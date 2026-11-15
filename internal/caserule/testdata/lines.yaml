@@ -1,0 +1,56 @@
+# Rules of lines for testdata/sample.txt.
+rules:
+  - id: P-001
+    title: ホスト名がある
+    severity: error
+    require_line: '^hostname \S+$'
+  - id: P-002
+    title: NTP サーバを書く
+    severity: warning
+    require_line: '^ntp server '
+  - id: P-003
+    title: 代理 ARP を止める
+    severity: error
+    under: '^interface GigabitEthernet'
+    require_line: '^no ip proxy-arp$'
+  - id: P-004
+    title: telnet を使わない
+    severity: error
+    forbid_line: '^transport input .*telnet'
+  - id: P-005
+    title: コメントの行は見ない
+    severity: error
+    forbid_line: 'ip http server'
+  - id: P-006
+    title: 近隣を有効にする
+    severity: warning
+    under: '^router bgp '
+    require_line: '^neighbor \S+ activate$'
+  - id: P-007
+    title: 同期を止める行を書かない
+    severity: info
+    under: '^router bgp '
+    forbid_line: '^no synchronization$'
+  - id: P-008
+    title: 閉じたインターフェースを残さない
+    severity: warning
+    under: '^interface '
+    forbid_line: '^shutdown$'
+  - id: P-009
+    title: 親の行そのものは見ない
+    severity: warning
+    under: '^interface '
+    forbid_line: '^interface '
+  - id: P-010
+    title: 秘密の値は伏せる
+    severity: info
+    forbid_line: '^username .* secret '
+  - id: P-011
+    title: 親がなければ指摘もない
+    severity: error
+    under: '^router ospf '
+    require_line: '^router-id '
+  - id: P-012
+    title: 字下げを取った行に当てる
+    severity: error
+    forbid_line: '^ ip address'

@@ -1,0 +1,9 @@
+rt-b02>enable
+rt-b02#show clock
+12:34:56.789 JST Mon Jan 5 2026
+rt-b02#show ip interface brief | include Loopback
+Loopback0              192.0.2.2       YES NVRAM  up                    up
+rt-b02#show version | include uptime
+rt-b02 uptime is 1 week, 2 days
+
+rt-b02#exit

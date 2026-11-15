@@ -1,0 +1,134 @@
+# QoS (stage M6). Syntax: cmdref 7.15 (CRM 14, FD 2.40).
+#
+# The order of the class-maps, the policy-maps and the lines under a class is
+# not shown in the manuals: nothing here depends on it.
+rules:
+  # "match-all" is the default of the device (CRM 14-16): an empty cell is
+  # filled from defaults.yaml.
+  - id: qos.class
+    match: '^class-map(?: (?P<m>match-all|match-any))? (?P<name>\S+)$'
+    row: {table: qos_classes, key: {name: "{{ name }}"}}
+    set: {match: "{{ m | replace('match-', '') }}"}
+    children:
+      # The word at the end is the queue in the class (CRM 14-17). Lists
+      # that only pick a DSCP or a precedence are turned into the columns
+      # of the condition below (derive qos.match).
+      - id: qos.class.acl
+        match: '^match ip access-list (?P<acl>\S+)(?: (?P<q>high|medium|normal|low))?$'
+        emit:
+          - table: x_qos_match
+            key: {class: "{{ parent.name }}", seq: "{{ (rows('x_qos_match', class=parent.name) | length + 1) * 10 }}"}
+            set: {acl: "{{ acl }}", queue: "{{ q }}"}
+      - id: qos.class.any
+        match: '^match any(?: (?P<q>high|medium|normal|low))?$'
+        emit:
+          - table: x_qos_match
+            key: {class: "{{ parent.name }}", seq: "{{ (rows('x_qos_match', class=parent.name) | length + 1) * 10 }}"}
+            set: {any: "true", queue: "{{ q }}"}
+
+  # A policy has a row per class. The two classes of the device are
+  # "default" (class-default) and "local" (class-local) in the dataset.
+  - id: qos.policy
+    match: '^policy-map (?P<name>\S+)$'
+    children:
+      - id: qos.policy.class
+        match: '^class (?P<cls>\S+)$'
+        row:
+          table: qos_policies
+          key:
+            policy: "{{ parent.name }}"
+            class: "{{ 'default' if cls == 'class-default' else ('local' if cls == 'class-local' else cls) }}"
+        set: {seq: "{{ (rows('qos_policies', policy=parent.name) | length + 1) * 10 }}"}
+        children:
+          # Without a word the value is in kbps (CRM 14-10). The burst is in
+          # bytes.
+          - id: qos.policy.priority
+            match: '^priority(?: (?:(?P<mbps>mbps) )?(?P<v>\d+)(?: (?P<be>\d+))?)?$'
+            set:
+              priority: true
+              bandwidth_kbps: "{{ (v | int * (1000 if mbps else 1)) if v else '' }}"
+              priority_burst: "{{ be }}"
+          - id: qos.policy.priority.percent
+            match: '^priority percent (?P<p>\d+)(?: (?P<be>\d+))?$'
+            set: {priority: true, bandwidth_percent: "{{ p }}", priority_burst: "{{ be }}"}
+          - id: qos.policy.bandwidth
+            match: '^bandwidth (?:(?P<mbps>mbps) )?(?P<v>\d+)$'
+            set: {bandwidth_kbps: "{{ v | int * (1000 if mbps else 1) }}"}
+          - id: qos.policy.bandwidth.percent
+            match: '^bandwidth percent (?P<p>\d+)$'
+            set: {bandwidth_percent: "{{ p }}"}
+          # Without a word the rate is in bps (CRM 14-11). Bc and Be are bits.
+          - id: qos.policy.shape
+            match: '^shape (?:(?P<u>kbps|mbps) )?(?P<cir>\d+)(?: (?P<bc>\d+)(?: (?P<be>\d+))?)?$'
+            set:
+              shape_bps: "{{ cir | int * (1000000 if u == 'mbps' else (1000 if u == 'kbps' else 1)) }}"
+              shape_bc: "{{ bc }}"
+              shape_be: "{{ be }}"
+          - id: qos.policy.set.dscp
+            match: '^set ip dscp (?P<v>\d+)$'
+            set: {set_dscp: "{{ v }}"}
+          - id: qos.policy.set.precedence
+            match: '^set ip precedence (?P<v>\d+)$'
+            set: {set_precedence: "{{ v }}"}
+          - id: qos.policy.queue_limit
+            match: '^queue-limit (?P<v>\d+(?: \d+){0,3})$'
+            append: {queue_limit: "{{ v }}"}
+
+derive:
+  # A list whose every entry is "permit ip src any dest any dscp N" (or
+  # "precedence N") only picks a DSCP: the condition keeps the values and the
+  # list leaves the dataset (qos.acl.*.taken), unless something else uses it.
+  - id: qos.match
+    for: x_qos_match
+    as: m
+    let:
+      all: "rows('acl_entries', acl=m.acl) if m.acl else []"
+      plain: "rows('acl_entries', acl=m.acl, action='permit', protocol='ip', src='any', dst='any') if m.acl else []"
+      d: "plain | selectattr('dscp') | rejectattr('precedence') | list"
+      p: "plain | selectattr('precedence') | rejectattr('dscp') | list"
+      u1: "first('interfaces', acl_in=m.acl)"
+      u2: "first('interfaces', acl_out=m.acl)"
+      u3: "first('nat_rules', match_acl=m.acl)"
+      u4: "first('remote_access', acl=m.acl)"
+      u5: "first('snmp_communities', acl=m.acl)"
+      u6: "lookup('x_ipsec_map', acl=m.acl)"
+      free: "not (u1.name or u2.name or u3.name or u4.acl or u5.acl or u6.name)"
+      cd: "free and all | length > 0 and d | length == all | length"
+      cp: "free and all | length > 0 and p | length == all | length"
+    when: "m.any or m.acl"
+    row: {table: qos_class_matches, key: {class: "{{ m.class }}", seq: "{{ m.seq }}"}}
+    set:
+      acl: "{{ '' if (cd or cp) else m.acl }}"
+      queue: "{{ m.queue }}"
+    append:
+      dscp: "{% if cd %}{% for e in d %}{{ e.dscp }} {% endfor %}{% endif %}"
+      precedence: "{% if cp %}{% for e in p %}{{ e.precedence }} {% endfor %}{% endif %}"
+
+  # The condition did not keep the name of the list: the list was turned
+  # into the DSCP or precedence of the condition (qos.match).
+  - id: qos.acl.entry.taken
+    for: acl_entries
+    as: e
+    let:
+      m: "lookup('x_qos_match', acl=e.acl)"
+      kept: "first('qos_class_matches', acl=e.acl)"
+    when: "m.class and not kept.class"
+    remove: true
+  - id: qos.acl.taken
+    for: acls
+    as: a
+    let:
+      m: "lookup('x_qos_match', acl=a.name)"
+      kept: "first('qos_class_matches', acl=a.name)"
+    when: "m.class and not kept.class"
+    remove: true
+  # "class class-default" and "class class-local" with nothing under them say
+  # nothing (the two classes are always there): no row. The templates write
+  # both lines in every policy.
+  - id: qos.policy.bare
+    for: qos_policies
+    as: p
+    let:
+      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue or p.shape_bps or p.shape_bc or p.shape_be"
+    when: "p.class in ['default', 'local'] and not (more)"
+    remove: true

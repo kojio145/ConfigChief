@@ -1,0 +1,16 @@
+!
+version 15.2
+hostname rt-a02
+!
+interface GigabitEthernet0/0
+ ip address 192.0.2.2 255.255.255.0
+ no cdp enable
+!
+ip sla 30
+ icmp-echo 192.0.2.254
+ip sla schedule 30 life forever start-time now
+!
+line vty 0 4
+ transport input ssh
+!
+end

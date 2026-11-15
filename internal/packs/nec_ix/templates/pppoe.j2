@@ -1,0 +1,47 @@
+{# PPPoE. Syntax: cmdref 4.12 and 7.12. A row is a PPP profile, bound to its
+   sub-interface by "ppp binding" (interfaces.j2). The sub-interface of a
+   port is the PPPoE interface itself, and the base interface of the same
+   port ("<port>.0") is the physical side. #}
+{% for p in t.pppoe %}
+{% set what = 'PPPoE ' ~ p.name %}
+{% if ' ' in p.name or p.name | length > 31 %}
+{{ fail(what ~ ' の名前は書けません（NEC IX では PPP プロファイルの名前になります。空白のない 31 字までにしてください）') }}
+{% endif %}
+{% set port = p.logical_if | split('.') %}
+{% set n = namespace(seen=false, same=0) %}
+{% for i in t.interfaces %}
+{% if i.name == p.logical_if %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% for q in t.pppoe %}
+{% if q.logical_if == p.logical_if %}
+{% set n.same = n.same + 1 %}
+{% endif %}
+{% endfor %}
+{% if port | length != 2 or port[1] == '0' or ':' in p.logical_if %}
+{{ fail(what ~ ' の論理 IF「' ~ p.logical_if ~ '」は書けません（NEC IX では、回線につながるポートのサブインタフェース「ポート名.1」以降が PPPoE の IF です）') }}
+{% elif not n.seen %}
+{{ fail(what ~ ' の論理 IF ' ~ p.logical_if ~ ' が、インタフェースの表にありません') }}
+{% elif p.physical_if != port[0] ~ '.0' %}
+{{ fail(what ~ ' の物理 IF「' ~ p.physical_if ~ '」は書けません（NEC IX では、論理 IF と同じポートの「' ~ port[0] ~ '.0」です）') }}
+{% endif %}
+{% if n.same > 1 %}
+{{ fail(what ~ ': 同じ論理 IF を使う PPPoE の行が、ほかにあります') }}
+{% endif %}
+{% set user = p.username | required(what ~ ' の接続 ID') %}
+{% set pw = p.password | required(what ~ ' の接続パスワード') %}
+{% if ' ' in user or ' ' in pw or ' ' in p.service_name %}
+{{ fail(what ~ ' の接続 ID・接続パスワード・サービス名のどれかに、空白があります') }}
+{% endif %}
+ppp profile {{ p.name }}
+  authentication myname {{ user }}
+  authentication password {{ user }} {{ pw }}
+{% if p.auth %}
+  authentication accept {{ p.auth | replace('_', '-') }}
+{% endif %}
+{% if p.keepalive != '' %}
+  lcp echo-interval {{ p.keepalive }}
+{% endif %}
+!
+{% endfor %}

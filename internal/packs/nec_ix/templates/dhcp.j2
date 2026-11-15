@@ -1,0 +1,73 @@
+{# The DHCP server. Syntax: cmdref 4.15. A pool is a profile, bound to the
+   interface of its network by "ip dhcp binding" (interfaces.j2); the server
+   works once "ip dhcp enable" is there. With a range the mask is written,
+   and the network comes from the two; without one it comes from the address
+   of the interface. #}
+{% set pools = t.dhcp_pools %}
+{% if pools %}
+ip dhcp enable
+{% for p in pools %}
+{% set what = 'DHCP ' ~ p.name %}
+{% for x in p.excluded %}
+{% set ends = x | split('-') %}
+{% if ends | length != 2 or not ((ends[0] ~ '/32') is cidr) or not ((ends[1] ~ '/32') is cidr) %}
+{{ fail(what ~ ' の配らないアドレス「' ~ x ~ '」は書けません（192.0.2.1-192.0.2.10 の形で書きます。1 つだけなら同じアドレスを 2 つ）') }}
+{% elif not (ends[0] | in_net(p.network)) %}
+{{ fail(what ~ ' の配らないアドレス ' ~ x ~ ' が、ネットワーク ' ~ p.network ~ ' の外にあります') }}
+{% else %}
+ip dhcp excluded-address {{ ends[0] }} {{ ends[1] }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+!
+{% for p in pools %}
+{% set what = 'DHCP ' ~ p.name %}
+{% if ' ' in p.name %}
+{{ fail(what ~ ' の名前に空白があります') }}
+{% endif %}
+{# The profile is bound to the one interface that stands in its network. #}
+{% set bound = namespace(n=0) %}
+{% for i in t.interfaces %}
+{% if i.ipv4 is cidr and (i.ipv4 | network) == p.network %}
+{% set bound.n = bound.n + 1 %}
+{% endif %}
+{% endfor %}
+{% if bound.n != 1 %}
+{{ fail(what ~ ' のネットワーク ' ~ p.network ~ ' にアドレスを持つインタフェースが ' ~ bound.n ~ ' つあります（NEC IX は、そのネットワークのインタフェース 1 つに結び付けます）') }}
+{% endif %}
+ip dhcp profile {{ p.name }}
+{% if p.range_start or p.range_end %}
+{% set first = p.range_start | required(what ~ ' の配る範囲の先頭（末尾と組で書きます）') %}
+{% set last = p.range_end | required(what ~ ' の配る範囲の末尾（先頭と組で書きます）') %}
+{% if first and not (first | in_net(p.network)) %}
+{{ fail(what ~ ' の配る範囲の先頭 ' ~ first ~ ' が、ネットワーク ' ~ p.network ~ ' の外にあります') }}
+{% endif %}
+  assignable-range {{ first }} {{ last }}
+  subnet-mask {{ p.network | mask }}
+{% endif %}
+{% if p.default_router %}
+  default-gateway {{ p.default_router }}
+{% endif %}
+{% if p.dns_servers %}
+{% if p.dns_servers | length > 2 %}
+{{ fail(what ~ ' の DNS サーバが ' ~ (p.dns_servers | length) ~ ' つあります（NEC IX は 2 つまでです）') }}
+{% endif %}
+  dns-server {{ p.dns_servers | join(' ') }}
+{% endif %}
+{% if p.domain %}
+  domain-name {{ p.domain }}
+{% endif %}
+{# Seconds: "2d" is 172800, "12h" 43200. #}
+{% if p.lease %}
+{% set n = p.lease[:-1] %}
+{% if not (n is digits) or p.lease[-1:] not in ['d', 'h'] or (n | int) == 0 %}
+{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は書けません（2d、12h の形で書きます）') }}
+{% elif p.lease[-1:] == 'h' and (n | int) % 24 == 0 %}
+{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は、日の形（' ~ ((n | int) // 24) ~ 'd）で書いてください') }}
+{% else %}
+  lease-time {{ (n | int) * (86400 if p.lease[-1:] == 'd' else 3600) }}
+{% endif %}
+{% endif %}
+!
+{% endfor %}
+{% endif %}

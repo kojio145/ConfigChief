@@ -1,0 +1,157 @@
+{# QoS in the MQC form (stage M6). Syntax: cmdref 7.16.
+   DSCP and precedence are written as numbers. The forms before MQC are read
+   and never written. The rate of the whole interface is a parent policy
+   "shape-<interface>" with the policy of the binding as its child (README).
+   Where these lines stand in the text of a device is not known: they are
+   written before the interfaces that name the policies. #}
+{% for c in t.qos_classes %}
+class-map match-{{ c.match | required('QoS のクラス ' ~ c.name ~ ' の合わせ方') }} {{ c.name }}
+{% set k = namespace(i=0) %}
+{% for m in t.qos_class_matches %}
+{% if m.class == c.name %}
+{% set what = 'QoS のクラス ' ~ c.name ~ ' の ' ~ m.seq ~ ' 番の条件' %}
+{% set k.i = k.i + 1 %}
+{% if m.seq != k.i * 10 %}
+{{ fail(what ~ ': 順番が 10 刻みではありません（コンフィグには番号を書かず、上から順に書きます。順番を 10、20、30… に振り直してください。評価の順は変わりません）') }}
+{% endif %}
+{% set kinds = (1 if m.acl else 0) + (1 if m.dscp else 0) + (1 if m.precedence else 0) %}
+{% if kinds > 1 %}
+{{ fail(what ~ ': ACL・DSCP・precedence は 1 行に 1 つだけ書きます（行を分けてください）') }}
+{% elif m.acl %}
+ match access-group {{ '' if m.acl is digits else 'name ' }}{{ m.acl }}
+{% elif m.dscp %}
+{% if m.dscp | length > 8 %}
+{{ fail(what ~ ': DSCP は 1 行に 8 つまでです（行を分けてください）') }}
+{% endif %}
+ match dscp {{ m.dscp | join(' ') }}
+{% elif m.precedence %}
+{% if m.precedence | length > 4 %}
+{{ fail(what ~ ': precedence は 1 行に 4 つまでです（行を分けてください）') }}
+{% endif %}
+ match precedence {{ m.precedence | join(' ') }}
+{% else %}
+ match any
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% if t.qos_classes %}
+!
+{% endif %}
+{% set seen = namespace(names=[]) %}
+{% for first in t.qos_policies %}
+{% if first.policy not in seen.names %}
+{% set seen.names = seen.names + [first.policy] %}
+policy-map {{ first.policy }}
+{# The classes in their order; "default" is always the last one. #}
+{% for pass in ['named', 'default'] %}
+{% for r in t.qos_policies | sort(attribute='seq') %}
+{% if r.policy == first.policy and (r.class == 'default') == (pass == 'default') %}
+{% set what = 'QoS のポリシー ' ~ r.policy ~ ' のクラス ' ~ r.class %}
+{% if r.class == 'local' %}
+{{ fail(what ~ ': 機器自身が出す通信のクラス（local）は Cisco にありません（行を消すか、追加コンフィグに書いてください）') }}
+{% endif %}
+ class {{ 'class-default' if r.class == 'default' else r.class }}
+{% set bw = (1 if r.bandwidth_kbps != '' else 0) + (1 if r.bandwidth_percent != '' else 0) + (1 if r.bandwidth_remaining != '' else 0) %}
+{% if bw > 1 %}
+{{ fail(what ~ ': 帯域（kbps・%・残りの %）は 1 つだけ書きます') }}
+{% endif %}
+{% if r.priority %}
+{% set burst = ' ' ~ r.priority_burst if r.priority_burst != '' else '' %}
+{% if r.priority_level != '' %}
+{% if bw > 0 or burst %}
+{{ fail(what ~ ': 「優先の段」と帯域・バーストを同じ行には書けません（上限は「上限・捨てる」に書きます）') }}
+{% endif %}
+  priority level {{ r.priority_level }}
+{% elif r.bandwidth_kbps != '' %}
+  priority {{ r.bandwidth_kbps }}{{ burst }}
+{% elif r.bandwidth_percent != '' %}
+  priority percent {{ r.bandwidth_percent }}{{ burst }}
+{% elif r.bandwidth_remaining != '' %}
+{{ fail(what ~ ': 優先して送るクラスに「帯域（残りの %）」は書けません（kbps か % で上限を書きます）') }}
+{% else %}
+{% if burst %}
+{{ fail(what ~ ': 優先のバーストは、帯域（上限）を書いたときだけ書けます') }}
+{% endif %}
+  priority
+{% endif %}
+{% else %}
+{% if r.priority_level != '' %}
+{{ fail(what ~ ': 「優先の段」は、「優先して送る」を有効にしたときだけ書けます') }}
+{% endif %}
+{% if r.bandwidth_kbps != '' %}
+  bandwidth {{ r.bandwidth_kbps }}
+{% elif r.bandwidth_percent != '' %}
+  bandwidth percent {{ r.bandwidth_percent }}
+{% elif r.bandwidth_remaining != '' %}
+  bandwidth remaining percent {{ r.bandwidth_remaining }}
+{% endif %}
+{% endif %}
+{% if r.shape_bps != '' %}
+{% if r.shape_be != '' and r.shape_bc == '' %}
+{{ fail(what ~ ': 超過バーストは、通常バーストを書いたときだけ書けます') }}
+{% endif %}
+  shape average {{ r.shape_bps }}{{ ' ' ~ r.shape_bc if r.shape_bc != '' else '' }}{{ ' ' ~ r.shape_be if r.shape_be != '' else '' }}
+{% elif r.shape_bc != '' or r.shape_be != '' %}
+{{ fail(what ~ ': 遅らせる側のバーストは、「上限・遅らせる」を書いたときだけ書けます') }}
+{% endif %}
+{% if r.police_bps != '' %}
+{% if r.police_be != '' and r.police_bc == '' %}
+{{ fail(what ~ ': 超過バーストは、通常バーストを書いたときだけ書けます') }}
+{% endif %}
+{% set ex = r.police_exceed if r.police_exceed else 'drop' %}
+{% if ex in ['set_dscp', 'set_precedence'] %}
+{% set ex = ('set-dscp-transmit ' if ex == 'set_dscp' else 'set-prec-transmit ') ~ (r.police_exceed_value | required(what ~ ' の「超えたときに付ける値」')) %}
+{% elif r.police_exceed_value != '' %}
+{{ fail(what ~ ': 「超えたときに付ける値」は、超えたときが set_dscp か set_precedence のときだけ書けます') }}
+{% endif %}
+  police cir {{ r.police_bps }}{{ ' bc ' ~ r.police_bc if r.police_bc != '' else '' }}{{ ' be ' ~ r.police_be if r.police_be != '' else '' }} conform-action transmit exceed-action {{ ex }}
+{% elif r.police_bc != '' or r.police_be != '' or r.police_exceed or r.police_exceed_value != '' %}
+{{ fail(what ~ ': 捨てる側のバースト・超えたときの動作は、「上限・捨てる」を書いたときだけ書けます') }}
+{% endif %}
+{% if r.set_dscp != '' and r.set_precedence != '' %}
+{{ fail(what ~ ': 付ける DSCP と precedence は、どちらか 1 つだけ書きます') }}
+{% elif r.set_dscp != '' %}
+  set dscp {{ r.set_dscp }}
+{% elif r.set_precedence != '' %}
+  set precedence {{ r.set_precedence }}
+{% endif %}
+{% if r.queue_limit | length > 1 %}
+{{ fail(what ~ ': キューの長さは 1 つだけ書けます（high・medium・normal・low の 4 つを並べる形は Cisco にありません）') }}
+{% elif r.queue_limit %}
+  queue-limit {{ r.queue_limit[0] }} packets
+{% endif %}
+{% if r.fair_queue %}
+  fair-queue
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{# The rate of a whole interface: a parent policy that shapes everything and
+   has the policy of the binding under it. #}
+{% for b in t.qos_bindings %}
+{% set what = b.if_name ~ ' の QoS（' ~ b.direction ~ '）' %}
+{% if b.shape_bps != '' %}
+{% if b.direction != 'output' %}
+{{ fail(what ~ ': 「IF 全体を絞る速さ」は出力（output）の行にだけ書けます') }}
+{% endif %}
+{% if b.shape_be != '' and b.shape_bc == '' %}
+{{ fail(what ~ ': 超過バーストは、通常バーストを書いたときだけ書けます') }}
+{% endif %}
+policy-map shape-{{ b.if_name | ifshort | replace('/', '-') | replace('.', '-') }}
+ class class-default
+  shape average {{ b.shape_bps }}{{ ' ' ~ b.shape_bc if b.shape_bc != '' else '' }}{{ ' ' ~ b.shape_be if b.shape_be != '' else '' }}
+{% if b.policy %}
+  service-policy {{ b.policy }}
+{% endif %}
+{% elif b.shape_bc != '' or b.shape_be != '' %}
+{{ fail(what ~ ': IF 全体のバーストは、「IF 全体を絞る速さ」を書いたときだけ書けます') }}
+{% elif not b.policy %}
+{{ fail(what ~ ': ポリシー名も「IF 全体を絞る速さ」もありません（どちらかを書くか、行を消してください）') }}
+{% endif %}
+{% endfor %}
+{% if t.qos_policies or t.qos_bindings %}
+!
+{% endif %}

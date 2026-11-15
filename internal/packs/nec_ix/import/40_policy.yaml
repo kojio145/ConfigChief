@@ -1,0 +1,87 @@
+# Access lists, prefix lists and NAT (stage M3).
+# Syntax: cmdref 4.9 and 4.10.
+rules:
+  # One entry on a line, with "src" and "dest"; the list has no line of its
+  # own. Without numbers the entries are numbered 10, 20, ... in the order of
+  # the lines. Read: one port with eq / lt / gt / neq, and "precedence" and
+  # "dscp" at the end (stage M6, cmdref 7.15). A range of ports, the ICMP
+  # type, "tos", "established" and the other options stay unknown.
+  - id: acl.entry
+    match: '^ip access-list (?P<acl>\S+)(?: (?P<seq>\d+))? (?P<action>permit|deny) (?P<proto>ip|tcp|udp|icmp) src (?P<src>any|\d+\.\d+\.\d+\.\d+/\d+)(?: sport (?P<sop>eq|lt|gt|neq) (?P<sp>\d+))? dest (?P<dst>any|\d+\.\d+\.\d+\.\d+/\d+)(?: dport (?P<dop>eq|lt|gt|neq) (?P<dp>\d+))?(?: precedence (?P<prec>\d+))?(?: dscp (?P<dscp>\d+))?$'
+    when: "proto in ['tcp', 'udp'] or not (sp or dp)"
+    row:
+      table: acl_entries
+      key:
+        acl: "{{ acl }}"
+        seq: "{{ seq if seq else (rows('acl_entries', acl=acl) | length + 1) * 10 }}"
+    set:
+      action: "{{ action }}"
+      protocol: "{{ proto }}"
+      src: "{{ src | replace('/32', '') }}"
+      src_port: "{{ (sop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ sp }}"
+      dst: "{{ dst | replace('/32', '') }}"
+      dst_port: "{{ (dop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ dp }}"
+      dscp: "{{ dscp }}"
+      precedence: "{{ prec }}"
+    # The device has one kind of list; with a source and a destination it is
+    # the "extended" kind of the dataset.
+    emit:
+      - table: acls
+        key: {name: "{{ acl }}"}
+        set: {type: extended}
+
+  # "min" and "max" are the shortest and the longest prefix; the form with
+  # "any" stays unknown.
+  - id: prefix_list
+    match: '^ip prefix-list (?P<name>\S+) (?P<seq>\d+) (?P<action>permit|deny) (?P<prefix>\d+\.\d+\.\d+\.\d+/\d+)(?: min (?P<ge>\d+))?(?: max (?P<le>\d+))?$'
+    row: {table: prefix_lists, key: {name: "{{ name }}", seq: "{{ seq }}"}}
+    set:
+      action: "{{ action }}"
+      prefix: "{{ prefix | network }}"
+      ge: "{{ ge }}"
+      le: "{{ le }}"
+
+derive:
+  # The lines stand under an interface (20_interfaces.yaml) and are joined
+  # here. "ip napt enable" translates to the address of that interface.
+  - id: nat.pat
+    for: x_nat
+    as: n
+    let:
+      l: "lookup('x_napt_list', if_name=n.if_name)"
+    when: "n.kind == 'pat'"
+    row: {table: nat_rules, key: {name: "{{ n.name }}"}}
+    set:
+      type: pat_interface
+      outside_if: "{{ n.if_name }}"
+      match_acl: "{{ l.acl }}"
+
+  # A forwarded port needs "ip napt enable" on the same interface.
+  - id: nat.static_port
+    for: x_nat
+    as: n
+    let:
+      on: "lookup('x_nat', kind='pat', if_name=n.if_name)"
+    when: "n.kind == 'static_port' and on.name"
+    row: {table: nat_rules, key: {name: "{{ n.name }}"}}
+    set:
+      type: static_port
+      outside_if: "{{ n.if_name }}"
+      protocol: "{{ n.protocol }}"
+      local_ip: "{{ n.local_ip }}"
+      local_port: "{{ n.port }}"
+      global_port: "{{ n.port }}"
+
+  # A static pair needs "ip nat enable" on the same interface.
+  - id: nat.static
+    for: x_nat
+    as: n
+    let:
+      on: "lookup('x_nat_enable', if_name=n.if_name)"
+    when: "n.kind == 'static' and on.on"
+    row: {table: nat_rules, key: {name: "{{ n.name }}"}}
+    set:
+      type: static
+      outside_if: "{{ n.if_name }}"
+      local_ip: "{{ n.local_ip }}"
+      global_ip: "{{ n.global_ip }}"

@@ -1,0 +1,34 @@
+# QoS written before MQC (cmdref 7.17). The pack names what the device does
+# not name: rl-<IF>-in|out, pq<n>, cq<n>-<queue>, and the lists made for
+# "tcp <port>" and "udp <port>".
+tables:
+  qos_classes:
+    - {name: pq1, match: any}
+    - {name: cq2-1, match: any}
+    - {name: cq2-2, match: any}
+    - {name: cq2-3, match: any}
+    - {name: rl-acl101, match: all}
+  qos_class_matches:
+    - {class: pq1, seq: 10, acl: "110", queue: high}
+    - {class: pq1, seq: 20, acl: pq1-tcp23, queue: medium}
+    - {class: pq1, seq: 30, acl: "", queue: normal}
+    - {class: cq2-1, seq: 10, acl: "110"}
+    - {class: cq2-2, seq: 10, acl: cq2-udp5060}
+    - {class: cq2-3, seq: 10, acl: ""}
+    - {class: rl-acl101, seq: 10, acl: "101"}
+  qos_policies:
+    - {policy: pq1, class: pq1, seq: 10, queue_limit: [30, 40, 50, 60]}
+    - {policy: cq2, class: cq2-1, seq: 10, bandwidth_percent: 50, queue_limit: [30]}
+    - {policy: cq2, class: cq2-2, seq: 20, bandwidth_percent: 25, queue_limit: []}
+    - {policy: cq2, class: cq2-3, seq: 30, bandwidth_percent: 25}
+    - {policy: rl-Gi0-1-in, class: rl-acl101, seq: 10, police_bps: 2000000, police_bc: 375000, police_be: 750000, police_exceed: drop}
+    - {policy: rl-Gi0-1-in, class: default, seq: 20, police_bps: 8000000, police_exceed: set_precedence, police_exceed_value: 0}
+  qos_bindings:
+    - {if_name: Serial0/0, direction: output, policy: pq1, shape_bps: 1536000, shape_bc: 6144, shape_be: 0}
+    - {if_name: Serial0/1, direction: output, policy: cq2}
+    - {if_name: GigabitEthernet0/1, direction: input, policy: rl-Gi0-1-in}
+  acl_entries:
+    - {acl: pq1-tcp23, seq: 10, protocol: tcp, src: any, dst: any, dst_port: "23"}
+    - {acl: pq1-tcp23, seq: 20, protocol: tcp, src_port: "23", dst_port: ""}
+    - {acl: cq2-udp5060, seq: 10, protocol: udp, dst_port: "5060"}
+unknown: []

@@ -1,0 +1,20 @@
+# What the device cannot write of an access list or a prefix list: each is
+# told with what to do about it (made-up values).
+tables:
+  devices:
+    - hostname: ix-p05
+      vendor: nec_ix
+  acls:
+    - {name: acl-sample-std, type: standard}          # the device has one kind of list
+    - {name: acl-sample-toolong1, type: extended}     # 16 letters
+    - {name: acl-sample-seq, type: extended}
+  acl_entries:
+    - {acl: acl-sample-std, seq: 10, action: permit, protocol: ip, src: 192.0.2.0/24, dst: any}
+    - {acl: acl-sample-toolong1, seq: 10, action: permit, protocol: ip, src: any, dst: any}
+    - {acl: acl-sample-seq, seq: 5, action: remark, remark: sample remark}                                              # not numbered by tens, and a remark
+    - {acl: acl-sample-seq, seq: 20, action: permit, protocol: esp, src: any, dst: any}                                 # a protocol that is not read back
+    - {acl: acl-sample-seq, seq: 30, action: permit, protocol: tcp, src: any, dst: any, dst_port: 8000-8080}            # a range of ports
+    - {acl: acl-sample-seq, seq: 40, action: permit, protocol: tcp, src: any, dst: any, flags: [established]}           # an option
+  prefix_lists:
+    - {name: PL-SAMPLE-IN, seq: 5, action: permit, prefix: 0.0.0.0/0}                                                   # the device keeps the name in small letters
+findings: [G-601]

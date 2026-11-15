@@ -1,0 +1,10 @@
+table: ntp_servers
+title: {ja: NTP サーバ, en: NTP servers}
+since: M1
+key: [device, server]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: server, title: {ja: サーバ, en: Server}, type: string, required: true, note: {ja: "アドレスか名前", en: "An address or a name"}}
+  - {name: prefer, title: {ja: 優先, en: Prefer}, type: bool}
+  - {name: source_if, title: {ja: 送信元 IF, en: Source interface}, type: ifname}
+  - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name}

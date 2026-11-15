@@ -1,0 +1,48 @@
+rt-b02>enable
+rt-b02#show clock
+12:34:56.789 JST Mon Jan 5 2026
+rt-b02#show ip interface brief | include Loopback
+Loopback0              192.0.2.2       YES NVRAM  up                    up
+rt-b02#show running-config
+Building configuration...
+
+Current configuration : 1024 bytes
+!
+version 15.9
+!
+hostname rt-b02
+!
+ip domain name example.net
+ip name-server 192.0.2.53
+!
+username admin privilege 15 secret 5 $1$dummy$SampleHashForTestsOnly333
+!
+interface Loopback0
+ ip address 192.0.2.2 255.255.255.255
+!
+interface GigabitEthernet0/0
+ description sample-wan
+ --More--          ip address 203.0.113.5 255.255.255.252
+ duplex auto
+ speed auto
+!
+interface GigabitEthernet0/1
+ description sample-lan
+ ip address 198.51.100.1 255.255.255.0
+ shutdown
+!
+ --More--         ip route 0.0.0.0 0.0.0.0 203.0.113.6
+ip route 192.0.2.64 255.255.255.192 198.51.100.2
+!
+ntp server 192.0.2.123
+!
+line con 0
+ exec-timeout 5 0
+ --More--         line vty 0 4
+ exec-timeout 10 0
+ login local
+ transport input ssh
+!
+end
+
+rt-b02#exit

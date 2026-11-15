@@ -1,0 +1,21 @@
+# What the pack refuses to write. A section that fails stops where it is and
+# the others go on (spec 9.6): expect.txt is what there is of the text.
+# Made-up values.
+tables:
+  devices:
+    - hostname: ix-c05
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.41/30}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.1/25, proxy_arp: false}   # no confirmed line: fail (G-601)
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: 203.0.113.42}
+  users:
+    - {name: netops, privilege: 15, secret: dummy-netops-secret-sample}   # no word for it: G-603
+  snmp_hosts:
+    - {host: 192.0.2.60, version: 2c}   # no community: required (G-606)
+extra:
+  ix-c05.j2: |
+    {# position: after nowhere #}
+    ip ufs-cache enable
+findings: [G-601, G-603, G-606, G-608]

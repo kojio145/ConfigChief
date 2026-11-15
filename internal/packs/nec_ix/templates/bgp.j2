@@ -1,0 +1,116 @@
+{# BGP. Syntax: cmdref 4.7. What belongs to the session stands under "router
+   bgp"; what belongs to the routes under "address-family ipv4 unicast". The
+   AS numbers are 1 to 65535 on this device. BGP inside a VRF is not written
+   (the "vrf <name>" block is not read either). #}
+{% for b in t.bgp_processes %}
+{% if b.vrf %}
+{{ fail('BGP（VRF ' ~ b.vrf ~ '）は、このパックでは書けません（VRF の中の BGP の書き方を確かめていません。追加コンフィグに書いてください）') }}
+{% else %}
+{% if b.asn > 65535 %}
+{{ fail('BGP の AS 番号 ' ~ b.asn ~ ' は書けません（NEC IX の AS 番号は 1〜65535 です）') }}
+{% endif %}
+router bgp {{ b.asn }}
+{% if b.router_id %}
+  router-id {{ b.router_id }}
+{% endif %}
+{% for n in t.bgp_neighbors %}
+{% if not n.vrf %}
+{% set nb = '  neighbor ' ~ n.neighbor %}
+{% set what = 'BGP ネイバー ' ~ n.neighbor %}
+{% if n.remote_as > 65535 %}
+{{ fail(what ~ ' の相手 AS 番号 ' ~ n.remote_as ~ ' は書けません（NEC IX の AS 番号は 1〜65535 です）') }}
+{% endif %}
+{{ nb }} remote-as {{ n.remote_as }}
+{% if n.update_source %}
+{{ nb }} update-source {{ n.update_source }}
+{% endif %}
+{% if n.description %}
+{{ nb }} description {{ n.description }}
+{% endif %}
+{% if n.password %}
+{{ nb }} password {{ n.password }}
+{% endif %}
+{% if n.ebgp_multihop != '' %}
+{{ nb }} ebgp-multihop {{ n.ebgp_multihop }}
+{% endif %}
+{% if n.keepalive != '' or n.holdtime != '' %}
+{{ nb }} timers {{ n.keepalive | required(what ~ ' の Keepalive（Hold と組で書きます）') }} {{ n.holdtime | required(what ~ ' の Hold（Keepalive と組で書きます）') }}
+{% endif %}
+{% if n.enabled == false %}
+{{ nb }} shutdown
+{% endif %}
+{% endif %}
+{% endfor %}
+{# The block is written only when it holds a line. #}
+{% set af = namespace(open=false) %}
+{% for w in t.bgp_networks %}
+{% if not w.vrf %}
+{% if not af.open %}
+  address-family ipv4 unicast
+{% set af.open = true %}
+{% endif %}
+    network {{ w.prefix }}
+{% endif %}
+{% endfor %}
+{% for r in t.bgp_redistribute %}
+{% if not r.vrf %}
+{% if not af.open %}
+  address-family ipv4 unicast
+{% set af.open = true %}
+{% endif %}
+    redistribute {{ r.source }}{{ ' metric ' ~ r.metric if r.metric != '' else '' }}{{ ' route-map ' ~ r.filter if r.filter else '' }}
+{% endif %}
+{% endfor %}
+{% for n in t.bgp_neighbors %}
+{% if not n.vrf and (n.prefix_list_in or n.prefix_list_out or n.filter_in or n.filter_out or n.next_hop_self == true or n.default_originate == true) %}
+{% if not af.open %}
+  address-family ipv4 unicast
+{% set af.open = true %}
+{% endif %}
+{% set nb = '    neighbor ' ~ n.neighbor %}
+{% if n.prefix_list_in %}
+{{ nb }} distribute-list {{ n.prefix_list_in }} in
+{% endif %}
+{% if n.prefix_list_out %}
+{{ nb }} distribute-list {{ n.prefix_list_out }} out
+{% endif %}
+{% if n.filter_in %}
+{{ nb }} route-map {{ n.filter_in }} in
+{% endif %}
+{% if n.filter_out %}
+{{ nb }} route-map {{ n.filter_out }} out
+{% endif %}
+{% if n.next_hop_self == true %}
+{{ nb }} next-hop-self
+{% endif %}
+{% if n.default_originate == true %}
+{{ nb }} send-default
+{% endif %}
+{% endif %}
+{% endfor %}
+!
+{% endif %}
+{% endfor %}
+{# A row of a VRF, or a row without the row of the process, is written
+   nowhere. #}
+{% set global = namespace(v=false) %}
+{% for b in t.bgp_processes %}
+{% if not b.vrf %}
+{% set global.v = true %}
+{% endif %}
+{% endfor %}
+{% for n in t.bgp_neighbors %}
+{% if n.vrf or not global.v %}
+{{ fail('BGP ネイバー ' ~ n.neighbor ~ (' （VRF ' ~ n.vrf ~ '）は、このパックでは書けません（VRF の中の BGP）' if n.vrf else ' は、BGP の表に VRF が空の行（AS 番号）が要ります')) }}
+{% endif %}
+{% endfor %}
+{% for w in t.bgp_networks %}
+{% if w.vrf or not global.v %}
+{{ fail('BGP 広告経路 ' ~ w.prefix ~ (' （VRF ' ~ w.vrf ~ '）は、このパックでは書けません（VRF の中の BGP）' if w.vrf else ' は、BGP の表に VRF が空の行（AS 番号）が要ります')) }}
+{% endif %}
+{% endfor %}
+{% for r in t.bgp_redistribute %}
+{% if r.vrf or not global.v %}
+{{ fail('BGP 再配布 ' ~ r.source ~ (' （VRF ' ~ r.vrf ~ '）は、このパックでは書けません（VRF の中の BGP）' if r.vrf else ' は、BGP の表に VRF が空の行（AS 番号）が要ります')) }}
+{% endif %}
+{% endfor %}

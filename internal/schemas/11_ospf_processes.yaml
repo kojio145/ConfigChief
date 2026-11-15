@@ -1,0 +1,13 @@
+table: ospf_processes
+title: {ja: OSPF, en: OSPF}
+since: M3
+key: [device, process_id]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: process_id, title: {ja: プロセス番号, en: Process ID}, type: int, required: true, note: {ja: "番号を持たないメーカーでは 1", en: "1 for a vendor without a number"}}
+  - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name}
+  - {name: router_id, title: {ja: ルータ ID, en: Router ID}, type: ip4, explicit: true}
+  - {name: reference_bandwidth, title: {ja: 基準帯域（Mbps）, en: Reference bandwidth (Mbps)}, type: int}
+  - {name: passive_default, title: {ja: 既定を受動にする, en: Passive by default}, type: bool}
+  - {name: default_originate, title: {ja: デフォルト経路の広告, en: Default originate}, type: enum, values: [none, when_present, always]}
+  - {name: default_metric, title: {ja: 広告のメトリック, en: Default metric}, type: int}

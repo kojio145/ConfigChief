@@ -1,0 +1,8 @@
+table: qos_classes
+title: {ja: QoS の見分け方, en: QoS classes}
+since: M6
+key: [device, name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: クラス名, en: Name}, type: string, required: true, note: {ja: "1〜31 字", en: "1 to 31 characters"}}
+  - {name: match, title: {ja: 合わせ方, en: Match}, type: enum, values: [any, all], explicit: true, note: {ja: "any = どれかの条件に合えば、all = すべての条件に合えば", en: "any = one of the conditions, all = every condition"}}

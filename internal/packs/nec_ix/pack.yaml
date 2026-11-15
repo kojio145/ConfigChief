@@ -1,0 +1,52 @@
+# NEC UNIVERGE IX (routers). The syntax follows the vendor's public command
+# reference; README.md names the books and what is not confirmed yet.
+id: nec_ix
+title: {ja: "NEC UNIVERGE IX", en: "NEC UNIVERGE IX"}
+version: 0.2.0
+schema: 1
+syntax: indent
+comment_prefixes: ["!"]
+output:
+  encoding: utf-8
+  newline: lf
+  indent: "  "
+# No end_marker: no line that closes the configuration was found in the
+# vendor's examples.
+
+detect:
+  - {match: '^device GigaEthernet\d+$', score: 4}
+  - {match: '^interface GigaEthernet\d+(:\d+)?\.\d+$', score: 3}
+  - {match: '^ip router ospf \d+$', score: 2}
+  - {match: '^ppp profile \S+$', score: 2}
+  - {match: '^ip dhcp profile \S+$', score: 2}
+  - {match: '^watch-group \S+', score: 2}
+  - {match: '^ip access-list \S+ (\d+ )?(permit|deny) \S+ src ', score: 2}
+  - {match: '^ip route (vrf \S+ )?(default|\d+\.\d+\.\d+\.\d+/\d+) ', score: 1}
+
+hostname: '^hostname (?P<name>\S+)$'
+
+# Terminal logs. The vendor's FAQ shows "show running-config" typed at a
+# prompt of the form "Router(config)#". Only the full commands are listed:
+# shortened forms are not confirmed. The pager mark is written "--more--" in
+# the vendor's troubleshooting guide; upper and lower case are both read
+# (README.md, what is not confirmed).
+session:
+  prompt: '^(?P<host>[\w.\-]+)(\((?P<mode>[^)]+)\))?[>#]'
+  show_config:
+    - '^show running-config$'
+    - '^show startup-config$'
+  pager: ['(?i)^\s*--more--']
+
+# The short forms are accepted by the device on input only; the saved text has
+# the full names, so no short form is listed.
+interfaces:
+  types:
+    - {name: GigaEthernet, short: [], kind: physical}
+    - {name: Loopback, short: [], kind: loopback}
+    - {name: Tunnel, short: [], kind: tunnel}
+    - {name: BVI, short: [], kind: other}
+    - {name: "Null", short: [], kind: other}
+    - {name: USB-Serial, short: [], kind: other}
+  # "GigaEthernet0.0" is the base interface of the port; ".1" and up are
+  # sub-interfaces.
+  subif: '^(?P<parent>.+)\.(?P<n>[1-9]\d*)$'

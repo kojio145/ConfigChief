@@ -1,0 +1,82 @@
+rules:
+  - id: host
+    match: '^hostname (?P<name>\S+)$'
+    row: {table: devices, key: {}}
+
+  - id: if
+    match: '^interface (?P<name>\S+)$'
+    row: {table: interfaces, key: {name: "{{ name }}"}}
+    children:
+      # Right: a fixed value in another way of writing, a column name made by
+      # a template, a word of a kind that is in the lexicon.
+      - id: if.auto
+        match: '^speed automatic$'
+        set: {speed: AUTO}
+      - id: if.acl
+        match: '^filter (?P<acl>\S+) (?P<dir>in|out)$'
+        set: {"acl_{{ dir }}": "{{ acl }}"}
+      - id: if.duplex
+        match: '^duplex (?P<d>\S+)$'
+        set: {duplex: "{{ d | lex('duplex') }}"}
+      # Wrong: a fixed value that is not one of the choices.
+      - id: if.fast
+        match: '^speed fast$'
+        set: {speed: fast}
+      # Wrong: no column can have this name.
+      - id: if.shelf
+        match: '^shelf (?P<s>\S+) (?P<dir>in|out)$'
+        set: {"shelf_{{ dir }}": "{{ s }}"}
+      # Wrong: a kind of word that is not in the lexicon.
+      - id: if.colour
+        match: '^colour (?P<c>\S+)$'
+        set: {description: "{{ c | lex('colour') }}"}
+      # Wrong: one of the fixed values of a list is not an address.
+      - id: if.relay
+        match: '^relay standard$'
+        append: {dhcp_relay: "192.0.2.67, standard"}
+      # A line that only holds its children.
+      - id: if.box
+        match: '^box$'
+        children:
+          - id: if.box.mtu
+            match: '^mtu (?P<n>\d+)$'
+            set: {mtu: "{{ n }}"}
+
+  # Wrong: a fixed key that is not a network.
+  - id: route.default
+    match: '^default-route (?P<nh>\S+)$'
+    row: {table: static_routes, key: {prefix: everything, next_hop: "{{ nh }}"}}
+
+  # Wrong: emit into a table that is not there, and a set on a list column.
+  - id: note
+    match: '^note (?P<n>\S+)$'
+    emit:
+      - table: shelves
+        key: {name: "{{ n }}"}
+      - table: interfaces
+        key: {name: GigabitEthernet0/0}
+        set: {dhcp_relay: 192.0.2.67}
+
+  # The work table x_seen is read by a when only; x_lost by nothing.
+  - id: seen
+    match: '^seen (?P<n>\S+)$'
+    emit:
+      - table: x_seen
+        key: {name: "{{ n }}"}
+  - id: lost
+    match: '^lost (?P<n>\S+)$'
+    emit:
+      - table: x_lost
+        key: {name: "{{ n }}"}
+  - id: user
+    match: '^user (?P<n>\S+)$'
+    when: "lookup('x_seen', name=n)"
+    row: {table: users, key: {name: "{{ n }}"}}
+
+derive:
+  # Wrong: a table to go over that is not there, a column that is not there.
+  - id: boxes
+    for: boxes
+    as: b
+    row: {table: vrfs, key: {name: "{{ b.name }}"}}
+    set: {colour: "{{ b.colour }}"}

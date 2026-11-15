@@ -1,0 +1,30 @@
+# What the device does when the line is absent. Only values that were read in
+# the command references (the section of cmdref is named on each line).
+defaults:
+  - {table: interfaces, column: enabled, value: true}          # 4.2: only "shutdown" is shown
+  - {table: tunnels, column: type, value: gre}                 # 4.14
+  - {table: syslog_servers, column: facility, value: local7}   # 4.4
+  - {table: fhrp, column: version, value: 1, when: "row.protocol == 'hsrp'"}         # 4.8
+  - {table: fhrp, column: priority, value: 100, when: "row.protocol == 'hsrp'"}      # 4.8
+  # A range is advertised unless the line says "not-advertise" (the word
+  # "advertise" is optional in the syntax line, cmdref 7.6; the sentence
+  # that names the default was not found: README).
+  - {table: ospf_ranges, column: advertise, value: true}       # 7.6
+  - {table: fhrp, column: priority, value: 100, when: "row.protocol == 'vrrp'"}      # 4.8
+  - {table: fhrp, column: preempt, value: true, when: "row.protocol == 'vrrp'"}      # 4.8
+  - {table: fhrp, column: advert_interval, value: 1, when: "row.protocol == 'vrrp'"} # 4.8
+  - {table: tracks, column: interval, value: 60, when: "row.type == 'icmp'"}         # 7.9 (frequency)
+  - {table: dhcp_pools, column: lease, value: 1d}              # 4.15
+  - {table: ipsec_tunnels, column: ike_encryption, value: des} # 7.2
+  - {table: ipsec_tunnels, column: ike_hash, value: sha1}      # 7.2
+  - {table: ipsec_tunnels, column: ike_dh, value: dh1}         # 7.2
+  - {table: ipsec_tunnels, column: ike_lifetime, value: 86400} # 7.2
+  - {table: ipsec_tunnels, column: ipsec_lifetime, value: 3600} # 4.13
+  - {table: ipsec_tunnels, column: pfs, value: none}           # 7.4
+  - {table: ipsec_selectors, column: protocol, value: ip}      # the template writes "permit ip"
+  # Not a default of the device: a secret written without its form is written
+  # out as a plain one (templates/system.j2).
+  - {table: devices, column: secret_form, value: plain, when: "row.enable_secret"}
+  - {table: users, column: secret_form, value: plain, when: "row.secret"}
+  - {table: qos_classes, column: match, value: all}            # 7.16 (1)
+  - {table: qos_policies, column: police_exceed, value: drop, when: "row.police_bps"}  # 7.16 (3)

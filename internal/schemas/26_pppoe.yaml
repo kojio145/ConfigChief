@@ -1,0 +1,15 @@
+table: pppoe
+title: {ja: PPPoE, en: PPPoE}
+since: M4
+key: [device, name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: 名前, en: Name}, type: string, required: true, auto_name: true, note: {ja: "メーカーに名前が無ければ、取り込み時に論理 IF の名前を入れる。比べるときは、名前でなく中身で行を合わせる", en: "The logical interface on import where the vendor has no name. Rows are matched by what they hold, not by this name"}}
+  - {name: physical_if, title: {ja: 物理 IF, en: Physical interface}, type: ifname, required: true, note: {ja: "回線につながる IF", en: "The interface the line is on"}}
+  - {name: logical_if, title: {ja: 論理 IF, en: Logical interface}, type: ifname, required: true, note: {ja: "アドレスや NAT を設定する IF。インタフェースのシートに行を持つ", en: "The interface that has the address and NAT. It has a row on the Interfaces sheet"}}
+  - {name: username, title: {ja: 接続 ID, en: User name}, type: string, required: true}
+  - {name: password, title: {ja: 接続パスワード, en: Password}, type: secret, required: true}
+  - {name: auth, title: {ja: 認証方式, en: Authentication}, type: enum, values: [chap, pap, chap_pap]}
+  - {name: service_name, title: {ja: サービス名, en: Service name}, type: string}
+  - {name: default_route, title: {ja: デフォルト経路を作る, en: Default route}, type: bool}
+  - {name: keepalive, title: {ja: 監視間隔（秒）, en: Keepalive (s)}, type: int}

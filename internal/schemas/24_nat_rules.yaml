@@ -1,0 +1,18 @@
+table: nat_rules
+title: {ja: NAT, en: NAT}
+since: M3
+key: [device, name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: 名前, en: Name}, type: string, required: true, auto_name: true, note: {ja: "取り込み時は nat1 から自動で振る。比べるときは、名前でなく中身で行を合わせる", en: "Named nat1, nat2 … on import. Rows are matched by what they hold, not by this name"}}
+  - {name: type, title: {ja: 種類, en: Type}, type: enum, values: [pat_interface, pat_pool, dynamic_pool, static, static_port], required: true, note: {ja: "pat_interface = 外側 IF のアドレスへまとめて変換", en: "pat_interface = everything goes out with the address of the outside interface"}}
+  - {name: outside_if, title: {ja: 外側 IF, en: Outside interface}, type: ifname}
+  - {name: match_acl, title: {ja: 対象の通信, en: Match ACL}, type: ref, ref: acls.name, note: {ja: "空 = すべて", en: "Empty = everything"}}
+  - {name: pool_start, title: {ja: 変換後アドレスの先頭, en: Pool start}, type: ip4}
+  - {name: pool_end, title: {ja: 変換後アドレスの末尾, en: Pool end}, type: ip4}
+  - {name: pool_prefix, title: {ja: 範囲のプレフィックス長, en: Pool prefix length}, type: int, min: 0, max: 32}
+  - {name: local_ip, title: {ja: 内側アドレス, en: Local address}, type: ip4}
+  - {name: global_ip, title: {ja: 外側アドレス, en: Global address}, type: ip4, also: [interface], note: {ja: "interface と書くと外側 IF のアドレス", en: "interface = the address of the outside interface"}}
+  - {name: protocol, title: {ja: プロトコル, en: Protocol}, type: enum, values: [tcp, udp]}
+  - {name: local_port, title: {ja: 内側ポート, en: Local port}, type: int, min: 1, max: 65535}
+  - {name: global_port, title: {ja: 外側ポート, en: Global port}, type: int, min: 1, max: 65535}

@@ -1,0 +1,29 @@
+hostname rt-a01
+!
+! ip http server is named in this comment only
+username admin secret dummy-admin-secret-sample
+!
+interface GigabitEthernet0/0
+ description to rt-a02
+ ip address 192.0.2.1 255.255.255.252
+ no ip proxy-arp
+!
+interface GigabitEthernet0/1
+ description sample lan
+ ip address 198.51.100.1 255.255.255.0
+!
+interface GigabitEthernet0/2
+ shutdown
+!
+router bgp 64496
+ address-family ipv4
+  neighbor 192.0.2.2 activate
+  no synchronization
+!
+line vty 0 4
+ transport input telnet ssh
+!
+line vty 5 15
+ transport input telnet ssh
+!
+end

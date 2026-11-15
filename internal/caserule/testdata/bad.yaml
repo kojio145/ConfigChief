@@ -1,0 +1,88 @@
+# Every rule here is written wrong, each in its own way.
+rules:
+  - title: id がない
+    severity: error
+    require_line: '^hostname '
+  - id: G-610
+    title: ツールのチェックと同じ形
+    severity: error
+    require_line: '^hostname '
+  - id: P-103
+    severity: error
+    require_line: '^hostname '
+  - id: P-104
+    title: 重大度がない
+    require_line: '^hostname '
+  - id: P-105
+    title: 重大度が違う
+    severity: fatal
+    require_line: '^hostname '
+  - id: P-106
+    title: 種類がない
+    severity: error
+  - id: P-107
+    title: 種類が 2 つ
+    severity: error
+    require_line: '^hostname '
+    forbid_line: '^end$'
+  - id: P-108
+    title: 正規表現が読めない
+    severity: error
+    forbid_line: '^(hostname'
+  - id: P-109
+    title: under が読めない
+    severity: error
+    under: '(?=interface)'
+    forbid_line: '^shutdown$'
+  - id: P-110
+    title: 行のルールに表
+    severity: error
+    table: interfaces
+    require_line: '^hostname '
+  - id: P-111
+    title: 表がない
+    severity: error
+    table: no_such_table
+    expr: 'row.name != ""'
+  - id: P-112
+    title: 式が読めない
+    severity: error
+    table: interfaces
+    expr: 'row.name =='
+  - id: P-113
+    title: where が読めない
+    severity: error
+    table: interfaces
+    where: 'row.kind in ('
+    expr: 'row.name != ""'
+  - id: P-114
+    title: 列がない
+    severity: error
+    unique: {table: interfaces, column: no_such_column}
+  - id: P-115
+    title: 列を書いていない
+    severity: error
+    unique: {table: interfaces}
+  - id: P-116
+    title: scope が違う
+    severity: error
+    unique: {table: interfaces, column: ipv4, scope: site}
+  - id: P-117
+    title: そろえるルールに scope
+    severity: error
+    equal_across: {table: ntp_servers, column: server, scope: device}
+  - id: P-118
+    title: 式のルールに under
+    severity: error
+    table: interfaces
+    under: '^interface '
+    expr: 'row.name != ""'
+  - id: P-119
+    title: 表を外に書いた
+    severity: error
+    table: interfaces
+    unique: {table: interfaces, column: ipv4}
+  - id: P-120
+    title: 空の正規表現
+    severity: error
+    require_line: ''

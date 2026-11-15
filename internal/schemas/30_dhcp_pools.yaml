@@ -1,0 +1,15 @@
+table: dhcp_pools
+title: {ja: DHCP, en: DHCP}
+since: M4
+key: [device, name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: 名前, en: Name}, type: string, required: true}
+  - {name: network, title: {ja: ネットワーク, en: Network}, type: net4, required: true}
+  - {name: range_start, title: {ja: 配る範囲の先頭, en: Range start}, type: ip4}
+  - {name: range_end, title: {ja: 配る範囲の末尾, en: Range end}, type: ip4}
+  - {name: excluded, title: {ja: 配らないアドレス, en: Excluded}, type: "list<string>", note: {ja: "192.0.2.1-192.0.2.10 の形。複数はカンマで区切る", en: "Like 192.0.2.1-192.0.2.10. Separate with commas"}}
+  - {name: default_router, title: {ja: デフォルトゲートウェイ, en: Default router}, type: ip4}
+  - {name: dns_servers, title: {ja: DNS サーバ, en: DNS servers}, type: "list<ip4>"}
+  - {name: domain, title: {ja: ドメイン名, en: Domain}, type: string}
+  - {name: lease, title: {ja: 貸し出し時間, en: Lease}, type: string, note: {ja: "1d、12h の形", en: "Like 1d or 12h"}}

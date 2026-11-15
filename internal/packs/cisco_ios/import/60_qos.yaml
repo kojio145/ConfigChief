@@ -1,0 +1,319 @@
+# QoS (stage M6). Syntax: cmdref 7.16 (MQC).
+#
+# How the device shows these lines (the order, names or numbers for DSCP,
+# "ip" in "match ip dscp", "police" on one line or several, the rate of
+# "shape" with or without k/m/g) is not in the manuals: every form found in
+# the command reference is read, and nothing depends on the order.
+rules:
+  # "match-all" is the default of the device (cmdref 7.16 (1)): an empty
+  # cell is filled from defaults.yaml.
+  - id: qos.class
+    match: '^class-map(?: (?P<m>match-all|match-any))? (?P<name>\S+)$'
+    row: {table: qos_classes, key: {name: "{{ name }}"}}
+    set: {match: "{{ m | replace('match-', '') }}"}
+    children:
+      - id: qos.class.acl
+        match: '^match access-group (?:name (?P<name>\S+)|(?P<n>\d+))$'
+        row: {table: qos_class_matches, key: {class: "{{ parent.name }}", seq: "{{ (rows('qos_class_matches', class=parent.name) | length + 1) * 10 }}"}}
+        set: {acl: "{{ name if name else n }}"}
+      # Up to 8 values on a line; names are turned into numbers.
+      - id: qos.class.dscp
+        match: '^match (?:ip )?dscp (?P<v>\S+(?: \S+){0,7})$'
+        row: {table: qos_class_matches, key: {class: "{{ parent.name }}", seq: "{{ (rows('qos_class_matches', class=parent.name) | length + 1) * 10 }}"}}
+        append: {dscp: "{% for d in v | split(' ') %}{{ d if d is digits else d | unlex('dscp') }} {% endfor %}"}
+      - id: qos.class.precedence
+        match: '^match (?:ip )?precedence (?P<v>\S+(?: \S+){0,3})$'
+        row: {table: qos_class_matches, key: {class: "{{ parent.name }}", seq: "{{ (rows('qos_class_matches', class=parent.name) | length + 1) * 10 }}"}}
+        append: {precedence: "{% for d in v | split(' ') %}{{ d if d is digits else d | unlex('precedence') }} {% endfor %}"}
+      # A condition with no column filled is "every packet".
+      - id: qos.class.any
+        match: '^match any$'
+        row: {table: qos_class_matches, key: {class: "{{ parent.name }}", seq: "{{ (rows('qos_class_matches', class=parent.name) | length + 1) * 10 }}"}}
+
+  # A policy has a row per class; "class-default" is "default" in the
+  # dataset.
+  - id: qos.policy
+    match: '^policy-map (?P<name>\S+)$'
+    children:
+      - id: qos.policy.class
+        match: '^class (?P<cls>\S+)$'
+        row:
+          table: qos_policies
+          key:
+            policy: "{{ parent.name }}"
+            class: "{{ 'default' if cls == 'class-default' else cls }}"
+        set: {seq: "{{ (rows('qos_policies', policy=parent.name) | length + 1) * 10 }}"}
+        children:
+          # kbps; the burst is in bytes.
+          - id: qos.policy.priority
+            match: '^priority(?: (?P<v>\d+)(?: (?P<b>\d+))?)?$'
+            set: {priority: true, bandwidth_kbps: "{{ v }}", priority_burst: "{{ b }}"}
+          - id: qos.policy.priority.percent
+            match: '^priority percent (?P<p>\d+)(?: (?P<b>\d+))?$'
+            set: {priority: true, bandwidth_percent: "{{ p }}", priority_burst: "{{ b }}"}
+          - id: qos.policy.priority.level
+            match: '^priority level (?P<l>[12])$'
+            set: {priority: true, priority_level: "{{ l }}"}
+          - id: qos.policy.bandwidth
+            match: '^bandwidth (?P<v>\d+)$'
+            set: {bandwidth_kbps: "{{ v }}"}
+          - id: qos.policy.bandwidth.percent
+            match: '^bandwidth percent (?P<p>\d+)$'
+            set: {bandwidth_percent: "{{ p }}"}
+          - id: qos.policy.bandwidth.remaining
+            match: '^bandwidth remaining percent (?P<p>\d+)$'
+            set: {bandwidth_remaining: "{{ p }}"}
+          # bps, or a number with k / m / g. Bc and Be are bits.
+          - id: qos.policy.shape
+            match: '^shape average (?P<v>\d+[kmg]?)(?: (?P<bc>\d+)(?: (?P<be>\d+))?)?$'
+            set:
+              shape_bps: "{{ (v[:-1] | int * (1000 if v[-1] == 'k' else (1000000 if v[-1] == 'm' else 1000000000))) if v[-1] in 'kmg' else v }}"
+              shape_bc: "{{ bc }}"
+              shape_be: "{{ be }}"
+          # On one line, or with the actions on the lines below. The bursts
+          # are bytes. "conform-action transmit" is what the device does
+          # without the word.
+          - id: qos.policy.police
+            match: '^police (?:cir |rate )?(?P<v>\d+[kmg]?)(?: (?:bc )?(?P<bc>\d+))?(?: (?:be )?(?P<be>\d+))?(?: conform-action transmit)?(?: exceed-action (?:(?P<ex>drop|transmit)|set-dscp-transmit (?P<exd>\S+)|set-prec-transmit (?P<exp>\S+)))?$'
+            set:
+              police_bps: "{{ (v[:-1] | int * (1000 if v[-1] == 'k' else (1000000 if v[-1] == 'm' else 1000000000))) if v[-1] in 'kmg' else v }}"
+              police_bc: "{{ bc }}"
+              police_be: "{{ be }}"
+              police_exceed: "{{ ex if ex else ('set_dscp' if exd else ('set_precedence' if exp else '')) }}"
+              police_exceed_value: "{{ (exd if exd is digits else exd | unlex('dscp')) if exd else ((exp if exp is digits else exp | unlex('precedence')) if exp else '') }}"
+            children:
+              - id: qos.policy.police.conform
+                match: '^conform-action transmit$'
+              - id: qos.policy.police.exceed
+                match: '^exceed-action (?:(?P<ex>drop|transmit)|set-dscp-transmit (?P<exd>\S+)|set-prec-transmit (?P<exp>\S+))$'
+                set:
+                  police_exceed: "{{ ex if ex else ('set_dscp' if exd else 'set_precedence') }}"
+                  police_exceed_value: "{{ (exd if exd is digits else exd | unlex('dscp')) if exd else ((exp if exp is digits else exp | unlex('precedence')) if exp else '') }}"
+          - id: qos.policy.set.dscp
+            match: '^set (?:ip )?dscp (?P<v>\S+)$'
+            set: {set_dscp: "{{ v if v is digits else v | unlex('dscp') }}"}
+          - id: qos.policy.set.precedence
+            match: '^set (?:ip )?precedence (?P<v>\S+)$'
+            set: {set_precedence: "{{ v if v is digits else v | unlex('precedence') }}"}
+          - id: qos.policy.queue_limit
+            match: '^queue-limit (?P<v>\d+)(?: packets)?$'
+            append: {queue_limit: "{{ v }}"}
+          - id: qos.policy.fair_queue
+            match: '^fair-queue$'
+            set: {fair_queue: true}
+          # A child policy: joined below.
+          - id: qos.policy.child
+            match: '^service-policy (?P<child>\S+)$'
+            emit:
+              - table: x_qos_nest
+                key: {policy: "{{ name }}", class: "{{ 'default' if cls == 'class-default' else cls }}"}
+                set: {child: "{{ child }}"}
+
+  # ---- the forms before MQC (cmdref 7.17) ----
+  # A priority list is one class "pq<n>" whose conditions carry the queue;
+  # a list of the device with no "default" line sends the rest to "normal"
+  # (derive qos.pq.default). "tcp <port>" and "udp <port>" become a list
+  # "pq<n>-tcp<port>" that matches the port on either side.
+  - id: qos.pq.acl
+    match: '^priority-list (?P<n>\d+) protocol ip (?P<q>high|medium|normal|low)(?: list (?P<acl>\S+))?$'
+    row: {table: qos_classes, key: {name: "pq{{ n }}"}}
+    set: {match: any}
+    emit:
+      - table: qos_class_matches
+        key: {class: "pq{{ n }}", seq: "{{ (rows('qos_class_matches', class='pq' ~ n) | length + 1) * 10 }}"}
+        set: {acl: "{{ acl }}", queue: "{{ q }}"}
+  - id: qos.pq.port
+    match: '^priority-list (?P<n>\d+) protocol ip (?P<q>high|medium|normal|low) (?P<proto>tcp|udp) (?P<port>\d+)$'
+    row: {table: qos_classes, key: {name: "pq{{ n }}"}}
+    set: {match: any}
+    emit:
+      - table: acls
+        key: {name: "pq{{ n }}-{{ proto }}{{ port }}"}
+        set: {type: extended}
+      - table: acl_entries
+        key: {acl: "pq{{ n }}-{{ proto }}{{ port }}", seq: "10"}
+        set: {action: permit, protocol: "{{ proto }}", src: any, dst: any, dst_port: "{{ port }}"}
+      - table: acl_entries
+        key: {acl: "pq{{ n }}-{{ proto }}{{ port }}", seq: "20"}
+        set: {action: permit, protocol: "{{ proto }}", src: any, src_port: "{{ port }}", dst: any}
+      - table: qos_class_matches
+        key: {class: "pq{{ n }}", seq: "{{ (rows('qos_class_matches', class='pq' ~ n) | length + 1) * 10 }}"}
+        set: {acl: "pq{{ n }}-{{ proto }}{{ port }}", queue: "{{ q }}"}
+  - id: qos.pq.default
+    match: '^priority-list (?P<n>\d+) default (?P<q>high|medium|normal|low)$'
+    row: {table: qos_classes, key: {name: "pq{{ n }}"}}
+    set: {match: any}
+    emit:
+      - table: x_pq_default
+        key: {list: "{{ n }}"}
+        set: {queue: "{{ q }}"}
+  - id: qos.pq.limit
+    match: '^priority-list (?P<n>\d+) queue-limit (?P<v>\d+ \d+ \d+ \d+)$'
+    row: {table: qos_policies, key: {policy: "pq{{ n }}", class: "pq{{ n }}"}}
+    set: {seq: "10"}
+    append: {queue_limit: "{{ v }}"}
+
+  # A custom queue list is a class "cq<n>-<queue>" per queue; the share of a
+  # queue is its byte count over the sum of the byte counts (1500 where the
+  # list has none), in whole percent (derive qos.cq.policy). That is near
+  # the device but not the same (README).
+  - id: qos.cq.acl
+    match: '^queue-list (?P<n>\d+) protocol ip (?P<q>\d+)(?: list (?P<acl>\S+))?$'
+    row: {table: qos_classes, key: {name: "cq{{ n }}-{{ q }}"}}
+    set: {match: any}
+    emit:
+      - table: qos_class_matches
+        key: {class: "cq{{ n }}-{{ q }}", seq: "{{ (rows('qos_class_matches', class='cq' ~ n ~ '-' ~ q) | length + 1) * 10 }}"}
+        set: {acl: "{{ acl }}"}
+      - table: x_cq_q
+        key: {list: "{{ n }}", queue: "{{ q }}"}
+        set: {used: "true"}
+  - id: qos.cq.port
+    match: '^queue-list (?P<n>\d+) protocol ip (?P<q>\d+) (?P<proto>tcp|udp) (?P<port>\d+)$'
+    row: {table: qos_classes, key: {name: "cq{{ n }}-{{ q }}"}}
+    set: {match: any}
+    emit:
+      - table: acls
+        key: {name: "cq{{ n }}-{{ proto }}{{ port }}"}
+        set: {type: extended}
+      - table: acl_entries
+        key: {acl: "cq{{ n }}-{{ proto }}{{ port }}", seq: "10"}
+        set: {action: permit, protocol: "{{ proto }}", src: any, dst: any, dst_port: "{{ port }}"}
+      - table: acl_entries
+        key: {acl: "cq{{ n }}-{{ proto }}{{ port }}", seq: "20"}
+        set: {action: permit, protocol: "{{ proto }}", src: any, src_port: "{{ port }}", dst: any}
+      - table: qos_class_matches
+        key: {class: "cq{{ n }}-{{ q }}", seq: "{{ (rows('qos_class_matches', class='cq' ~ n ~ '-' ~ q) | length + 1) * 10 }}"}
+        set: {acl: "cq{{ n }}-{{ proto }}{{ port }}"}
+      - table: x_cq_q
+        key: {list: "{{ n }}", queue: "{{ q }}"}
+        set: {used: "true"}
+  - id: qos.cq.default
+    match: '^queue-list (?P<n>\d+) default (?P<q>\d+)$'
+    row: {table: qos_classes, key: {name: "cq{{ n }}-{{ q }}"}}
+    set: {match: any}
+    emit:
+      - table: x_cq_default
+        key: {list: "{{ n }}"}
+        set: {queue: "{{ q }}"}
+      - table: x_cq_q
+        key: {list: "{{ n }}", queue: "{{ q }}"}
+        set: {used: "true"}
+  - id: qos.cq.queue
+    match: '^queue-list (?P<n>\d+) queue (?P<q>\d+)(?: byte-count (?P<b>\d+))?(?: limit (?P<l>\d+))?$'
+    when: "b or l"
+    emit:
+      - table: x_cq_queue
+        key: {list: "{{ n }}", queue: "{{ q }}"}
+        set: {byte_count: "{{ b }}", limit: "{{ l }}"}
+
+derive:
+  # A policy that has only "class class-default" with "shape average" (and,
+  # mostly, a child policy under it) shapes the whole interface: the binding
+  # gets the rate and the child, and the policy leaves the dataset
+  # (qos.parent.taken). Any other policy with a child leaves its
+  # "service-policy" lines unknown.
+  - id: qos.bind.shaped
+    for: x_qos_bind
+    as: b
+    let:
+      nest: "first('x_qos_nest', policy=b.policy)"
+      n: "lookup('x_qos_nest', policy=b.policy, class='default')"
+      p: "lookup('qos_policies', policy=b.policy, class='default')"
+      count: "rows('qos_policies', policy=b.policy) | length"
+      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue"
+      inb: "first('x_qos_bind', policy=b.policy, direction='input')"
+    when: "count == 1 and p.shape_bps and not more and b.direction == 'output' and not inb.policy and (n.child or not nest.child)"
+    row: {table: qos_bindings, key: {if_name: "{{ b.if_name }}", direction: "{{ b.direction }}"}}
+    set:
+      policy: "{{ n.child }}"
+      shape_bps: "{{ p.shape_bps }}"
+      shape_bc: "{{ p.shape_bc }}"
+      shape_be: "{{ p.shape_be }}"
+  - id: qos.bind
+    for: x_qos_bind
+    as: b
+    let:
+      nest: "first('x_qos_nest', policy=b.policy)"
+      p: "lookup('qos_policies', policy=b.policy, class='default')"
+      count: "rows('qos_policies', policy=b.policy) | length"
+      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue"
+      inb: "first('x_qos_bind', policy=b.policy, direction='input')"
+    when: "not nest.child and not (count == 1 and p.shape_bps and not more and b.direction == 'output' and not inb.policy)"
+    row: {table: qos_bindings, key: {if_name: "{{ b.if_name }}", direction: "{{ b.direction }}"}}
+    set: {policy: "{{ b.policy }}"}
+  - id: qos.parent.taken
+    for: qos_policies
+    as: p
+    let:
+      nest: "first('x_qos_nest', policy=p.policy)"
+      n: "lookup('x_qos_nest', policy=p.policy, class='default')"
+      count: "rows('qos_policies', policy=p.policy) | length"
+      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue"
+      outb: "first('x_qos_bind', policy=p.policy, direction='output')"
+      inb: "first('x_qos_bind', policy=p.policy, direction='input')"
+    when: "p.class == 'default' and count == 1 and p.shape_bps and not more and outb.policy and not inb.policy and (n.child or not nest.child)"
+    remove: true
+  # "class class-default" with nothing under it says nothing: no row.
+  - id: qos.policy.bare
+    for: qos_policies
+    as: p
+    let:
+      n: "lookup('x_qos_nest', policy=p.policy, class=p.class)"
+      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue"
+    when: "p.class == 'default' and not more and not p.shape_bps and not p.shape_bc and not p.shape_be and not n.child"
+    remove: true
+
+  # ---- the forms before MQC ----
+  - id: qos.pq.bind
+    for: x_pq_bind
+    as: b
+    row: {table: qos_bindings, key: {if_name: "{{ b.if_name }}", direction: output}}
+    set: {policy: "pq{{ b.list }}"}
+  - id: qos.pq.policy
+    for: x_pq_bind
+    as: b
+    row: {table: qos_policies, key: {policy: "pq{{ b.list }}", class: "pq{{ b.list }}"}}
+    set: {seq: "10"}
+  # The "default" line is the last condition of the class: every packet.
+  # Without the line the rest goes to the normal queue (cmdref 7.17 (3)).
+  - id: qos.pq.rest
+    for: x_pq_default
+    as: d
+    row: {table: qos_class_matches, key: {class: "pq{{ d.list }}", seq: "{{ (rows('qos_class_matches', class='pq' ~ d.list) | length + 1) * 10 }}"}}
+    set: {queue: "{{ d.queue }}"}
+  - id: qos.pq.rest.normal
+    for: x_pq_bind
+    as: b
+    let:
+      d: "lookup('x_pq_default', list=b.list)"
+    when: "not d.queue"
+    row: {table: qos_class_matches, key: {class: "pq{{ b.list }}", seq: "{{ (rows('qos_class_matches', class='pq' ~ b.list) | length + 1) * 10 }}"}}
+    set: {queue: normal}
+  - id: qos.cq.rest
+    for: x_cq_default
+    as: d
+    let:
+      # A condition with no column filled is "every packet": the row is
+      # opened by its key alone.
+      seq: "(rows('qos_class_matches', class='cq' ~ d.list ~ '-' ~ d.queue) | length + 1) * 10"
+    row: {table: qos_class_matches, key: {class: "cq{{ d.list }}-{{ d.queue }}", seq: "{{ seq }}"}}
+  - id: qos.cq.bind
+    for: x_cq_bind
+    as: b
+    row: {table: qos_bindings, key: {if_name: "{{ b.if_name }}", direction: output}}
+    set: {policy: "cq{{ b.list }}"}
+  - id: qos.cq.policy
+    for: x_cq_q
+    as: c
+    let:
+      mine: "lookup('x_cq_queue', list=c.list, queue=c.queue)"
+      used: "rows('x_cq_q', list=c.list) | map(attribute='queue') | list"
+      counted: "rows('x_cq_queue', list=c.list) | selectattr('queue', 'in', used) | selectattr('byte_count') | list"
+      total: "(counted | map(attribute='byte_count') | map('int') | sum) + 1500 * (used | length - counted | length)"
+    when: "c.used"
+    row: {table: qos_policies, key: {policy: "cq{{ c.list }}", class: "cq{{ c.list }}-{{ c.queue }}"}}
+    set:
+      seq: "{{ c.queue | int * 10 }}"
+      bandwidth_percent: "{{ [((mine.byte_count | int) if mine.byte_count else 1500) * 100 // total, 1] | max }}"
+    append: {queue_limit: "{{ mine.limit }}"}

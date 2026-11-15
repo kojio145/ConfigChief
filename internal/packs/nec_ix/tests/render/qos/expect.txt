@@ -1,0 +1,61 @@
+hostname ix-q11
+!
+ip access-list al-q-biz permit ip src 192.0.2.0/24 dest 203.0.113.9/32 precedence 5
+ip access-list al-q-biz permit tcp src any dest any dport eq 443 dscp 18
+!
+ip access-list qos-d1 permit ip src any dest any dscp 34
+ip access-list qos-d1 permit ip src any dest any dscp 36
+ip access-list qos-d2 permit ip src any dest any dscp 46
+ip access-list qos-d3 permit ip src any dest any precedence 5
+!
+class-map match-any cm-q-biz
+  match ip access-list al-q-biz normal
+  match any low
+class-map match-all cm-q-video
+  match ip access-list qos-d1
+class-map match-any cm-q-voice
+  match ip access-list qos-d2 high
+  match ip access-list qos-d3
+!
+policy-map pm-q-in
+  class cm-q-biz
+    set ip dscp 18
+  class class-local
+    set ip precedence 6
+  class class-default
+policy-map pm-q-out
+  class cm-q-voice
+    priority 512 4000
+  class cm-q-video
+    bandwidth percent 30
+    shape 4000000 16000 0
+  class cm-q-biz
+    queue-limit 10 20 30 40
+  class class-local
+  class class-default
+    bandwidth 1000
+policy-map pm-q-pq
+  class cm-q-biz
+  class class-local
+  class class-default
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.1/30
+  service-policy enable
+  service-policy output pm-q-out
+  traffic-shape rate 10000000 10000
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 192.0.2.1/24
+  service-policy input pm-q-in
+  service-policy enable
+  service-policy output pm-q-pq
+  no shutdown
+!
+interface GigaEthernet2.0
+  ip address 198.51.100.1/24
+  service-policy enable
+  traffic-shape rate 2000000
+  no shutdown
+!

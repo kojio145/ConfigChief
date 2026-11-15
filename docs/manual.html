@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>ConfigChief の使い方 - ConfigChief</title>
+<style>
+  :root { --ground:#f6f8fb; --panel:#fff; --panel-2:#eef2f7; --ink:#1b2430; --ink-soft:#4c5a6b; --line:#dde4ec; --accent:#2563eb; }
+  @media (prefers-color-scheme: dark) { :root { --ground:#0f141b; --panel:#171e28; --panel-2:#1f2835; --ink:#e6ebf2; --ink-soft:#aab6c5; --line:#2a3542; --accent:#6ea0ff; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink); font-family:"Segoe UI","Hiragino Sans","Noto Sans JP",system-ui,sans-serif; line-height:1.7; }
+  main { max-width:960px; margin:0 auto; padding:32px 20px 64px; }
+  nav { font-size:.9rem; margin-bottom:24px; } nav a { margin-right:14px; }
+  h1 { font-size:1.9rem; margin:0 0 16px; } h2 { font-size:1.3rem; margin:36px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line); } h3 { font-size:1.1rem; margin:24px 0 8px; }
+  a { color:var(--accent); }
+  code { background:var(--panel-2); padding:1px 5px; border-radius:4px; font-size:.92em; }
+  pre { background:var(--panel-2); padding:12px 14px; border-radius:8px; overflow-x:auto; line-height:1.5; } pre code { background:none; padding:0; }
+  table { border-collapse:collapse; margin:12px 0; display:block; overflow-x:auto; } th, td { border:1px solid var(--line); padding:5px 9px; vertical-align:top; } th { background:var(--panel-2); text-align:left; }
+  blockquote { margin:12px 0; padding:8px 16px; border-left:4px solid #e0a800; background:var(--panel); }
+  img { max-width:100%; height:auto; border:1px solid var(--line); border-radius:8px; }
+  footer { margin-top:48px; color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--line); padding-top:16px; }
+</style>
+</head>
+<body>
+<main>
+<nav><a href="index.html">ConfigChief</a><a href="manual.html">使い方</a><a href="tables.html">シートと列</a><a href="checks.html">チェック</a><a href="pack-guide.html">パックの書き方</a><a href="https://github.com/kojio145/ConfigChief">GitHub</a></nav>
+<h1>ConfigChief の使い方</h1>
+<p>ConfigChief は、ネットワーク機器のコンフィグを読んでメーカーによらない表（Excel のパラメータブック）にし、その表からコンフィグ・チェック結果表・納品用のシートを出すツールです。</p>
+<ul>
+<li>exe 1 つで動きます。インストールは要りません。外部と通信しません</li>
+<li>同じ入力からは、いつも同じ出力になります</li>
+<li>読めなかった行は「未対応」として必ず一覧に出します（黙って落としません）</li>
+<li>対応しているメーカーは Cisco IOS / IOS-XE と NEC UNIVERGE IX です。メーカーごとの読み方・書き方は「メーカーパック」というテキストのファイルにあり、足すことができます（<a href="pack-guide.html">パックの書き方</a>）</li>
+</ul>
+<blockquote><p><b>大事な注意</b>: 同梱のパックは、メーカーが公開しているコマンドリファレンスを読んで作りました。<b>実機の出力では確かめていません。</b> 生成したコンフィグは、必ず検証機に流して確かめてから使ってください。何を確かめていないかは、各パックの README（<code>internal/packs/&lt;パック&gt;/README.md</code>）の「確かめていないこと」にあります。</p></blockquote>
+<p>ほかのページ: <a href="tables.html">シートと列の一覧</a> ・ <a href="checks.html">チェックの一覧</a> ・ <a href="pack-guide.html">パックの書き方</a></p>
+<h2>1. 起動する</h2>
+<p><code>ConfigChief.exe</code> を置いて、ダブルクリックします。画面の表示には WebView2 ランタイム（Windows 11 には初めから入っています）が要ります。</p>
+<ul>
+<li>署名の無い exe なので、初めて起動するときに Microsoft Defender SmartScreen の警告が出ることがあります。「詳細情報」→「実行」で起動できます。取った exe は、リリースのページの SHA-256 と比べて確かめられます（PowerShell: <code>Get-FileHash ConfigChief.exe</code>）</li>
+<li>何も付けずに起動すると、画面が開きます。案件フォルダを付けて起動すると、その案件を開きます</li>
+<li>コマンドを付けて起動すると、窓を開かずにそのコマンドを行って終わります（8 章）</li>
+<li>書き込むのは、案件フォルダの中と、<code>%APPDATA%\ConfigChief</code>（最近使った案件の一覧と、画面の作業フォルダ）だけです。レジストリは書きません</li>
+</ul>
+<p><img src="img/home.png" alt="ホームの画面。旧コンフィグ・パラメータブック・生成とチェック・納品物の操作が並ぶ"></p>
+<h2>2. 案件フォルダ</h2>
+<p>1 つの案件が 1 つのフォルダです。中身はテキストと Excel だけなので、共有フォルダや git にそのまま置けます。</p>
+<pre><code>案件フォルダ/
+  project.yaml       案件の設定
+  parameters.xlsx    パラメータブック（値の正本）
+  input/old/         旧機器のコンフィグ（1 台 1 ファイル。端末ログのままでも読めます）
+  input/new/         手で書いた新コンフィグ（使うときだけ）
+  input/customer/    お客様からもらった一覧（xlsx・xls・csv）
+  input/logs/        検証機・本番の投入ログ、投入後の設定ログ
+  extra/             追加コンフィグ（パックが書けない設定を、人が書いて差し込む）
+  mappings/          お客様の一覧の、列の対応
+  rules/             案件ごとのチェックのルール
+  templates/         納品用パラメータシートのひな形
+  packs/             案件専用のメーカーパック（同じ ID の同梱パックより優先）
+  state/             判定・承認・控え・操作の記録
+  out/&lt;日時&gt;/        実行 1 回ごとの出力（コンフィグ、レポート）</code></pre>
+<ul>
+<li>ツールが書き換えるのは、パラメータブック（はっきり操作したときだけ。書く前に <code>state/backup/</code> へ控えを取ります）と、<code>state/</code>・<code>out/</code> だけです。<code>input/</code> と <code>extra/</code> は読むだけです</li>
+<li>パラメータブックを Excel で開いたままだと書けません。「Excel を閉じてください」と出たら、閉じてからやり直します</li>
+<li>文字コードは UTF-8 と Shift_JIS を自動で見分けます</li>
+</ul>
+<h2>3. 更改の流れ（機器の入れ替え。同じメーカーでも別メーカーでも同じ）</h2>
+<ol>
+<li><b>案件を作り、旧コンフィグを置く</b>: 画面の「案件」で作るか、<code>init</code>。旧機器のコンフィグを <code>input/old/</code> に入れます。端末ソフトのログ（<code>show running-config</code> を打った画面の保存）もそのまま置けます</li>
+<li><b>取り込む</b>: 画面の「取り込み」か <code>import</code>。行ごとに、取り込み済み・無視・未対応が色で分かります。パラメータブックができ、「機器対応」「IF 対応」のシートに案が入ります <img src="img/import-lines.png" alt="取り込みの画面。コンフィグの各行が、どの規則でどの表に入ったかが分かる（値はすべて架空の見本）"></li>
+<li><b>対応を決める</b>: Excel で「機器対応」（旧ホスト名 → 新ホスト名・新メーカー）と「IF 対応」（旧 IF 名 → 新 IF 名）を埋めます</li>
+<li><b>パラメータブックにする</b>: 「対応」の画面か <code>book</code>。対応を当てた設計データが、表ごとのシートに入ります。これ以降は、この Excel が値の正本です <img src="img/mapping.png" alt="対応の画面。旧 IF 名と新 IF 名の対応を確かめる"></li>
+<li><b>未対応の行を片付ける</b>: 画面の「未対応の行」か <code>judge</code>。同じ形の行をまとめて、「手動で対応」（追加コンフィグに書く）・「対応不要」・「保留」を付けます</li>
+<li><b>生成とチェック</b>: ホームの「生成とチェック」か <code>generate</code>。全台のコンフィグ（<code>out/&lt;日時&gt;/configs/</code>）と、チェック結果表（<code>reports/check_results.xlsx</code>・<code>.html</code>）が出ます。値の誤りがある機器のコンフィグは書きません <img src="img/result-findings.png" alt="結果の画面。Cisco の拠点ルータを NEC IX に書き換え、新しいメーカーで書けない値を指摘として出している"></li>
+<li><b>指摘を直すか、承認する</b>: エラーと警告は、Excel の値を直すか、理由を付けて承認します。未承認の指摘が残っている間は、出力フォルダに <code>UNVERIFIED.txt</code> が置かれます</li>
+<li><b>検証機で確かめる</b>: 1 台分を検証機に流し、その端末ログを <code>input/logs/</code> に置いて、画面の「ログ」か <code>logs</code>。機器に弾かれた行が一覧に出ます</li>
+<li><b>変更が来たら</b>: Excel を直して 6 をやり直します。2 回目からは、前回から変わった機器と行の一覧（<code>reports/changes.xlsx</code>）が出ます</li>
+<li><b>納品物を出す</b>: ホームの「納品物」か <code>export</code>。納品用パラメータシートと、相手に渡すパラメータ表が出ます</li>
+<li><b>投入の後</b>: 投入後の設定のログを <code>input/logs/</code> に置いて、<code>verify</code>。パラメータブックから作ったコンフィグとの違いが出ます</li>
+</ol>
+<h3>別メーカーへ書き換えるとき</h3>
+<p>「機器対応」の新メーカーを変えると、同じパラメータブックから別メーカーのコンフィグが出ます。新しいメーカーで書けないものは、3 通りで知らせます。どれも黙って落としません。</p>
+<table>
+<tr><th>出方</th><th>意味</th><th>すること</th></tr>
+<tr><td>G-602（エラー）</td><td>その列を、新しいメーカーのパックが書けない</td><td>持っていかないならセルを空にする。別の書き方で持っていくなら、追加コンフィグに書いてセルを空にする</td></tr>
+<tr><td>G-601・G-603・G-606（エラー）</td><td>列は書けるが、その値の書き方が新しいメーカーに無い・足りない値がある</td><td>指摘の文にある直し方のとおり、値を書き直す</td></tr>
+<tr><td>G-614（警告）</td><td>パックが、新しいメーカーの書き方に置き換えて書いた（例: QoS の「残りの帯域の %」を「帯域の %」に）</td><td>指摘の文を読み、置き換えでよければ承認する。よくなければ値を書き直す</td></tr>
+</table>
+<h2>4. 新規構築の流れ</h2>
+<ol>
+<li>案件を作り、ホームの「空のブックを作る（新規構築）」か <code>book --new</code>。見出しだけのパラメータブックができます。見出しのセルのコメントに、列の説明と記入例があります</li>
+<li>1 台目を、シート「機器」から書きます（ホスト名とメーカーは必須です）</li>
+<li>似た機器は、ホームの「機器の複製」か <code>clone --from &lt;元&gt; --to &lt;新しいホスト名,…&gt;</code> で増やします。値は元のままなので、アドレスなど機器ごとに違う値を直します（重なりはチェックが指摘します）</li>
+<li>全台に共通の値は、「機器」の列に <code>*</code>（全機器）か <code>@グループ名</code> を書いた 1 行で書けます。空の列をまとめて埋めたいときは、シート「共通値」を使います</li>
+<li>あとは更改の 6 以降と同じです</li>
+</ol>
+<h3>コンフィグを先に手で書く進め方</h3>
+<p>手で書いたコンフィグを <code>input/new/</code> に置いて取り込み、<code>book --from new</code> でパラメータブックにできます。旧コンフィグがあれば、「比較」で旧と新を比べて、入れ忘れと値の違いを確かめられます。</p>
+<h2>5. パラメータブック</h2>
+<ul>
+<li>1 つのシートが 1 種類の設定、1 行が設定 1 件です。シートと列の一覧は <a href="tables.html">tables.md</a></li>
+<li>1 行目が見出しです。列の順番は自由で、定義に無い見出しの列を足してもかまいません（自由列。追加コンフィグと納品用シートから使えます）</li>
+<li>有効・無効は <code>有効</code> <code>無効</code>、<code>○</code> <code>×</code>、<code>yes</code> <code>no</code>、<code>true</code> <code>false</code> のどれでも読みます</li>
+<li>複数の値を持つ列は、カンマか改行で区切ります</li>
+<li>秘密の値（パスワード・鍵）は平文で書きます。画面・チェック結果表・変更一覧では伏せ、生成するコンフィグには書きます</li>
+<li>同じキーの行が「ホスト名」「<code>@グループ名</code>」「<code>*</code>」の複数にあるときは、ホスト名 ＞ グループ ＞ <code>*</code> の順で 1 行を取ります</li>
+</ul>
+<h2>6. チェックと承認</h2>
+<p>チェックの一覧は <a href="checks.html">checks.md</a> です。</p>
+<table>
+<tr><th>頭の字</th><th>種類</th><th>例</th></tr>
+<tr><td>V</td><td>値</td><td>必須の値が空、アドレスの重なり、使われていない ACL</td></tr>
+<tr><td>X</td><td>対向（2 台の間）</td><td>IPsec の暗号が両端で違う、OSPF のエリアが違う</td></tr>
+<tr><td>G</td><td>生成</td><td>書けない値、生成した文面を読み直した結果が表と違う</td></tr>
+<tr><td>M</td><td>移行</td><td>旧との違い、対応が決まっていない IF</td></tr>
+<tr><td>S</td><td>お客様の一覧</td><td>一覧とパラメータブックの値が違う</td></tr>
+<tr><td>L</td><td>ログ</td><td>機器に弾かれた行、投入後の設定との違い</td></tr>
+</table>
+<ul>
+<li><b>承認</b>: 指摘をそのまま受け入れるときは、理由と名前を付けて承認します（結果の画面で指摘を選ぶか、<code>approve</code>）。警告は「この機器の同じチェック」「全機器の同じチェック」とまとめて承認できます。エラーは 1 件ずつです</li>
+<li><b>承認できない指摘</b>もあります（必須の値が空、文面が作れない、など）。値を直します</li>
+<li>承認は <code>state/approvals.yaml</code> に残り、チェック結果表の「承認」のシートに出ます</li>
+<li>重大度の変更・チェックの停止は、<code>project.yaml</code> の <code>checks.severity</code>・<code>checks.disable</code> に書きます</li>
+</ul>
+<h3>案件ごとのルール</h3>
+<p><code>rules/*.yaml</code> に、その案件だけの決まりを書けます。生成とチェックのたびに全台に当てます。</p>
+<pre><code>rules:
+  - id: P-001
+    title: 全台に NTP サーバがある
+    severity: error
+    require_line: &#39;^ntp server &#39;
+  - id: P-002
+    title: telnet を使わない
+    severity: warning
+    under: &#39;^line vty&#39;
+    forbid_line: &#39;^transport input .*telnet&#39;
+  - id: P-003
+    title: インタフェースの説明は空にしない
+    severity: warning
+    table: interfaces
+    where: &#39;row.enabled&#39;
+    expr: &#39;row.description != &#34;&#34;&#39;
+  - id: P-004
+    title: NTP サーバは全台で同じ
+    severity: warning
+    equal_across: {table: ntp_servers, column: server}</code></pre>
+<p>種類は 5 つです: <code>require_line</code>（含むべき行）、<code>forbid_line</code>（含んではいけない行）、<code>expr</code>（行ごとの式）、<code>unique</code>（値の重複）、<code>equal_across</code>（全台で値がそろっているか）。<code>devices</code> で機器を絞れます（ホスト名・<code>@グループ</code>・<code>vendor:パックの ID</code>）。</p>
+<h2>7. パックが書けない設定（追加コンフィグ）</h2>
+<p>パックが対応していない設定は、<code>extra/</code> に書いて差し込みます。</p>
+<table>
+<tr><th>ファイル</th><th>当たる機器</th></tr>
+<tr><td><code>extra/_all.j2</code></td><td>全機器</td></tr>
+<tr><td><code>extra/@グループ名.j2</code></td><td>そのグループの機器</td></tr>
+<tr><td><code>extra/ホスト名.j2</code></td><td>その機器</td></tr>
+</table>
+<ul>
+<li>書いた文面がそのまま出ます。Jinja2 の書き方で、パラメータブックの値を使えます（例: <code>{{ device.hostname }}</code>）</li>
+<li>差し込む位置は、先頭の行で指定できます（例: <code>{# position: after interfaces #}</code>）。指定が無ければ、末尾の手前です</li>
+</ul>
+<h2>8. コマンドライン</h2>
+<p>画面と同じ処理を、窓を開かずに行えます。バッチファイルから呼ぶと、終わるまで待ち、<code>%ERRORLEVEL%</code> で終了コードを見られます（0 = 見るものなし、1 = 未承認の指摘などが残っている、2 = 実行できなかった）。</p>
+<pre><code>ConfigChief.exe init     &lt;dir&gt; [--name &lt;案件名&gt;] [--kind migration|new]
+ConfigChief.exe import   --project &lt;dir&gt; [--source old|new] [--pack &lt;ID&gt;]
+ConfigChief.exe book     --project &lt;dir&gt; [--from old|new] [--replace]
+ConfigChief.exe book     --project &lt;dir&gt; --new
+ConfigChief.exe clone    --project &lt;dir&gt; --from &lt;ホスト名&gt; --to &lt;ホスト名&gt;[,&lt;ホスト名&gt;…]
+ConfigChief.exe compare  --project &lt;dir&gt; --a &lt;old|new|book&gt; --b &lt;old|new|book&gt;
+ConfigChief.exe generate --project &lt;dir&gt; [--device &lt;ホスト名&gt;]
+ConfigChief.exe check    --project &lt;dir&gt;
+ConfigChief.exe approve  --project &lt;dir&gt; --finding &lt;指紋&gt; --reason &lt;理由&gt; --by &lt;名前&gt;
+ConfigChief.exe approve  --project &lt;dir&gt; --rule &lt;ID&gt; --devices &lt;範囲&gt; [--table &lt;表&gt;] [--column &lt;列&gt;] --reason &lt;理由&gt; --by &lt;名前&gt;
+ConfigChief.exe approve  --project &lt;dir&gt; --remove &lt;承認の ID&gt;
+ConfigChief.exe judge    --project &lt;dir&gt; [--source old|new] [--all]
+ConfigChief.exe judge    --project &lt;dir&gt; --group &lt;ID&gt; --verdict manual|not_needed|hold|none [--devices &lt;範囲&gt;] [--reason &lt;理由&gt;] --by &lt;名前&gt;
+ConfigChief.exe customer --project &lt;dir&gt; [--draft &lt;ファイル&gt; [--sheet &lt;シート&gt;]] [--apply &lt;指紋&gt;,… | --apply-rule S-501|S-503 [--devices &lt;範囲&gt;]]
+ConfigChief.exe export   --project &lt;dir&gt; --what sheet|peer|unhandled [--secrets show|mask] [--source old|new]
+ConfigChief.exe logs     --project &lt;dir&gt;
+ConfigChief.exe verify   --project &lt;dir&gt;
+ConfigChief.exe sites    --project &lt;dir&gt; [--source book|old|new|logs]
+ConfigChief.exe diff     &lt;fileA&gt; &lt;fileB&gt;
+ConfigChief.exe diff     --tree &lt;fileA&gt; &lt;fileB&gt; [--keep-stamps] [--keep-secrets]
+ConfigChief.exe diff     --tree --project &lt;dir&gt; --a &lt;側&gt; --b &lt;側&gt;
+ConfigChief.exe pack test &lt;パックのフォルダ&gt; [--lines] [--dump]
+ConfigChief.exe pack columns &lt;パックのフォルダ&gt;
+ConfigChief.exe version</code></pre>
+<p>端末に直接打ったときは、Windows の決まりで、端末は終わりを待たずに次の入力を受け付けます（結果の文字は出ます）。待たせたいときは <code>start /wait ConfigChief.exe …</code> と打ちます。</p>
+<h2>9. そのほかの機能</h2>
+<ul>
+<li><b>比較</b>: 旧コンフィグ・新コンフィグ・パラメータブックのうち 2 つを、設計データとして比べます。文面どうしの比較（<code>diff</code>）と、階層を見た比較（<code>diff --tree</code>。親の行の下に違いを出します）もあります</li>
+<li><b>お客様の一覧</b>: お客様からもらった Excel・CSV の列を、<code>mappings/</code> の列対応でパラメータブックの列に結び付け、値の違いを出します。選んだ値をパラメータブックに反映できます</li>
+<li><b>多拠点の一覧</b>（<code>sites</code>）: 多くの拠点の同じ設定を、横に並べて見ます</li>
+<li><b>納品用パラメータシート</b>: <code>templates/</code> に置いた Excel のひな形に、値を流し込みます。ひな形が無ければ標準の形で出します</li>
+<li><b>未対応の行の持ち出し用レポート</b>（<code>export --what unhandled</code>）: 未対応の行を、値と名前を伏せた「形」にして出します。現場の外へ持ち出して、パックを直す材料にするためのものです。<b>渡す前に、必ず中身を見てください</b></li>
+</ul>
+<h2>10. 困ったとき</h2>
+<table>
+<tr><th>起きたこと</th><th>見るところ</th></tr>
+<tr><td>メーカーを判定できない</td><td>取り込みの画面で、候補からパックを選びます（<code>import --pack &lt;ID&gt;</code>）</td></tr>
+<tr><td>行が「未対応」になる</td><td>その行の理由が画面に出ます。パックの README の「読まない行」も見ます。設定として要るなら、追加コンフィグに書きます</td></tr>
+<tr><td>生成が止まる（コンフィグが出ない）</td><td>チェック結果表のエラーを見ます。値の誤り（V-101〜V-107・V-109）がある機器は書きません</td></tr>
+<tr><td>G-604（往復の不一致）が出る</td><td>生成した文面を読み直した結果が、表と違います。パックの不具合か、パックが書けない値です。指摘の場所の値を見ます</td></tr>
+<tr><td>機器に弾かれた</td><td><code>logs</code> の一覧に、弾かれた行と機器の返事が出ます。実機の書き方がパックと違うときは、追加コンフィグで補うか、パックを直します</td></tr>
+</table>
+<h2>11. 制限</h2>
+<ul>
+<li>実機の出力では確かめていません（冒頭の注意）</li>
+<li>表示は日本語だけです</li>
+<li>対応していない設定の例: ルートマップ、IKEv2、L2TP、VLAN・スイッチポート・LAG、IPv6 の経路制御。取り込みでは「未対応」になり、書き換えでは追加コンフィグで運びます</li>
+<li>機種ごとのポート名の定義（新 IF 名の案を機種から作る機能）は、まだありません</li>
+</ul>
+<footer>ConfigChief (MIT License) by KJO. このページは docs/ の Markdown から作っています。</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,19 @@
+# What the device writes back after a command (appendix B 4.4). The first
+# entry that matches a line counts. Sources: cmdref 7.14.
+#
+# The three rejections are the whole table "Common CLI Error Messages" of the
+# Configuration Fundamentals Configuration Guide. The quotes around the caret
+# differ between the table and the examples: any character is taken.
+errors:
+  - {id: invalid, match: '^% Invalid input detected at .\^. marker\.', level: rejected}
+  - {id: incomplete, match: '^% Incomplete command\.', level: rejected}
+  - {id: ambiguous, match: '^% Ambiguous command:', level: rejected}
+# Seen in the vendor's documents after a command that was taken.
+warnings:
+  - {id: warning, match: '^% ?Warning:', level: warning}
+  - {id: keys, match: '^% (Generating \d+ bit RSA keys|The key modulus size is )', level: warning}
+# Any other answer of the CLI: the pack does not know whether the command was
+# taken, and a person has to look. A system message ("%LINK-3-UPDOWN: ...")
+# is no answer to a command and matches nothing here.
+others:
+  - {id: other, match: '^%( |[A-Z][a-z])', level: unknown}

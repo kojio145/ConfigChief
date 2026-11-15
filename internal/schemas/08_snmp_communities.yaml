@@ -1,0 +1,9 @@
+table: snmp_communities
+title: {ja: SNMP コミュニティ, en: SNMP communities}
+since: M1
+key: [device, community]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: community, title: {ja: コミュニティ, en: Community}, type: secret, required: true}
+  - {name: access, title: {ja: 権限, en: Access}, type: enum, values: [ro, rw]}
+  - {name: acl, title: {ja: 接続元の制限, en: Source ACL}, type: ref, ref: acls.name}

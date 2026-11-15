@@ -1,0 +1,27 @@
+table: qos_policies
+title: {ja: QoS のポリシー, en: QoS policies}
+since: M6
+key: [device, policy, class]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: policy, title: {ja: ポリシー名, en: Policy}, type: string, required: true, note: {ja: "1〜31 字", en: "1 to 31 characters"}}
+  - {name: class, title: {ja: クラス名, en: Class}, type: ref, ref: qos_classes.name, also: [default, local], required: true, note: {ja: "QoS の見分け方のクラス名か、default（どれにも当たらない通信）、local（機器自身が出す通信）", en: "A QoS class, default (everything else) or local (packets the device itself sends)"}}
+  - {name: seq, title: {ja: 順番, en: Sequence}, type: int, required: true, generate: false, note: {ja: "ポリシーの中で見る順（小さい順に書く。default はいつも最後）", en: "The order in the policy (written from the smallest; default is always the last)"}}
+  - {name: priority, title: {ja: 優先して送る, en: Priority}, type: bool}
+  - {name: priority_level, title: {ja: 優先の段, en: Priority level}, type: int, min: 1, max: 2}
+  - {name: bandwidth_kbps, title: {ja: 帯域（kbps）, en: Bandwidth (kbps)}, type: int, min: 1, note: {ja: "帯域の 3 列は 1 つだけ書く。優先の行では上限", en: "Write one of the three bandwidth columns. On a priority row it is the limit"}}
+  - {name: bandwidth_percent, title: {ja: 帯域（%）, en: Bandwidth (%)}, type: int, min: 1, max: 100}
+  - {name: bandwidth_remaining, title: {ja: 帯域（残りの %）, en: Bandwidth (remaining %)}, type: int, min: 1, max: 100}
+  - {name: priority_burst, title: {ja: 優先のバースト（バイト）, en: Priority burst (bytes)}, type: int, min: 1}
+  - {name: shape_bps, title: {ja: 上限・遅らせる（bps）, en: Shape (bps)}, type: int, min: 1}
+  - {name: shape_bc, title: {ja: 遅らせる側の通常バースト（ビット）, en: Shape Bc (bits)}, type: int, min: 1}
+  - {name: shape_be, title: {ja: 遅らせる側の超過バースト（ビット）, en: Shape Be (bits)}, type: int, min: 0}
+  - {name: police_bps, title: {ja: 上限・捨てる（bps）, en: Police (bps)}, type: int, min: 1}
+  - {name: police_bc, title: {ja: 捨てる側の通常バースト（バイト）, en: Police Bc (bytes)}, type: int, min: 1}
+  - {name: police_be, title: {ja: 捨てる側の超過バースト（バイト）, en: Police Be (bytes)}, type: int, min: 0}
+  - {name: police_exceed, title: {ja: 超えたとき, en: Exceed action}, type: enum, values: [drop, transmit, set_dscp, set_precedence], note: {ja: "空 = drop", en: "Empty = drop"}}
+  - {name: police_exceed_value, title: {ja: 超えたときに付ける値, en: Exceed value}, type: int, min: 0, max: 63}
+  - {name: set_dscp, title: {ja: 付ける DSCP, en: Set DSCP}, type: int, min: 0, max: 63}
+  - {name: set_precedence, title: {ja: 付ける precedence, en: Set precedence}, type: int, min: 0, max: 7}
+  - {name: queue_limit, title: {ja: キューの長さ（パケット）, en: Queue limit (packets)}, type: "list<int>", min: 1, note: {ja: "PQ では high・medium・normal・low の順", en: "For priority queues: high, medium, normal, low"}}
+  - {name: fair_queue, title: {ja: 公平に送る, en: Fair queue}, type: bool}

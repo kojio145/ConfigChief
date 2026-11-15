@@ -1,0 +1,10 @@
+table: users
+title: {ja: ユーザ, en: Users}
+since: M1
+key: [device, name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: ユーザ名, en: User name}, type: string, required: true}
+  - {name: privilege, title: {ja: 権限, en: Privilege}, type: string, note: {ja: "admin、operator か、メーカーの値（数値など）", en: "admin, operator, or the value of the vendor (a number …)"}}
+  - {name: secret, title: {ja: パスワード, en: Password}, type: secret, required: true}
+  - {name: secret_form, title: {ja: パスワードの形, en: Secret form}, type: enum, values: [plain, hashed], note: {ja: "取り込んだ値がハッシュのとき hashed", en: "hashed when the imported value is a hash"}}

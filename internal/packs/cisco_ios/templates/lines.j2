@@ -1,0 +1,48 @@
+{# The banner and remote login. Syntax: cmdref 4.1 and 4.4. The banner is
+   closed by one character that is not in its text. The lines 0 to 4 are
+   written; more of them go into an extra configuration (README). #}
+{% if device.banner %}
+{% set mark = namespace(c='') %}
+{% for c in ['#', '@', '%', '~', '|'] %}
+{% if not mark.c and c not in device.banner %}
+{% set mark.c = c %}
+{% endif %}
+{% endfor %}
+{% if not mark.c %}
+{{ fail('バナーの区切りに使える文字がありません（# @ % ~ | のどれかを文面から外してください）') }}
+{% endif %}
+banner login {{ mark.c }}
+{{ device.banner }}
+{{ mark.c }}
+!
+{% endif %}
+{% for ra in t.remote_access %}
+{% if ra.ssh_version %}
+ip ssh version {{ ra.ssh_version }}
+!
+{% endif %}
+line vty 0 4
+{% if ra.acl %}
+ access-class {{ ra.acl }} in
+{% endif %}
+{% if ra.idle_timeout != '' %}
+ exec-timeout {{ ra.idle_timeout }} 0
+{% endif %}
+{% if ra.line_password %}
+ password 0 {{ ra.line_password }}
+{% endif %}
+{% if ra.auth == 'local' %}
+ login local
+{% elif ra.auth == 'password' %}
+{% if not ra.line_password %}
+{{ fail('認証が password のときは、ログインのパスワードが要ります') }}
+{% endif %}
+ login
+{% elif ra.auth == 'aaa' %}
+{{ fail('認証 aaa は、このパックでは書けません（追加コンフィグに書いてください）') }}
+{% endif %}
+{% if ra.protocols %}
+ transport input {{ ra.protocols | join(' ') }}
+{% endif %}
+!
+{% endfor %}

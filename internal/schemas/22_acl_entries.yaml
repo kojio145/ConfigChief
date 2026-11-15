@@ -1,0 +1,19 @@
+table: acl_entries
+title: {ja: ACL 行, en: ACL entries}
+since: M3
+key: [device, acl, seq]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: acl, title: {ja: ACL 名, en: ACL}, type: ref, ref: acls.name, required: true}
+  - {name: seq, title: {ja: 順番, en: Sequence}, type: int, required: true, note: {ja: "番号を持たない書き方では 10 刻みで振る", en: "Counted in steps of 10 where the vendor has no number"}}
+  - {name: action, title: {ja: 動作, en: Action}, type: enum, values: [permit, deny, remark], required: true}
+  - {name: protocol, title: {ja: プロトコル, en: Protocol}, type: string, note: {ja: "ip tcp udp icmp esp ah gre ospf か番号", en: "ip tcp udp icmp esp ah gre ospf, or a number"}}
+  - {name: src, title: {ja: 送信元, en: Source}, type: string, note: {ja: "any、192.0.2.1（ホスト）、192.0.2.0/24（ネットワーク）", en: "any, 192.0.2.1 (a host), 192.0.2.0/24 (a network)"}}
+  - {name: src_port, title: {ja: 送信元ポート, en: Source port}, type: string, note: {ja: "80、1000-2000、>1023、<1024、!80", en: "80, 1000-2000, >1023, <1024, !80"}}
+  - {name: dst, title: {ja: 宛先, en: Destination}, type: string, note: {ja: "送信元と同じ書き方", en: "Written like the source"}}
+  - {name: dst_port, title: {ja: 宛先ポート, en: Destination port}, type: string, note: {ja: "送信元ポートと同じ書き方", en: "Written like the source port"}}
+  - {name: flags, title: {ja: 付加条件, en: Flags}, type: "list<enum>", values: [established, log, fragments]}
+  - {name: icmp_type, title: {ja: ICMP の種類, en: ICMP type}, type: string}
+  - {name: remark, title: {ja: 注記, en: Remark}, type: string, note: {ja: "動作が remark の行の本文", en: "The text of a remark entry"}}
+  - {name: dscp, title: {ja: DSCP, en: DSCP}, type: int, min: 0, max: 63, note: {ja: "この DSCP の通信だけに合う。数で書く（ef = 46）", en: "Matches this DSCP only. A number (ef = 46)"}}
+  - {name: precedence, title: {ja: precedence, en: Precedence}, type: int, min: 0, max: 7, note: {ja: "この precedence の通信だけに合う", en: "Matches this precedence only"}}

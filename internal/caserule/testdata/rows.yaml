@@ -1,0 +1,55 @@
+# Rules of rows for the data of caserule_test.go.
+rules:
+  - id: P-201
+    title: 開いているインターフェースには説明を書く
+    severity: warning
+    table: interfaces
+    where: 'row.enabled'
+    expr: 'row.description != ""'
+  - id: P-202
+    title: アドレスは案件の中で 1 つ
+    severity: error
+    unique: {table: interfaces, column: ipv4}
+  - id: P-203
+    title: NTP サーバは全台で同じ
+    severity: warning
+    equal_across: {table: ntp_servers, column: server}
+  - id: P-204
+    title: パスワードは機器の中で使い回さない
+    severity: warning
+    devices: rt-a01, rt-a02
+    unique: {table: users, column: secret, scope: device}
+  - id: P-205
+    title: メーカーで絞る
+    severity: info
+    devices: vendor:nec_ix
+    table: interfaces
+    expr: 'row.mtu == ""'
+  - id: P-206
+    title: 機器の値と全台の行を使う
+    severity: error
+    devices: "@core"
+    table: interfaces
+    expr: 'device.hostname == row.device and (t.interfaces | length) < (all.interfaces | length) and project.name == "sample"'
+  - id: P-207
+    title: 実行できない式
+    severity: info
+    table: interfaces
+    expr: 'row.no_such_column == 1'
+  - id: P-208
+    title: パックのフィルタを使える
+    severity: error
+    devices: rt-a01
+    table: interfaces
+    expr: '(row.name | ifname) == row.name'
+  - id: P-209
+    title: どの機器にも当たらない
+    severity: error
+    devices: rt-z99
+    table: interfaces
+    expr: 'false'
+  - id: P-210
+    title: 1 台では比べない
+    severity: error
+    devices: rt-a03
+    equal_across: {table: ntp_servers, column: server}

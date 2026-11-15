@@ -1,0 +1,11 @@
+Ported from PalaTerm (github.com/kojio145/palaterm, MIT, same author) internal/history diff.go and diffinline.go at commit 354f1e6 (2026-11-14).
+Only the line comparison (Myers shortest edit script, its limits and the line-for-line fallback) and the in-line changed spans were taken;
+the noise filter, the tree comparison, the per-command comparison and the terminal line-edit handling were left behind, and the API is new.
+Kept as a copy on purpose, so that the two tools can move at their own pace (spec 17.1).
+Fixes made here should be carried back by hand when they matter to PalaTerm too.
+
+tree.go and noise.go: the structured comparison, from PalaTerm internal/history difftree.go, diffnoise.go and the
+listing stamps of diff.go at commit d8369c1 (2026-11-14). Left behind: the choice of what to compare in a log (the
+configuration listing, one command), the prompts and pager lines (internal/termlog cuts the listing here), the
+clock and counter noise of show output, the jump lists and the reading of the impact. New here: Source (the lines
+outside the listing and the comment lines are told by the caller), Row.Level and Walk.

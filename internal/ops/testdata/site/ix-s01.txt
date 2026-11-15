@@ -1,0 +1,55 @@
+hostname ix-s01
+!
+ip access-list acl-s-nat permit ip src 198.51.100.0/24 dest any
+ip prefix-list pl-s-in 10 permit 0.0.0.0/0
+!
+ip route default 203.0.113.50
+!
+ip router ospf 1
+  router-id 192.0.2.201
+  area 1 stub
+  redistribute static
+  passive-interface GigaEthernet1.0
+  network GigaEthernet0.0 area 0
+  network GigaEthernet1.0 area 1
+  network Loopback0.0 area 0
+!
+router bgp 64500
+  router-id 192.0.2.201
+  neighbor 203.0.113.50 remote-as 64501
+  neighbor 203.0.113.50 description sample-upstream
+  neighbor 203.0.113.50 password dummy-bgp-key-s
+  address-family ipv4 unicast
+    network 198.51.100.0/24
+    neighbor 203.0.113.50 distribute-list pl-s-in in
+!
+watch-group wg1 10
+  event 10 ip unreach-host 203.0.113.50 source GigaEthernet0.0
+  probe-timer variance 5
+  action 10 ip shutdown-route 0.0.0.0/0 203.0.113.50
+!
+network-monitor wg1 enable
+!
+vrrp enable
+!
+interface GigaEthernet0.0
+  description sample wan
+  ip address 203.0.113.49/30
+  ip ospf network point-to-point
+  ip ospf hello-interval 5
+  ip ospf dead-interval 20
+  ip napt enable
+  ip napt inside list acl-s-nat
+  no shutdown
+!
+interface GigaEthernet1.0
+  description sample lan
+  ip address 198.51.100.2/24
+  vrrp 1 ip 198.51.100.1
+  vrrp 1 priority 110
+  no shutdown
+!
+interface Loopback0.0
+  description sample id
+  ip address 192.0.2.201/32
+!

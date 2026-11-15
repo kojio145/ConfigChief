@@ -1,0 +1,66 @@
+hostname rt-w01
+!
+ip dhcp excluded-address 198.51.100.1 198.51.100.10
+ip dhcp pool pool-w-lan
+ network 198.51.100.0 255.255.255.0
+ default-router 198.51.100.1
+ dns-server 192.0.2.53
+ lease 1
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+ lifetime 28800
+crypto isakmp key dummy-psk-site-w address 203.0.113.20
+crypto isakmp keepalive 30
+!
+crypto ipsec transform-set TS-W esp-aes 256 esp-sha-hmac
+!
+crypto ipsec profile PROF-W
+ set transform-set TS-W
+ set pfs group14
+ set security-association lifetime seconds 3600
+!
+interface Tunnel1
+ description sample vpn
+ ip unnumbered GigabitEthernet0/1
+ ip tcp adjust-mss 1300
+ tunnel source Dialer1
+ tunnel destination 203.0.113.20
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-W
+!
+interface GigabitEthernet0/0
+ description sample wan port
+ no ip address
+ pppoe enable group global
+ pppoe-client dial-pool-number 1
+!
+interface GigabitEthernet0/1
+ description sample lan
+ ip address 198.51.100.1 255.255.255.0
+ ip nat inside
+!
+interface Dialer1
+ description sample pppoe
+ ip address negotiated
+ ip mtu 1454
+ ip nat outside
+ encapsulation ppp
+ ip tcp adjust-mss 1414
+ dialer pool 1
+ ppp authentication chap callin
+ ppp chap hostname sample-w@example.com
+ ppp chap password dummy-pppoe-secret-w
+!
+ip route 0.0.0.0 0.0.0.0 Dialer1
+ip route 192.0.2.0 255.255.255.128 Tunnel1
+!
+ip access-list extended acl-w-nat
+ permit ip 198.51.100.0 0.0.0.255 any
+!
+ip nat inside source list acl-w-nat interface Dialer1 overload
+!
+end

@@ -1,0 +1,363 @@
+{# Ports and interfaces. Syntax: cmdref 4.2 and 4.10. The "device" blocks
+   stand before the "interface" blocks (cmdref 3.3). The device has no "mtu"
+   line and no NAT direction, and the unit of "bandwidth" is not known: those
+   cells are not read. #}
+{% set ifs = t.interfaces %}
+{# NAT stands under the interface outside (cmdref 4.10). What cannot be
+   written is told here once, before the blocks. #}
+{% for n in t.nat_rules %}
+{% set what = 'NAT ' ~ n.name %}
+{% set oif = n.outside_if | required(what ~ ' の外側 IF（NEC IX は、外側のインタフェースの下に NAT を書きます）') %}
+{% set seen = namespace(v=false, pat=0) %}
+{% for i in ifs %}
+{% if i.name == oif %}
+{% set seen.v = true %}
+{% endif %}
+{% endfor %}
+{% if oif and not seen.v %}
+{{ fail(what ~ ' の外側 IF ' ~ oif ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% for m in t.nat_rules %}
+{% if m.outside_if == oif and m.type == 'pat_interface' %}
+{% set seen.pat = seen.pat + 1 %}
+{% endif %}
+{% endfor %}
+{% if n.type == 'pat_interface' %}
+{% if seen.pat > 1 %}
+{{ fail(what ~ ': 外側 IF ' ~ oif ~ ' に、種類が pat_interface の行が 2 つ以上あります（NEC IX では 1 つのインタフェースに 1 つです）') }}
+{% endif %}
+{% elif n.type == 'static_port' %}
+{% if seen.pat == 0 %}
+{{ fail(what ~ ' のポート転送は、同じ外側 IF に種類が pat_interface の行が要ります（NEC IX では ip napt enable の上で動きます）') }}
+{% endif %}
+{% if n.global_ip and n.global_ip != 'interface' %}
+{{ fail(what ~ ' の外側アドレスは「interface」（外側 IF のアドレス）だけ書けます') }}
+{% endif %}
+{% if n.local_port != n.global_port %}
+{{ fail(what ~ ' は内側ポートと外側ポートが違います（ポートを変える転送の書き方を確かめていません。追加コンフィグに書いてください）') }}
+{% endif %}
+{% elif n.type == 'static' %}
+{% if n.global_ip == 'interface' %}
+{{ fail(what ~ ' の外側アドレス「interface」は、種類が static_port の行にだけ書けます') }}
+{% endif %}
+{% else %}
+{{ fail(what ~ ' の種類「' ~ n.type ~ '」は、このパックでは書けません（アドレスの範囲の定義の書き方を確かめていません。追加コンフィグに書いてください）') }}
+{% endif %}
+{% endfor %}
+{# A VRF has no block of its own: the interface that names it makes it
+   (cmdref 4.5). #}
+{% for v in t.vrfs %}
+{% set named = namespace(v=false) %}
+{% for i in ifs %}
+{% if i.vrf == v.name %}
+{% set named.v = true %}
+{% endif %}
+{% endfor %}
+{% if not named.v %}
+{{ fail('VRF ' ~ v.name ~ ' を使うインタフェースがありません（NEC IX は、インタフェースに書いた時点で VRF を作ります）') }}
+{% endif %}
+{% endfor %}
+{# VRRP works only with the switch of the whole device (cmdref 4.8). The
+   device has no HSRP. #}
+{% for f in t.fhrp %}
+{% set n = namespace(seen=false) %}
+{% for i in ifs %}
+{% if i.name == f.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('冗長化の IF ' ~ f.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% if f.protocol != 'vrrp' %}
+{{ fail(f.if_name ~ ' の冗長化のグループ ' ~ f.group ~ ' の方式「' ~ f.protocol ~ '」は書けません（NEC IX の冗長化は VRRP です。方式を vrrp に書き直してください）') }}
+{% endif %}
+{% endfor %}
+{% if t.fhrp %}
+vrrp enable
+!
+{% endif %}
+{% for u in t.tunnels %}
+{% set n = namespace(seen=false) %}
+{% for i in ifs %}
+{% if i.name == u.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('トンネル IF ' ~ u.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{# The relay works only with the switch of the whole device (CRM p.8-49). #}
+{% set relay = namespace(on=false) %}
+{% for i in ifs %}
+{% if i.dhcp_relay %}
+{% set relay.on = true %}
+{% endif %}
+{% endfor %}
+{% if relay.on %}
+ip dhcp-relay enable
+!
+{% endif %}
+{# Speed and duplex belong to the port, and are written on the row of its
+   base interface ("<port>.0"). #}
+{% for i in ifs %}
+{% if i.speed or i.duplex %}
+{% set port = i.name | split('.') %}
+{% if i.kind != 'physical' or port | length != 2 or port[1] != '0' or ':' in i.name %}
+{{ fail(i.name ~ ' に速度・二重は書けません（NEC IX では物理ポートの設定です。「ポート名.0」の行に書いてください）') }}
+{% endif %}
+device {{ port[0] }}
+{% if i.speed %}
+  speed {{ i.speed }}
+{% endif %}
+{% if i.duplex %}
+  duplex {{ i.duplex }}
+{% endif %}
+!
+{% endif %}
+{% endfor %}
+{% for i in ifs %}
+interface {{ i.name }}
+{% if i.description %}
+  description {{ i.description }}
+{% endif %}
+{% if i.encap_vlan %}
+{% if i.kind != 'subif' %}
+{{ fail(i.name ~ ' に VLAN のタグは書けません（サブインタフェース「ポート名.1」以降に書きます）') }}
+{% endif %}
+  encapsulation dot1q {{ i.encap_vlan }}
+{% endif %}
+{# The VRF is entered before the address (CRM p.8-17). #}
+{% if i.vrf %}
+  ip vrf forwarding {{ i.vrf }}
+{% endif %}
+{% if i.ipv4 is cidr %}
+  ip address {{ i.ipv4 }}
+{% elif i.ipv4 == 'dhcp' %}
+  ip address dhcp
+{% elif i.ipv4 == 'negotiated' %}
+  ip address ipcp
+{% elif i.ipv4 is startingwith('unnumbered:') and i.ipv4 != 'unnumbered:' %}
+  ip unnumbered {{ i.ipv4 | replace('unnumbered:', '') }}
+{% elif i.ipv4 %}
+{{ fail(i.name ~ ' のアドレス ' ~ i.ipv4 ~ ' の書き方が分かりません') }}
+{% endif %}
+{% for a in i.ipv4_secondary %}
+  ip address {{ a }} secondary
+{% endfor %}
+{% for a in i.ipv6 %}
+  ipv6 address {{ a }}
+{% endfor %}
+{# The line takes a sequence number, which the dataset does not have: 1. #}
+{% if i.acl_in %}
+  ip filter {{ i.acl_in }} 1 in
+{% endif %}
+{% if i.acl_out %}
+  ip filter {{ i.acl_out }} 1 out
+{% endif %}
+{% for a in i.dhcp_relay %}
+  ip dhcp-relay server {{ a }}
+{% endfor %}
+{% if i.proxy_arp == true %}
+  ip proxy-arp
+{% elif i.proxy_arp == false %}
+{{ fail(i.name ~ ' の代理 ARP「無効」は書けません（NEC IX の既定と、止める行の出方を確かめていません。セルを空にしてください）') }}
+{% endif %}
+{% if i.ip_mtu %}
+  ip mtu {{ i.ip_mtu }}
+{% endif %}
+{% if i.tcp_mss %}
+  ip tcp adjust-mss {{ i.tcp_mss }}
+{% endif %}
+{% for o in t.ospf_interfaces %}
+{% if o.if_name == i.name %}
+{% set what = i.name ~ ' の OSPF' %}
+{% if o.cost != '' %}
+  ip ospf cost {{ o.cost }}
+{% endif %}
+{% if o.priority != '' %}
+  ip ospf priority {{ o.priority }}
+{% endif %}
+{% if o.hello != '' %}
+  ip ospf hello-interval {{ o.hello }}
+{% endif %}
+{% if o.dead != '' %}
+  ip ospf dead-interval {{ o.dead }}
+{% endif %}
+{% if o.network_type %}
+  ip ospf network {{ o.network_type | lex('ospf_network') }}
+{% endif %}
+{% if o.auth_type == 'md5' %}
+  ip ospf authentication message-digest
+  ip ospf message-digest-key {{ o.auth_key_id | required(what ~ ' の鍵番号') }} {{ o.auth_key | required(what ~ ' の鍵') }}
+{% elif o.auth_type == 'simple' %}
+  ip ospf authentication
+  ip ospf authentication-key {{ o.auth_key | required(what ~ ' の鍵') }}
+{% elif o.auth_type == 'none' %}
+  ip ospf authentication null
+{% endif %}
+{% if o.auth_type in ['', 'none'] and (o.auth_key or o.auth_key_id != '') %}
+{{ fail(what ~ ' に鍵がありますが、認証が simple でも md5 でもありません') }}
+{% elif o.auth_type == 'simple' and o.auth_key_id != '' %}
+{{ fail(what ~ ' の鍵番号は、認証が md5 のときだけ書けます') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for f in t.fhrp %}
+{% if f.if_name == i.name and f.protocol == 'vrrp' %}
+{% set what = i.name ~ ' の冗長化のグループ ' ~ f.group %}
+{% set g = 'vrrp ' ~ f.group %}
+  {{ g }} ip {{ f.virtual_ip | required(what ~ ' の仮想 IP') }}
+{% if f.priority != '' %}
+  {{ g }} priority {{ f.priority }}
+{% endif %}
+{% if f.preempt == true %}
+  {{ g }} preempt
+{% elif f.preempt == false %}
+  no {{ g }} preempt
+{% endif %}
+{% if f.advert_interval != '' %}
+  {{ g }} timers advertisement {{ f.advert_interval }}
+{% endif %}
+{% if f.auth_type == 'md5' %}
+{{ fail(what ~ ' の認証 md5 は書けません（NEC IX の VRRP の認証は、パスワード（simple）です）') }}
+{% elif f.auth_type == 'simple' or (f.auth_type == '' and f.auth_key) %}
+  {{ g }} authentication {{ f.auth_key | required(what ~ ' の鍵') }}
+{% elif f.auth_key %}
+{{ fail(what ~ ' に鍵がありますが、認証が simple ではありません') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# A tunnel: the mode first. #}
+{% for u in t.tunnels %}
+{% if u.if_name == i.name %}
+{% set what = i.name ~ ' のトンネル' %}
+  tunnel mode {{ u.type | lex('tunnel_mode') }}
+{# IPsec: the map of ipsec.j2 holds the address of the other side, and the
+   tunnel has neither a source nor a destination line. #}
+{% if u.type == 'ipsec' %}
+{% set sec = namespace(seen=false) %}
+{% for r in t.ipsec_tunnels %}
+{% if r.style == 'tunnel_if' and r.tunnel_if == i.name %}
+{% set sec.seen = true %}
+  ipsec policy tunnel ipsec-{{ i.name | replace('Tunnel', '') | replace('.0', '') }} out
+{% endif %}
+{% endfor %}
+{% if not sec.seen %}
+{{ fail(what ~ ' は種類が ipsec ですが、IPsec の表に、このトンネル IF の行がありません') }}
+{% endif %}
+{% else %}
+  tunnel source {{ u.source | required(what ~ ' の送信元') }}
+  tunnel destination {{ u.destination | required(what ~ ' の宛先') }}
+{% endif %}
+{% if u.key != '' %}
+{% if u.type != 'gre' %}
+{{ fail(what ~ ' の鍵は、種類が gre のときだけ書けます') }}
+{% endif %}
+  tunnel key {{ u.key }}
+{% endif %}
+{% if u.keepalive_interval != '' or u.keepalive_retry != '' %}
+  tunnel keepalive period {{ u.keepalive_interval | required(what ~ ' の監視間隔（再送回数と組で書きます）') }} retries {{ u.keepalive_retry | required(what ~ ' の監視の再送回数（監視間隔と組で書きます）') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# PPPoE: the profile (pppoe.j2) is bound by its name. On a sub-interface
+   PPPoE and "auto-connect" are what the device does by itself. #}
+{% for p in t.pppoe %}
+{% if p.logical_if == i.name %}
+  ppp binding {{ p.name }}
+{% if p.service_name %}
+  pppoe service-name {{ p.service_name }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# The DHCP profile of the network of the interface (dhcp.j2). #}
+{% for p in t.dhcp_pools %}
+{% if i.ipv4 is cidr and (i.ipv4 | network) == p.network %}
+  ip dhcp binding {{ p.name }}
+{% endif %}
+{% endfor %}
+{# The switch first, then the lines that work on it. #}
+{% set nat = namespace(on=false) %}
+{% for kind in ['pat_interface', 'static_port', 'static'] %}
+{% for n in t.nat_rules %}
+{% if n.outside_if == i.name and n.type == kind %}
+{% set what = 'NAT ' ~ n.name %}
+{% if kind == 'pat_interface' %}
+  ip napt enable
+{% if n.match_acl %}
+  ip napt inside list {{ n.match_acl }}
+{% endif %}
+{% elif kind == 'static_port' %}
+  ip napt static {{ n.local_ip | required(what ~ ' の内側アドレス') }} {{ n.protocol | required(what ~ ' のプロトコル') }} {{ n.local_port | required(what ~ ' の内側ポート') }}
+{% else %}
+{% if not nat.on %}
+  ip nat enable
+{% set nat.on = true %}
+{% endif %}
+  ip nat static {{ n.local_ip | required(what ~ ' の内側アドレス') }} {{ n.global_ip | required(what ~ ' の外側アドレス') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{# QoS (cmdref 7.15). "service-policy enable" is needed where the interface
+   shapes or queues what it sends; marking alone does not need it. #}
+{% for b in t.qos_bindings %}
+{% if b.if_name == i.name %}
+{% set what = b.if_name ~ ' の QoS（' ~ b.direction ~ '）' %}
+{% if b.direction == 'output' %}
+{% set q = namespace(on=b.shape_bps != '') %}
+{% for r in t.qos_policies %}
+{% if r.policy == b.policy %}
+{% if r.priority or r.bandwidth_kbps != '' or r.bandwidth_percent != '' or r.shape_bps != '' or r.queue_limit %}
+{% set q.on = true %}
+{% endif %}
+{% for m in t.qos_class_matches %}
+{% if m.class == r.class and m.queue %}
+{% set q.on = true %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% if q.on %}
+  service-policy enable
+{% endif %}
+{% if b.policy %}
+  service-policy output {{ b.policy }}
+{% endif %}
+{% if b.shape_bps != '' %}
+{% if b.shape_be != '' and b.shape_bc == '' %}
+{{ fail(what ~ ': 超過バーストは、通常バーストを書いたときだけ書けます') }}
+{% endif %}
+  traffic-shape rate {{ b.shape_bps }}{{ ' ' ~ b.shape_bc if b.shape_bc != '' else '' }}{{ ' ' ~ b.shape_be if b.shape_be != '' else '' }}
+{% elif b.shape_bc != '' or b.shape_be != '' %}
+{{ fail(what ~ ': IF 全体のバーストは、「IF 全体を絞る速さ」を書いたときだけ書けます') }}
+{% elif not b.policy %}
+{{ fail(what ~ ': ポリシー名も「IF 全体を絞る速さ」もありません（どちらかを書くか、行を消してください）') }}
+{% endif %}
+{% else %}
+{% if b.shape_bps != '' or b.shape_bc != '' or b.shape_be != '' %}
+{{ fail(what ~ ': 「IF 全体を絞る速さ」は出力（output）の行にだけ書けます') }}
+{% endif %}
+  service-policy input {{ b.policy | required(what ~ ' のポリシー名') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# "shutdown" / "no shutdown" stand on Ethernet and tunnel interfaces, and on
+   neither Loopback nor Null (cmdref, note 1). #}
+{% if i.kind in ['physical', 'subif', 'tunnel'] %}
+{% if i.enabled == false %}
+  shutdown
+{% else %}
+  no shutdown
+{% endif %}
+{% elif i.kind == 'loopback' or i.name is startingwith('Null') %}
+{% if i.enabled == false %}
+{{ fail(i.name ~ ' は無効にできません（Loopback と Null に shutdown を書けるか確かめていません）') }}
+{% endif %}
+{% else %}
+{{ fail(i.name ~ ' の有効・無効の書き方を確かめていません（書けるのは GigaEthernet・Tunnel・Loopback・Null です）') }}
+{% endif %}
+!
+{% endfor %}

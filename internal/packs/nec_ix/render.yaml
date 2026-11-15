@@ -1,0 +1,21 @@
+# The order of the configuration. The device has no end marker, and its own
+# text shows the routes before the "device" and "interface" blocks, which come
+# last (cmdref 3.3). Where the users and the services stand is not known; the
+# extra configurations go before them by default, so that an access list
+# written there is defined before the lines that name it. The stages after M2
+# add their sections here.
+sections:
+  - {id: system,     template: system.j2}
+  - {id: policy,     template: policy.j2}
+  - {id: qos,        template: qos.j2}          # after the access lists the classes name
+  - {id: routing,    template: routing.j2}
+  - {id: ospf,       template: ospf.j2}
+  - {id: bgp,        template: bgp.j2}
+  - {id: tracking,   template: tracking.j2}
+  - {id: ipsec,      template: ipsec.j2}
+  - {id: extra,      slot: extra}
+  - {id: services,   template: services.j2}
+  - {id: remote,     template: remote.j2}
+  - {id: pppoe,      template: pppoe.j2}
+  - {id: dhcp,       template: dhcp.j2}
+  - {id: interfaces, template: interfaces.j2}

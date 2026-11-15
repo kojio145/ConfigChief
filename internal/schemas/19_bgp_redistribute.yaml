@@ -1,0 +1,10 @@
+table: bgp_redistribute
+title: {ja: BGP 再配布, en: BGP redistribute}
+since: M3
+key: [device, vrf, source]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name, note: {ja: "空 = VRF なし（全体の経路表）", en: "Empty = no VRF (the global table)"}}
+  - {name: source, title: {ja: 再配布の元, en: Source}, type: enum, values: [connected, static, ospf, rip], required: true}
+  - {name: metric, title: {ja: メトリック, en: Metric}, type: int}
+  - {name: filter, title: {ja: 経路制御の条件, en: Filter}, type: string, note: {ja: "条件の名前。中身は追加コンフィグに書く", en: "The name of the policy. What it does goes into the extra config"}}

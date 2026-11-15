@@ -1,0 +1,24 @@
+# The DHCP server and tunnels (made-up values). expect.txt is the
+# configuration the tables must turn into.
+tables:
+  devices:
+    - hostname: ix-t01
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.57/30}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.1/24}
+    - {name: GigaEthernet2.0, enabled: true, ipv4: 192.0.2.1/26}
+    - {name: Tunnel1.0, enabled: true, ipv4: 192.0.2.209/30}
+  tunnels:
+    - {if_name: Tunnel1.0, type: gre, source: GigaEthernet0.0, destination: 203.0.113.61, key: 100, keepalive_interval: 10, keepalive_retry: 3}
+  dhcp_pools:
+    - name: pool-sample-lan
+      network: 198.51.100.0/24
+      range_start: 198.51.100.11
+      range_end: 198.51.100.200
+      excluded: [198.51.100.100-198.51.100.110, 198.51.100.150-198.51.100.150]
+      default_router: 198.51.100.1
+      dns_servers: [192.0.2.53, 192.0.2.54]
+      domain: example.com
+      lease: 36h
+    - {name: pool-sample-guest, network: 192.0.2.0/26, lease: 2d}

@@ -1,0 +1,17 @@
+table: tracks
+title: {ja: 回線監視, en: Tracks}
+since: M3
+key: [device, id]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: id, title: {ja: 番号・名前, en: ID}, type: string, required: true}
+  - {name: type, title: {ja: 監視の方法, en: Type}, type: enum, values: [icmp, interface, route], required: true}
+  - {name: target, title: {ja: 監視先, en: Target}, type: string, or_ifname: true, note: {ja: "icmp はアドレス、interface は IF 名、route はネットワーク", en: "An address for icmp, an interface for interface, a network for route"}}
+  - {name: source_if, title: {ja: 送信元 IF, en: Source interface}, type: ifname}
+  - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name}
+  - {name: interval, title: {ja: 間隔（秒）, en: Interval (s)}, type: int, explicit: true}
+  - {name: timeout, title: {ja: 待ち時間（ミリ秒）, en: Timeout (ms)}, type: int}
+  - {name: fail_count, title: {ja: 断と判断する回数, en: Fail count}, type: int, explicit: true}
+  - {name: restore_count, title: {ja: 復旧と判断する回数, en: Restore count}, type: int}
+  - {name: down_delay, title: {ja: 断の反映待ち（秒）, en: Down delay (s)}, type: int}
+  - {name: up_delay, title: {ja: 復旧の反映待ち（秒）, en: Up delay (s)}, type: int}

@@ -1,0 +1,40 @@
+hostname ix-t01
+!
+ip dhcp enable
+ip dhcp excluded-address 198.51.100.100 198.51.100.110
+ip dhcp excluded-address 198.51.100.150 198.51.100.150
+!
+ip dhcp profile pool-sample-guest
+  lease-time 172800
+!
+ip dhcp profile pool-sample-lan
+  assignable-range 198.51.100.11 198.51.100.200
+  subnet-mask 255.255.255.0
+  default-gateway 198.51.100.1
+  dns-server 192.0.2.53 192.0.2.54
+  domain-name example.com
+  lease-time 129600
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.57/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.1/24
+  ip dhcp binding pool-sample-lan
+  no shutdown
+!
+interface GigaEthernet2.0
+  ip address 192.0.2.1/26
+  ip dhcp binding pool-sample-guest
+  no shutdown
+!
+interface Tunnel1.0
+  ip address 192.0.2.209/30
+  tunnel mode gre
+  tunnel source GigaEthernet0.0
+  tunnel destination 203.0.113.61
+  tunnel key 100
+  tunnel keepalive period 10 retries 3
+  no shutdown
+!

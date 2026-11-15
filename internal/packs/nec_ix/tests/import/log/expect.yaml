@@ -1,0 +1,18 @@
+# A terminal log: only the output of "show running-config" is read. The pager
+# marks stand on lines of their own.
+tables:
+  devices:
+    - {hostname: ix-b02, vendor: nec_ix, name_servers: [192.0.2.53]}
+  users:
+    - {name: admin}
+  interfaces:
+    - {name: GigaEthernet0.0, description: sample-wan, ipv4: 203.0.113.5/30, enabled: true}
+    - {name: GigaEthernet1.0, description: sample-lan, ipv4: 198.51.100.1/24, enabled: false, speed: 1000, duplex: full}
+    - {name: Loopback0.0, ipv4: 192.0.2.2/32, enabled: true}
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: 203.0.113.6}
+    - {prefix: 192.0.2.64/26, next_hop: 198.51.100.2}
+  ntp_servers:
+    - {server: 192.0.2.123}
+unknown: []
+ignored_min: 1

@@ -1,0 +1,53 @@
+hostname ix-q01
+!
+ip access-list al-q-ef permit ip src any dest any dscp 46
+ip access-list al-q-af41 permit ip src any dest any dscp 34
+ip access-list al-q-af41 permit ip src any dest any dscp 36
+ip access-list al-q-prec permit ip src any dest any precedence 5
+ip access-list al-q-biz permit ip src 192.0.2.0/24 dest 198.51.100.0/24
+ip access-list al-q-peer permit ip src any dest 203.0.113.9/32 precedence 5
+ip access-list al-q-flt permit ip src any dest any dscp 10
+!
+class-map match-any cm-q-voice
+  match ip access-list al-q-ef high
+  match ip access-list al-q-prec high
+class-map cm-q-video
+  match ip access-list al-q-af41
+class-map match-any cm-q-biz
+  match ip access-list al-q-biz normal
+  match ip access-list al-q-peer medium
+  match ip access-list al-q-flt low
+  match any low
+!
+policy-map pm-q-in
+  class cm-q-biz
+    set ip dscp 18
+  class class-local
+  class class-default
+    set ip precedence 0
+!
+policy-map pm-q-out
+  class cm-q-voice
+    priority 512 4000
+  class cm-q-video
+    bandwidth percent 30
+    shape kbps 4000
+  class cm-q-biz
+    bandwidth mbps 2
+    queue-limit 10 20 30 40
+  class class-local
+  class class-default
+    priority percent 5
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.1/24
+  service-policy enable
+  service-policy output pm-q-out
+  traffic-shape rate mbps 10 10000
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 192.0.2.1/24
+  ip filter al-q-flt 1 in
+  service-policy input pm-q-in
+  no shutdown

@@ -1,0 +1,16 @@
+# PPPoE clients (made-up values). expect.txt is the configuration the
+# tables must turn into. A row is a PPP profile, bound to its sub-interface.
+tables:
+  devices:
+    - hostname: ix-e01
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true}
+    - {name: GigaEthernet0.1, description: sample-wan-a, enabled: true, ipv4: negotiated, tcp_mss: 1414}
+    - {name: GigaEthernet0.2, description: sample-wan-b, enabled: true, ipv4: negotiated}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.1/24}
+  pppoe:
+    - {name: ppp-sample-a, physical_if: GigaEthernet0.0, logical_if: GigaEthernet0.1, username: sample-a@example.com, password: dummy-pppoe-secret-a, auth: chap, keepalive: 20}
+    - {name: ppp-sample-b, physical_if: GigaEthernet0.0, logical_if: GigaEthernet0.2, username: sample-b@example.com, password: dummy-pppoe-secret-b, service_name: svc-sample-b}
+  static_routes:
+    - {prefix: 0.0.0.0/0, out_if: GigaEthernet0.1}

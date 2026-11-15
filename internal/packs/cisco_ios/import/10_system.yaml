@@ -1,0 +1,202 @@
+# The device as a whole, and the management settings (stage M1).
+# Syntax: cmdref 4.1 and 4.4.
+rules:
+  - id: sys.hostname
+    match: '^hostname (?P<name>\S+)$'
+    row: {table: devices, key: {}}
+
+  # IOS writes "ip domain name", older IOS and IOS-XE "ip domain-name".
+  - id: sys.domain
+    match: '^ip domain[ -]name (?P<name>\S+)$'
+    row: {table: devices, key: {}}
+    set: {domain_name: "{{ name }}"}
+
+  # The form with "vrf" has no column yet and stays unknown.
+  - id: sys.name_server
+    match: '^ip name-server (?P<servers>\d[\d. ]*)$'
+    row: {table: devices, key: {}}
+    append: {name_servers: "{{ servers }}"}
+
+  - id: sys.timezone
+    match: '^clock timezone (?P<zone>\S+) (?P<sign>-)?(?P<h>\d+)(?: (?P<m>\d+))?$'
+    row: {table: devices, key: {}}
+    set: {timezone: "{{ zone }} {{ sign if sign else '+' }}{{ h }}{{ (':' ~ m) if (m and m != '0') else '' }}"}
+
+  - id: sys.enable.hashed
+    match: '^enable secret (?P<type>4|5|8|9) (?P<value>\S+)$'
+    row: {table: devices, key: {}}
+    set: {enable_secret: "{{ value }}", secret_form: hashed}
+
+  - id: sys.enable.plain
+    match: '^enable secret (?:0 )?(?P<value>\S+)$'
+    row: {table: devices, key: {}}
+    set: {enable_secret: "{{ value }}", secret_form: plain}
+
+  - id: sys.snmp.location
+    match: '^snmp-server location (?P<text>.+)$'
+    row: {table: devices, key: {}}
+    set: {snmp_location: "{{ text }}"}
+
+  - id: sys.snmp.contact
+    match: '^snmp-server contact (?P<text>.+)$'
+    row: {table: devices, key: {}}
+    set: {snmp_contact: "{{ text }}"}
+
+  # The dataset has one banner. "banner exec" stays unknown.
+  - id: sys.banner
+    match: '^banner (?P<kind>login|motd) .*$'
+    row: {table: devices, key: {}}
+    set: {banner: "{{ body }}"}
+
+  # ---- users ----
+  # Level 15 is the neutral word "admin" (lexicon.yaml); other levels stay numbers.
+  - id: user.secret.hashed
+    match: '^username (?P<name>\S+)(?: privilege (?P<priv>\d+))? secret (?P<type>5|8|9) (?P<value>\S+)$'
+    row: {table: users, key: {name: "{{ name }}"}}
+    set: {privilege: "{{ (priv | unlex('user_role')) if priv == '15' else priv }}", secret: "{{ value }}", secret_form: hashed}
+
+  - id: user.secret.plain
+    match: '^username (?P<name>\S+)(?: privilege (?P<priv>\d+))? secret (?:0 )?(?P<value>\S+)$'
+    row: {table: users, key: {name: "{{ name }}"}}
+    set: {privilege: "{{ (priv | unlex('user_role')) if priv == '15' else priv }}", secret: "{{ value }}", secret_form: plain}
+
+  # "password 7" is a reversible form: there is no word for it in secret_form,
+  # so the line stays unknown.
+  - id: user.password.plain
+    match: '^username (?P<name>\S+)(?: privilege (?P<priv>\d+))? password (?:0 )?(?P<value>\S+)$'
+    when: "value != '7'"
+    row: {table: users, key: {name: "{{ name }}"}}
+    set: {privilege: "{{ (priv | unlex('user_role')) if priv == '15' else priv }}", secret: "{{ value }}", secret_form: plain}
+
+  # ---- remote access ----
+  - id: vty
+    match: '^line vty (?P<first>\d+)(?: (?P<last>\d+))?$'
+    row: {table: remote_access, key: {}}
+    children:
+      - id: vty.transport.all
+        match: '^transport input all$'
+        append: {protocols: "ssh telnet"}
+      - id: vty.transport
+        match: '^transport input (?P<list>(?:ssh|telnet)(?: (?:ssh|telnet))?)$'
+        append: {protocols: "{{ list }}"}
+      - id: vty.login_local
+        match: '^login local$'
+        set: {auth: local}
+      - id: vty.login
+        match: '^login$'
+        set: {auth: password}
+      - id: vty.acl
+        match: '^access-class (?P<acl>\S+) in$'
+        set: {acl: "{{ acl }}"}
+      # The dataset keeps minutes; a line with seconds stays unknown.
+      - id: vty.timeout
+        match: '^exec-timeout (?P<min>\d+)(?: 0)?$'
+        set: {idle_timeout: "{{ min }}"}
+      - id: vty.password
+        match: '^password (?:0 )?(?P<value>\S+)$'
+        when: "value != '7'"
+        set: {line_password: "{{ value }}"}
+
+  - id: ssh.version
+    match: '^ip ssh version (?P<v>1|2)$'
+    row: {table: remote_access, key: {}}
+    set: {ssh_version: "{{ v }}"}
+
+  # ---- NTP ----
+  - id: ntp.server
+    match: '^ntp server(?: vrf (?P<vrf>\S+))? (?P<server>\d+\.\d+\.\d+\.\d+)(?:(?P<prefer> prefer)| source (?P<src>[A-Za-z]\S*))*$'
+    row: {table: ntp_servers, key: {server: "{{ server }}"}}
+    set:
+      vrf: "{{ vrf }}"
+      prefer: "{{ 'true' if prefer else '' }}"
+      source_if: "{{ src | ifname }}"
+
+  # One line for the whole device: it is kept aside and put on each server.
+  - id: ntp.source
+    match: '^ntp source (?P<ifn>\S+)$'
+    emit:
+      - table: x_ntp
+        key: {}
+        set: {source_if: "{{ ifn | ifname }}"}
+
+  # ---- syslog ----
+  - id: syslog.host
+    match: '^logging host (?P<server>\d+\.\d+\.\d+\.\d+)(?: vrf (?P<vrf>\S+))?$'
+    row: {table: syslog_servers, key: {server: "{{ server }}"}}
+    set: {vrf: "{{ vrf }}"}
+
+  - id: syslog.host.short
+    match: '^logging (?P<server>\d+\.\d+\.\d+\.\d+)$'
+    row: {table: syslog_servers, key: {server: "{{ server }}"}}
+
+  - id: syslog.facility
+    match: '^logging facility (?P<f>\S+)$'
+    emit:
+      - table: x_logging
+        key: {}
+        set: {facility: "{{ f }}"}
+
+  - id: syslog.trap
+    match: '^logging trap (?P<level>emergencies|alerts|critical|errors|warnings|notifications|informational|debugging)$'
+    emit:
+      - table: x_logging
+        key: {}
+        set: {severity: "{{ level }}"}
+
+  - id: syslog.source
+    match: '^logging source-interface (?P<ifn>\S+)$'
+    emit:
+      - table: x_logging
+        key: {}
+        set: {source_if: "{{ ifn | ifname }}"}
+
+  # ---- SNMP ----
+  # "ro" / "rw" may be shown in capitals; both are read.
+  - id: snmp.community
+    match: '^snmp-server community (?P<name>\S+)(?: (?P<access>(?i:ro|rw)))?(?: (?P<acl>\S+))?$'
+    row: {table: snmp_communities, key: {community: "{{ name }}"}}
+    set: {access: "{{ access | lower }}", acl: "{{ acl }}"}
+
+  - id: snmp.host
+    match: '^snmp-server host (?P<host>\d+\.\d+\.\d+\.\d+)(?: version (?P<ver>1|2c))? (?P<community>\S+)$'
+    when: "community not in ['traps', 'informs', 'version', 'vrf']"
+    row: {table: snmp_hosts, key: {host: "{{ host }}"}}
+    set: {version: "{{ ver }}", community: "{{ community }}"}
+
+  - id: snmp.trap_source
+    match: '^snmp-server trap-source (?P<ifn>\S+)$'
+    emit:
+      - table: x_snmp
+        key: {}
+        set: {source_if: "{{ ifn | ifname }}"}
+
+derive:
+  - id: ntp.source.each
+    for: ntp_servers
+    as: s
+    let:
+      g: "lookup('x_ntp')"
+    when: "g.source_if and not s.source_if"
+    row: {table: ntp_servers, key: {server: "{{ s.server }}"}}
+    set: {source_if: "{{ g.source_if }}"}
+
+  - id: syslog.common
+    for: syslog_servers
+    as: s
+    let:
+      g: "lookup('x_logging')"
+    when: "g"
+    row: {table: syslog_servers, key: {server: "{{ s.server }}"}}
+    set:
+      facility: "{{ g.facility }}"
+      severity: "{{ g.severity }}"
+      source_if: "{{ g.source_if }}"
+
+  - id: snmp.trap_source.each
+    for: snmp_hosts
+    as: h
+    let:
+      g: "lookup('x_snmp')"
+    when: "g.source_if"
+    row: {table: snmp_hosts, key: {host: "{{ h.host }}"}}
+    set: {source_if: "{{ g.source_if }}"}

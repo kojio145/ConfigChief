@@ -1,0 +1,18 @@
+hostname ix-p01
+!
+ip access-list acl-sample-in permit tcp src 198.51.100.0/24 dest any dport eq 443
+ip access-list acl-sample-in permit udp src any sport eq 53 dest 198.51.100.0/24
+ip access-list acl-sample-in permit tcp src any dest 192.0.2.80/32 dport gt 1023
+ip access-list acl-sample-in permit udp src any dest any dport neq 123
+ip access-list acl-sample-in permit icmp src any dest any
+ip access-list acl-sample-in deny ip src any dest any
+ip access-list acl-sample-mgmt permit ip src 192.0.2.0/24 dest any
+ip prefix-list pl-sample-in 5 permit 0.0.0.0/0
+ip prefix-list pl-sample-out 10 permit 198.51.100.0/24 max 28
+ip prefix-list pl-sample-out 20 deny 0.0.0.0/0 max 32
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.25/30
+  ip filter acl-sample-in 1 in
+  no shutdown
+!

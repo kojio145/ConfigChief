@@ -1,0 +1,3 @@
+Copied from PalaTerm (github.com/kojio145/palaterm, MIT, same author) internal/sheet at commit 586468c (2026-11-01).
+Kept as a copy on purpose, so that the two tools can move at their own pace (spec 17.1).
+Fixes made here should be carried back by hand when they matter to PalaTerm too.

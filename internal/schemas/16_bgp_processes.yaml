@@ -1,0 +1,12 @@
+table: bgp_processes
+title: {ja: BGP, en: BGP}
+since: M3
+key: [device, vrf]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name, note: {ja: "空 = VRF なし（全体の経路表）", en: "Empty = no VRF (the global table)"}}
+  - {name: asn, title: {ja: AS 番号, en: AS number}, type: int, required: true}
+  - {name: router_id, title: {ja: ルータ ID, en: Router ID}, type: ip4, explicit: true}
+  - {name: keepalive, title: {ja: Keepalive（秒）, en: Keepalive (s)}, type: int}
+  - {name: holdtime, title: {ja: Hold（秒）, en: Hold time (s)}, type: int}
+  - {name: log_neighbor_changes, title: {ja: ネイバーの変化を記録, en: Log neighbor changes}, type: bool}

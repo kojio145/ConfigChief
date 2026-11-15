@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>ConfigChief - ルータのコンフィグを Excel の表にし、表からコンフィグとチェック結果を出す（Cisco IOS ⇄ NEC IX）</title>
+<meta name="description" content="ConfigChief は、ネットワーク機器（Cisco IOS / IOS-XE・NEC UNIVERGE IX）のコンフィグを読んでメーカーによらない Excel の表（パラメータブック）にし、その表から全台のコンフィグ・チェック結果表・納品用のパラメータシートを出す Windows 用ツールです。機器更改・別メーカーへの書き換え・新規構築に。インストール不要・外部通信ゼロ・MIT ライセンス。">
+<link rel="canonical" href="https://kojio145.github.io/ConfigChief/">
+<meta property="og:title" content="ConfigChief - ルータのコンフィグ ⇄ メーカーによらない Excel の表">
+<meta property="og:description" content="コンフィグを読んで Excel の表にし、表から全台のコンフィグとチェック結果表を出す Windows 用ツール。Cisco IOS ⇄ NEC IX の書き換えにも。インストール不要・外部通信ゼロ。">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://kojio145.github.io/ConfigChief/">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"ConfigChief","operatingSystem":"Windows 10, Windows 11","applicationCategory":"DeveloperApplication","softwareVersion":"1.0.0","license":"https://opensource.org/licenses/MIT","url":"https://kojio145.github.io/ConfigChief/","downloadUrl":"https://github.com/kojio145/ConfigChief/releases/latest","description":"Network device configurations to a vendor-neutral Excel workbook and back (Cisco IOS / NEC IX).","offers":{"@type":"Offer","price":"0","priceCurrency":"JPY"}}
+</script>
+<style>
+  :root { --ground:#f6f8fb; --panel:#fff; --panel-2:#eef2f7; --ink:#1b2430; --ink-soft:#4c5a6b; --ink-faint:#7a889a; --line:#dde4ec; --accent:#2563eb; --accent-soft:#e5edff; }
+  @media (prefers-color-scheme: dark) { :root { --ground:#0f141b; --panel:#171e28; --panel-2:#1f2835; --ink:#e6ebf2; --ink-soft:#aab6c5; --ink-faint:#7a889a; --line:#2a3542; --accent:#6ea0ff; --accent-soft:#1c2a45; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink); font-family:"Segoe UI","Hiragino Sans","Noto Sans JP",system-ui,sans-serif; line-height:1.7; }
+  main { max-width:860px; margin:0 auto; padding:48px 20px 64px; }
+  h1 { font-size:2.2rem; margin:0 0 6px; letter-spacing:.01em; }
+  .tag { color:var(--ink-soft); font-size:1.05rem; margin:0 0 24px; }
+  .lead { font-size:1.08rem; margin:0 0 28px; }
+  .cta { display:flex; flex-wrap:wrap; gap:12px; margin:0 0 36px; }
+  .btn { display:inline-block; padding:12px 20px; border-radius:8px; text-decoration:none; font-weight:600; border:1px solid var(--line); background:var(--panel); color:var(--ink); }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .note { color:var(--ink-faint); font-size:.9rem; margin:-24px 0 32px; }
+  h2 { font-size:1.25rem; margin:36px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line); }
+  ul { padding-left:1.3em; } li { margin:4px 0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .card b { display:block; margin-bottom:4px; }
+  code { background:var(--panel-2); padding:1px 5px; border-radius:4px; font-size:.92em; }
+  footer { margin-top:48px; color:var(--ink-faint); font-size:.85rem; border-top:1px solid var(--line); padding-top:16px; }
+  a { color:var(--accent); }
+  figure.shot { margin:1.5rem 0 0; }
+  figure.shot img { width:100%; height:auto; border-radius:8px; border:1px solid rgba(127,127,127,.35); display:block; }
+  figure.shot figcaption { font-size:.85rem; opacity:.75; margin-top:.4rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ConfigChief</h1>
+  <p class="tag">ルータのコンフィグを、メーカーによらない Excel の表にする。表から、全台のコンフィグとチェック結果を出す。</p>
+  <p class="lead">
+    旧機器のコンフィグを読んでパラメータブック（Excel）にし、その表から新しい機器のコンフィグ・提出用のチェック結果表・納品用のパラメータシートを出します。
+    同じ表から別メーカーのコンフィグも出せるので、Cisco IOS から NEC IX への書き換え（その逆も）に使えます。
+    exe 1 つで動き、インストールは不要です。外部とは一切通信しません。
+  </p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/kojio145/ConfigChief/releases/latest">ダウンロード（GitHub Releases）</a>
+    <a class="btn" href="manual.html">使い方</a>
+    <a class="btn" href="https://github.com/kojio145/ConfigChief">ソースコード（GitHub）</a>
+  </div>
+  <p class="note">v1.0.0。Windows 10 / 11（x64）。署名の無い exe のため、初めて起動するときに SmartScreen の警告が出ることがあります（「詳細情報」から「実行」）。MIT ライセンス・商用利用可。<b>実機では確かめていません</b>（同梱のパックはメーカーの公開コマンドリファレンスから作りました）。生成したコンフィグは、必ず検証機で確かめてから使ってください。</p>
+
+  <figure class="shot">
+    <img src="img/result-findings.png" width="1264" height="781" alt="ConfigChief の結果の画面: Cisco の拠点ルータを NEC IX に書き換え、書けない値を指摘として一覧にしている" loading="eager">
+    <figcaption>結果: Cisco の拠点ルータを NEC IX に書き換えたところ。新しいメーカーで書けない値は、黙って落とさず指摘として出ます（値はすべて架空の見本）</figcaption>
+  </figure>
+  <figure class="shot">
+    <img src="img/import-lines.png" width="1264" height="781" alt="ConfigChief の取り込みの画面: コンフィグの各行が、取り込み済み・無視・未対応のどれになったかが分かる" loading="lazy">
+    <figcaption>取り込み: 行ごとに、どの規則でどの表のどの列に入ったかが分かります。読めなかった行は「未対応」として必ず一覧に出ます</figcaption>
+  </figure>
+
+  <h2>できること</h2>
+  <div class="grid">
+    <div class="card"><b>コンフィグ → 表</b>旧機器のコンフィグ（端末ログのままでも可）を読み、行ごとに「取り込み済み・無視・未対応」を色で出します。</div>
+    <div class="card"><b>表 → 全台のコンフィグ</b>Excel を直してボタン 1 つで、全台のコンフィグとチェック結果表を出します。2 回目からは前回からの変更一覧も。</div>
+    <div class="card"><b>別メーカーへの書き換え</b>同じ表から Cisco IOS / NEC IX のどちらのコンフィグも出せます。書けない値・置き換えて書いた設定は、必ず指摘として出します。</div>
+    <div class="card"><b>チェック</b>値の誤り、2 台の間の食い違い（IPsec・BGP・OSPF・VRRP・トンネル）、旧との違いを調べます。指摘は理由を付けて承認できます。</div>
+    <div class="card"><b>自己点検</b>生成したコンフィグを読み直し、元の表と同じになることを毎回確かめます。</div>
+    <div class="card"><b>検証と投入の後</b>検証機の投入ログから弾かれた行を探し、投入後の設定とパラメータブックの違いを出します。</div>
+    <div class="card"><b>納品物</b>自分の書式の Excel のひな形に値を流し込んだ納品用パラメータシート、相手に渡すパラメータ表。</div>
+    <div class="card"><b>新規構築</b>空のパラメータブックから 1 台目を作り、機器を複製して増やせます。</div>
+    <div class="card"><b>メーカーパック</b>本体はメーカーを知りません。読み方・書き方はテキストのパックにあり、足したり直したりできます。</div>
+    <div class="card"><b>外部通信ゼロ</b>テレメトリなし・自動更新なし・待ち受けポートなし。閉域の作業端末での利用を想定した設計です。</div>
+  </div>
+
+  <h2>対応している設定</h2>
+  <p>機器の基本・インタフェース・スタティック経路・ユーザ・遠隔ログイン・NTP・syslog・SNMP・VRF・OSPF・BGP・VRRP / HSRP・ACL・プレフィックスリスト・NAT・回線監視・PPPoE・IPsec（IKEv1）・GRE・DHCP・QoS（Cisco の古い書き方も読みます）。対応していない設定は「未対応」として一覧に出し、追加コンフィグで運べます。</p>
+
+  <h2>こんな場面に</h2>
+  <ul>
+    <li>数十〜数百台のルータ更改で、旧コンフィグからパラメータシートを作り直す転記をやめたい</li>
+    <li>Cisco から NEC（またはその逆）に入れ替えるとき、書き換えの漏れと値の食い違いを機械的に見つけたい</li>
+    <li>IPsec や BGP の両端の値が合っているかを、全台まとめて確かめたい</li>
+    <li>提出用のチェック結果と、変更の前後の一覧を、毎回同じ形で出したい</li>
+  </ul>
+
+  <h2>使い方</h2>
+  <ol>
+    <li><a href="https://github.com/kojio145/ConfigChief/releases/latest">Releases</a> から zip をダウンロードして展開し、中の <code>ConfigChief.exe</code> を起動（インストール不要）</li>
+    <li>案件フォルダを作り、旧機器のコンフィグを <code>input/old/</code> に置いて「取り込み」</li>
+    <li>Excel で対応（旧ホスト名 → 新ホスト名・新メーカー、旧 IF 名 → 新 IF 名）を埋めて、パラメータブックにする</li>
+    <li>「生成とチェック」で、全台のコンフィグとチェック結果表が出ます</li>
+  </ol>
+  <p>詳しくは <a href="manual.html">使い方</a>、<a href="tables.html">シートと列の一覧</a>、<a href="checks.html">チェックの一覧</a>、<a href="pack-guide.html">メーカーパックの書き方</a> を参照してください。</p>
+
+  <h2>English</h2>
+  <p>ConfigChief reads router configurations into a vendor-neutral Excel workbook and writes configurations, a check report and delivery sheets back from it. The same workbook gives the configuration of either vendor (Cisco IOS / IOS-XE, NEC UNIVERGE IX), so it also serves for replacing routers across vendors. One portable Windows exe, no network access. The user interface and the documents are in Japanese. Not verified on real devices yet: check every generated configuration on a lab device. See the <a href="https://github.com/kojio145/ConfigChief">GitHub repository</a>.</p>
+
+  <footer>
+    ConfigChief is an open-source project (MIT License) by KJO. This is a spare-time project; issues are read but answered on an irregular schedule.<br>
+    免責: 本ツールが出すコンフィグは、実機で確かめていません。利用により生じたいかなる損害についても作者は責任を負いません。本番の機器に入れる前に検証機で確かめ、所属組織のルールを確認してください。
+  </footer>
+</main>
+</body>
+</html>

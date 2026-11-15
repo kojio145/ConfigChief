@@ -1,0 +1,77 @@
+# Neutral word: the word of the device (appendix A 1.4, appendix B 4.2).
+# Sources: cmdref 4.6 (OSPF network types), 4.14 (tunnel modes), 7.2 (IKE)
+# and 7.4 (transform sets).
+# Privilege level 15 is the full one (cmdref 4.4). "operator" has no level
+# that is known to mean the same: such a user is written with a number.
+user_role:
+  admin: "15"
+
+ospf_network:
+  broadcast: broadcast
+  nbma: non-broadcast
+  point_to_multipoint: point-to-multipoint
+  point_to_point: point-to-point
+
+tunnel_mode:
+  gre: "gre ip"
+  ipip: ipip
+  ipsec: "ipsec ipv4"
+
+ike_encryption:
+  des: des
+  3des: 3des
+  aes128: aes
+  aes192: "aes 192"
+  aes256: "aes 256"
+
+ike_hash:
+  md5: md5
+  sha1: sha
+  sha256: sha256
+  sha384: sha384
+
+esp_encryption:
+  des: esp-des
+  3des: esp-3des
+  aes128: esp-aes
+  aes192: "esp-aes 192"
+  aes256: "esp-aes 256"
+  "null": esp-null
+
+esp_hash:
+  md5: esp-md5-hmac
+  sha1: esp-sha-hmac
+
+# QoS (cmdref 7.16 (7)). The dataset has numbers; the names are read here.
+dscp:
+  "0": default
+  "8": cs1
+  "10": af11
+  "12": af12
+  "14": af13
+  "16": cs2
+  "18": af21
+  "20": af22
+  "22": af23
+  "24": cs3
+  "26": af31
+  "28": af32
+  "30": af33
+  "32": cs4
+  "34": af41
+  "36": af42
+  "38": af43
+  "40": cs5
+  "46": ef
+  "48": cs6
+  "56": cs7
+
+precedence:
+  "0": routine
+  "1": priority
+  "2": immediate
+  "3": flash
+  "4": flash-override
+  "5": critical
+  "6": internet
+  "7": network

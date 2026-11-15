@@ -1,0 +1,28 @@
+# QoS as another vendor has it (made-up values): the queue of a condition is
+# not of MQC. adapt.yaml splits the class by its queues and tells it (G-614);
+# a class whose queues are all the same is written as one class.
+tables:
+  devices:
+    - hostname: rt-q12
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.1/30}
+  acls:
+    - {name: al-q-biz, type: extended}
+  acl_entries:
+    - {acl: al-q-biz, seq: 10, action: permit, protocol: ip, src: 192.0.2.0/24, dst: any}
+  qos_classes:
+    - {name: cm-q-pq, match: any}
+    - {name: cm-q-one, match: any}
+  qos_class_matches:
+    - {class: cm-q-pq, seq: 10, dscp: [46], queue: high}
+    - {class: cm-q-pq, seq: 20, acl: al-q-biz}
+    - {class: cm-q-pq, seq: 30, queue: low}
+    - {class: cm-q-one, seq: 10, precedence: [5], queue: normal}
+    - {class: cm-q-one, seq: 20, dscp: [34], queue: normal}
+  qos_policies:
+    - {policy: pm-q-out, class: cm-q-one, seq: 10, bandwidth_percent: 30}
+    - {policy: pm-q-out, class: cm-q-pq, seq: 20, queue_limit: [10, 20, 30, 40]}
+  qos_bindings:
+    - {if_name: GigabitEthernet0/0, direction: output, policy: pm-q-out, shape_bps: 10000000}
+findings: [G-614]

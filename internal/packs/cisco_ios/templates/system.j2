@@ -1,0 +1,63 @@
+{# The device as a whole and its users. Syntax: cmdref 4.1 and 4.4. The type
+   of a hashed secret is told by how the hash starts (README). #}
+hostname {{ device.hostname }}
+!
+{% if device.enable_secret %}
+{% if device.secret_form == 'hashed' %}
+{% if device.enable_secret is startingwith('$1$') %}
+enable secret 5 {{ device.enable_secret }}
+{% elif device.enable_secret is startingwith('$8$') %}
+enable secret 8 {{ device.enable_secret }}
+{% elif device.enable_secret is startingwith('$9$') or device.enable_secret is startingwith('$14$') %}
+enable secret 9 {{ device.enable_secret }}
+{% else %}
+{{ fail('特権パスワードのハッシュの種類が分かりません（$1$・$8$・$9$ で始まる値を書けます。別メーカーのハッシュは引き継げません）') }}
+{% endif %}
+{% else %}
+enable secret 0 {{ device.enable_secret }}
+{% endif %}
+!
+{% endif %}
+{% if device.timezone %}
+{% set tz = device.timezone | split(' ') %}
+{% if tz | length != 2 %}
+{{ fail('タイムゾーンは「名前 +時」の形で書きます（例 JST +9）。Cisco では名前が要ります') }}
+{% endif %}
+{% set off = tz[1] | split(':') %}
+{% if not (off[0] is startingwith('+') or off[0] is startingwith('-')) %}
+{{ fail('タイムゾーンの時差は + か - で始めます（例 JST +9）') }}
+{% endif %}
+clock timezone {{ tz[0] }} {{ off[0] | replace('+', '') }} {{ off[1] if off | length > 1 else '0' }}
+!
+{% endif %}
+{% if device.domain_name %}
+ip domain name {{ device.domain_name }}
+{% endif %}
+{% for a in device.name_servers %}
+ip name-server {{ a }}
+{% endfor %}
+{% if device.domain_name or device.name_servers %}
+!
+{% endif %}
+{% for u in t.users %}
+{% set priv = (u.privilege | lex('user_role')) if u.privilege in ['admin', 'operator'] else u.privilege %}
+{% if priv and priv is not digits %}
+{{ fail('ユーザ ' ~ u.name ~ ' の権限は admin か、0〜15 の数で書きます') }}
+{% endif %}
+{% if u.secret_form == 'hashed' %}
+{% if u.secret is startingwith('$1$') %}
+username {{ u.name }}{{ ' privilege ' ~ priv if priv else '' }} secret 5 {{ u.secret }}
+{% elif u.secret is startingwith('$8$') %}
+username {{ u.name }}{{ ' privilege ' ~ priv if priv else '' }} secret 8 {{ u.secret }}
+{% elif u.secret is startingwith('$9$') or u.secret is startingwith('$14$') %}
+username {{ u.name }}{{ ' privilege ' ~ priv if priv else '' }} secret 9 {{ u.secret }}
+{% else %}
+{{ fail('ユーザ ' ~ u.name ~ ' のパスワードのハッシュの種類が分かりません（$1$・$8$・$9$ で始まる値を書けます。別メーカーのハッシュは引き継げません）') }}
+{% endif %}
+{% else %}
+username {{ u.name }}{{ ' privilege ' ~ priv if priv else '' }} secret 0 {{ u.secret | required('パスワード') }}
+{% endif %}
+{% endfor %}
+{% if t.users %}
+!
+{% endif %}

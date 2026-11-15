@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>チェックの一覧 - ConfigChief</title>
+<style>
+  :root { --ground:#f6f8fb; --panel:#fff; --panel-2:#eef2f7; --ink:#1b2430; --ink-soft:#4c5a6b; --line:#dde4ec; --accent:#2563eb; }
+  @media (prefers-color-scheme: dark) { :root { --ground:#0f141b; --panel:#171e28; --panel-2:#1f2835; --ink:#e6ebf2; --ink-soft:#aab6c5; --line:#2a3542; --accent:#6ea0ff; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink); font-family:"Segoe UI","Hiragino Sans","Noto Sans JP",system-ui,sans-serif; line-height:1.7; }
+  main { max-width:960px; margin:0 auto; padding:32px 20px 64px; }
+  nav { font-size:.9rem; margin-bottom:24px; } nav a { margin-right:14px; }
+  h1 { font-size:1.9rem; margin:0 0 16px; } h2 { font-size:1.3rem; margin:36px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line); } h3 { font-size:1.1rem; margin:24px 0 8px; }
+  a { color:var(--accent); }
+  code { background:var(--panel-2); padding:1px 5px; border-radius:4px; font-size:.92em; }
+  pre { background:var(--panel-2); padding:12px 14px; border-radius:8px; overflow-x:auto; line-height:1.5; } pre code { background:none; padding:0; }
+  table { border-collapse:collapse; margin:12px 0; display:block; overflow-x:auto; } th, td { border:1px solid var(--line); padding:5px 9px; vertical-align:top; } th { background:var(--panel-2); text-align:left; }
+  blockquote { margin:12px 0; padding:8px 16px; border-left:4px solid #e0a800; background:var(--panel); }
+  img { max-width:100%; height:auto; border:1px solid var(--line); border-radius:8px; }
+  footer { margin-top:48px; color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--line); padding-top:16px; }
+</style>
+</head>
+<body>
+<main>
+<nav><a href="index.html">ConfigChief</a><a href="manual.html">使い方</a><a href="tables.html">シートと列</a><a href="checks.html">チェック</a><a href="pack-guide.html">パックの書き方</a><a href="https://github.com/kojio145/ConfigChief">GitHub</a></nav>
+<h1>チェックの一覧</h1>
+<p>このページは、プログラムが使っている定義から作っています（<code>go run ./cmd/docgen</code>）。手で直さないでください。</p>
+<ul>
+<li>重大度: E = エラー、W = 警告、I = 情報。「指定」= 案件のルールに書いた重大度</li>
+<li>頭の字: V = 値、X = 対向（2 台の間）、G = 生成、M = 移行（旧との違い・対応）、S = お客様の一覧、L = 投入ログと反映確認</li>
+</ul>
+<table>
+<tr><th>ID</th><th>重大度</th><th>内容</th></tr>
+<tr><td>V-101</td><td>E</td><td>必須の値が空</td></tr>
+<tr><td>V-102</td><td>E</td><td>値の形式が型に合わない</td></tr>
+<tr><td>V-103</td><td>E</td><td>値が範囲の外</td></tr>
+<tr><td>V-104</td><td>E</td><td>選択肢にない語</td></tr>
+<tr><td>V-105</td><td>E</td><td>行のキーが重複している</td></tr>
+<tr><td>V-106</td><td>E</td><td>参照先がない（ACL 名・IF 名・回線監視の番号など）</td></tr>
+<tr><td>V-107</td><td>E</td><td>「機器」列のホスト名が機器シートにない。@グループ名 に当たる機器が 1 台もない</td></tr>
+<tr><td>V-108</td><td>I</td><td>定義にない見出しがある（自由列として読んだ）</td></tr>
+<tr><td>V-109</td><td>E</td><td>機器シートのメーカーに当たるパックがない</td></tr>
+<tr><td>V-110</td><td>W</td><td>値に全角の英数字、前後の空白、制御文字が含まれる</td></tr>
+<tr><td>V-111</td><td>E</td><td>IF 名が、機種のポート一覧にも論理 IF の書き方にも当たらない</td></tr>
+<tr><td>V-112</td><td>E</td><td>生成先のメーカーで書けない語</td></tr>
+<tr><td>V-113</td><td>I</td><td>「明示」列が空のため、生成先の既定値で書き出す</td></tr>
+<tr><td>V-114</td><td>W</td><td>機種が空、または機種の定義がない</td></tr>
+<tr><td>V-115</td><td>W</td><td>参照先がないが、参照先の表をその機器のメーカーパックがまだ読まない</td></tr>
+<tr><td>V-201</td><td>E</td><td>同じ機器・同じ VRF の中で、IF のサブネットが重なっている</td></tr>
+<tr><td>V-202</td><td>W</td><td>案件の中で同じ IP アドレスが複数の IF に付いている</td></tr>
+<tr><td>V-203</td><td>E</td><td>IF のアドレスがネットワークアドレスかブロードキャストアドレス</td></tr>
+<tr><td>V-204</td><td>W</td><td>スタティック経路のネクストホップが、その機器のどの IF のサブネットにも入らない</td></tr>
+<tr><td>V-205</td><td>E</td><td>仮想 IP が、その IF のサブネットに入らない</td></tr>
+<tr><td>V-206</td><td>E</td><td>ホスト名に使えない文字がある・長すぎる</td></tr>
+<tr><td>V-207</td><td>E</td><td>ルータ ID（OSPF・BGP）が案件の中で重複している</td></tr>
+<tr><td>V-208</td><td>I</td><td>有効な IF の説明が空</td></tr>
+<tr><td>V-209</td><td>E</td><td>ハッシュ化された秘密の値を、別メーカーの機器に引き継ごうとしている</td></tr>
+<tr><td>V-210</td><td>W</td><td>ACL・プレフィックスリスト・回線監視が、定義されているがどこからも使われていない</td></tr>
+<tr><td>V-211</td><td>W</td><td>ACL に行が 1 つもない。permit の行が 1 つもない</td></tr>
+<tr><td>V-212</td><td>W</td><td>TCP MSS 調整の値が MTU − 40 より大きい</td></tr>
+<tr><td>V-213</td><td>E</td><td>DHCP の配布範囲・デフォルトルータがネットワークの外。配布範囲が IF のアドレスを含む</td></tr>
+<tr><td>V-214</td><td>W</td><td>スタティック経路・冗長化が参照する回線監視の送信元 IF が無効</td></tr>
+<tr><td>V-215</td><td>E</td><td>IPsec の方式が tunnel_if なのにトンネル IF がない。policy なのに対象通信の行がない</td></tr>
+<tr><td>V-216</td><td>W</td><td>弱い暗号（des・md5・dh1・dh2・dh5）を使っている</td></tr>
+<tr><td>V-217</td><td>E</td><td>PPPoE の論理 IF・物理 IF がインタフェース表にない</td></tr>
+<tr><td>V-218</td><td>W</td><td>秘密の値が仮の値のまま</td></tr>
+<tr><td>X-300</td><td>I</td><td>相手の機器が案件の中にない（管理外）</td></tr>
+<tr><td>X-301</td><td>W</td><td>IPsec・トンネル: 相手アドレスは案件の中の機器のものだが、相手側に対になる行がない</td></tr>
+<tr><td>X-302</td><td>E</td><td>IPsec: IKE の版、モードが両端で違う</td></tr>
+<tr><td>X-303</td><td>E</td><td>IPsec: IKE の暗号・ハッシュ・DH グループが両端で違う</td></tr>
+<tr><td>X-304</td><td>E</td><td>IPsec: ESP の暗号・ハッシュ・PFS が両端で違う</td></tr>
+<tr><td>X-305</td><td>E</td><td>IPsec: 事前共有鍵が両端で違う</td></tr>
+<tr><td>X-306</td><td>E</td><td>IPsec: 自分の ID と、相手が期待する相手の ID が合わない</td></tr>
+<tr><td>X-307</td><td>E</td><td>IPsec: 対象通信が両端で鏡写しになっていない</td></tr>
+<tr><td>X-308</td><td>W</td><td>IPsec: 有効時間が両端で違う</td></tr>
+<tr><td>X-309</td><td>I</td><td>IPsec: 相手監視・NAT 越えの設定が片側だけ</td></tr>
+<tr><td>X-311</td><td>E</td><td>トンネル: 送信元と宛先が両端で鏡写しになっていない</td></tr>
+<tr><td>X-312</td><td>E</td><td>トンネル: 種類・鍵が両端で違う</td></tr>
+<tr><td>X-313</td><td>E</td><td>トンネル: 両端のトンネル IF のアドレスが同じサブネットにない</td></tr>
+<tr><td>X-314</td><td>W</td><td>トンネル: MTU・監視の設定が両端で違う</td></tr>
+<tr><td>X-321</td><td>E</td><td>BGP: 相手 AS 番号が、相手機器の AS 番号と違う</td></tr>
+<tr><td>X-322</td><td>E</td><td>BGP: 片側にしかネイバーの行がない</td></tr>
+<tr><td>X-323</td><td>E</td><td>BGP: パスワードが両端で違う・片側だけ</td></tr>
+<tr><td>X-324</td><td>W</td><td>BGP: 送信元 IF の指定と、相手が指すアドレスが合わない。マルチホップの指定が片側だけ</td></tr>
+<tr><td>X-325</td><td>I</td><td>BGP: タイマーが両端で違う</td></tr>
+<tr><td>X-331</td><td>E</td><td>OSPF: 同じサブネットの IF で、エリアが違う</td></tr>
+<tr><td>X-332</td><td>E</td><td>OSPF: Hello・Dead 間隔が違う</td></tr>
+<tr><td>X-333</td><td>E</td><td>OSPF: 網の種類が違う</td></tr>
+<tr><td>X-334</td><td>E</td><td>OSPF: 認証の方式・鍵番号・鍵が違う</td></tr>
+<tr><td>X-335</td><td>E</td><td>OSPF: エリアの種類（stub・nssa）が違う</td></tr>
+<tr><td>X-336</td><td>W</td><td>OSPF: IF の MTU が違う</td></tr>
+<tr><td>X-337</td><td>W</td><td>OSPF: 片側だけ受動になっている</td></tr>
+<tr><td>X-338</td><td>I</td><td>OSPF: 同じサブネットで、片側だけ OSPF が有効</td></tr>
+<tr><td>X-341</td><td>E</td><td>VRRP・HSRP: 同じサブネット・同じグループ番号で、仮想 IP が違う</td></tr>
+<tr><td>X-342</td><td>E</td><td>VRRP・HSRP: 方式・版が違う</td></tr>
+<tr><td>X-343</td><td>W</td><td>VRRP・HSRP: 優先度が同じ</td></tr>
+<tr><td>X-344</td><td>E</td><td>VRRP・HSRP: 認証が違う</td></tr>
+<tr><td>X-345</td><td>W</td><td>VRRP・HSRP: 間隔が違う</td></tr>
+<tr><td>X-346</td><td>W</td><td>VRRP・HSRP: グループに機器が 1 台しかない</td></tr>
+<tr><td>X-351</td><td>W</td><td>同じサブネットの IF どうしで、プレフィックス長・MTU が違う</td></tr>
+<tr><td>G-601</td><td>E</td><td>テンプレートの実行エラー</td></tr>
+<tr><td>G-602</td><td>E</td><td>設計データに値があるのに、生成に使われなかった</td></tr>
+<tr><td>G-603</td><td>E</td><td>語の対応がない</td></tr>
+<tr><td>G-604</td><td>E</td><td>往復の不一致（生成したコンフィグを取り込み直した結果が、設計データと違う）</td></tr>
+<tr><td>G-605</td><td>W</td><td>生成したコンフィグに、取り込み直しで未対応になる行がある</td></tr>
+<tr><td>G-606</td><td>E</td><td>生成先のメーカーで必要な値が空</td></tr>
+<tr><td>G-607</td><td>E</td><td>機種が対応していない機能を使っている</td></tr>
+<tr><td>G-608</td><td>E</td><td>追加コンフィグの実行エラー</td></tr>
+<tr><td>G-609</td><td>W</td><td>追加コンフィグの行が、パックが生成した行と二重になっている</td></tr>
+<tr><td>G-610</td><td>指定</td><td>案件のルール: 含むべき行がない</td></tr>
+<tr><td>G-611</td><td>指定</td><td>案件のルール: 含んではいけない行がある</td></tr>
+<tr><td>G-612</td><td>指定</td><td>案件のルール: 式が偽・値が重複・値がそろっていない</td></tr>
+<tr><td>G-613</td><td>E</td><td>出力ファイル名が重複する・ファイル名に使えない文字がある</td></tr>
+<tr><td>G-614</td><td>W</td><td>パックが、このメーカーの書き方に置き換えて書いた設定がある</td></tr>
+<tr><td>M-403</td><td>E</td><td>旧にあって新にない行</td></tr>
+<tr><td>M-404</td><td>W</td><td>新にあって旧にない行</td></tr>
+<tr><td>M-405</td><td>W</td><td>旧と新で値が違うセル</td></tr>
+<tr><td>M-406</td><td>E</td><td>IF 対応が決まっていない旧 IF がある</td></tr>
+<tr><td>M-407</td><td>E</td><td>機器対応が決まっていない旧機器がある</td></tr>
+<tr><td>M-408</td><td>E</td><td>複数の旧 IF が、同じ新 IF に対応している</td></tr>
+<tr><td>S-501</td><td>W</td><td>お客様の一覧にあって、パラメータブックにない行</td></tr>
+<tr><td>S-502</td><td>I</td><td>パラメータブックにあって、お客様の一覧にない行</td></tr>
+<tr><td>S-503</td><td>E</td><td>お客様の一覧とパラメータブックで値が違う</td></tr>
+<tr><td>S-504</td><td>W</td><td>お客様の一覧の値が読めなかった</td></tr>
+<tr><td>S-505</td><td>I</td><td>お客様の一覧のファイルが、前回の読み込みから変わった</td></tr>
+<tr><td>L-701</td><td>E</td><td>機器に弾かれた行（エラーメッセージと、その直前のコマンド）</td></tr>
+<tr><td>L-702</td><td>W</td><td>ログのコマンドの並びが、生成したコンフィグと合わない（別の版を流した疑い）</td></tr>
+<tr><td>L-703</td><td>W</td><td>ログに現れたコマンドが、生成したコンフィグより少ない（途中で切れた疑い）</td></tr>
+<tr><td>L-704</td><td>I</td><td>機器の警告メッセージ</td></tr>
+<tr><td>L-705</td><td>E</td><td>ログのプロンプトのホスト名と、流したコンフィグのホスト名・機器の対応が合わない（機器の取り違えの疑い）</td></tr>
+<tr><td>R-801</td><td>E</td><td>パラメータブックにあるが、機器の設定にない行</td></tr>
+<tr><td>R-802</td><td>W</td><td>機器の設定にあるが、パラメータブックにない行</td></tr>
+<tr><td>R-803</td><td>E</td><td>パラメータブックと機器の設定で値が違う</td></tr>
+<tr><td>R-804</td><td>E</td><td>追加コンフィグの行が、機器の設定に見つからない</td></tr>
+<tr><td>R-805</td><td>I</td><td>機器の設定に未対応の行があり、追加コンフィグにも当たらない</td></tr>
+<tr><td>R-806</td><td>E</td><td>ログのホスト名が、案件のどの機器にも当たらない・別の機器のものである</td></tr>
+<tr><td>R-807</td><td>I</td><td>秘密の値は、機器側でハッシュ化されているため比べられなかった</td></tr>
+</table>
+<footer>ConfigChief (MIT License) by KJO. このページは docs/ の Markdown から作っています。</footer>
+</main>
+</body>
+</html>

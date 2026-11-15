@@ -1,0 +1,17 @@
+tables:
+  devices:
+    - {hostname: rt-c01, name_servers: [192.0.2.53, 192.0.2.54, 192.0.2.55]}
+  interfaces:
+    - {name: GigabitEthernet0/1, ipv4: 198.51.100.1/24, dhcp_relay: [192.0.2.67, 192.0.2.68]}
+  ospf_interfaces:
+    - {process_id: 1, if_name: GigabitEthernet0/1, area: 2}
+    - {process_id: 1, if_name: GigabitEthernet0/2, area: 0}
+  ntp_servers:
+    - {server: 192.0.2.123, source_if: Loopback0}
+    - {server: 192.0.2.124, source_if: Loopback0}
+# A network no interface falls into, and a value nothing reads.
+unknown:
+  - "common spare sample-text"
+  - "area-net 198.51.100.0/24 area 1"
+  - "area-net 192.0.2.128/25 area 9"
+ignored_min: 0

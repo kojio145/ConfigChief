@@ -1,0 +1,40 @@
+{# Line monitoring. Syntax: cmdref 4.11 and 7.9. A watch by ping is an IP SLA
+   operation and a track object that follows it; both get the number of the
+   row. The device takes no timeout below its threshold (5000 ms unless
+   changed), so a shorter timeout is written with a threshold of the same
+   value: with "reachability" the threshold does not change the state. #}
+{% for k in t.tracks %}
+{% set what = '回線監視 ' ~ k.id %}
+{% if not (k.id is digits) or (k.id | int) < 1 or (k.id | int) > 1000 %}
+{{ fail(what ~ ' の番号・名前は、Cisco では 1〜1000 の番号で書きます') }}
+{% elif k.type == 'icmp' %}
+{% set target = k.target | required(what ~ ' の監視先') %}
+{% if target and not ((target ~ '/32') is cidr) %}
+{{ fail(what ~ ' の監視先「' ~ target ~ '」は IPv4 アドレスで書きます') }}
+{% endif %}
+{% if k.timeout != '' and k.timeout > (k.interval if k.interval != '' else 60) * 1000 %}
+{{ fail(what ~ ' の待ち時間（ミリ秒）が、間隔（秒。空なら 60）より長くなっています') }}
+{% endif %}
+ip sla {{ k.id }}
+ icmp-echo {{ target }}{{ ' source-interface ' ~ k.source_if if k.source_if else '' }}
+{% if k.timeout != '' %}
+{% if k.timeout < 5000 %}
+ threshold {{ k.timeout }}
+{% endif %}
+ timeout {{ k.timeout }}
+{% endif %}
+{% if k.interval != '' %}
+ frequency {{ k.interval }}
+{% endif %}
+ip sla schedule {{ k.id }} life forever start-time now
+track {{ k.id }} ip sla {{ k.id }} reachability
+{% elif k.type == 'interface' %}
+track {{ k.id }} interface {{ k.target | required(what ~ ' の監視先（IF 名）') }} line-protocol
+{% else %}
+{{ fail(what ~ ' の監視の方法「' ~ k.type ~ '」は、このパックでは書けません（書き方を確かめていません。追加コンフィグに書いてください）') }}
+{% endif %}
+{% if k.type in ['icmp', 'interface'] and (k.up_delay != '' or k.down_delay != '') %}
+ delay{{ ' up ' ~ k.up_delay if k.up_delay != '' else '' }}{{ ' down ' ~ k.down_delay if k.down_delay != '' else '' }}
+{% endif %}
+!
+{% endfor %}

@@ -1,0 +1,286 @@
+Building configuration...
+
+Current configuration : 6480 bytes
+!
+version 15.9
+service timestamps debug datetime msec
+service timestamps log datetime msec
+no service password-encryption
+!
+hostname rt-a01
+!
+enable secret 5 $1$dummy$SampleHashForTestsOnly000
+!
+clock timezone JST 9 0
+!
+ip vrf VRF-SAMPLE-A
+ description sample vrf a
+ rd 64496:100
+!
+vrf definition VRF-SAMPLE-B
+ rd 64496:200
+ !
+ address-family ipv4
+ exit-address-family
+!
+ip domain name example.com
+ip name-server 192.0.2.53
+ip name-server 192.0.2.54
+!
+ip dhcp excluded-address 198.51.100.1 198.51.100.10
+ip dhcp excluded-address 198.51.100.254
+!
+ip dhcp pool POOL-SAMPLE-LAN
+ network 198.51.100.0 255.255.255.0
+ default-router 198.51.100.1
+ dns-server 192.0.2.53 192.0.2.54
+ domain-name example.com
+ lease 0 12
+!
+username admin privilege 15 secret 5 $1$dummy$SampleHashForTestsOnly111
+username operator privilege 1 secret 5 $1$dummy$SampleHashForTestsOnly222
+username backup password 0 dummy-backup-password
+!
+track 1 ip sla 1 reachability
+ delay down 10
+!
+track 2 interface GigabitEthernet0/2 line-protocol
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+ lifetime 28800
+crypto isakmp key dummy-psk-sample address 203.0.113.20
+crypto isakmp key dummy-psk-sample2 address 203.0.113.40
+crypto isakmp keepalive 30 5
+!
+crypto ipsec transform-set TS-SAMPLE esp-aes 256 esp-sha-hmac
+ mode tunnel
+!
+crypto ipsec profile IPSEC-PROF-SAMPLE
+ set transform-set TS-SAMPLE
+ set pfs group14
+ set security-association lifetime seconds 3600
+!
+crypto map CMAP-SAMPLE 10 ipsec-isakmp
+ set peer 203.0.113.40
+ set transform-set TS-SAMPLE
+ set pfs group14
+ match address ACL-SAMPLE-VPN
+!
+interface Loopback0
+ description sample loopback
+ ip address 192.0.2.1 255.255.255.255
+!
+interface Tunnel1
+ description to rt-b01 ipsec
+ ip address 198.18.0.1 255.255.255.252
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source Dialer1
+ tunnel mode ipsec ipv4
+ tunnel destination 203.0.113.20
+ tunnel protection ipsec profile IPSEC-PROF-SAMPLE
+!
+interface Tunnel2
+ description to rt-c01 gre
+ ip address 198.18.0.5 255.255.255.252
+ keepalive 10 3
+ tunnel source Loopback0
+ tunnel destination 203.0.113.30
+ tunnel key 100
+!
+interface GigabitEthernet0/0
+ description sample wan pppoe
+ no ip address
+ duplex auto
+ speed auto
+ pppoe enable group global
+ pppoe-client dial-pool-number 1
+!
+interface GigabitEthernet0/1
+ description sample lan
+ ip address 198.51.100.2 255.255.255.0
+ ip address 203.0.113.129 255.255.255.128 secondary
+ ip access-group ACL-SAMPLE-IN in
+ ip helper-address 192.0.2.67
+ no ip proxy-arp
+ ip nat inside
+ ip ospf cost 10
+ ip ospf priority 100
+ standby version 2
+ standby 1 ip 198.51.100.1
+ standby 1 priority 110
+ standby 1 preempt delay minimum 60
+ standby 1 authentication text dummy-hsrp
+ standby 1 track 1 decrement 20
+ duplex full
+ speed 1000
+!
+interface GigabitEthernet0/2
+ description to rt-b01
+ bandwidth 100000
+ ip address 203.0.113.1 255.255.255.252
+ ip access-group ACL-SAMPLE-OUT out
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 dummy-ospf-key
+ ip ospf network point-to-point
+ ip ospf hello-interval 5
+ ip ospf dead-interval 20
+ ip ospf 1 area 0
+ duplex auto
+ speed auto
+!
+interface GigabitEthernet0/3
+ no ip address
+ duplex auto
+ speed auto
+!
+interface GigabitEthernet0/3.10
+ description sample vlan 10
+ encapsulation dot1Q 10
+ ip address 192.0.2.130 255.255.255.128
+ vrrp 10 ip 192.0.2.129
+ vrrp 10 priority 120
+ vrrp 10 preempt delay minimum 30
+ vrrp 10 timers advertise 3
+!
+interface GigabitEthernet0/3.20
+ description sample vlan 20
+ encapsulation dot1Q 20
+ ip vrf forwarding VRF-SAMPLE-A
+ ip address 192.0.2.193 255.255.255.192
+!
+interface GigabitEthernet0/4
+ no ip address
+ shutdown
+!
+interface Dialer1
+ description sample pppoe session
+ ip address negotiated
+ ip mtu 1454
+ ip nat outside
+ encapsulation ppp
+ ip tcp adjust-mss 1414
+ dialer pool 1
+ dialer-group 1
+ ppp authentication chap callin
+ ppp chap hostname example-user@example.net
+ ppp chap password 0 dummy-ppp-password
+ crypto map CMAP-SAMPLE
+!
+router ospf 1
+ router-id 192.0.2.1
+ auto-cost reference-bandwidth 10000
+ log-adjacency-changes
+ area 1 stub no-summary
+ area 1 range 198.51.100.0 255.255.255.0
+ redistribute static metric 100 metric-type 1 subnets
+ passive-interface default
+ no passive-interface GigabitEthernet0/2
+ network 192.0.2.1 0.0.0.0 area 0
+ network 198.51.100.0 0.0.0.255 area 1
+ default-information originate always
+!
+router bgp 64496
+ bgp router-id 192.0.2.1
+ bgp log-neighbor-changes
+ neighbor 192.0.2.2 remote-as 64496
+ neighbor 192.0.2.2 update-source Loopback0
+ neighbor 192.0.2.2 shutdown
+ neighbor 203.0.113.2 remote-as 64497
+ neighbor 203.0.113.2 description to rt-b01
+ neighbor 203.0.113.2 password dummy-bgp-key
+ neighbor 203.0.113.30 remote-as 64498
+ neighbor 203.0.113.30 ebgp-multihop 2
+ neighbor 203.0.113.30 update-source Loopback0
+ !
+ address-family ipv4
+  network 198.51.100.0 mask 255.255.255.0
+  redistribute connected
+  neighbor 192.0.2.2 activate
+  neighbor 192.0.2.2 next-hop-self
+  neighbor 203.0.113.2 activate
+  neighbor 203.0.113.2 soft-reconfiguration inbound
+  neighbor 203.0.113.2 prefix-list PL-SAMPLE-IN in
+  neighbor 203.0.113.2 prefix-list PL-SAMPLE-OUT out
+  neighbor 203.0.113.30 activate
+ exit-address-family
+!
+ip nat pool NAT-POOL-SAMPLE 203.0.113.210 203.0.113.220 netmask 255.255.255.128
+ip nat inside source list ACL-SAMPLE-NAT interface Dialer1 overload
+ip nat inside source list 10 pool NAT-POOL-SAMPLE overload
+ip nat inside source static 198.51.100.20 203.0.113.200
+ip nat inside source static tcp 198.51.100.21 443 203.0.113.201 443
+ip route 0.0.0.0 0.0.0.0 Dialer1
+ip route 192.0.2.64 255.255.255.192 203.0.113.2 10 name sample-backup track 1
+ip route 198.18.20.0 255.255.255.0 Tunnel1
+ip route vrf VRF-SAMPLE-A 198.18.10.0 255.255.255.0 192.0.2.194
+ip ssh version 2
+!
+ip access-list standard ACL-SAMPLE-MGMT
+ permit 192.0.2.0 0.0.0.255
+ deny any
+ip access-list standard ACL-SAMPLE-NAT
+ permit 198.51.100.0 0.0.0.255
+ip access-list extended ACL-SAMPLE-IN
+ remark sample inbound filter
+ permit tcp 198.51.100.0 0.0.0.255 any eq 443
+ permit tcp any host 192.0.2.80 range 8000 8080
+ permit udp 198.51.100.0 0.0.0.255 host 192.0.2.53 eq 53
+ permit tcp any any established
+ permit icmp any any
+ deny ip any any log
+ip access-list extended ACL-SAMPLE-VPN
+ permit ip 198.51.100.0 0.0.0.255 192.0.2.128 0.0.0.127
+ permit ip 198.51.100.0 0.0.0.255 203.0.113.128 0.0.0.127
+ip access-list extended ACL-SAMPLE-OUT
+ 10 permit ip 198.51.100.0 0.0.0.255 any
+ 20 deny ip any any
+!
+ip prefix-list PL-SAMPLE-IN seq 5 permit 0.0.0.0/0
+ip prefix-list PL-SAMPLE-OUT seq 10 permit 198.51.100.0/24 le 28
+ip prefix-list PL-SAMPLE-OUT seq 20 deny 0.0.0.0/0 le 32
+!
+ip sla 1
+ icmp-echo 203.0.113.2 source-interface GigabitEthernet0/2
+ frequency 10
+ip sla schedule 1 life forever start-time now
+!
+dialer-list 1 protocol ip permit
+!
+logging facility local6
+logging trap warnings
+logging source-interface Loopback0
+logging host 192.0.2.50
+access-list 10 permit 192.0.2.0 0.0.0.255
+access-list 10 deny any log
+access-list 100 remark sample numbered list
+access-list 100 permit ip 198.51.100.0 0.0.0.255 any
+access-list 100 deny ip any any
+!
+snmp-server community dummy-ro-comm RO 10
+snmp-server trap-source Loopback0
+snmp-server location sample-site-a rack 1
+snmp-server contact netops@example.com
+snmp-server host 192.0.2.60 version 2c dummy-ro-comm
+!
+ntp source Loopback0
+ntp server 192.0.2.123 prefer
+ntp server 192.0.2.124
+!
+banner login ^C
+sample banner: authorized access only
+^C
+!
+line con 0
+ exec-timeout 5 0
+line vty 0 4
+ access-class 10 in
+ exec-timeout 10 0
+ login local
+ transport input ssh
+!
+end

@@ -1,0 +1,11 @@
+table: ipsec_selectors
+title: {ja: IPsec 対象通信, en: IPsec selectors}
+since: M4
+key: [device, tunnel, seq]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: tunnel, title: {ja: IPsec の名前, en: Tunnel}, type: ref, ref: ipsec_tunnels.name, required: true}
+  - {name: seq, title: {ja: 順番, en: Sequence}, type: int, required: true}
+  - {name: local_net, title: {ja: 自分側ネットワーク, en: Local network}, type: net4, required: true}
+  - {name: remote_net, title: {ja: 相手側ネットワーク, en: Remote network}, type: net4, required: true}
+  - {name: protocol, title: {ja: プロトコル, en: Protocol}, type: string}

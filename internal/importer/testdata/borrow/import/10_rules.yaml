@@ -1,0 +1,36 @@
+rules:
+  - id: host
+    match: '^hostname (?P<name>\S+)$'
+    row: {table: devices, key: {}}
+
+  # The rules below "zone" are the ones the other places borrow: here "zone"
+  # is in sight.
+  - id: zone
+    match: '^zone (?P<zone>\S+)$'
+    row: {table: vrfs, key: {name: "{{ zone }}"}}
+    children:
+      - id: peer
+        match: '^peer (?P<addr>\S+) as (?P<ras>\d+)$'
+        row: {table: bgp_neighbors, key: {vrf: "{{ zone }}", neighbor: "{{ addr }}"}}
+        set: {remote_as: "{{ ras }}"}
+        children:
+          - id: peer.note
+            match: '^note (?P<text>.+)$'
+            set: {description: "{{ text }}"}
+      - id: note
+        match: '^note (?P<text>.+)$'
+        set: {description: "{{ text }}"}
+
+  # Its own rule comes first, then the borrowed ones. "zone" reads as "".
+  - id: global
+    match: '^global$'
+    row: {table: vrfs, key: {name: "global"}}
+    children_from: zone
+    children:
+      - id: global.peer.off
+        match: '^peer (?P<addr>\S+) as (?P<ras>\d+) off$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {remote_as: "{{ ras }}", enabled: false}
+      - id: global.inner
+        match: '^inner$'
+        children_from: zone

@@ -1,0 +1,43 @@
+# QoS (made-up values). expect.txt is the configuration the tables must turn
+# into; the text is read back and compared with the tables.
+tables:
+  devices:
+    - hostname: rt-q11
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0/0, enabled: true, ipv4: 203.0.113.1/30}
+    - {name: GigabitEthernet0/0/1, enabled: true, ipv4: 192.0.2.1/24}
+    - {name: GigabitEthernet0/0/2, enabled: true, ipv4: 198.51.100.1/24}
+  acls:
+    - {name: acl-q-voice, type: extended}
+    - {name: "120", type: extended}
+  acl_entries:
+    - {acl: acl-q-voice, seq: 10, action: permit, protocol: ip, src: any, dst: 203.0.113.9, precedence: 5}
+    - {acl: acl-q-voice, seq: 20, action: permit, protocol: ip, src: any, dst: any, dscp: 46}
+    - {acl: "120", seq: 10, action: permit, protocol: ip, src: 192.0.2.0/24, dst: any}
+  qos_classes:
+    - {name: cm-q-voice, match: any}
+    - {name: cm-q-video, match: all}
+    - {name: cm-q-rest, match: any}
+  qos_class_matches:
+    - {class: cm-q-voice, seq: 10, dscp: [46]}
+    - {class: cm-q-voice, seq: 20, acl: acl-q-voice}
+    - {class: cm-q-video, seq: 10, dscp: [34, 36]}
+    - {class: cm-q-video, seq: 20, precedence: [4]}
+    - {class: cm-q-rest, seq: 10, acl: "120"}
+    - {class: cm-q-rest, seq: 20}
+  qos_policies:
+    - {policy: pm-q-out, class: cm-q-voice, seq: 10, priority: true, bandwidth_percent: 20, priority_burst: 4000}
+    - {policy: pm-q-out, class: cm-q-video, seq: 20, bandwidth_remaining: 40, queue_limit: [64]}
+    - {policy: pm-q-out, class: cm-q-rest, seq: 30, bandwidth_remaining: 20, shape_bps: 4000000, shape_bc: 16000, shape_be: 0}
+    - {policy: pm-q-out, class: default, seq: 40, fair_queue: true}
+    - {policy: pm-q-in, class: default, seq: 20, police_bps: 5000000, police_bc: 8000, police_exceed: set_dscp, police_exceed_value: 10, set_precedence: 0}
+    - {policy: pm-q-in, class: cm-q-voice, seq: 10, set_dscp: 46}
+    - {policy: pm-q-lan, class: cm-q-voice, seq: 10, priority: true, priority_level: 1}
+    - {policy: pm-q-lan, class: cm-q-video, seq: 20, priority: true, bandwidth_kbps: 512}
+    - {policy: pm-q-lan, class: cm-q-rest, seq: 30, bandwidth_kbps: 2000, police_bps: 3000000}
+  qos_bindings:
+    - {if_name: GigabitEthernet0/0/0, direction: output, policy: pm-q-out, shape_bps: 10000000}
+    - {if_name: GigabitEthernet0/0/1, direction: input, policy: pm-q-in}
+    - {if_name: GigabitEthernet0/0/1, direction: output, policy: pm-q-lan}
+    - {if_name: GigabitEthernet0/0/2, direction: output, shape_bps: 2000000, shape_bc: 8000}

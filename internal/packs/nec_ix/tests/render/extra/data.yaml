@@ -1,0 +1,40 @@
+# Extra configurations (spec 9.4), a table the pack has no template for
+# (G-602) and a line written twice (G-609). Made-up values.
+tables:
+  devices:
+    - hostname: ix-c03
+      vendor: nec_ix
+      group: [sample-edge]
+  interfaces:
+    - {name: GigaEthernet0.0, description: sample wan, enabled: true, ipv4: 203.0.113.33/30, vrf: vrf-sample-c}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: dhcp}
+    - {name: Tunnel0.0, enabled: false, ipv4: "unnumbered:GigaEthernet1.0"}
+  # The interface that names the VRF writes it: this row is not a finding.
+  vrfs:
+    - {name: vrf-sample-c}
+  # A list without an entry writes no line: its entry stands in the extra
+  # configuration below.
+  acls:
+    - {name: acl-sample-mgmt, type: extended}
+  ntp_servers:
+    - {server: 192.0.2.123, source_if: GigaEthernet0.0}
+    # The device has no "prefer": G-602.
+    - {server: 192.0.2.124, prefer: true}
+extra:
+  _all.j2: |
+    {# position: before interfaces #}
+    ip access-list acl-sample-mgmt permit ip src 192.0.2.0/24 dest any
+    !
+  "@sample-edge.j2": |
+    logging timestamp datetime
+    !
+  "@sample-core.j2": |
+    logging buffered 131072
+  ix-c03.j2: |
+    {# position: after services #}
+    ntp server 192.0.2.124
+    ntp ip enable
+    !
+  ix-c04.j2: |
+    ip ufs-cache enable
+findings: [G-602, G-609]

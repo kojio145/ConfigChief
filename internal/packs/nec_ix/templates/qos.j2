@@ -1,0 +1,129 @@
+{# QoS (stage M6). Syntax: cmdref 7.15 (CRM 14, FD 2.40).
+   The device has no condition for a DSCP or a precedence: a list
+   "qos-d<n>" is made for every such condition (the import turns it back
+   into the condition). Every policy gets "class class-local" and
+   "class class-default": the two classes are always there. Policing, fair
+   queueing and the level of a priority are not of this device: the columns
+   are not read here (G-602 tells them). #}
+{% set made = namespace(keys=[]) %}
+{% for m in t.qos_class_matches %}
+{% if m.dscp or m.precedence %}
+{% set what = 'QoS のクラス ' ~ m.class ~ ' の ' ~ m.seq ~ ' 番の条件' %}
+{% if m.acl or (m.dscp and m.precedence) %}
+{{ fail(what ~ ': ACL・DSCP・precedence は 1 行に 1 つだけ書きます（行を分けてください）') }}
+{% endif %}
+{% set made.keys = made.keys + [m.class ~ '/' ~ m.seq] %}
+{% set name = 'qos-d' ~ (made.keys | length) %}
+{% for a in t.acls %}
+{% if a.name == name %}
+{{ fail('ACL ' ~ name ~ ': この名前は、パックが QoS の DSCP・precedence の条件のために作るリストの名前です（別の名前にしてください）') }}
+{% endif %}
+{% endfor %}
+{% for v in m.dscp %}
+ip access-list {{ name }} permit ip src any dest any dscp {{ v }}
+{% endfor %}
+{% for v in m.precedence %}
+ip access-list {{ name }} permit ip src any dest any precedence {{ v }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% if made.keys %}
+!
+{% endif %}
+{% for c in t.qos_classes %}
+class-map match-{{ c.match | required('QoS のクラス ' ~ c.name ~ ' の合わせ方') }} {{ c.name }}
+{% set k = namespace(i=0) %}
+{% for m in t.qos_class_matches %}
+{% if m.class == c.name %}
+{% set what = 'QoS のクラス ' ~ c.name ~ ' の ' ~ m.seq ~ ' 番の条件' %}
+{% set k.i = k.i + 1 %}
+{% if m.seq != k.i * 10 %}
+{{ fail(what ~ ': 順番が 10 刻みではありません（コンフィグには番号を書かず、上から順に書きます。順番を 10、20、30… に振り直してください。評価の順は変わりません）') }}
+{% endif %}
+{% set q = ' ' ~ m.queue if m.queue else '' %}
+{% if m.dscp or m.precedence %}
+{% set at = namespace(i=0) %}
+{% for key in made.keys %}
+{% if key == m.class ~ '/' ~ m.seq %}
+{% set at.i = loop.index %}
+{% endif %}
+{% endfor %}
+  match ip access-list qos-d{{ at.i }}{{ q }}
+{% elif m.acl %}
+  match ip access-list {{ m.acl }}{{ q }}
+{% else %}
+  match any{{ q }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% if t.qos_classes %}
+!
+{% endif %}
+{% set seen = namespace(names=[]) %}
+{% for first in t.qos_policies %}
+{% if first.policy not in seen.names %}
+{% set seen.names = seen.names + [first.policy] %}
+policy-map {{ first.policy }}
+{# The classes in their order, then the two classes of the device. #}
+{% for pass in ['named', 'local', 'default'] %}
+{% set wrote = namespace(v=false) %}
+{% for r in t.qos_policies | sort(attribute='seq') %}
+{% if r.policy == first.policy and ((r.class if r.class in ['local', 'default'] else 'named') == pass) %}
+{% set wrote.v = true %}
+{% set what = 'QoS のポリシー ' ~ r.policy ~ ' のクラス ' ~ r.class %}
+  class {{ 'class-' ~ r.class if r.class in ['local', 'default'] else r.class }}
+{% set bw = (1 if r.bandwidth_kbps != '' else 0) + (1 if r.bandwidth_percent != '' else 0) + (1 if r.bandwidth_remaining != '' else 0) %}
+{% if bw > 1 %}
+{{ fail(what ~ ': 帯域（kbps・%・残りの %）は 1 つだけ書きます') }}
+{% endif %}
+{% if r.priority %}
+{% set burst = ' ' ~ r.priority_burst if r.priority_burst != '' else '' %}
+{% if r.bandwidth_kbps != '' %}
+    priority {{ r.bandwidth_kbps }}{{ burst }}
+{% elif r.bandwidth_percent != '' %}
+    priority percent {{ r.bandwidth_percent }}{{ burst }}
+{% else %}
+{% if burst %}
+{{ fail(what ~ ': 優先のバーストは、帯域（上限）を書いたときだけ書けます') }}
+{% endif %}
+    priority
+{% endif %}
+{% elif r.bandwidth_kbps != '' %}
+    bandwidth {{ r.bandwidth_kbps }}
+{% elif r.bandwidth_percent != '' %}
+{% if r.bandwidth_percent > 98 %}
+{{ fail(what ~ ': 帯域（%）は 98 までです（NEC IX は、機器の 2 つのクラスに帯域を残します）') }}
+{% endif %}
+    bandwidth percent {{ r.bandwidth_percent }}
+{% endif %}
+{% if r.shape_bps != '' %}
+{% if r.shape_be != '' and r.shape_bc == '' %}
+{{ fail(what ~ ': 超過バーストは、通常バーストを書いたときだけ書けます') }}
+{% endif %}
+    shape {{ r.shape_bps }}{{ ' ' ~ r.shape_bc if r.shape_bc != '' else '' }}{{ ' ' ~ r.shape_be if r.shape_be != '' else '' }}
+{% elif r.shape_bc != '' or r.shape_be != '' %}
+{{ fail(what ~ ': 遅らせる側のバーストは、「上限・遅らせる」を書いたときだけ書けます') }}
+{% endif %}
+{% if r.set_dscp != '' %}
+    set ip dscp {{ r.set_dscp }}
+{% endif %}
+{% if r.set_precedence != '' %}
+    set ip precedence {{ r.set_precedence }}
+{% endif %}
+{% if r.queue_limit | length > 4 %}
+{{ fail(what ~ ': キューの長さは 4 つ（high・medium・normal・low）までです') }}
+{% elif r.queue_limit %}
+    queue-limit {{ r.queue_limit | join(' ') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if pass != 'named' and not wrote.v %}
+  class class-{{ pass }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% if t.qos_policies %}
+!
+{% endif %}

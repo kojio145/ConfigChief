@@ -1,0 +1,17 @@
+# A made-up vendor for the check of a pack against the table definitions.
+# Most of its rules are wrong on purpose. It does not describe a real device.
+id: lint
+title: {ja: "試験用の小さなパック（パックの検査）", en: "Pack check test pack"}
+version: 0.0.1
+schema: 1
+syntax: indent
+comment_prefixes: ["!"]
+
+detect:
+  - {match: '^hostname \S+$', score: 2}
+
+hostname: '^hostname (?P<name>\S+)$'
+
+interfaces:
+  types:
+    - {name: GigabitEthernet, short: [Gi], kind: physical}

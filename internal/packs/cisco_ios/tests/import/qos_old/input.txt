@@ -1,0 +1,27 @@
+hostname rt-q02
+!
+interface Serial0/0
+ ip address 203.0.113.5 255.255.255.252
+ traffic-shape rate 1536000 6144 0
+ priority-group 1
+!
+interface Serial0/1
+ ip address 203.0.113.9 255.255.255.252
+ custom-queue-list 2
+!
+interface GigabitEthernet0/1
+ ip address 192.0.2.1 255.255.255.0
+ rate-limit input access-group 101 2000000 375000 750000 conform-action transmit exceed-action drop
+ rate-limit input 8000000 1500000 3000000 conform-action transmit exceed-action set-prec-transmit 0
+!
+access-list 101 permit ip 192.0.2.0 0.0.0.255 any
+access-list 110 permit ip any host 198.51.100.10
+priority-list 1 protocol ip high list 110
+priority-list 1 protocol ip medium tcp 23
+priority-list 1 queue-limit 30 40 50 60
+queue-list 2 protocol ip 1 list 110
+queue-list 2 protocol ip 2 udp 5060
+queue-list 2 default 3
+queue-list 2 queue 1 byte-count 3000 limit 30
+queue-list 2 queue 3 byte-count 1500
+end

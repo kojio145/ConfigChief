@@ -1,0 +1,60 @@
+hostname ix-q02
+!
+ip access-list 101 permit ip src 192.0.2.0/24 dest any
+ip access-list 110 permit ip src any dest 198.51.100.10/32
+ip access-list cq2-udp5060 permit udp src any dest any dport eq 5060
+ip access-list cq2-udp5060 permit udp src any sport eq 5060 dest any
+ip access-list pq1-tcp23 permit tcp src any dest any dport eq 23
+ip access-list pq1-tcp23 permit tcp src any sport eq 23 dest any
+!
+class-map match-any cq2-1
+  match ip access-list 110
+class-map match-any cq2-2
+  match ip access-list cq2-udp5060
+class-map match-any cq2-3
+  match any
+class-map match-any pq1
+  match ip access-list 110 high
+  match ip access-list pq1-tcp23 medium
+  match any normal
+class-map match-all rl-acl101
+  match ip access-list 101
+!
+policy-map cq2
+  class cq2-1
+    bandwidth percent 50
+    queue-limit 30
+  class cq2-2
+    bandwidth percent 25
+  class cq2-3
+    bandwidth percent 25
+  class class-local
+  class class-default
+policy-map pq1
+  class pq1
+    queue-limit 30 40 50 60
+  class class-local
+  class class-default
+policy-map rl-Gi0-1-in
+  class rl-acl101
+  class class-local
+  class class-default
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.5/30
+  service-policy enable
+  service-policy output pq1
+  traffic-shape rate 1536000 6144 0
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 203.0.113.9/30
+  service-policy enable
+  service-policy output cq2
+  no shutdown
+!
+interface GigaEthernet2.0
+  ip address 192.0.2.1/24
+  service-policy input rl-Gi0-1-in
+  no shutdown
+!

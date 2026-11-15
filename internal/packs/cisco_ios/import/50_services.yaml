@@ -1,0 +1,338 @@
+# Line monitoring, PPPoE, IPsec and DHCP (stages M3 and M4).
+# Syntax: cmdref 4.11, 4.12, 4.13, 4.15, 7.2, 7.4, 7.5 and 7.9.
+rules:
+  # ---- tracking ----
+  # Without "reachability" the object follows the state of the operation,
+  # which the dataset has no word for: that form stays unknown.
+  - id: track.sla
+    match: '^track (?P<id>\d+) ip sla (?P<op>\d+) reachability$'
+    emit:
+      - table: x_track
+        key: {id: "{{ id }}"}
+        set: {sla: "{{ op }}"}
+    children:
+      - id: track.sla.delay
+        match: '^delay(?: up (?P<up>\d+))?(?: down (?P<down>\d+))?$'
+        when: "up or down"
+        emit:
+          - table: x_track
+            key: {id: "{{ id }}"}
+            set: {up_delay: "{{ up }}", down_delay: "{{ down }}"}
+
+  - id: track.interface
+    match: '^track (?P<id>\d+) interface (?P<ifn>\S+) line-protocol$'
+    row: {table: tracks, key: {id: "{{ id }}"}}
+    set: {type: interface, target: "{{ ifn | ifname }}"}
+    children:
+      - id: track.interface.delay
+        match: '^delay(?: up (?P<up>\d+))?(?: down (?P<down>\d+))?$'
+        when: "up or down"
+        set: {up_delay: "{{ up }}", down_delay: "{{ down }}"}
+
+  # "frequency" and "timeout" belong to the icmp-echo mode; they are read both
+  # under the icmp-echo line and beside it (the look of the output is not
+  # confirmed). "source-ip" has no column and stays unknown.
+  - id: sla
+    match: '^ip sla (?P<n>\d+)$'
+    row: {table: x_sla, key: {n: "{{ n }}"}}
+    children:
+      - id: sla.echo
+        match: '^icmp-echo (?P<dst>\d+\.\d+\.\d+\.\d+)(?: source-interface (?P<sif>\S+))?$'
+        set: {target: "{{ dst }}", source_if: "{{ sif | ifname }}"}
+        children:
+          - id: sla.echo.frequency
+            match: '^frequency (?P<s>\d+)$'
+            set: {interval: "{{ s }}"}
+          - id: sla.echo.timeout
+            match: '^timeout (?P<ms>\d+)$'
+            set: {timeout: "{{ ms }}"}
+          - id: sla.echo.threshold
+            match: '^threshold \d+$'
+            ignore: しきい値（表に列がありません。到達できるかどうかの監視では、結果を変えません）
+      - id: sla.frequency
+        match: '^frequency (?P<s>\d+)$'
+        set: {interval: "{{ s }}"}
+      - id: sla.timeout
+        match: '^timeout (?P<ms>\d+)$'
+        set: {timeout: "{{ ms }}"}
+      # The threshold only marks a slow answer; an object that tracks
+      # "reachability" stays up above it (cmdref 7.9).
+      - id: sla.threshold
+        match: '^threshold \d+$'
+        ignore: しきい値（表に列がありません。到達できるかどうかの監視では、結果を変えません）
+
+  # Only the form that runs the operation for ever from now on.
+  - id: sla.schedule
+    match: '^ip sla schedule (?P<n>\d+) life forever start-time now$'
+    emit:
+      - table: x_sla
+        key: {n: "{{ n }}"}
+        set: {scheduled: "true"}
+
+  # ---- IPsec (IKEv1, on a tunnel interface) ----
+  # "encr" is the form seen in the examples of the command reference.
+  - id: isakmp.policy
+    match: '^crypto isakmp policy (?P<prio>\d+)$'
+    row: {table: x_isakmp_policy, key: {priority: "{{ prio }}"}}
+    children:
+      - id: isakmp.policy.encryption
+        match: '^encr(?:yption)? (?P<enc>des|3des|aes|aes 192|aes 256)$'
+        set: {encryption: "{{ enc | unlex('ike_encryption') }}"}
+      - id: isakmp.policy.hash
+        match: '^hash (?P<hash>sha|sha256|sha384|md5)$'
+        set: {hash: "{{ hash | unlex('ike_hash') }}"}
+      - id: isakmp.policy.authentication
+        match: '^authentication (?P<auth>pre-share)$'
+        set: {auth: "{{ auth }}"}
+      - id: isakmp.policy.group
+        match: '^group (?P<g>1|2|5|14|15|16|19|20|21|24)$'
+        set: {dh: "dh{{ g }}"}
+      - id: isakmp.policy.lifetime
+        match: '^lifetime (?P<s>\d+)$'
+        set: {lifetime: "{{ s }}"}
+
+  - id: isakmp.key
+    match: '^crypto isakmp key (?:0 )?(?P<key>\S+) address (?P<peer>\d+\.\d+\.\d+\.\d+)$'
+    emit:
+      - table: x_isakmp_key
+        key: {address: "{{ peer }}"}
+        set: {psk: "{{ key }}"}
+
+  # With a second number (seconds between the retries) there is no column:
+  # the dataset counts retries. Such a line stays unknown.
+  - id: isakmp.keepalive
+    match: '^crypto isakmp keepalive (?P<s>\d+)$'
+    emit:
+      - table: x_isakmp_keepalive
+        key: {}
+        set: {interval: "{{ s }}"}
+
+  - id: ipsec.transform_set
+    match: '^crypto ipsec transform-set (?P<name>\S+) (?P<enc>esp-aes|esp-aes 192|esp-aes 256|esp-3des|esp-des|esp-null)(?: (?P<hash>esp-sha-hmac|esp-md5-hmac))?$'
+    row: {table: x_transform_set, key: {name: "{{ name }}"}}
+    set:
+      encryption: "{{ enc | unlex('esp_encryption') }}"
+      hash: "{{ (hash | unlex('esp_hash')) if hash else '' }}"
+
+  - id: ipsec.profile
+    match: '^crypto ipsec profile (?P<name>\S+)$'
+    row: {table: x_ipsec_profile, key: {name: "{{ name }}"}}
+    children:
+      - id: ipsec.profile.transform_set
+        match: '^set transform-set (?P<ts>\S+)$'
+        set: {transform_set: "{{ ts }}"}
+      - id: ipsec.profile.pfs
+        match: '^set pfs group(?P<g>1|2|5|14|15|16|19|20)$'
+        set: {pfs: "dh{{ g }}"}
+      - id: ipsec.profile.lifetime
+        match: '^set security-association lifetime seconds (?P<s>\d+)$'
+        set: {lifetime: "{{ s }}"}
+
+  # ---- IPsec (IKEv1, with a crypto map: an access list chooses the traffic) ----
+  # Read: an entry with one peer given by its address and one transform set.
+  # A dynamic map, a profile, a peer by name and a second transform set stay
+  # unknown.
+  - id: ipsec.map
+    match: '^crypto map (?P<name>\S+) (?P<seq>\d+) ipsec-isakmp$'
+    row: {table: x_crypto_map, key: {name: "{{ name }}", seq: "{{ seq }}"}}
+    children:
+      - id: ipsec.map.peer
+        match: '^set peer (?P<peer>\d+\.\d+\.\d+\.\d+)$'
+        set: {peer: "{{ peer }}"}
+      - id: ipsec.map.transform_set
+        match: '^set transform-set (?P<ts>\S+)$'
+        set: {transform_set: "{{ ts }}"}
+      - id: ipsec.map.pfs
+        match: '^set pfs group(?P<g>1|2|5|14|15|16|19|20)$'
+        set: {pfs: "dh{{ g }}"}
+      - id: ipsec.map.lifetime
+        match: '^set security-association lifetime seconds (?P<s>\d+)$'
+        set: {lifetime: "{{ s }}"}
+      - id: ipsec.map.match
+        match: '^match address (?P<acl>\S+)$'
+        set: {acl: "{{ acl }}"}
+
+  # ---- DHCP server ----
+  - id: dhcp.pool
+    match: '^ip dhcp pool (?P<name>\S+)$'
+    row: {table: dhcp_pools, key: {name: "{{ name }}"}}
+    children:
+      - id: dhcp.pool.network
+        match: '^network (?P<net>\d+\.\d+\.\d+\.\d+)(?: (?P<mask>\d+\.\d+\.\d+\.\d+)| /(?P<len>\d+))$'
+        set: {network: "{{ (net ~ '/' ~ len) if len else (net | with_mask(mask) | network) }}"}
+      # The dataset keeps one gateway; a line with several stays unknown.
+      - id: dhcp.pool.router
+        match: '^default-router (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+        set: {default_router: "{{ addr }}"}
+      - id: dhcp.pool.dns
+        match: '^dns-server (?P<list>\d+\.\d+\.\d+\.\d+(?: \d+\.\d+\.\d+\.\d+)*)$'
+        append: {dns_servers: "{{ list }}"}
+      - id: dhcp.pool.domain
+        match: '^domain-name (?P<name>\S+)$'
+        set: {domain: "{{ name }}"}
+      # Days, hours, minutes. Minutes and "infinite" have no form in the dataset.
+      - id: dhcp.pool.lease
+        match: '^lease (?P<d>\d+)(?: (?P<h>\d+))?(?: (?P<m>\d+))?$'
+        when: "not m or m == '0'"
+        set: {lease: "{{ (d ~ 'd') if (not h or h == '0') else ((d | int * 24 + h | int) ~ 'h') }}"}
+
+  - id: dhcp.excluded
+    match: '^ip dhcp excluded-address (?P<start>\d+\.\d+\.\d+\.\d+)(?: (?P<end>\d+\.\d+\.\d+\.\d+))?$'
+    emit:
+      - table: x_dhcp_excluded
+        key: {start: "{{ start }}"}
+        set: {end: "{{ end }}"}
+
+derive:
+  - id: track.icmp
+    for: x_track
+    as: t
+    let:
+      s: "lookup('x_sla', n=t.sla)"
+    when: "s.target and s.scheduled"
+    row: {table: tracks, key: {id: "{{ t.id }}"}}
+    set:
+      type: icmp
+      target: "{{ s.target }}"
+      source_if: "{{ s.source_if }}"
+      interval: "{{ s.interval }}"
+      timeout: "{{ s.timeout }}"
+      up_delay: "{{ t.up_delay }}"
+      down_delay: "{{ t.down_delay }}"
+
+  # The Dialer interface and the physical interface share the pool number.
+  - id: pppoe
+    for: x_dialer
+    as: d
+    let:
+      c: "lookup('x_pppoe_client', pool=d.pool)"
+      user: "d.username or d.pap_username"
+      pw: "d.password or d.pap_password"
+    when: "c.physical_if and d.encap == 'ppp' and user and (not d.pap_username or (d.pap_username == user and d.pap_password == pw))"
+    row: {table: pppoe, key: {name: "{{ d.if_name }}"}}
+    set:
+      physical_if: "{{ c.physical_if }}"
+      logical_if: "{{ d.if_name }}"
+      username: "{{ user }}"
+      password: "{{ pw }}"
+      auth: "{{ d.auth }}"
+      service_name: "{{ c.service_name }}"
+
+  # A tunnel interface with "tunnel protection": the profile names the
+  # transform set, the key is found by the address of the peer, and the IKE
+  # values come from the policy with the smallest number (the others stay
+  # unknown, as the dataset keeps one proposal).
+  - id: ipsec.tunnel_if
+    for: x_tunnel_protection
+    as: t
+    let:
+      tun: "lookup('tunnels', if_name=t.if_name)"
+      prof: "lookup('x_ipsec_profile', name=t.profile)"
+      ts: "lookup('x_transform_set', name=prof.transform_set)"
+      key: "lookup('x_isakmp_key', address=tun.destination)"
+      pol: "first('x_isakmp_policy', sort='priority')"
+      ka: "lookup('x_isakmp_keepalive')"
+    when: "ts.encryption and key.psk and tun.type == 'ipsec' and pol.auth == 'pre-share'"
+    row: {table: ipsec_tunnels, key: {name: "{{ t.if_name }}"}}
+    set:
+      style: tunnel_if
+      tunnel_if: "{{ t.if_name }}"
+      peer_address: "{{ tun.destination }}"
+      ike_version: 1
+      psk: "{{ key.psk }}"
+      ike_encryption: "{{ pol.encryption }}"
+      ike_hash: "{{ pol.hash }}"
+      ike_dh: "{{ pol.dh }}"
+      ike_lifetime: "{{ pol.lifetime }}"
+      esp_encryption: "{{ ts.encryption }}"
+      esp_hash: "{{ ts.hash }}"
+      pfs: "{{ prof.pfs }}"
+      ipsec_lifetime: "{{ prof.lifetime }}"
+      dpd_interval: "{{ ka.interval }}"
+
+  # An entry of a crypto map that an interface uses: the transform set and
+  # the key are found as above. The device has no name for one entry, so the
+  # row is named "<map>/<number>".
+  - id: ipsec.policy
+    for: x_crypto_map
+    as: m
+    let:
+      bind: "lookup('x_crypto_map_if', map=m.name)"
+      ts: "lookup('x_transform_set', name=m.transform_set)"
+      key: "lookup('x_isakmp_key', address=m.peer)"
+      pol: "first('x_isakmp_policy', sort='priority')"
+      ka: "lookup('x_isakmp_keepalive')"
+      acl: "lookup('acls', name=m.acl)"
+    when: "bind.if_name and ts.encryption and key.psk and pol.auth == 'pre-share' and acl.type == 'extended'"
+    row: {table: ipsec_tunnels, key: {name: "{{ m.name }}/{{ m.seq }}"}}
+    set:
+      style: policy
+      local_if: "{{ bind.if_name }}"
+      peer_address: "{{ m.peer }}"
+      ike_version: 1
+      psk: "{{ key.psk }}"
+      ike_encryption: "{{ pol.encryption }}"
+      ike_hash: "{{ pol.hash }}"
+      ike_dh: "{{ pol.dh }}"
+      ike_lifetime: "{{ pol.lifetime }}"
+      esp_encryption: "{{ ts.encryption }}"
+      esp_hash: "{{ ts.hash }}"
+      pfs: "{{ m.pfs }}"
+      ipsec_lifetime: "{{ m.lifetime }}"
+      dpd_interval: "{{ ka.interval }}"
+
+  # The traffic of such an entry: each "permit ip" line of its access list,
+  # with a network or a host on both sides.
+  - id: ipsec.selector
+    for: acl_entries
+    as: e
+    let:
+      m: "lookup('x_crypto_map', acl=e.acl)"
+      t: "lookup('ipsec_tunnels', name=m.name ~ '/' ~ m.seq)"
+    when: "t.style == 'policy' and e.action == 'permit' and e.protocol == 'ip' and e.src != 'any' and e.dst != 'any' and not e.flags"
+    row: {table: ipsec_selectors, key: {tunnel: "{{ t.name }}", seq: "{{ e.seq }}"}}
+    set:
+      local_net: "{{ e.src if '/' in e.src else e.src ~ '/32' }}"
+      remote_net: "{{ e.dst if '/' in e.dst else e.dst ~ '/32' }}"
+      protocol: "{{ e.protocol }}"
+
+  # A line that became a selector leaves the access lists, and so does the
+  # list once it is empty: the template makes the list from the selectors.
+  # A list that a filter, NAT, a login line or SNMP names as well stays whole.
+  - id: ipsec.selector.taken
+    for: acl_entries
+    as: e
+    let:
+      m: "lookup('x_crypto_map', acl=e.acl)"
+      s: "lookup('ipsec_selectors', tunnel=m.name ~ '/' ~ m.seq, seq=e.seq)"
+      u1: "first('interfaces', acl_in=e.acl)"
+      u2: "first('interfaces', acl_out=e.acl)"
+      u3: "first('nat_rules', match_acl=e.acl)"
+      u4: "first('remote_access', acl=e.acl)"
+      u5: "first('snmp_communities', acl=e.acl)"
+    when: "s.local_net and not (u1.name or u2.name or u3.name or u4.acl or u5.acl)"
+    remove: true
+  - id: ipsec.acl.taken
+    for: acls
+    as: a
+    let:
+      m: "lookup('x_crypto_map', acl=a.name)"
+      t: "lookup('ipsec_tunnels', name=m.name ~ '/' ~ m.seq)"
+      rest: "first('acl_entries', acl=a.name)"
+      u1: "first('interfaces', acl_in=a.name)"
+      u2: "first('interfaces', acl_out=a.name)"
+      u3: "first('nat_rules', match_acl=a.name)"
+      u4: "first('remote_access', acl=a.name)"
+      u5: "first('snmp_communities', acl=a.name)"
+    when: "t.style == 'policy' and not rest.seq and not (u1.name or u2.name or u3.name or u4.acl or u5.acl)"
+    remove: true
+
+  # An excluded range goes to the pool whose network has its first address.
+  - id: dhcp.excluded.join
+    for: x_dhcp_excluded
+    as: e
+    let:
+      pool: "covering('dhcp_pools', 'network', e.start)"
+    when: "pool.name"
+    row: {table: dhcp_pools, key: {name: "{{ pool.name }}"}}
+    append: {excluded: "{{ e.start }}-{{ e.end if e.end else e.start }}"}

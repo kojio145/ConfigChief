@@ -1,0 +1,27 @@
+# Line monitoring and NAT (made-up values). expect.txt is the configuration
+# the tables must turn into.
+tables:
+  devices:
+    - hostname: ix-n01
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.41/30}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 192.0.2.1/25}
+    - {name: GigaEthernet2.0, enabled: true, ipv4: 198.51.100.1/28}
+  tracks:
+    - {id: wg-sample-wan, type: icmp, target: 203.0.113.42, source_if: GigaEthernet0.0, interval: 3, fail_count: 4, restore_count: 2}
+    - {id: wg-sample-port, type: interface, target: GigaEthernet2.0}
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: 203.0.113.42, track: wg-sample-wan}
+    - {prefix: 0.0.0.0/0, next_hop: 192.0.2.2, distance: 200}
+    - {prefix: 198.51.100.64/26, out_if: GigaEthernet2.0, track: wg-sample-port}
+  acls:
+    - {name: acl-sample-nat, type: extended}
+  acl_entries:
+    - {acl: acl-sample-nat, seq: 10, action: permit, protocol: ip, src: 192.0.2.0/25, dst: any}
+  nat_rules:
+    - {name: sample-web, type: static_port, protocol: tcp, local_ip: 192.0.2.11, local_port: 443, global_port: 443, outside_if: GigaEthernet0.0}
+    - {name: nat1, type: pat_interface, match_acl: acl-sample-nat, outside_if: GigaEthernet0.0}
+    - {name: nat3, type: static_port, protocol: udp, local_ip: 192.0.2.12, local_port: 514, global_ip: interface, global_port: 514, outside_if: GigaEthernet0.0}
+    - {name: nat4, type: static, local_ip: 192.0.2.20, global_ip: 198.51.100.4, outside_if: GigaEthernet2.0}
+    - {name: nat5, type: static, local_ip: 192.0.2.21, global_ip: 198.51.100.5, outside_if: GigaEthernet2.0}

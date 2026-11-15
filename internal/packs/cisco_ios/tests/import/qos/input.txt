@@ -1,0 +1,67 @@
+hostname rt-q01
+!
+class-map match-any cm-q-voice
+ match dscp ef
+ match access-group name acl-q-voice
+class-map match-all cm-q-video
+ match ip dscp af41 af42 34
+class-map cm-q-prec
+ match precedence critical 3
+class-map match-any cm-q-any
+ match any
+ match access-group 120
+!
+policy-map pm-q-child
+ class cm-q-voice
+  priority percent 20
+ class cm-q-video
+  bandwidth remaining percent 40
+  queue-limit 64 packets
+ class cm-q-prec
+  priority level 2
+ class class-default
+  fair-queue
+policy-map pm-q-out
+ class class-default
+  shape average 10000000
+  service-policy pm-q-child
+policy-map pm-q-in
+ class cm-q-voice
+  set dscp ef
+ class cm-q-any
+  police cir 2m bc 8000
+   conform-action transmit
+   exceed-action set-dscp-transmit af11
+ class class-default
+  police 5000000 conform-action transmit exceed-action drop
+  set precedence 0
+policy-map pm-q-shape
+ class class-default
+  shape average 2000000
+policy-map pm-q-plain
+ class cm-q-video
+  bandwidth 2000
+  shape average 4m 16000 0
+ class cm-q-prec
+  priority 512 4000
+!
+interface GigabitEthernet0/0/0
+ ip address 203.0.113.1 255.255.255.252
+ service-policy output pm-q-out
+!
+interface GigabitEthernet0/0/1
+ ip address 192.0.2.1 255.255.255.0
+ service-policy input pm-q-in
+ service-policy output pm-q-plain
+!
+interface Tunnel1
+ ip address 198.51.100.1 255.255.255.252
+ qos pre-classify
+ service-policy output pm-q-shape
+!
+ip access-list extended acl-q-voice
+ permit udp 192.0.2.0 0.0.0.255 198.51.100.0 0.0.0.255 range 16384 32767
+ permit ip any any dscp ef
+ permit ip any host 203.0.113.9 precedence 5
+access-list 120 permit ip any any
+end

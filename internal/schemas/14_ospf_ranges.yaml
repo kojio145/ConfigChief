@@ -1,0 +1,10 @@
+table: ospf_ranges
+title: {ja: OSPF 集約, en: OSPF ranges}
+since: M3
+key: [device, process_id, area, prefix]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: process_id, title: {ja: プロセス番号, en: Process ID}, type: int, required: true}
+  - {name: area, title: {ja: エリア, en: Area}, type: string, required: true}
+  - {name: prefix, title: {ja: 集約する範囲, en: Prefix}, type: net4, required: true}
+  - {name: advertise, title: {ja: 広告する, en: Advertise}, type: bool}

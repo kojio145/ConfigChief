@@ -1,0 +1,28 @@
+table: ipsec_tunnels
+title: {ja: IPsec, en: IPsec}
+since: M4
+key: [device, name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: 名前, en: Name}, type: string, required: true, auto_name: true, note: {ja: "取り込み時は、トンネル IF の名前か「マップ名/番号」。比べるときは、名前でなく中身で行を合わせる", en: "The tunnel interface or \"map/number\" on import. Rows are matched by what they hold, not by this name"}}
+  - {name: style, title: {ja: 方式, en: Style}, type: enum, values: [tunnel_if, policy], required: true, note: {ja: "tunnel_if = トンネル IF に経路を向ける。policy = 対象通信で選ぶ", en: "tunnel_if = routes point to a tunnel interface. policy = traffic is picked by selectors"}}
+  - {name: tunnel_if, title: {ja: トンネル IF, en: Tunnel interface}, type: ifname, note: {ja: "方式が tunnel_if のとき必須", en: "Needed when the style is tunnel_if"}}
+  - {name: local_if, title: {ja: 自分側 IF, en: Local interface}, type: ifname, note: {ja: "自分側 IF か自分側アドレスのどちらか", en: "Either this or the local address"}}
+  - {name: local_address, title: {ja: 自分側アドレス, en: Local address}, type: ip4}
+  - {name: peer_address, title: {ja: 相手アドレス, en: Peer address}, type: string, required: true, note: {ja: "アドレス。相手が動的なら any", en: "An address, or any for a dynamic peer"}}
+  - {name: ike_version, title: {ja: IKE の版, en: IKE version}, type: enum, values: ["1", "2"], required: true, explicit: true}
+  - {name: ike_mode, title: {ja: IKE のモード, en: IKE mode}, type: enum, values: [main, aggressive], explicit: true, note: {ja: "版 1 のみ", en: "Version 1 only"}}
+  - {name: local_id, title: {ja: 自分の ID, en: Local ID}, type: string}
+  - {name: remote_id, title: {ja: 相手の ID, en: Remote ID}, type: string}
+  - {name: psk, title: {ja: 事前共有鍵, en: Pre-shared key}, type: secret, required: true}
+  - {name: ike_encryption, title: {ja: IKE 暗号, en: IKE encryption}, type: enum, values: [des, 3des, aes128, aes192, aes256, aes128gcm, aes256gcm, "null"], required: true, explicit: true}
+  - {name: ike_hash, title: {ja: IKE ハッシュ, en: IKE hash}, type: enum, values: [md5, sha1, sha256, sha384, sha512], required: true, explicit: true}
+  - {name: ike_dh, title: {ja: IKE DH グループ, en: IKE DH group}, type: enum, values: [dh1, dh2, dh5, dh14, dh15, dh16, dh19, dh20, dh21, dh24], required: true, explicit: true}
+  - {name: ike_lifetime, title: {ja: IKE 有効時間（秒）, en: IKE lifetime (s)}, type: int, explicit: true}
+  - {name: esp_encryption, title: {ja: ESP 暗号, en: ESP encryption}, type: enum, values: [des, 3des, aes128, aes192, aes256, aes128gcm, aes256gcm, "null"], required: true, explicit: true}
+  - {name: esp_hash, title: {ja: ESP ハッシュ, en: ESP hash}, type: enum, values: [md5, sha1, sha256, sha384, sha512], required: true, explicit: true}
+  - {name: pfs, title: {ja: PFS, en: PFS}, type: enum, values: [none, dh1, dh2, dh5, dh14, dh15, dh16, dh19, dh20, dh21, dh24], explicit: true}
+  - {name: ipsec_lifetime, title: {ja: IPsec 有効時間（秒）, en: IPsec lifetime (s)}, type: int, explicit: true}
+  - {name: dpd_interval, title: {ja: 相手監視の間隔（秒）, en: DPD interval (s)}, type: int}
+  - {name: dpd_retry, title: {ja: 相手監視の再送回数, en: DPD retries}, type: int}
+  - {name: nat_traversal, title: {ja: NAT 越え, en: NAT traversal}, type: bool}

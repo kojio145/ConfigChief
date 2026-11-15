@@ -1,0 +1,54 @@
+hostname ix-w01
+!
+ip access-list acl-w-nat permit ip src 198.51.100.0/24 dest any
+ip access-list sec-list-w permit ip src any dest any
+!
+ip route default GigaEthernet0.1
+ip route 192.0.2.0/25 Tunnel0.0
+ip dhcp enable
+ip dhcp excluded-address 198.51.100.1 198.51.100.10
+!
+ike proposal ike-prop-w encryption aes-256 hash sha2-256 group 2048-bit lifetime 28800
+ike policy ike-pol-w peer 203.0.113.20 key dummy-psk-site-w ike-prop-w
+ike keepalive ike-pol-w 30 3
+!
+ipsec autokey-proposal sec-prop-w esp-aes-256 esp-sha lifetime time 3600
+ipsec autokey-map sec-map-w sec-list-w peer 203.0.113.20 pfs 2048-bit sec-prop-w
+!
+ppp profile ppp-w
+  authentication myname sample-w@example.com
+  authentication password sample-w@example.com dummy-pppoe-secret-w
+!
+ip dhcp profile pool-w-lan
+  default-gateway 198.51.100.1
+  dns-server 192.0.2.53
+  lease-time 86400
+!
+interface GigaEthernet0.0
+  description sample wan port
+  no shutdown
+!
+interface GigaEthernet1.0
+  description sample lan
+  ip address 198.51.100.1/24
+  ip dhcp binding pool-w-lan
+  no shutdown
+!
+interface GigaEthernet0.1
+  description sample pppoe
+  ppp binding ppp-w
+  ip address ipcp
+  ip mtu 1454
+  ip tcp adjust-mss 1414
+  ip napt enable
+  ip napt inside list acl-w-nat
+  no shutdown
+!
+interface Tunnel0.0
+  description sample vpn
+  tunnel mode ipsec
+  ip unnumbered GigaEthernet1.0
+  ip tcp adjust-mss 1300
+  ipsec policy tunnel sec-map-w out
+  no shutdown
+!

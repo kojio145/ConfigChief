@@ -1,0 +1,99 @@
+{# Access lists and prefix lists. Syntax: cmdref 4.9 (CRM p.24-3, p.23-14).
+   A list has no line of its own: every entry is one line with "src" and
+   "dest", and the entries count in the order they are written. The device
+   has one kind of list, no remark, and numbers the entries only in its
+   "sequence-mode", which is not written here: the entries have to be
+   numbered 10, 20, 30 ... (README). Written is what the import reads back:
+   ip, tcp, udp and icmp, one port with eq / lt / gt / neq. A list without
+   an entry writes no line (its entries may stand in an extra
+   configuration). #}
+{% set wrote = namespace(v=false) %}
+{% for a in t.acls %}
+{% if a.name | length > 15 %}
+{{ fail('ACL ' ~ a.name ~ ' の名前が 15 字を超えています（NEC IX の ACL の名前は 15 字までです）') }}
+{% endif %}
+{% if a.type and a.type != 'extended' %}
+{{ fail('ACL ' ~ a.name ~ ' の種類「' ~ a.type ~ '」は書けません（NEC IX の ACL は 1 種類です。種類を extended にし、各行にプロトコル ip と宛先 any を書いてください）') }}
+{% endif %}
+{% set n = namespace(i=0) %}
+{% for x in t.acl_entries %}
+{% if x.acl == a.name %}
+{% set n.i = n.i + 1 %}
+{% set what = 'ACL ' ~ a.name ~ ' の ' ~ x.seq ~ ' 番' %}
+{% if x.seq != n.i * 10 %}
+{{ fail(what ~ ': 順番が 10 刻みではありません（NEC IX では番号を書かず、上から順に書きます。順番を 10、20、30… に振り直してください。評価の順は変わりません）') }}
+{% endif %}
+{% if x.action == 'remark' %}
+{{ fail(what ~ ': 注記（remark）の行は書けません（NEC IX の ACL に注記の行があるかを確かめていません。行を消してください）') }}
+{% else %}
+{% set proto = x.protocol | required(what ~ 'のプロトコル') %}
+{% if proto not in ['ip', 'tcp', 'udp', 'icmp'] %}
+{{ fail(what ~ 'のプロトコル「' ~ proto ~ '」は書けません（ip tcp udp icmp のどれかで書きます。ほかは追加コンフィグに書いてください）') }}
+{% endif %}
+{% if x.flags %}
+{{ fail(what ~ 'の付加条件（' ~ (x.flags | join(' ')) ~ '）は書けません（追加コンフィグに書いてください）') }}
+{% endif %}
+{% if x.icmp_type %}
+{{ fail(what ~ 'の ICMP の種類は書けません（追加コンフィグに書いてください）') }}
+{% endif %}
+{# An address: any, or an address with its length (a host has /32). #}
+{% set ad = namespace(s='', d='') %}
+{% for side in ['s', 'd'] %}
+{% set v = x.src if side == 's' else x.dst %}
+{% set w = '' %}
+{% if v == 'any' or v is cidr %}
+{% set w = v %}
+{% elif v and (v ~ '/32') is cidr %}
+{% set w = v ~ '/32' %}
+{% elif v %}
+{{ fail(what ~ 'のアドレス「' ~ v ~ '」は書けません（any、192.0.2.1、192.0.2.0/24 の形で書きます）') }}
+{% endif %}
+{% if side == 's' %}
+{% set ad.s = w %}
+{% else %}
+{% set ad.d = w %}
+{% endif %}
+{% endfor %}
+{# A port: 80, >1023, <1024, !80. A range is not read back by the import. #}
+{% set pt = namespace(s='', d='') %}
+{% if proto in ['tcp', 'udp'] %}
+{% for side in ['s', 'd'] %}
+{% set p = x.src_port if side == 's' else x.dst_port %}
+{% set w = '' %}
+{% if p %}
+{% set op = 'eq' %}
+{% if '>' in p %}
+{% set op = 'gt' %}
+{% elif '<' in p %}
+{% set op = 'lt' %}
+{% elif '!' in p %}
+{% set op = 'neq' %}
+{% endif %}
+{% set num = p | replace('>', '') | replace('<', '') | replace('!', '') %}
+{% if not (num is digits) %}
+{{ fail(what ~ 'のポート「' ~ p ~ '」は書けません（80、>1023、<1024、!80 の形で、番号で書きます。範囲は追加コンフィグに書いてください）') }}
+{% endif %}
+{% set w = (' sport ' if side == 's' else ' dport ') ~ op ~ ' ' ~ num %}
+{% endif %}
+{% if side == 's' %}
+{% set pt.s = w %}
+{% else %}
+{% set pt.d = w %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% set wrote.v = true %}
+ip access-list {{ a.name }} {{ x.action }} {{ proto }} src {{ ad.s | required(what ~ 'の送信元') }}{{ pt.s }} dest {{ ad.d | required(what ~ 'の宛先') }}{{ pt.d }}{{ ' precedence ' ~ x.precedence if x.precedence != '' else '' }}{{ ' dscp ' ~ x.dscp if x.dscp != '' else '' }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% for p in t.prefix_lists %}
+{% if p.name != p.name | lower %}
+{{ fail('プレフィックスリスト ' ~ p.name ~ ': NEC IX は名前を小文字で保存します。小文字で書いてください') }}
+{% endif %}
+ip prefix-list {{ p.name }} {{ p.seq }} {{ p.action }} {{ p.prefix }}{{ ' min ' ~ p.ge if p.ge != '' else '' }}{{ ' max ' ~ p.le if p.le != '' else '' }}
+{% endfor %}
+{% if wrote.v or t.prefix_lists %}
+!
+{% endif %}

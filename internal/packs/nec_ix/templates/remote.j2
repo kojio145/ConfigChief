@@ -1,0 +1,18 @@
+{# Remote access. Syntax: cmdref 4.4. Each server is switched on by its own
+   line, both take the same access list, and the timeout is one value for
+   every terminal of the device. The SSH version, the way of logging in and a
+   line password have no confirmed line: those cells are not read. #}
+{% for ra in t.remote_access %}
+{% for p in ra.protocols %}
+{{ p }}-server ip enable
+{% if ra.acl %}
+{{ p }}-server ip access-list {{ ra.acl }}
+{% endif %}
+{% endfor %}
+{% if ra.idle_timeout != '' %}
+terminal timeout {{ ra.idle_timeout }}
+{% endif %}
+{% if ra.protocols or ra.idle_timeout != '' %}
+!
+{% endif %}
+{% endfor %}

@@ -1,0 +1,80 @@
+{# OSPF. Syntax: cmdref 4.6. An interface joins a process by a "network
+   <interface> area <area>" line of the process. A process is not tied to a
+   VRF on this device, and it has no "passive-interface default" and no
+   reference bandwidth: the VRF and the bandwidth are not read. #}
+{% for p in t.ospf_processes %}
+{% set what = 'OSPF ' ~ p.process_id %}
+ip router ospf {{ p.process_id }}
+{% if p.router_id %}
+  router-id {{ p.router_id }}
+{% endif %}
+{% for a in t.ospf_areas %}
+{% if a.process_id == p.process_id %}
+{% if a.type in ['stub', 'totally_stub'] %}
+  area {{ a.area }} stub{{ ' no-summary' if a.type == 'totally_stub' else '' }}
+{% elif a.type in ['nssa', 'totally_nssa'] %}
+  area {{ a.area }} nssa{{ ' no-summary' if a.type == 'totally_nssa' else '' }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for r in t.ospf_ranges %}
+{% if r.process_id == p.process_id %}
+  area {{ r.area }} range {{ r.prefix }} {{ 'not-advertise' if r.advertise == false else 'advertise' }}
+{% endif %}
+{% endfor %}
+{% for r in t.ospf_redistribute %}
+{% if r.process_id == p.process_id %}
+  redistribute {{ r.source }}{{ ' metric ' ~ r.metric if r.metric != '' else '' }}{{ ' metric-type ' ~ r.metric_type if r.metric_type else '' }}{{ ' route-map ' ~ r.filter if r.filter else '' }}
+{% endif %}
+{% endfor %}
+{% if p.default_originate in ['when_present', 'always'] %}
+  originate-default{{ ' always' if p.default_originate == 'always' else '' }}{{ ' metric ' ~ p.default_metric if p.default_metric != '' else '' }}
+{% elif p.default_metric != '' %}
+{{ fail(what ~ ' の広告のメトリックは、デフォルト経路の広告が when_present か always のときだけ書けます') }}
+{% endif %}
+{% if p.passive_default == true %}
+{{ fail(what ~ ' の「既定を受動にする」は書けません（NEC IX にありません。受動にするインタフェースの行で「受動」を有効にしてください）') }}
+{% endif %}
+{% for o in t.ospf_interfaces %}
+{% if o.process_id == p.process_id and o.passive == true %}
+  passive-interface {{ o.if_name }}
+{% endif %}
+{% endfor %}
+{% for o in t.ospf_interfaces %}
+{% if o.process_id == p.process_id %}
+  network {{ o.if_name }} area {{ o.area | required(o.if_name ~ ' の OSPF のエリア') }}
+{% endif %}
+{% endfor %}
+!
+{% endfor %}
+{# What cannot be written of the interfaces is told here once. #}
+{% for o in t.ospf_interfaces %}
+{% set n = namespace(rows=0, proc=false, seen=false) %}
+{% for x in t.ospf_interfaces %}
+{% if x.if_name == o.if_name %}
+{% set n.rows = n.rows + 1 %}
+{% endif %}
+{% endfor %}
+{% if n.rows > 1 %}
+{{ fail('OSPF インタフェース ' ~ o.if_name ~ ' の行が ' ~ n.rows ~ ' つあります（このパックは、1 つのインタフェースを 1 つのプロセスに入れます）') }}
+{% endif %}
+{% for p in t.ospf_processes %}
+{% if p.process_id == o.process_id %}
+{% set n.proc = true %}
+{% endif %}
+{% endfor %}
+{% if not n.proc %}
+{{ fail('OSPF インタフェース ' ~ o.if_name ~ ' のプロセス番号 ' ~ o.process_id ~ ' が、OSPF の表にありません') }}
+{% endif %}
+{% for i in t.interfaces %}
+{% if i.name == o.if_name %}
+{% set n.seen = true %}
+{% if i.vrf %}
+{{ fail('OSPF インタフェース ' ~ o.if_name ~ ' は VRF ' ~ i.vrf ~ ' の中にあります（VRF の中の OSPF は、このパックでは書けません）') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('OSPF インタフェース ' ~ o.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}

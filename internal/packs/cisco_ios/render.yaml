@@ -1,0 +1,19 @@
+# The order of the configuration (appendix B 5.1). The stages after M2 add
+# their sections here.
+sections:
+  - {id: system,     template: system.j2}
+  - {id: vrf,        template: vrf.j2}
+  - {id: ipsec,      template: ipsec.j2}        # before the interfaces that name the profiles and maps
+  - {id: qos,        template: qos.j2}          # before the interfaces that name the policies
+  - {id: interfaces, template: interfaces.j2}   # PPPoE stands under its two interfaces
+  - {id: tracking,   template: tracking.j2}
+  - {id: routing,    template: routing.j2}
+  - {id: ospf,       template: ospf.j2}
+  - {id: bgp,        template: bgp.j2}
+  - {id: policy,     template: policy.j2}
+  - {id: nat,        template: nat.j2}
+  - {id: dhcp,       template: dhcp.j2}
+  - {id: services,   template: services.j2}
+  - {id: extra,      slot: extra}
+  - {id: lines,      template: lines.j2}
+  - {id: footer,     template: footer.j2}

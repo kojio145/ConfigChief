@@ -1,0 +1,27 @@
+# IPsec (made-up values): two tunnel interfaces and a crypto map of two
+# entries. expect.txt is the configuration the tables must turn into. The
+# access lists of the map are made from the selectors.
+tables:
+  devices:
+    - hostname: rt-v01
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.9/30}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 198.51.100.1/24}
+    - {name: Tunnel1, enabled: true, ipv4: 192.0.2.209/30}
+    - {name: Tunnel2, enabled: true, ipv4: 192.0.2.213/30}
+  tunnels:
+    - {if_name: Tunnel1, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.20}
+    - {if_name: Tunnel2, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.30}
+  ipsec_tunnels:
+    - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: 203.0.113.20, psk: dummy-psk-sample-a, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, pfs: dh14, ipsec_lifetime: 3600, dpd_interval: 30}
+    # The name of a row on a tunnel interface is free.
+    - {name: vpn-sample-b, style: tunnel_if, tunnel_if: Tunnel2, peer_address: 203.0.113.30, psk: dummy-psk-sample-b, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes128, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600, dpd_interval: 30}
+    - {name: CMAP-SAMPLE/10, style: policy, local_if: GigabitEthernet0/0, peer_address: 203.0.113.40, psk: dummy-psk-sample-c, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, pfs: dh14, ipsec_lifetime: 3600, dpd_interval: 30}
+    - {name: CMAP-SAMPLE/20, style: policy, local_if: GigabitEthernet0/0, peer_address: 203.0.113.50, psk: dummy-psk-sample-d, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: 3des, esp_hash: sha1, pfs: none, ipsec_lifetime: 1800, dpd_interval: 30}
+  ipsec_selectors:
+    - {tunnel: CMAP-SAMPLE/10, seq: 10, local_net: 198.51.100.0/24, remote_net: 192.0.2.0/25}
+    - {tunnel: CMAP-SAMPLE/10, seq: 20, local_net: 198.51.100.0/24, remote_net: 192.0.2.130/32, protocol: ip}
+    - {tunnel: CMAP-SAMPLE/20, seq: 5, local_net: 198.51.100.0/24, remote_net: 192.0.2.160/27}
+  static_routes:
+    - {prefix: 192.0.2.0/26, out_if: Tunnel1}

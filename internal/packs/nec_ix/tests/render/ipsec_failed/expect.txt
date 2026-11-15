@@ -1,0 +1,21 @@
+hostname ix-v05
+!
+ip access-list sec-0 permit ip src any dest any
+ike proposal ike-prop-0 encryption aes-256 hash sha2-256 group 2048-bit lifetime 28800
+ike policy ike-0 peer 203.0.113.20 key dummy-psk-sample-a ike-prop-0
+ipsec autokey-proposal ipsec-prop-0 esp-aes-256 esp-sha
+ipsec autokey-map ipsec-0 sec-0 peer 203.0.113.20 ipsec-prop-0
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.9/30
+  no shutdown
+!
+interface Tunnel0.0
+  ip unnumbered GigaEthernet0.0
+  tunnel mode ipsec
+  ipsec policy tunnel ipsec-0 out
+  no shutdown
+!
+interface Tunnel1.0
+  ip unnumbered GigaEthernet0.0
+  tunnel mode ipsec

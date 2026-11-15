@@ -1,0 +1,12 @@
+tables:
+  vrfs:
+    - {name: sample-a, description: zone a}
+    - {name: global, description: the global zone}
+  bgp_neighbors:
+    - {vrf: sample-a, neighbor: 192.0.2.1, remote_as: 64496, description: first peer}
+    - {vrf: "", neighbor: 192.0.2.2, remote_as: 64497, description: second peer}
+    - {vrf: "", neighbor: 192.0.2.3, remote_as: 64498, enabled: false}
+    - {vrf: "", neighbor: 192.0.2.4, remote_as: 64499}
+unknown:
+  - "mystery 1"
+ignored_min: 0

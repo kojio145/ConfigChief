@@ -1,0 +1,34 @@
+# QoS (stage M6). Lists that only pick a DSCP or a precedence become the
+# condition of the class and leave the access lists; a list with addresses,
+# and a list the filter also uses, stay lists.
+tables:
+  qos_classes:
+    - {name: cm-q-voice, match: any}
+    - {name: cm-q-video, match: all}
+    - {name: cm-q-biz, match: any}
+  qos_class_matches:
+    - {class: cm-q-voice, seq: 10, acl: "", dscp: [46], precedence: [], queue: high}
+    - {class: cm-q-voice, seq: 20, acl: "", dscp: [], precedence: [5], queue: high}
+    - {class: cm-q-video, seq: 10, acl: "", dscp: [34, 36], queue: ""}
+    - {class: cm-q-biz, seq: 10, acl: al-q-biz, dscp: [], queue: normal}
+    - {class: cm-q-biz, seq: 20, acl: al-q-peer, precedence: [], queue: medium}
+    - {class: cm-q-biz, seq: 30, acl: al-q-flt, dscp: [], queue: low}
+    - {class: cm-q-biz, seq: 40, acl: "", dscp: [], queue: low}
+  qos_policies:
+    - {policy: pm-q-in, class: cm-q-biz, seq: 10, set_dscp: 18}
+    - {policy: pm-q-in, class: default, seq: 30, set_precedence: 0}
+    - {policy: pm-q-out, class: cm-q-voice, seq: 10, priority: true, bandwidth_kbps: 512, priority_burst: 4000}
+    - {policy: pm-q-out, class: cm-q-video, seq: 20, bandwidth_percent: 30, shape_bps: 4000000}
+    - {policy: pm-q-out, class: cm-q-biz, seq: 30, bandwidth_kbps: 2000, queue_limit: [10, 20, 30, 40]}
+    - {policy: pm-q-out, class: default, seq: 50, priority: true, bandwidth_percent: 5}
+  qos_bindings:
+    - {if_name: GigaEthernet0.0, direction: output, policy: pm-q-out, shape_bps: 10000000, shape_bc: 10000}
+    - {if_name: GigaEthernet1.0, direction: input, policy: pm-q-in, shape_bps: ""}
+  acls:
+    - {name: al-q-biz}
+    - {name: al-q-peer}
+    - {name: al-q-flt}
+  acl_entries:
+    - {acl: al-q-peer, seq: 10, dst: 203.0.113.9, precedence: 5}
+    - {acl: al-q-flt, seq: 10, dscp: 10}
+unknown: []

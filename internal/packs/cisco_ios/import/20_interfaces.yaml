@@ -1,0 +1,339 @@
+# Interfaces, and the settings written under an interface (stages M1 to M4).
+# Syntax: cmdref 4.2, 4.6, 4.8, 4.12, 4.14 and 7.8.
+rules:
+  - id: if
+    match: '^interface (?P<name>[A-Za-z][A-Za-z-]*\d[\d/.:]*)$'
+    row: {table: interfaces, key: {name: "{{ name | ifname }}"}}
+    children:
+      - id: if.description
+        match: '^description (?P<text>.+)$'
+        set: {description: "{{ text }}"}
+
+      # ---- addresses ----
+      - id: if.ipv4
+        match: '^ip address (?P<ip>\d+\.\d+\.\d+\.\d+) (?P<mask>\d+\.\d+\.\d+\.\d+)$'
+        set: {ipv4: "{{ ip | with_mask(mask) }}"}
+      - id: if.ipv4.secondary
+        match: '^ip address (?P<ip>\d+\.\d+\.\d+\.\d+) (?P<mask>\d+\.\d+\.\d+\.\d+) secondary$'
+        append: {ipv4_secondary: "{{ ip | with_mask(mask) }}"}
+      - id: if.ipv4.auto
+        match: '^ip address (?P<how>dhcp|negotiated)$'
+        set: {ipv4: "{{ how }}"}
+      - id: if.ipv4.unnumbered
+        match: '^ip unnumbered (?P<ifn>\S+)$'
+        set: {ipv4: "unnumbered:{{ ifn | ifname }}"}
+      # "The column is empty": the line is read, and nothing is written.
+      - id: if.ipv4.none
+        match: '^no ip address$'
+      - id: if.ipv6
+        match: '^ipv6 address (?P<addr>[0-9A-Fa-f:]+/\d+)$'
+        append: {ipv6: "{{ addr | lower }}"}
+
+      - id: if.shutdown
+        match: '^shutdown$'
+        set: {enabled: false}
+      # Not shown by the device (cmdref 4.2); the generated text has it.
+      - id: if.no_shutdown
+        match: '^no shutdown$'
+        set: {enabled: true}
+      - id: if.vrf
+        match: '^(?:ip )?vrf forwarding (?P<vrf>\S+)$'
+        set: {vrf: "{{ vrf }}"}
+      # Shown as "dot1Q"; the command reference writes "dot1q".
+      - id: if.encap.vlan
+        match: '^encapsulation dot1[qQ] (?P<vlan>\d+)$'
+        set: {encap_vlan: "{{ vlan }}"}
+      - id: if.mtu
+        match: '^mtu (?P<n>\d+)$'
+        set: {mtu: "{{ n }}"}
+      - id: if.ip_mtu
+        match: '^ip mtu (?P<n>\d+)$'
+        set: {ip_mtu: "{{ n }}"}
+      - id: if.mss
+        match: '^ip tcp adjust-mss (?P<n>\d+)$'
+        set: {tcp_mss: "{{ n }}"}
+      - id: if.bandwidth
+        match: '^bandwidth (?P<n>\d+)$'
+        set: {bandwidth: "{{ n }}"}
+      - id: if.speed
+        match: '^speed (?P<v>10|100|1000|auto)$'
+        set: {speed: "{{ v }}"}
+      - id: if.duplex
+        match: '^duplex (?P<v>full|half|auto)$'
+        set: {duplex: "{{ v }}"}
+      - id: if.acl
+        match: '^ip access-group (?P<acl>\S+) (?P<dir>in|out)$'
+        set: {"acl_{{ dir }}": "{{ acl }}"}
+      - id: if.nat
+        match: '^ip nat (?P<role>inside|outside)$'
+        set: {nat_role: "{{ role }}"}
+      - id: if.helper
+        match: '^ip helper-address (?P<server>\d+\.\d+\.\d+\.\d+)$'
+        append: {dhcp_relay: "{{ server }}"}
+      - id: if.proxy_arp.off
+        match: '^no ip proxy-arp$'
+        set: {proxy_arp: false}
+      - id: if.proxy_arp.on
+        match: '^ip proxy-arp$'
+        set: {proxy_arp: true}
+
+      # ---- OSPF on the interface: kept aside, put together in 90_derive ----
+      - id: if.ospf.area
+        match: '^ip ospf (?P<pid>\d+) area (?P<area>\S+)$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {process_id: "{{ pid }}", area: "{{ area }}"}
+      - id: if.ospf.number
+        match: '^ip ospf (?P<what>cost|priority|hello-interval|dead-interval) (?P<n>\d+)$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {"{{ what | replace('-interval', '') }}": "{{ n }}"}
+      - id: if.ospf.network
+        match: '^ip ospf network (?P<type>broadcast|non-broadcast|point-to-multipoint|point-to-point)$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {network_type: "{{ type | unlex('ospf_network') }}"}
+      - id: if.ospf.auth
+        match: '^ip ospf authentication(?: (?P<kind>message-digest|null))?$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {auth_type: "{{ 'md5' if kind == 'message-digest' else ('none' if kind == 'null' else 'simple') }}"}
+      # A key written in the type-7 form ("7 <text>") has two words and is not read.
+      - id: if.ospf.key.md5
+        match: '^ip ospf message-digest-key (?P<id>\d+) md5 (?P<key>\S+)$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {auth_key_id: "{{ id }}", auth_key: "{{ key }}"}
+      - id: if.ospf.key.simple
+        match: '^ip ospf authentication-key (?:0 )?(?P<key>\S+)$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {auth_key: "{{ key }}"}
+
+      # ---- HSRP ----
+      - id: if.hsrp.version
+        match: '^standby version (?P<v>1|2)$'
+        emit:
+          - table: x_hsrp_version
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {version: "{{ v }}"}
+      - id: if.hsrp.ip
+        match: '^standby (?P<group>\d+) ip (?P<ip>\d+\.\d+\.\d+\.\d+)$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: hsrp, virtual_ip: "{{ ip }}"}
+      - id: if.hsrp.priority
+        match: '^standby (?P<group>\d+) priority (?P<n>\d+)$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: hsrp, priority: "{{ n }}"}
+      - id: if.hsrp.preempt
+        match: '^standby (?P<group>\d+) preempt(?: delay minimum (?P<delay>\d+))?$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: hsrp, preempt: true, preempt_delay: "{{ delay }}"}
+      # The switch-off of what is on by default (VRRP) or was switched on
+      # (HSRP); the template writes it for a cell that says "no".
+      - id: if.hsrp.preempt.off
+        match: '^no standby (?P<group>\d+) preempt$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: hsrp, preempt: false}
+      - id: if.vrrp.preempt.off
+        match: '^no vrrp (?P<group>\d+) preempt$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: vrrp, preempt: false}
+      - id: if.hsrp.timers
+        match: '^standby (?P<group>\d+) timers (?P<hello>\d+) (?P<hold>\d+)$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: hsrp, advert_interval: "{{ hello }}", hold: "{{ hold }}"}
+      - id: if.hsrp.auth
+        match: '^standby (?P<group>\d+) authentication text (?P<key>\S+)$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: hsrp, auth_type: simple, auth_key: "{{ key }}"}
+      - id: if.hsrp.track
+        match: '^standby (?P<group>\d+) track (?P<obj>\d+)(?: decrement (?P<dec>\d+))?$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: hsrp, track: "{{ obj }}", track_decrement: "{{ dec }}"}
+
+      # ---- VRRP (the older form, written on the interface) ----
+      - id: if.vrrp.ip
+        match: '^vrrp (?P<group>\d+) ip (?P<ip>\d+\.\d+\.\d+\.\d+)$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: vrrp, virtual_ip: "{{ ip }}"}
+      - id: if.vrrp.priority
+        match: '^vrrp (?P<group>\d+) priority (?P<n>\d+)$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: vrrp, priority: "{{ n }}"}
+      - id: if.vrrp.preempt
+        match: '^vrrp (?P<group>\d+) preempt(?: delay minimum (?P<delay>\d+))?$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: vrrp, preempt: true, preempt_delay: "{{ delay }}"}
+      - id: if.vrrp.timers
+        match: '^vrrp (?P<group>\d+) timers advertise (?P<n>\d+)$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: vrrp, advert_interval: "{{ n }}"}
+      - id: if.vrrp.track
+        match: '^vrrp (?P<group>\d+) track (?P<obj>\d+)(?: decrement (?P<dec>\d+))?$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: vrrp, track: "{{ obj }}", track_decrement: "{{ dec }}"}
+
+      # ---- tunnels ----
+      - id: if.tunnel.source
+        match: '^tunnel source (?P<src>\S+)$'
+        when: "src != 'dynamic'"
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {source: "{{ src | ifname }}"}
+      - id: if.tunnel.destination
+        match: '^tunnel destination (?P<dst>\d+\.\d+\.\d+\.\d+)$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {destination: "{{ dst }}"}
+      - id: if.tunnel.key
+        match: '^tunnel key (?P<key>\d+)$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {key: "{{ key }}"}
+      - id: if.tunnel.mode
+        match: '^tunnel mode (?P<mode>ipip|ipsec ipv4)$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {type: "{{ mode | unlex('tunnel_mode') }}"}
+      - id: if.tunnel.keepalive
+        match: '^keepalive (?P<period>\d+) (?P<retries>\d+)$'
+        when: "parent.name is startingwith('Tunnel')"
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {keepalive_interval: "{{ period }}", keepalive_retry: "{{ retries }}"}
+      - id: if.crypto_map
+        match: '^crypto map (?P<map>\S+)$'
+        emit:
+          - table: x_crypto_map_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {map: "{{ map }}"}
+      - id: if.tunnel.protection
+        match: '^tunnel protection ipsec profile (?P<profile>\S+)$'
+        emit:
+          - table: x_tunnel_protection
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {profile: "{{ profile }}"}
+
+      # ---- PPPoE: the physical side and the Dialer side meet in 90_derive ----
+      # The service name is the last word of the same line (cmdref 7.12).
+      - id: if.pppoe.client
+        match: '^pppoe-client dial-pool-number (?P<pool>\d+)(?: service-name (?P<svc>[^\s"]+))?$'
+        emit:
+          - table: x_pppoe_client
+            key: {pool: "{{ pool }}"}
+            set: {physical_if: "{{ parent.name | ifname }}", service_name: "{{ svc }}"}
+      # The switch of PPPoE on the port: the design data has no column for
+      # it, and the template always writes it.
+      - id: if.pppoe.enable
+        match: '^pppoe enable(?: group global)?$'
+        ignore: PPPoE を使う印（表に列がありません。書き出しでは必ず付けます）
+      - id: if.dialer.encap
+        match: '^encapsulation ppp$'
+        emit:
+          - table: x_dialer
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {encap: ppp}
+      - id: if.dialer.pool
+        match: '^dialer pool (?P<pool>\d+)$'
+        emit:
+          - table: x_dialer
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {pool: "{{ pool }}"}
+      # Only the form a PPPoE client uses ("callin"); without it the line is
+      # another setting and stays unknown.
+      - id: if.dialer.auth
+        match: '^ppp authentication (?P<how>chap|pap|chap pap) callin$'
+        emit:
+          - table: x_dialer
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {auth: "{{ how | replace(' ', '_') }}"}
+      - id: if.dialer.chap.name
+        match: '^ppp chap hostname (?P<user>\S+)$'
+        emit:
+          - table: x_dialer
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {username: "{{ user }}"}
+      - id: if.dialer.chap.password
+        match: '^ppp chap password (?:0 )?(?P<pw>\S+)$'
+        emit:
+          - table: x_dialer
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {password: "{{ pw }}"}
+      # The same name and password again (after the CHAP lines) say nothing
+      # new; other values go to columns of their own, and the row is not made.
+      - id: if.dialer.pap
+        match: '^ppp pap sent-username (?P<user>\S+) password (?:0 )?(?P<pw>\S+)$'
+        emit:
+          - table: x_dialer
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {pap_username: "{{ user }}", pap_password: "{{ pw }}"}
+
+      # ---- QoS (stage M6. cmdref 7.16 and 7.17) ----
+      # The policy is joined in import/60_qos.yaml: a parent policy that only
+      # shapes the whole interface is folded into the binding.
+      - id: if.qos.policy
+        match: '^service-policy (?P<dir>input|output) (?P<p>\S+)$'
+        emit:
+          - table: x_qos_bind
+            key: {if_name: "{{ parent.name | ifname }}", direction: "{{ dir }}"}
+            set: {policy: "{{ p }}"}
+
+      # ---- QoS: the forms before MQC (cmdref 7.17). Names are made by the
+      # pack: rl-<IF>-in|out for rate-limit, pq<n> and cq<n> for the lists.
+      # The units of traffic-shape are taken as bps and bits (README).
+      - id: if.qos.gts
+        match: '^traffic-shape rate (?P<v>\d+)(?: (?P<bc>\d+)(?: (?P<be>\d+))?)?$'
+        emit:
+          - table: qos_bindings
+            key: {if_name: "{{ parent.name | ifname }}", direction: output}
+            set: {shape_bps: "{{ v }}", shape_bc: "{{ bc }}", shape_be: "{{ be }}"}
+      - id: if.qos.car.acl
+        match: '^rate-limit (?P<dir>input|output) access-group (?P<acl>\d+) (?P<bps>\d+) (?P<bc>\d+) (?P<be>\d+) conform-action transmit exceed-action (?:(?P<ex>drop|transmit)|set-dscp-transmit (?P<exd>\d+)|set-prec-transmit (?P<exp>\d+))$'
+        emit:
+          - table: qos_classes
+            key: {name: "rl-acl{{ acl }}"}
+            set: {match: all}
+          - table: qos_class_matches
+            key: {class: "rl-acl{{ acl }}", seq: "10"}
+            set: {acl: "{{ acl }}"}
+          - table: qos_policies
+            key: {policy: "rl-{{ parent.name | ifshort | replace('/', '-') | replace('.', '-') }}-{{ dir | replace('put', '') }}", class: "rl-acl{{ acl }}"}
+            set:
+              seq: "{{ (rows('qos_policies', policy='rl-' ~ (parent.name | ifshort | replace('/', '-') | replace('.', '-')) ~ '-' ~ (dir | replace('put', ''))) | length + 1) * 10 }}"
+              police_bps: "{{ bps }}"
+              police_bc: "{{ bc }}"
+              police_be: "{{ be }}"
+              police_exceed: "{{ ex if ex else ('set_dscp' if exd else 'set_precedence') }}"
+              police_exceed_value: "{{ exd if exd else exp }}"
+          - table: qos_bindings
+            key: {if_name: "{{ parent.name | ifname }}", direction: "{{ dir }}"}
+            set: {policy: "rl-{{ parent.name | ifshort | replace('/', '-') | replace('.', '-') }}-{{ dir | replace('put', '') }}"}
+      - id: if.qos.car
+        match: '^rate-limit (?P<dir>input|output) (?P<bps>\d+) (?P<bc>\d+) (?P<be>\d+) conform-action transmit exceed-action (?:(?P<ex>drop|transmit)|set-dscp-transmit (?P<exd>\d+)|set-prec-transmit (?P<exp>\d+))$'
+        emit:
+          - table: qos_policies
+            key: {policy: "rl-{{ parent.name | ifshort | replace('/', '-') | replace('.', '-') }}-{{ dir | replace('put', '') }}", class: default}
+            set:
+              seq: "{{ (rows('qos_policies', policy='rl-' ~ (parent.name | ifshort | replace('/', '-') | replace('.', '-')) ~ '-' ~ (dir | replace('put', ''))) | length + 1) * 10 }}"
+              police_bps: "{{ bps }}"
+              police_bc: "{{ bc }}"
+              police_be: "{{ be }}"
+              police_exceed: "{{ ex if ex else ('set_dscp' if exd else 'set_precedence') }}"
+              police_exceed_value: "{{ exd if exd else exp }}"
+          - table: qos_bindings
+            key: {if_name: "{{ parent.name | ifname }}", direction: "{{ dir }}"}
+            set: {policy: "rl-{{ parent.name | ifshort | replace('/', '-') | replace('.', '-') }}-{{ dir | replace('put', '') }}"}
+      - id: if.qos.pq
+        match: '^priority-group (?P<n>\d+)$'
+        emit:
+          - table: x_pq_bind
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {list: "{{ n }}"}
+      - id: if.qos.cq
+        match: '^custom-queue-list (?P<n>\d+)$'
+        emit:
+          - table: x_cq_bind
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {list: "{{ n }}"}

@@ -1,0 +1,108 @@
+hostname rt-d01
+!
+vrf definition VRF-SAMPLE-D
+ rd 64496:500
+ address-family ipv4
+ exit-address-family
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.49 255.255.255.252
+ ip ospf 1 area 0
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 dummy-ospf-key-d
+ ip ospf network point-to-point
+ ip ospf cost 20
+ ip ospf priority 0
+ ip ospf hello-interval 5
+ ip ospf dead-interval 20
+ no shutdown
+!
+interface GigabitEthernet0/1
+ ip address 198.51.100.2 255.255.255.0
+ ip ospf 1 area 1
+ ip ospf authentication
+ ip ospf authentication-key dummy-ospf-pw
+ standby version 2
+ standby 1 ip 198.51.100.1
+ standby 1 priority 110
+ standby 1 preempt delay minimum 60
+ standby 1 timers 1 4
+ standby 1 authentication text dummy-hsrp-d
+ standby 1 track 5 decrement 20
+ standby 2 ip 198.51.100.3
+ standby 2 priority 100
+ no standby 2 preempt
+ no shutdown
+!
+interface GigabitEthernet0/2
+ ip address 198.51.100.130 255.255.255.128
+ vrrp 10 ip 198.51.100.129
+ vrrp 10 priority 120
+ vrrp 10 preempt delay minimum 30
+ vrrp 10 timers advertise 3
+ vrrp 10 track 5
+ vrrp 11 ip 198.51.100.131
+ vrrp 11 priority 100
+ no vrrp 11 preempt
+ vrrp 11 timers advertise 1
+ no shutdown
+!
+interface GigabitEthernet0/3
+ vrf forwarding VRF-SAMPLE-D
+ ip address 192.0.2.65 255.255.255.192
+ ip ospf 20 area 0.0.0.5
+ ip ospf authentication null
+ no shutdown
+!
+interface Loopback0
+ ip address 192.0.2.201 255.255.255.255
+ ip ospf 1 area 0
+ no shutdown
+!
+track 5 interface GigabitEthernet0/0 line-protocol
+!
+router ospf 1
+ router-id 192.0.2.201
+ auto-cost reference-bandwidth 10000
+ area 1 stub no-summary
+ area 0 range 192.0.2.192 255.255.255.192 not-advertise
+ area 1 range 198.51.100.0 255.255.255.0
+ redistribute bgp 64500 route-map RM-SAMPLE-D subnets
+ redistribute static metric 100 metric-type 1 subnets
+ default-information originate always metric 50
+ passive-interface default
+ no passive-interface GigabitEthernet0/0
+ passive-interface Loopback0
+!
+router ospf 20 vrf VRF-SAMPLE-D
+ router-id 192.0.2.65
+ area 0.0.0.5 nssa
+ redistribute connected subnets
+ default-information originate
+!
+router bgp 64500
+ bgp router-id 192.0.2.201
+ bgp log-neighbor-changes
+ neighbor 192.0.2.202 remote-as 64500
+ neighbor 192.0.2.202 update-source Loopback0
+ neighbor 192.0.2.202 shutdown
+ neighbor 192.0.2.202 next-hop-self
+ neighbor 192.0.2.202 soft-reconfiguration inbound
+ neighbor 203.0.113.50 remote-as 64501
+ neighbor 203.0.113.50 description to sample upstream
+ neighbor 203.0.113.50 password dummy-bgp-key-d
+ neighbor 203.0.113.50 ebgp-multihop 2
+ neighbor 203.0.113.50 prefix-list PL-SAMPLE-D-IN in
+ neighbor 203.0.113.50 route-map RM-SAMPLE-D out
+ network 198.51.100.0 mask 255.255.255.0
+ redistribute ospf 1 metric 10
+ redistribute static route-map RM-SAMPLE-D
+ address-family ipv4 vrf VRF-SAMPLE-D
+  neighbor 192.0.2.66 remote-as 64502
+  network 192.0.2.64 mask 255.255.255.192
+  redistribute connected
+ exit-address-family
+!
+ip prefix-list PL-SAMPLE-D-IN seq 10 permit 0.0.0.0/0
+!
+end

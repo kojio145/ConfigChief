@@ -1,0 +1,21 @@
+# A terminal log: only the output of "show running-config" is read. Three
+# lines follow a pager mark; their indentation must come out right.
+tables:
+  devices:
+    - {hostname: rt-b02, vendor: cisco_ios, domain_name: example.net, name_servers: [192.0.2.53]}
+  users:
+    - {name: admin, privilege: admin, secret_form: hashed}
+  interfaces:
+    - {name: Loopback0, kind: loopback, ipv4: 192.0.2.2/32, enabled: true}
+    - {name: GigabitEthernet0/0, description: sample-wan, ipv4: 203.0.113.5/30, speed: auto, duplex: auto}
+    - {name: GigabitEthernet0/1, description: sample-lan, ipv4: 198.51.100.1/24, enabled: false}
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: 203.0.113.6}
+    - {prefix: 192.0.2.64/26, next_hop: 198.51.100.2}
+  ntp_servers:
+    - {server: 192.0.2.123}
+# The console line has no rule yet (README.md).
+unknown:
+  - "line con 0"
+  - "exec-timeout 5 0"
+ignored_min: 4

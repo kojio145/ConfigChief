@@ -1,0 +1,6 @@
+# Only lines that carry no setting: what the display adds (appendix B 3.5).
+# The lines that start with "!" are comments and need no entry here.
+ignore:
+  - {match: '^Current configuration : \d+ bytes$', reason: 表示上の行}
+  - {match: '^Using \d+ out of \d+ bytes$', reason: 表示上の行}
+  - {match: '^Current time: \d+/\d+/\d+ \d+:\d+:\d+ [+-]\d+$', reason: 表示上の行}

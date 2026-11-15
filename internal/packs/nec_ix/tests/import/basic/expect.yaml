@@ -1,0 +1,197 @@
+# What the sample must turn into. "tables" lists some rows per table (not all
+# of them); "unknown" is the whole list of lines that may stay unknown.
+tables:
+  devices:
+    - hostname: ix-a01
+      vendor: nec_ix
+      name_servers: [192.0.2.53, 192.0.2.54]
+      timezone: "+9"
+      snmp_location: sample-site-a
+      snmp_contact: netops@example.com
+  interfaces:
+    - {name: GigaEthernet0.0, kind: physical, ipv4: "", enabled: true}
+    - name: GigaEthernet1.0
+      description: sample-lan
+      ipv4: 198.51.100.2/24
+      ipv4_secondary: [203.0.113.129/25]
+      ipv6: ["2001:db8:1::2/64"]
+      acl_in: acl-sample-in
+      acl_out: acl-sample-out
+      proxy_arp: true
+      speed: 1000
+      duplex: full
+    - {name: GigaEthernet2.0, ipv4: 203.0.113.1/30, ip_mtu: 1454, speed: "", duplex: ""}
+    - {name: GigaEthernet2.1, kind: subif, encap_vlan: 10, ipv4: 192.0.2.130/25, dhcp_relay: [192.0.2.67]}
+    - {name: GigaEthernet2.2, kind: subif, encap_vlan: 20, vrf: vrf-sample-a, ipv4: 192.0.2.193/26, enabled: false}
+    - {name: GigaEthernet0.1, kind: subif, ipv4: negotiated, tcp_mss: ""}
+    - {name: Loopback0.0, kind: loopback, ipv4: 192.0.2.1/32, enabled: true}
+    - {name: Null0.0, kind: other, enabled: true}
+    - {name: Tunnel0.0, kind: tunnel, ipv4: "unnumbered:GigaEthernet1.0", tcp_mss: 1300}
+    - {name: Tunnel1.0, kind: tunnel, ipv4: 198.18.0.1/30, ip_mtu: 1400}
+  static_routes:
+    - {prefix: 0.0.0.0/0, out_if: GigaEthernet0.1, distance: 1}
+    - {prefix: 192.0.2.64/26, next_hop: 203.0.113.2, distance: 10, track: wg-sample-a}
+    - {prefix: 198.18.20.0/24, out_if: Tunnel0.0, track: wg-sample-b}
+    - {vrf: vrf-sample-a, prefix: 198.18.10.0/24, next_hop: 192.0.2.194, track: ""}
+  users:
+    - {name: admin, privilege: admin, secret_form: hashed}
+    - {name: operator, privilege: operator}
+    - {name: monitor, privilege: monitor}
+  remote_access:
+    - {protocols: [telnet, ssh], acl: acl-sample-mgmt, idle_timeout: 10}
+  ntp_servers:
+    - {server: 192.0.2.123, source_if: Loopback0.0}
+    - {server: 192.0.2.124, source_if: Loopback0.0}
+  syslog_servers:
+    - {server: 192.0.2.50, facility: local6}
+  snmp_communities:
+    - {community: dummy-ro-comm, access: ro, acl: acl-sample-mgmt}
+    - {community: dummy-rw-community, access: rw, acl: ""}
+  snmp_hosts:
+    - {host: 192.0.2.60, version: 2c, community: dummy-ro-comm, source_if: Loopback0.0}
+  vrfs:
+    - {name: vrf-sample-a}
+  ospf_processes:
+    - {process_id: 1, router_id: 192.0.2.1, default_originate: always}
+  ospf_interfaces:
+    - {process_id: 1, if_name: Loopback0.0, area: 0, priority: 1, hello: 10, dead: 40}
+    - process_id: 1
+      if_name: GigaEthernet2.0
+      area: 0
+      cost: 10
+      network_type: point_to_point
+      hello: 5
+      dead: 20
+      auth_type: md5
+      auth_key_id: 1
+      auth_key: dummy-ospf-key
+    - {process_id: 1, if_name: GigaEthernet1.0, area: 1, priority: 100, passive: true}
+  ospf_areas:
+    - {process_id: 1, area: 1, type: totally_stub}
+  ospf_ranges:
+    - {process_id: 1, area: 1, prefix: 198.51.100.0/24, advertise: true}
+  ospf_redistribute:
+    - {process_id: 1, source: static, metric: 100, metric_type: 1}
+  bgp_processes:
+    - {asn: 64496, router_id: 192.0.2.1}
+  bgp_neighbors:
+    - {neighbor: 192.0.2.2, remote_as: 64496, update_source: Loopback0.0, enabled: false, next_hop_self: true}
+    - neighbor: 203.0.113.2
+      remote_as: 64497
+      description: to rt-b01
+      password: dummy-bgp-key
+      keepalive: 30
+      holdtime: 90
+      prefix_list_in: pl-sample-in
+      prefix_list_out: pl-sample-out
+    - {neighbor: 203.0.113.30, remote_as: 64498, ebgp_multihop: 2, default_originate: true}
+  bgp_networks:
+    - {prefix: 198.51.100.0/24}
+  bgp_redistribute:
+    - {source: connected}
+  fhrp:
+    - if_name: GigaEthernet1.0
+      group: 1
+      protocol: vrrp
+      virtual_ip: 198.51.100.1
+      priority: 110
+      preempt: true
+      advert_interval: 3
+      auth_type: simple
+      auth_key: dummy-vrrp
+  acls:
+    - {name: acl-sample-in, type: extended}
+    - {name: acl-sample-seq, type: extended}
+  acl_entries:
+    - {acl: acl-sample-in, seq: 10, action: permit, protocol: tcp, src: 198.51.100.0/24, dst: any, dst_port: 443}
+    - {acl: acl-sample-in, seq: 20, action: permit, protocol: udp, src: any, src_port: 53, dst: 198.51.100.0/24}
+    - {acl: acl-sample-in, seq: 30, action: permit, protocol: tcp, src: any, dst: 192.0.2.80, dst_port: ">1023"}
+    - {acl: acl-sample-in, seq: 40, action: permit, protocol: icmp, src: any, dst: any}
+    - {acl: acl-sample-in, seq: 50, action: deny, protocol: ip, src: any, dst: any}
+    - {acl: acl-sample-seq, seq: 10, action: permit, protocol: ip, src: 192.0.2.0/25, dst: any}
+    - {acl: acl-sample-seq, seq: 30, action: deny, protocol: udp, src: any, dst: any, dst_port: "!123"}
+  prefix_lists:
+    - {name: pl-sample-in, seq: 5, action: permit, prefix: 0.0.0.0/0}
+    - {name: pl-sample-out, seq: 10, action: permit, prefix: 198.51.100.0/24, le: 28}
+    - {name: pl-sample-out, seq: 20, action: deny, prefix: 0.0.0.0/0, le: 32}
+  nat_rules:
+    - {name: nat1, type: static, outside_if: GigaEthernet2.0, local_ip: 198.51.100.20, global_ip: 203.0.113.200}
+    - {name: nat2, type: pat_interface, outside_if: GigaEthernet0.1, match_acl: acl-sample-nat}
+    - name: nat3
+      type: static_port
+      outside_if: GigaEthernet0.1
+      protocol: tcp
+      local_ip: 198.51.100.21
+      local_port: 443
+      global_port: 443
+  tracks:
+    - id: wg-sample-a
+      type: icmp
+      target: 203.0.113.2
+      source_if: GigaEthernet2.0
+      interval: 10
+      fail_count: 3
+      restore_count: 2
+    - {id: wg-sample-b, type: interface, target: GigaEthernet2.0}
+  pppoe:
+    - name: ppp-sample-a
+      physical_if: GigaEthernet0.0
+      logical_if: GigaEthernet0.1
+      username: example-user@example.net
+      password: dummy-ppp-password
+      auth: chap
+  ipsec_tunnels:
+    - name: Tunnel0.0
+      style: tunnel_if
+      tunnel_if: Tunnel0.0
+      peer_address: 203.0.113.20
+      ike_version: 1
+      psk: dummy-psk-sample
+      ike_encryption: aes256
+      ike_hash: sha256
+      ike_dh: dh14
+      ike_lifetime: 86400
+      esp_encryption: aes256
+      esp_hash: sha1
+      pfs: dh14
+      ipsec_lifetime: 3600
+      dpd_interval: 30
+      dpd_retry: 3
+      nat_traversal: true
+  tunnels:
+    - {if_name: Tunnel0.0, type: ipsec}
+    - if_name: Tunnel1.0
+      type: gre
+      source: GigaEthernet2.0
+      destination: 203.0.113.30
+      key: 100
+      keepalive_interval: 10
+      keepalive_retry: 3
+  dhcp_pools:
+    - name: dhcp-sample-lan
+      network: 198.51.100.0/24
+      range_start: 198.51.100.100
+      range_end: 198.51.100.199
+      excluded: [198.51.100.1-198.51.100.10]
+      default_router: 198.51.100.1
+      dns_servers: [192.0.2.53, 192.0.2.54]
+      domain: example.com
+      lease: 12h
+
+# Lines with no rule; the reason for each is in README.md.
+unknown:
+  - "logging buffered 131072"
+  - "logging subsystem all warn"
+  - "logging timestamp datetime"
+  - "ip ufs-cache enable"
+  - "ip access-list acl-sample-seq sequence-mode 10"
+  - "ip access-list acl-sample-seq 20 deny tcp src any dest any dport range 8000 8080"
+  - "ntp ip enable"
+  - "action 20 ip decrement-vrrp-priority 1 20"
+  - "probe-timer restorer 10"
+  - "description sample-uplink-port"
+  - "ipv6 enable"
+  - "ip filter acl-sample-seq 20 in"
+  - "ip tcp adjust-mss auto"
+
+ignored_min: 1

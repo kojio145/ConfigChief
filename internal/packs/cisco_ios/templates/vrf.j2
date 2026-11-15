@@ -1,0 +1,15 @@
+{# VRFs. Syntax: cmdref 4.5. The newer form ("vrf definition") is written: it
+   goes with "vrf forwarding" on the interfaces, and it carries IPv4 only
+   with its "address-family ipv4" lines. #}
+{% for v in t.vrfs %}
+vrf definition {{ v.name }}
+{% if v.description %}
+ description {{ v.description }}
+{% endif %}
+{% if v.rd %}
+ rd {{ v.rd }}
+{% endif %}
+ address-family ipv4
+ exit-address-family
+!
+{% endfor %}

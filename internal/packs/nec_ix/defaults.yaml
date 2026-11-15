@@ -1,0 +1,44 @@
+# What the device does when the line is absent. Only values that were read in
+# the command reference (the page of the book, or the section of cmdref, is
+# named on each line).
+defaults:
+  # An interface is stopped until "no shutdown" (CRM p.3-6).
+  - {table: interfaces, column: enabled, value: false, when: "row.kind in ['physical', 'subif', 'tunnel']"}  # CRM p.3-6
+  # Loopback and Null show neither "shutdown" nor "no shutdown" (cmdref,
+  # note 1: the lines stand on Ethernet and tunnel interfaces only). They are
+  # taken as working: that is a reading of the note, not a sentence of the
+  # manual (README, "確かめていないこと").
+  - {table: interfaces, column: enabled, value: true, when: "row.kind == 'loopback' or row.name is startingwith('Null')"}  # cmdref note 1
+  - {table: static_routes, column: distance, value: 1}          # CRM p.8-14
+  - {table: syslog_servers, column: facility, value: local0}    # CRM p.32-25
+  - {table: snmp_communities, column: access, value: ro}        # CRM p.22-14
+  - {table: snmp_hosts, column: version, value: 1}              # CRM p.22-15
+  - {table: ospf_interfaces, column: priority, value: 1}        # CRM p.10-32
+  - {table: ospf_interfaces, column: hello, value: 10}          # CRM p.10-30
+  - {table: ospf_interfaces, column: dead, value: 40}           # CRM p.10-30
+  # An interface is passive only by its line (CRM p.10-34).
+  - {table: ospf_interfaces, column: passive, value: false}     # CRM p.10-34
+  # Not a default of the device: the line of a range always says whether it
+  # is advertised (CRM p.10-27). An empty cell is written as "advertise".
+  - {table: ospf_ranges, column: advertise, value: true}
+  - {table: fhrp, column: priority, value: 100, when: "row.protocol == 'vrrp'"}   # CRM p.16-4
+  - {table: fhrp, column: preempt, value: true, when: "row.protocol == 'vrrp'"}   # CRM p.16-4
+  - {table: tracks, column: interval, value: 5, when: "row.type == 'icmp'"}       # CRM p.17-23
+  - {table: tracks, column: fail_count, value: 6, when: "row.type == 'icmp'"}     # CRM p.17-21
+  - {table: tracks, column: restore_count, value: 1, when: "row.type == 'icmp'"}  # CRM p.17-22
+  - {table: pppoe, column: auth, value: chap_pap}               # cmdref 4.12
+  - {table: ipsec_tunnels, column: ike_encryption, value: des}  # CRM p.13-43
+  - {table: ipsec_tunnels, column: ike_hash, value: md5}        # CRM p.13-43
+  - {table: ipsec_tunnels, column: ike_dh, value: dh1}          # CRM p.13-43
+  - {table: ipsec_tunnels, column: ike_lifetime, value: 28800}  # CRM p.13-43
+  - {table: dhcp_pools, column: lease, value: 4h}               # CRM p.8-50 (14400 seconds)
+  # Not a default of the device: it has one kind of access list, which the
+  # import takes as the extended kind (import/40_policy.yaml).
+  - {table: acls, column: type, value: extended}
+  # A forwarded port is taken at the address of the interface the line
+  # stands under (CRM p.8-38).
+  - {table: nat_rules, column: global_ip, value: interface, when: "row.type == 'static_port'"}
+  # A secret with no form is a plain one (the saved text of the device always
+  # has the hashed form, which the import marks).
+  - {table: users, column: secret_form, value: plain, when: "row.secret"}
+  - {table: qos_classes, column: match, value: all}             # CRM p.14-16

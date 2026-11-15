@@ -1,0 +1,86 @@
+{# SNMP, NTP and syslog. Syntax: cmdref 4.4. The source of the SNMP traps and
+   the facility of syslog are one setting of the device: the rows have to
+   agree. The device has no "prefer" for an NTP server, no level for a syslog
+   destination, and takes an address (not an interface) as the source of
+   syslog: those cells are not read. #}
+{% set comms = t.snmp_communities %}
+{% set traps = t.snmp_hosts %}
+{% if comms or traps %}
+snmp-agent ip enable
+{% endif %}
+{% for c in comms %}
+snmp-agent ip community {{ c.community }}{{ ' ' ~ c.acl if c.acl else '' }}{{ ' ' ~ c.access if c.access else '' }}
+{% endfor %}
+{% for h in traps %}
+{% if h.source_if != traps[0].source_if %}
+{{ fail('SNMP 通知先の送信元 IF は、NEC IX では機器に 1 つです。全部の行で同じ値にしてください') }}
+{% endif %}
+{% endfor %}
+{% for h in traps %}
+{% if h.version == '3' %}
+{{ fail('SNMP 通知先 ' ~ h.host ~ ' の版 3 は書けません（NEC IX の通知先の版は 1 と 2 です）') }}
+{% endif %}
+{# The community of a destination has to be defined before (CRM p.22-15). #}
+{% set known = namespace(v=false) %}
+{% for c in comms %}
+{% if c.community == h.community %}
+{% set known.v = true %}
+{% endif %}
+{% endfor %}
+{% if h.community and not known.v %}
+{{ fail('SNMP 通知先 ' ~ h.host ~ ' のコミュニティが、SNMP コミュニティの表にありません（NEC IX では先に定義が要ります）') }}
+{% endif %}
+snmp-agent ip host {{ h.host }} {{ h.community | required('SNMP 通知先のコミュニティ') }}{{ ' version 2' if h.version == '2c' else (' version 1' if h.version == '1' else '') }}
+{% endfor %}
+{% if traps and traps[0].source_if %}
+snmp-agent ip trap-source {{ traps[0].source_if }}
+{% endif %}
+{% if device.snmp_location %}
+snmp-agent location {{ device.snmp_location }}
+{% endif %}
+{% if device.snmp_contact %}
+{% if ' ' in device.snmp_contact %}
+{{ fail('SNMP の連絡先に空白があります（NEC IX の連絡先は空白なしの 1 語です）') }}
+{% endif %}
+snmp-agent contact {{ device.snmp_contact }}
+{% endif %}
+{% if comms or traps or device.snmp_location or device.snmp_contact %}
+!
+{% endif %}
+{% set ntps = t.ntp_servers %}
+{% if ntps %}
+{% set one = namespace(source=true) %}
+{% for n in ntps %}
+{% if ':' in n.server or not ((n.server ~ '/32') is cidr) %}
+{{ fail('NTP サーバ ' ~ n.server ~ ' は IPv4 アドレスで書きます（名前や IPv6 の書き方を確かめていません）') }}
+{% endif %}
+{% if n.source_if != ntps[0].source_if %}
+{% set one.source = false %}
+{% endif %}
+{% endfor %}
+{% for n in ntps %}
+ntp{{ ' vrf ' ~ n.vrf if n.vrf else '' }} server {{ n.server }}{{ ' source ' ~ n.source_if if n.source_if and not one.source else '' }}
+{% endfor %}
+{% if one.source and ntps[0].source_if %}
+ntp source {{ ntps[0].source_if }}
+{% endif %}
+!
+{% endif %}
+{% set logs = t.syslog_servers %}
+{% if logs %}
+{% for s in logs %}
+{% if ':' in s.server or not ((s.server ~ '/32') is cidr) %}
+{{ fail('ログ転送先 ' ~ s.server ~ ' は IPv4 アドレスで書きます（名前や IPv6 の書き方を確かめていません）') }}
+{% endif %}
+{% if s.facility != logs[0].facility %}
+{{ fail('ログ転送先のファシリティは、NEC IX では機器に 1 つです。全部の行で同じ値にしてください') }}
+{% endif %}
+{% endfor %}
+{% for s in logs %}
+syslog{{ ' vrf ' ~ s.vrf if s.vrf else '' }} ip host {{ s.server }}
+{% endfor %}
+{% if logs[0].facility %}
+syslog facility {{ logs[0].facility }}
+{% endif %}
+!
+{% endif %}

@@ -1,0 +1,14 @@
+! sample configuration of a made-up device
+hostname rt-d01
+zone sample-a
+ peer 192.0.2.1 as 64496
+  note first peer
+ note zone a
+global
+ peer 192.0.2.2 as 64497
+  note second peer
+ peer 192.0.2.3 as 64498 off
+ note the global zone
+ inner
+  peer 192.0.2.4 as 64499
+ mystery 1

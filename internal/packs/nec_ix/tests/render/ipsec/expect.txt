@@ -1,0 +1,39 @@
+hostname ix-v01
+!
+ip route 192.0.2.0/26 Tunnel0.0
+!
+ip access-list sec-0 permit ip src any dest any
+ike proposal ike-prop-0 encryption aes-256 hash sha2-256 group 2048-bit lifetime 28800
+ike policy ike-0 peer 203.0.113.20 key dummy-psk-sample-a ike-prop-0
+ike keepalive ike-0 30 3
+ipsec autokey-proposal ipsec-prop-0 esp-aes-256 esp-sha lifetime time 3600
+ipsec autokey-map ipsec-0 sec-0 peer 203.0.113.20 pfs 2048-bit ipsec-prop-0
+!
+ip access-list sec-1 permit ip src any dest any
+ike proposal ike-prop-1 encryption aes hash sha group 1536-bit lifetime 28800
+ike policy ike-1 peer 203.0.113.30 key dummy-psk-sample-b mode aggressive ike-prop-1
+ipsec autokey-proposal ipsec-prop-1 esp-aes esp-sha2-256
+ipsec autokey-map ipsec-1 sec-1 peer 203.0.113.30 pfs off ipsec-prop-1
+!
+ike nat-traversal
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.9/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.1/24
+  no shutdown
+!
+interface Tunnel0.0
+  ip unnumbered GigaEthernet1.0
+  tunnel mode ipsec
+  ipsec policy tunnel ipsec-0 out
+  no shutdown
+!
+interface Tunnel1.0
+  ip unnumbered GigaEthernet1.0
+  tunnel mode ipsec
+  ipsec policy tunnel ipsec-1 out
+  no shutdown
+!

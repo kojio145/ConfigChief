@@ -1,0 +1,33 @@
+# Access lists and prefix lists (made-up values). expect.txt is the
+# configuration the tables must turn into.
+tables:
+  devices:
+    - hostname: rt-p01
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.21/30, acl_in: ACL-SAMPLE-IN}
+  acls:
+    - {name: ACL-SAMPLE-MGMT, type: standard}
+    - {name: ACL-SAMPLE-IN, type: extended}
+    - {name: ACL-SAMPLE-SEQ, type: extended}
+    - {name: "10", type: standard}
+  acl_entries:
+    - {acl: ACL-SAMPLE-MGMT, seq: 10, action: remark, remark: sample management hosts}
+    - {acl: ACL-SAMPLE-MGMT, seq: 20, action: permit, src: 192.0.2.0/24}
+    - {acl: ACL-SAMPLE-MGMT, seq: 30, action: permit, src: 198.51.100.7}
+    - {acl: ACL-SAMPLE-MGMT, seq: 40, action: deny, src: any, flags: [log]}
+    - {acl: ACL-SAMPLE-IN, seq: 10, action: permit, protocol: tcp, src: any, dst: 198.51.100.80, dst_port: "443", flags: [log]}
+    - {acl: ACL-SAMPLE-IN, seq: 20, action: permit, protocol: tcp, src: 192.0.2.0/24, src_port: ">1023", dst: 198.51.100.0/24, dst_port: 8000-8080}
+    - {acl: ACL-SAMPLE-IN, seq: 30, action: permit, protocol: tcp, src: any, dst: 198.51.100.0/24, flags: [established]}
+    - {acl: ACL-SAMPLE-IN, seq: 40, action: permit, protocol: udp, src: any, src_port: "53", dst: any, dst_port: "!123"}
+    - {acl: ACL-SAMPLE-IN, seq: 50, action: permit, protocol: icmp, src: any, dst: any, icmp_type: echo-reply}
+    - {acl: ACL-SAMPLE-IN, seq: 60, action: permit, protocol: ah, src: 203.0.113.22, dst: 203.0.113.21}
+    - {acl: ACL-SAMPLE-IN, seq: 70, action: permit, protocol: "89", src: any, dst: any}
+    - {acl: ACL-SAMPLE-IN, seq: 80, action: deny, protocol: ip, src: any, dst: any, flags: [fragments, log]}
+    - {acl: ACL-SAMPLE-SEQ, seq: 5, action: remark, remark: numbered by hand}
+    - {acl: ACL-SAMPLE-SEQ, seq: 15, action: permit, protocol: udp, src: any, dst: any, dst_port: "<1024"}
+    - {acl: "10", seq: 10, action: permit, src: 192.0.2.0/25}
+  prefix_lists:
+    - {name: PL-SAMPLE-IN, seq: 5, action: permit, prefix: 0.0.0.0/0}
+    - {name: PL-SAMPLE-OUT, seq: 10, action: permit, prefix: 198.51.100.0/24, le: 28}
+    - {name: PL-SAMPLE-OUT, seq: 20, action: deny, prefix: 0.0.0.0/0, le: 32}

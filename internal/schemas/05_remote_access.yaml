@@ -1,0 +1,12 @@
+table: remote_access
+title: {ja: 遠隔ログイン, en: Remote access}
+since: M1
+key: [device]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: protocols, title: {ja: 許可する方式, en: Protocols}, type: "list<enum>", values: [ssh, telnet], required: true}
+  - {name: ssh_version, title: {ja: SSH の版, en: SSH version}, type: enum, values: ["1", "2"]}
+  - {name: acl, title: {ja: 接続元の制限, en: Source ACL}, type: ref, ref: acls.name}
+  - {name: idle_timeout, title: {ja: 無操作切断（分）, en: Idle timeout (min)}, type: int}
+  - {name: auth, title: {ja: 認証, en: Authentication}, type: enum, values: [local, password, aaa], note: {ja: "aaa の中身は追加コンフィグに書く", en: "What aaa does goes into the extra config"}}
+  - {name: line_password, title: {ja: 回線パスワード, en: Line password}, type: secret}

@@ -1,0 +1,49 @@
+# Neutral word: the word of the device (appendix A 1.4, appendix B 4.2).
+# Sources: cmdref 4.4 (user roles), 4.6 (OSPF network types), 4.13 (IKE and
+# IPsec) and 4.14 (tunnel modes).
+user_role:
+  admin: administrator
+  operator: operator
+
+ospf_network:
+  broadcast: broadcast
+  nbma: nonbroadcast
+  point_to_point: point-to-point
+
+tunnel_mode:
+  gre: gre
+  ipsec: ipsec
+
+ike_encryption:
+  des: des
+  3des: 3des
+  aes128: aes
+  aes192: aes-192
+  aes256: aes-256
+
+ike_hash:
+  md5: md5
+  sha1: sha
+  sha256: sha2-256
+  sha384: sha2-384
+  sha512: sha2-512
+
+# The device names a group by the length of its prime (RFC 2409, RFC 3526).
+dh_group:
+  dh1: 768-bit
+  dh2: 1024-bit
+  dh5: 1536-bit
+  dh14: 2048-bit
+
+esp_encryption:
+  des: esp-des
+  3des: esp-3des
+  aes128: esp-aes
+  aes192: esp-aes-192
+  aes256: esp-aes-256
+  "null": esp-null
+
+esp_hash:
+  md5: esp-md5
+  sha1: esp-sha
+  sha256: esp-sha2-256

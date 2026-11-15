@@ -1,0 +1,54 @@
+{# NAT. Syntax: cmdref 4.10. The translation works between an interface
+   marked "ip nat inside" and one marked "ip nat outside" (interfaces.j2). A
+   pool gets the name of its rule. The interface outside is part of the line
+   only where the address of that interface is used; elsewhere the cell is
+   not read. #}
+{% set nats = t.nat_rules %}
+{% if nats %}
+{% set role = namespace(inside=false, outside=false) %}
+{% for i in t.interfaces %}
+{% if i.nat_role == 'inside' %}
+{% set role.inside = true %}
+{% elif i.nat_role == 'outside' %}
+{% set role.outside = true %}
+{% endif %}
+{% endfor %}
+{% if not role.inside or not role.outside %}
+{{ fail('NAT の行がありますが、NAT の向きが「inside」と「outside」のインタフェースがそろっていません（Cisco は、内側と外側のインタフェースに向きを書きます）') }}
+{% endif %}
+{% for n in nats %}
+{% set what = 'NAT ' ~ n.name %}
+{% set acl = '' %}
+{% set oif = '' %}
+{% if n.type in ['pat_interface', 'pat_pool', 'dynamic_pool'] %}
+{% set acl = n.match_acl | required(what ~ ' の対象の通信（Cisco では ACL の名前が要ります）') %}
+{% endif %}
+{% if n.type == 'pat_interface' or (n.type == 'static_port' and n.global_ip == 'interface') %}
+{% set oif = n.outside_if | required(what ~ ' の外側 IF') %}
+{% for i in t.interfaces %}
+{% if i.name == oif and i.nat_role != 'outside' %}
+{{ fail(what ~ ' の外側 IF ' ~ oif ~ ' は、NAT の向きが「outside」ではありません') }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if n.type == 'pat_interface' %}
+ip nat inside source list {{ acl }} interface {{ oif }} overload
+{% elif n.type in ['pat_pool', 'dynamic_pool'] %}
+{% if ' ' in n.name %}
+{{ fail(what ~ ' の名前に空白があります（Cisco では、名前をプールの名前に使います）') }}
+{% endif %}
+ip nat pool {{ n.name }} {{ n.pool_start | required(what ~ ' の変換後アドレスの先頭') }} {{ n.pool_end | required(what ~ ' の変換後アドレスの末尾') }} prefix-length {{ n.pool_prefix | required(what ~ ' の範囲のプレフィックス長') }}
+ip nat inside source list {{ acl }} pool {{ n.name }}{{ ' overload' if n.type == 'pat_pool' else '' }}
+{% elif n.type == 'static' %}
+{% if n.global_ip == 'interface' %}
+{{ fail(what ~ ' の外側アドレス「interface」は、種類が static_port の行にだけ書けます') }}
+{% endif %}
+ip nat inside source static {{ n.local_ip | required(what ~ ' の内側アドレス') }} {{ n.global_ip | required(what ~ ' の外側アドレス') }}
+{% elif n.type == 'static_port' %}
+ip nat inside source static {{ n.protocol | required(what ~ ' のプロトコル') }} {{ n.local_ip | required(what ~ ' の内側アドレス') }} {{ n.local_port | required(what ~ ' の内側ポート') }} {{ 'interface ' ~ oif if n.global_ip == 'interface' else (n.global_ip | required(what ~ ' の外側アドレス')) }} {{ n.global_port | required(what ~ ' の外側ポート') }}
+{% else %}
+{{ fail(what ~ ' の種類「' ~ n.type ~ '」は書けません') }}
+{% endif %}
+{% endfor %}
+!
+{% endif %}

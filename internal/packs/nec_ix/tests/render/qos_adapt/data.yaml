@@ -1,0 +1,22 @@
+# QoS as another vendor has it (made-up values): the remaining percent and
+# the level of a priority are not of this device. adapt.yaml writes them the
+# way of the device and tells it (G-614); the sum of the percents is told too.
+tables:
+  devices:
+    - hostname: ix-q12
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.1/30}
+  qos_classes:
+    - {name: cm-q-voice, match: any}
+    - {name: cm-q-video, match: all}
+  qos_class_matches:
+    - {class: cm-q-voice, seq: 10, dscp: [46]}
+    - {class: cm-q-video, seq: 10, dscp: [34, 36]}
+  qos_policies:
+    - {policy: pm-q-out, class: cm-q-voice, seq: 10, priority: true, priority_level: 1}
+    - {policy: pm-q-out, class: cm-q-video, seq: 20, bandwidth_remaining: 60}
+    - {policy: pm-q-out, class: default, seq: 30, bandwidth_remaining: 35}
+  qos_bindings:
+    - {if_name: GigaEthernet0.0, direction: output, policy: pm-q-out, shape_bps: 10000000}
+findings: [G-614]

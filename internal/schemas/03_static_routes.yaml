@@ -1,0 +1,17 @@
+table: static_routes
+title: {ja: スタティック経路, en: Static routes}
+since: M1
+key: [device, vrf, prefix, next_hop, out_if]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name, note: {ja: "空 = VRF なし（全体の経路表）", en: "Empty = no VRF (the global table)"}}
+  - {name: prefix, title: {ja: 宛先, en: Prefix}, type: net4, required: true, note: {ja: "例 192.0.2.0/24。デフォルト経路は 0.0.0.0/0", en: "e.g. 192.0.2.0/24. The default route is 0.0.0.0/0"}}
+  - {name: next_hop, title: {ja: ネクストホップ, en: Next hop}, type: ip4}
+  - {name: out_if, title: {ja: 出力 IF, en: Out interface}, type: ifname, also: ["Null*"], note: {ja: "捨てる経路の Null0 などは、インタフェースの表に行がなくてもよい", en: "Null0 and the like (a route that discards) need no row in the interfaces table"}}
+  - {name: distance, title: {ja: 優先度（distance）, en: Distance}, type: int, min: 1, max: 255}
+  - {name: track, title: {ja: 回線監視, en: Track}, type: ref, ref: tracks.id}
+  - {name: description, title: {ja: 説明, en: Description}, type: string}
+checks:
+  - id: V-101
+    when: "not row.next_hop and not row.out_if"
+    message: {ja: ネクストホップか出力 IF のどちらかが必要です, en: A next hop or an out interface is needed}

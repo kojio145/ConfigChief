@@ -1,0 +1,27 @@
+table: interfaces
+title: {ja: インタフェース, en: Interfaces}
+since: M1
+key: [device, name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: IF 名, en: Interface}, type: ifname, required: true, note: {ja: "メーカーの正式な書き方。例 GigabitEthernet0/0/0", en: "The full name the vendor uses, e.g. GigabitEthernet0/0/0"}}
+  - {name: kind, title: {ja: 種類, en: Kind}, type: enum, generate: false, values: [physical, subif, loopback, tunnel, dialer, vlan, lag, other], note: {ja: "空なら名前から決める", en: "Empty = worked out from the name"}}
+  - {name: description, title: {ja: 説明, en: Description}, type: string}
+  - {name: enabled, title: {ja: 有効, en: Enabled}, type: bool, required: true, explicit: true, note: {ja: "無効 = shutdown", en: "Off = shutdown"}}
+  - {name: ipv4, title: {ja: IPv4 アドレス, en: IPv4 address}, type: cidr4, also: [dhcp, negotiated, "unnumbered:*"], note: {ja: "例 192.0.2.1/30。dhcp、negotiated、unnumbered:<IF 名> も書ける", en: "e.g. 192.0.2.1/30. Also dhcp, negotiated, unnumbered:<interface>"}}
+  - {name: ipv4_secondary, title: {ja: IPv4 セカンダリ, en: IPv4 secondary}, type: "list<cidr4>"}
+  - {name: ipv6, title: {ja: IPv6 アドレス, en: IPv6 address}, type: "list<cidr6>"}
+  - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name}
+  - {name: encap_vlan, title: {ja: VLAN 番号（サブ IF）, en: VLAN ID (subinterface)}, type: int, min: 1, max: 4094}
+  - {name: mtu, title: {ja: MTU, en: MTU}, type: int}
+  - {name: ip_mtu, title: {ja: IP MTU, en: IP MTU}, type: int}
+  - {name: tcp_mss, title: {ja: TCP MSS 調整, en: TCP MSS adjust}, type: int}
+  - {name: speed, title: {ja: 速度, en: Speed}, type: enum, values: [auto, "10", "100", "1000", "10000"], note: {ja: "単位は Mbps", en: "In Mbps"}}
+  - {name: duplex, title: {ja: 二重, en: Duplex}, type: enum, values: [auto, full, half]}
+  - {name: bandwidth, title: {ja: 帯域（kbps）, en: Bandwidth (kbps)}, type: int, note: {ja: "経路計算用の値", en: "The value used for route metrics"}}
+  - {name: acl_in, title: {ja: 入力 ACL, en: ACL in}, type: ref, ref: acls.name}
+  - {name: acl_out, title: {ja: 出力 ACL, en: ACL out}, type: ref, ref: acls.name}
+  - {name: nat_role, title: {ja: NAT の向き, en: NAT role}, type: enum, values: [inside, outside], note: {ja: "メーカーによっては使わない", en: "Not used by every vendor"}}
+  - {name: dhcp_relay, title: {ja: DHCP 中継先, en: DHCP relay}, type: "list<ip4>"}
+  - {name: proxy_arp, title: {ja: 代理 ARP, en: Proxy ARP}, type: bool}
+  - {name: note, title: {ja: 備考, en: Note}, type: string, generate: false, note: {ja: "生成には使わない", en: "Not used for generation"}}

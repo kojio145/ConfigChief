@@ -1,0 +1,54 @@
+hostname rt-s01
+!
+interface Loopback0
+ description sample id
+ ip address 192.0.2.201 255.255.255.255
+!
+interface GigabitEthernet0/0
+ description sample wan
+ ip address 203.0.113.49 255.255.255.252
+ ip nat outside
+ ip ospf network point-to-point
+ ip ospf hello-interval 5
+ ip ospf dead-interval 20
+!
+interface GigabitEthernet0/1
+ description sample lan
+ ip address 198.51.100.2 255.255.255.0
+ ip nat inside
+ vrrp 1 ip 198.51.100.1
+ vrrp 1 priority 110
+!
+ip sla 1
+ icmp-echo 203.0.113.50 source-interface GigabitEthernet0/0
+ frequency 5
+ip sla schedule 1 life forever start-time now
+track 1 ip sla 1 reachability
+!
+router ospf 1
+ router-id 192.0.2.201
+ area 1 stub
+ redistribute static subnets
+ passive-interface GigabitEthernet0/1
+ network 192.0.2.201 0.0.0.0 area 0
+ network 198.51.100.0 0.0.0.255 area 1
+ network 203.0.113.48 0.0.0.3 area 0
+!
+router bgp 64500
+ bgp router-id 192.0.2.201
+ neighbor 203.0.113.50 remote-as 64501
+ neighbor 203.0.113.50 description sample-upstream
+ neighbor 203.0.113.50 password dummy-bgp-key-s
+ neighbor 203.0.113.50 prefix-list pl-s-in in
+ network 198.51.100.0 mask 255.255.255.0
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.50 track 1
+!
+ip access-list extended acl-s-nat
+ permit ip 198.51.100.0 0.0.0.255 any
+!
+ip prefix-list pl-s-in seq 10 permit 0.0.0.0/0
+!
+ip nat inside source list acl-s-nat interface GigabitEthernet0/0 overload
+!
+end

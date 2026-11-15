@@ -1,0 +1,26 @@
+hostname ix-c03
+!
+logging timestamp datetime
+!
+ntp server 192.0.2.123 source GigaEthernet0.0
+ntp server 192.0.2.124
+!
+ntp server 192.0.2.124
+ntp ip enable
+!
+ip access-list acl-sample-mgmt permit ip src 192.0.2.0/24 dest any
+!
+interface GigaEthernet0.0
+  description sample wan
+  ip vrf forwarding vrf-sample-c
+  ip address 203.0.113.33/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address dhcp
+  no shutdown
+!
+interface Tunnel0.0
+  ip unnumbered GigaEthernet1.0
+  shutdown
+!

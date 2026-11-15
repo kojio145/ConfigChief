@@ -1,0 +1,85 @@
+hostname rt-c01
+!
+enable secret 5 $1$dummy$SampleHashForTestsOnly444
+!
+clock timezone JST 9 0
+!
+ip domain name example.net
+ip name-server 192.0.2.53
+ip name-server 192.0.2.54
+!
+username admin privilege 15 secret 5 $1$dummy$SampleHashForTestsOnly555
+username backup secret 0 dummy-backup-secret-sample
+username monitor privilege 1 secret 9 $9$dummy$SampleHashForTestsOnly666
+!
+interface GigabitEthernet0/0
+ description to rt-c02
+ bandwidth 100000
+ ip address 203.0.113.9 255.255.255.252
+ mtu 1500
+ duplex auto
+ speed auto
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description sample lan
+ ip address 198.51.100.129 255.255.255.128
+ ip address 198.51.100.1 255.255.255.128 secondary
+ ip helper-address 192.0.2.67
+ no ip proxy-arp
+ ip mtu 1400
+ ip nat inside
+ ip tcp adjust-mss 1360
+ duplex full
+ speed 1000
+ no shutdown
+!
+interface GigabitEthernet0/2
+ no shutdown
+!
+interface GigabitEthernet0/2.30
+ description sample vlan 30
+ encapsulation dot1Q 30
+ ip address 192.0.2.129 255.255.255.192
+ no shutdown
+!
+interface GigabitEthernet0/3
+ shutdown
+!
+interface Loopback0
+ description sample loopback
+ ip address 192.0.2.9 255.255.255.255
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.10
+ip route 192.0.2.64 255.255.255.192 203.0.113.10 10 name sample-backup
+ip route 198.18.30.0 255.255.255.0 GigabitEthernet0/0 203.0.113.10
+!
+logging facility local6
+logging trap warnings
+logging source-interface Loopback0
+logging host 192.0.2.50
+logging host 192.0.2.51
+!
+snmp-server community dummy-ro-comm RO
+snmp-server trap-source Loopback0
+snmp-server location sample-site-c rack 2
+snmp-server contact netops@example.net
+snmp-server host 192.0.2.60 version 2c dummy-ro-comm
+!
+ntp source Loopback0
+ntp server 192.0.2.123 prefer
+ntp server 192.0.2.124
+!
+banner login #
+sample banner: authorized access only
+#
+!
+ip ssh version 2
+!
+line vty 0 4
+ exec-timeout 10 0
+ login local
+ transport input ssh
+!
+end

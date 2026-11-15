@@ -1,0 +1,12 @@
+table: qos_bindings
+title: {ja: QoS の適用, en: QoS bindings}
+since: M6
+key: [device, if_name, direction]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: if_name, title: {ja: IF 名, en: Interface}, type: ifname, required: true}
+  - {name: direction, title: {ja: 向き, en: Direction}, type: enum, values: [input, output], required: true}
+  - {name: policy, title: {ja: ポリシー名, en: Policy}, type: ref, ref: qos_policies.policy, note: {ja: "空でもよい（IF 全体を絞るだけ）", en: "May be empty (shaping the whole interface only)"}}
+  - {name: shape_bps, title: {ja: IF 全体を絞る速さ（bps）, en: Interface shape (bps)}, type: int, min: 1, note: {ja: "出力だけ", en: "Output only"}}
+  - {name: shape_bc, title: {ja: IF 全体の通常バースト（ビット）, en: Interface shape Bc (bits)}, type: int, min: 1}
+  - {name: shape_be, title: {ja: IF 全体の超過バースト（ビット）, en: Interface shape Be (bits)}, type: int, min: 0}

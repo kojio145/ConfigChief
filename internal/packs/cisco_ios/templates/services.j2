@@ -1,0 +1,69 @@
+{# Syslog, SNMP and NTP. Syntax: cmdref 4.4. The facility, the level and the
+   source interface of syslog, and the source of the SNMP traps, are one
+   setting of the device: the rows have to agree. #}
+{% set logs = t.syslog_servers %}
+{% if logs %}
+{% for s in logs %}
+{% if s.facility != logs[0].facility or s.severity != logs[0].severity or s.source_if != logs[0].source_if %}
+{{ fail('ログ転送先のファシリティ・重要度・送信元 IF は、Cisco では機器に 1 つです。全部の行で同じ値にしてください') }}
+{% endif %}
+{% endfor %}
+{% if logs[0].facility %}
+logging facility {{ logs[0].facility }}
+{% endif %}
+{% if logs[0].severity %}
+logging trap {{ logs[0].severity }}
+{% endif %}
+{% if logs[0].source_if %}
+logging source-interface {{ logs[0].source_if }}
+{% endif %}
+{% for s in logs %}
+logging host {{ s.server }}{{ ' vrf ' ~ s.vrf if s.vrf else '' }}
+{% endfor %}
+!
+{% endif %}
+{% for c in t.snmp_communities %}
+snmp-server community {{ c.community }}{{ ' ' ~ (c.access | upper) if c.access else '' }}{{ ' ' ~ c.acl if c.acl else '' }}
+{% endfor %}
+{% set traps = t.snmp_hosts %}
+{% if traps %}
+{% for h in traps %}
+{% if h.source_if != traps[0].source_if %}
+{{ fail('SNMP 通知先の送信元 IF は、Cisco では機器に 1 つです。全部の行で同じ値にしてください') }}
+{% endif %}
+{% endfor %}
+{% if traps[0].source_if %}
+snmp-server trap-source {{ traps[0].source_if }}
+{% endif %}
+{% endif %}
+{% if device.snmp_location %}
+snmp-server location {{ device.snmp_location }}
+{% endif %}
+{% if device.snmp_contact %}
+snmp-server contact {{ device.snmp_contact }}
+{% endif %}
+{% for h in traps %}
+{% if h.version == '3' %}
+{{ fail('SNMP 通知先 ' ~ h.host ~ ' の版 3 は、このパックでは書けません（追加コンフィグに書いてください）') }}
+{% endif %}
+snmp-server host {{ h.host }}{{ ' version ' ~ h.version if h.version else '' }} {{ h.community | required('SNMP 通知先のコミュニティ') }}
+{% endfor %}
+{% if t.snmp_communities or traps or device.snmp_location or device.snmp_contact %}
+!
+{% endif %}
+{% set ntps = t.ntp_servers %}
+{% if ntps %}
+{% set one = namespace(source=true) %}
+{% for n in ntps %}
+{% if n.source_if != ntps[0].source_if %}
+{% set one.source = false %}
+{% endif %}
+{% endfor %}
+{% if one.source and ntps[0].source_if %}
+ntp source {{ ntps[0].source_if }}
+{% endif %}
+{% for n in ntps %}
+ntp server{{ ' vrf ' ~ n.vrf if n.vrf else '' }} {{ n.server }}{{ ' prefer' if n.prefer == true else '' }}{{ ' source ' ~ n.source_if if n.source_if and not one.source else '' }}
+{% endfor %}
+!
+{% endif %}

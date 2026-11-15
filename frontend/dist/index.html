@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Defence in depth: the text of configurations and of the book reaches
+       the page only as text nodes, and this keeps a slip from loading a
+       script or sending anything out (the page talks to the tool over the
+       WebView2 bridge, not the network). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <title>ConfigChief</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="app">
+    <nav id="nav"></nav>
+    <main id="main"></main>
+  </div>
+  <div id="busy" class="overlay" hidden>
+    <div class="dialog">
+      <div id="busy-label" class="dialog-title"></div>
+      <div class="bar"><div id="busy-bar"></div></div>
+      <div id="busy-text" class="dialog-text"></div>
+      <div class="dialog-buttons"><button id="busy-stop" type="button">止める</button></div>
+    </div>
+  </div>
+  <div id="ask" class="overlay" hidden>
+    <div class="dialog">
+      <div id="ask-title" class="dialog-title"></div>
+      <div id="ask-text" class="dialog-text"></div>
+      <div class="dialog-buttons">
+        <button id="ask-no" type="button">やめる</button>
+        <button id="ask-yes" type="button" class="primary"></button>
+      </div>
+    </div>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

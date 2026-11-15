@@ -1,0 +1,26 @@
+# A made-up vendor, small enough to read at a glance. It exists to test the
+# import engine, not to describe a real device.
+id: mini
+title: {ja: "試験用の小さなパック", en: "Mini test pack"}
+version: 0.0.1
+schema: 1
+syntax: indent
+comment_prefixes: ["!"]
+end_marker: '^end$'
+
+detect:
+  - {match: '^hostname \S+$', score: 2}
+  - {match: '^interface GigabitEthernet\d', score: 2}
+
+blocks:
+  - id: banner
+    start: '^banner (?P<kind>\S+) (?P<delim>.)'
+    end_by: delim
+
+hostname: '^hostname (?P<name>\S+)$'
+
+interfaces:
+  types:
+    - {name: GigabitEthernet, short: [Gi, Gig], kind: physical}
+    - {name: Loopback, short: [Lo], kind: loopback}
+  subif: '^(?P<parent>.+)\.(?P<n>\d+)$'

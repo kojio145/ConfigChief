@@ -1,0 +1,128 @@
+# What this device writes in another way than the design data has it
+# (appendix B 5.7). Each step tells what it did as G-614. The answers behind
+# the steps: hearing.md, the table of QoS (2026-11-15).
+#
+# The queue of a condition (high / medium / normal / low: NEC IX, and the
+# priority lists of old IOS) is not of MQC. A class whose conditions go to
+# different queues is split into a class per queue: high = priority level 1,
+# medium = priority level 2, normal = 75 % and low = 25 % of what remains.
+# A class that has actions of its own in a policy is left alone: its queues
+# are told as values that are not written (G-602).
+adapt:
+  # A condition without a queue, in a class that has queues, is "normal".
+  - id: qos.queue.normal
+    for: qos_class_matches
+    as: m
+    let:
+      some: "rows('qos_class_matches', class=m.class) | selectattr('queue') | list | length"
+    when: "not m.queue and some > 0"
+    row: {table: qos_class_matches, key: {class: "{{ m.class }}", seq: "{{ m.seq }}"}}
+    set: {queue: normal}
+    note: "{{ '' }}"
+  # Every condition goes to the same queue: the queue says nothing.
+  - id: qos.queue.same
+    for: qos_class_matches
+    as: m
+    let:
+      other: "rows('qos_class_matches', class=m.class) | selectattr('queue') | rejectattr('queue', 'equalto', m.queue) | list | length"
+      head: "rows('qos_class_matches', class=m.class) | first"
+    when: "m.queue and other == 0"
+    clear: [queue]
+    note: "{% if head.seq == m.seq %}QoS のクラス {{ m.class }}: 条件のキューがどれも {{ m.queue }} なので、キューを書かずに 1 つのクラスとして書きます（MQC に、条件ごとのキューはありません）{% endif %}"
+  - id: qos.queue.split.match
+    for: qos_class_matches
+    as: m
+    let:
+      prs: "rows('qos_policies', class=m.class)"
+      busy: "(prs | selectattr('priority') | list | length) + (prs | selectattr('bandwidth_kbps') | list | length) + (prs | selectattr('bandwidth_percent') | list | length) + (prs | selectattr('bandwidth_remaining') | list | length) + (prs | selectattr('shape_bps') | list | length) + (prs | selectattr('police_bps') | list | length) + (prs | selectattr('set_dscp') | list | length) + (prs | selectattr('set_precedence') | list | length) + (prs | selectattr('fair_queue') | list | length)"
+    when: "m.queue and busy == 0"
+    row: {table: qos_class_matches, key: {class: "{{ m.class }}-{{ m.queue }}", seq: "{{ (rows('qos_class_matches', class=m.class ~ '-' ~ m.queue) | length + 1) * 10 }}"}}
+    set: {acl: "{{ m.acl }}"}
+    append: {dscp: "{{ m.dscp | join(' ') }}", precedence: "{{ m.precedence | join(' ') }}"}
+    note: "{{ '' }}"
+  - id: qos.queue.split.class
+    for: qos_class_matches
+    as: m
+    let:
+      made: "first('qos_class_matches', class=m.class ~ '-' ~ m.queue)"
+    when: "m.queue and made.class"
+    row: {table: qos_classes, key: {name: "{{ m.class }}-{{ m.queue }}"}}
+    set: {match: any}
+    note: "{{ '' }}"
+  - id: qos.queue.split.high
+    for: qos_policies
+    as: p
+    let:
+      made: "first('qos_classes', name=p.class ~ '-high')"
+    when: "made.name"
+    row: {table: qos_policies, key: {policy: "{{ p.policy }}", class: "{{ p.class }}-high"}}
+    set: {seq: "{{ p.seq }}", priority: true, priority_level: "1"}
+    append: {queue_limit: "{{ p.queue_limit[0] if p.queue_limit | length == 4 else '' }}"}
+    note: "{{ '' }}"
+  - id: qos.queue.split.medium
+    for: qos_policies
+    as: p
+    let:
+      made: "first('qos_classes', name=p.class ~ '-medium')"
+    when: "made.name"
+    row: {table: qos_policies, key: {policy: "{{ p.policy }}", class: "{{ p.class }}-medium"}}
+    set: {seq: "{{ p.seq | int + 1 }}", priority: true, priority_level: "2"}
+    append: {queue_limit: "{{ p.queue_limit[1] if p.queue_limit | length == 4 else '' }}"}
+    note: "{{ '' }}"
+  - id: qos.queue.split.normal
+    for: qos_policies
+    as: p
+    let:
+      made: "first('qos_classes', name=p.class ~ '-normal')"
+    when: "made.name"
+    row: {table: qos_policies, key: {policy: "{{ p.policy }}", class: "{{ p.class }}-normal"}}
+    set: {seq: "{{ p.seq | int + 2 }}", bandwidth_remaining: "75"}
+    append: {queue_limit: "{{ p.queue_limit[2] if p.queue_limit | length == 4 else '' }}"}
+    note: "{{ '' }}"
+  - id: qos.queue.split.low
+    for: qos_policies
+    as: p
+    let:
+      made: "first('qos_classes', name=p.class ~ '-low')"
+    when: "made.name"
+    row: {table: qos_policies, key: {policy: "{{ p.policy }}", class: "{{ p.class }}-low"}}
+    set: {seq: "{{ p.seq | int + 3 }}", bandwidth_remaining: "25"}
+    append: {queue_limit: "{{ p.queue_limit[3] if p.queue_limit | length == 4 else '' }}"}
+    note: "{{ '' }}"
+  # The rows the split was made from leave.
+  - id: qos.queue.split.policy
+    for: qos_policies
+    as: p
+    let:
+      split: "rows('qos_policies', policy=p.policy) | selectattr('class', 'in', [p.class ~ '-high', p.class ~ '-medium', p.class ~ '-normal', p.class ~ '-low']) | list | length"
+      old: "rows('qos_class_matches', class=p.class) | selectattr('queue') | list | length"
+    when: "split > 0 and old > 0"
+    remove: true
+    note: "QoS のポリシー {{ p.policy }} のクラス {{ p.class }}: 条件ごとのキュー（high〜low）は MQC に無いので、キューごとのクラス（{{ p.class }}-high など）に分けて書きます。high は priority level 1、medium は priority level 2、normal は残りの帯域の 75%、low は 25% です（動きは近いものの同じではありません。割合は、分けたクラスの行を自分で書けば変えられます）"
+  - id: qos.queue.split.old
+    for: qos_class_matches
+    as: m
+    let:
+      made: "first('qos_classes', name=m.class ~ '-' ~ m.queue)"
+    when: "m.queue and made.name"
+    remove: true
+    note: "{{ '' }}"
+  - id: qos.queue.split.empty
+    for: qos_classes
+    as: c
+    let:
+      left: "rows('qos_class_matches', class=c.name) | length"
+      split: "rows('qos_classes') | selectattr('name', 'in', [c.name ~ '-high', c.name ~ '-medium', c.name ~ '-normal', c.name ~ '-low']) | list | length"
+    when: "left == 0 and split > 0"
+    remove: true
+    note: "{{ '' }}"
+  # A row of class-default with nothing in it says nothing (the import
+  # makes no row of such a line either): it is not a row.
+  - id: qos.adapt.bare
+    for: qos_policies
+    as: p
+    let:
+      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.shape_bps or p.shape_bc or p.shape_be or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue"
+    when: "p.class in ['default'] and not more"
+    remove: true
+    note: "{{ '' }}"

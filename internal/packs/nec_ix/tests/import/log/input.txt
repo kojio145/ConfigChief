@@ -1,0 +1,44 @@
+ix-b02(config)# 
+ix-b02(config)# show running-config
+Current configuration : 1024 bytes
+
+!
+! NEC Portable Internetwork Core Operating System Software
+! IX Series IX2107 (magellan-sec) Software, Version 10.11.6
+!
+hostname ix-b02
+timezone +09 00
+!
+username admin password hash dummy0hash0sample0admin0004 administrator
+!
+ip name-server 192.0.2.53
+ip route default 203.0.113.6
+ip route 192.0.2.64/26 198.51.100.2
+!
+ntp server 192.0.2.123
+!
+device GigaEthernet0
+!
+device GigaEthernet1
+--More--
+          
+  speed 1000
+  duplex full
+!
+interface GigaEthernet0.0
+  description sample-wan
+  ip address 203.0.113.5/30
+  no shutdown
+!
+--More--
+          
+interface GigaEthernet1.0
+  description sample-lan
+  ip address 198.51.100.1/24
+  shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.2/32
+  no shutdown
+ix-b02(config)# exit
+ix-b02# exit

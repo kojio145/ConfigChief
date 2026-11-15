@@ -1,0 +1,185 @@
+# The device as a whole, and the management settings (stage M1).
+# Syntax: cmdref 3.4 and 4.1, 4.4.
+rules:
+  - id: sys.hostname
+    match: '^hostname (?P<name>\S+)$'
+    row: {table: devices, key: {}}
+
+  # The device shows hours and minutes ("+09 00") and has no name for the zone.
+  - id: sys.timezone
+    match: '^timezone (?P<sign>[+-])?(?P<h>\d+)(?: (?P<m>\d+))?$'
+    row: {table: devices, key: {}}
+    set: {timezone: "{{ '-' if sign == '-' else '+' }}{{ h | int }}{{ (':' ~ m) if (m and m | int != 0) else '' }}"}
+
+  # One server on a line. The forms with "vrf" or with an interface have no
+  # column and stay unknown.
+  - id: sys.name_server
+    match: '^ip name-server (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+    row: {table: devices, key: {}}
+    append: {name_servers: "{{ addr }}"}
+
+  - id: sys.snmp.location
+    match: '^snmp-agent location (?P<text>.+)$'
+    row: {table: devices, key: {}}
+    set: {snmp_location: "{{ text }}"}
+
+  - id: sys.snmp.contact
+    match: '^snmp-agent contact (?P<text>\S+)$'
+    row: {table: devices, key: {}}
+    set: {snmp_contact: "{{ text }}"}
+
+  # ---- users ----
+  # The saved text always has the hashed form. The role "monitor" has no
+  # neutral word and is kept as the device writes it.
+  - id: user.hashed
+    match: '^username (?P<name>\S+) password hash (?P<value>\S+)(?: (?P<role>administrator|operator|monitor))?$'
+    row: {table: users, key: {name: "{{ name }}"}}
+    set:
+      privilege: "{{ (role | unlex('user_role')) if role in ['administrator', 'operator'] else role }}"
+      secret: "{{ value }}"
+      secret_form: hashed
+
+  # The form a password is entered in (CRM p.2-12); the device does not show
+  # it, the generated text has it. The form with a mode word after "plain"
+  # has one more word and stays unknown.
+  - id: user.plain
+    match: '^username (?P<name>\S+) password plain (?P<value>\S+)(?: (?P<role>administrator|operator|monitor))?$'
+    row: {table: users, key: {name: "{{ name }}"}}
+    set:
+      privilege: "{{ (role | unlex('user_role')) if role in ['administrator', 'operator'] else role }}"
+      secret: "{{ value }}"
+      secret_form: plain
+
+  # ---- remote access ----
+  - id: remote.enable
+    match: '^(?P<proto>telnet|ssh)-server ip enable$'
+    row: {table: remote_access, key: {}}
+    append: {protocols: "{{ proto }}"}
+
+  # The dataset has one list for both servers; a second list with another
+  # name is reported as a second value.
+  - id: remote.acl
+    match: '^(?:telnet|ssh)-server ip access-list (?P<acl>\S+)$'
+    row: {table: remote_access, key: {}}
+    set: {acl: "{{ acl }}"}
+
+  # Minutes, for every terminal of the device.
+  - id: remote.timeout
+    match: '^terminal timeout (?P<min>\d+)$'
+    row: {table: remote_access, key: {}}
+    set: {idle_timeout: "{{ min }}"}
+
+  # ---- NTP ----
+  # "retry", "version", "timeout" and "priority" have no column: a line with
+  # one of them stays unknown.
+  - id: ntp.server
+    match: '^ntp(?: vrf (?P<vrf>\S+))? server (?P<server>\d+\.\d+\.\d+\.\d+)(?: source (?P<src>\S+))?$'
+    row: {table: ntp_servers, key: {server: "{{ server }}"}}
+    set:
+      vrf: "{{ vrf }}"
+      source_if: "{{ src | ifname }}"
+
+  # One line for the whole device: it is kept aside and put on each server.
+  - id: ntp.source
+    match: '^ntp source (?P<ifn>\S+)$'
+    emit:
+      - table: x_ntp
+        key: {}
+        set: {source_if: "{{ ifn | ifname }}"}
+
+  # ---- syslog ----
+  # "port" and the other options have no column.
+  - id: syslog.host
+    match: '^syslog(?: vrf (?P<vrf>\S+))? ip host (?P<server>\d+\.\d+\.\d+\.\d+)$'
+    row: {table: syslog_servers, key: {server: "{{ server }}"}}
+    set: {vrf: "{{ vrf }}"}
+
+  - id: syslog.facility
+    match: '^syslog facility (?P<f>\S+)$'
+    emit:
+      - table: x_syslog
+        key: {}
+        set: {facility: "{{ f }}"}
+
+  # ---- SNMP ----
+  # The agent answers only after "snmp-agent ip enable": the lines are kept
+  # aside, and the rows are made at the end when the switch is on.
+  - id: snmp.enable
+    match: '^snmp-agent ip enable$'
+    emit:
+      - table: x_enable
+        key: {}
+        set: {snmp: "true"}
+
+  - id: snmp.community
+    match: '^snmp-agent ip community (?P<community>\S+)(?: (?P<access>ro|rw))?$'
+    emit:
+      - table: x_snmp_community
+        key: {community: "{{ community }}"}
+        set: {access: "{{ access }}"}
+
+  # With a list: the name of the list stands before "ro" / "rw". The form with
+  # "view" does not match (it has more words).
+  - id: snmp.community.acl
+    match: '^snmp-agent ip community (?P<community>\S+) (?P<acl>\S+)(?: (?P<access>ro|rw))?$'
+    emit:
+      - table: x_snmp_community
+        key: {community: "{{ community }}"}
+        set: {acl: "{{ acl }}", access: "{{ access }}"}
+
+  - id: snmp.host
+    match: '^snmp-agent ip host (?P<host>\d+\.\d+\.\d+\.\d+) (?P<community>\S+)(?: version (?P<ver>1|2))?$'
+    emit:
+      - table: x_snmp_host
+        key: {host: "{{ host }}"}
+        set:
+          community: "{{ community }}"
+          version: "{{ '2c' if ver == '2' else ver }}"
+
+  - id: snmp.trap_source
+    match: '^snmp-agent ip trap-source (?P<ifn>[A-Za-z]\S*)$'
+    emit:
+      - table: x_snmp
+        key: {}
+        set: {source_if: "{{ ifn | ifname }}"}
+
+derive:
+  - id: ntp.source.each
+    for: ntp_servers
+    as: s
+    let:
+      g: "lookup('x_ntp')"
+    when: "g.source_if and not s.source_if"
+    row: {table: ntp_servers, key: {server: "{{ s.server }}"}}
+    set: {source_if: "{{ g.source_if }}"}
+
+  - id: syslog.common
+    for: syslog_servers
+    as: s
+    let:
+      g: "lookup('x_syslog')"
+    when: "g.facility"
+    row: {table: syslog_servers, key: {server: "{{ s.server }}"}}
+    set: {facility: "{{ g.facility }}"}
+
+  - id: snmp.community.on
+    for: x_snmp_community
+    as: c
+    let:
+      en: "lookup('x_enable')"
+    when: "en.snmp"
+    row: {table: snmp_communities, key: {community: "{{ c.community }}"}}
+    set: {access: "{{ c.access }}", acl: "{{ c.acl }}"}
+
+  - id: snmp.host.on
+    for: x_snmp_host
+    as: h
+    let:
+      en: "lookup('x_enable')"
+      g: "lookup('x_snmp')"
+    when: "en.snmp"
+    row: {table: snmp_hosts, key: {host: "{{ h.host }}"}}
+    set:
+      version: "{{ h.version }}"
+      community: "{{ h.community }}"
+      source_if: "{{ g.source_if }}"

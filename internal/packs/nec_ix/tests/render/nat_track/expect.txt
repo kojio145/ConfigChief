@@ -1,0 +1,42 @@
+hostname ix-n01
+!
+ip access-list acl-sample-nat permit ip src 192.0.2.0/25 dest any
+!
+ip route default 192.0.2.2 distance 200
+ip route default 203.0.113.42
+ip route 198.51.100.64/26 GigaEthernet2.0
+!
+watch-group wg-sample-port 10
+  event 10 interface-down GigaEthernet2.0
+  action 10 ip shutdown-route 198.51.100.64/26
+!
+network-monitor wg-sample-port enable
+!
+watch-group wg-sample-wan 10
+  event 10 ip unreach-host 203.0.113.42 source GigaEthernet0.0
+  probe-counter variance 4
+  probe-counter restorer 2
+  probe-timer variance 3
+  action 10 ip shutdown-route 0.0.0.0/0 203.0.113.42
+!
+network-monitor wg-sample-wan enable
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.41/30
+  ip napt enable
+  ip napt inside list acl-sample-nat
+  ip napt static 192.0.2.12 udp 514
+  ip napt static 192.0.2.11 tcp 443
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 192.0.2.1/25
+  no shutdown
+!
+interface GigaEthernet2.0
+  ip address 198.51.100.1/28
+  ip nat enable
+  ip nat static 192.0.2.20 198.51.100.4
+  ip nat static 192.0.2.21 198.51.100.5
+  no shutdown
+!

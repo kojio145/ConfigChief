@@ -1,0 +1,12 @@
+table: qos_class_matches
+title: {ja: QoS の見分け方の条件, en: QoS class conditions}
+since: M6
+key: [device, class, seq]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: class, title: {ja: クラス名, en: Class}, type: ref, ref: qos_classes.name, required: true}
+  - {name: seq, title: {ja: 順番, en: Sequence}, type: int, required: true, note: {ja: "書いた順に 10 刻みで振る", en: "Counted in steps of 10 in the written order"}}
+  - {name: acl, title: {ja: ACL, en: ACL}, type: ref, ref: acls.name, note: {ja: "ACL・DSCP・precedence は 1 行に 1 つだけ。3 つとも空 = すべての通信", en: "One of ACL, DSCP and precedence per row. All three empty = every packet"}}
+  - {name: dscp, title: {ja: DSCP, en: DSCP}, type: "list<int>", min: 0, max: 63, note: {ja: "数で書く（ef = 46、af41 = 34）。複数はカンマで区切る", en: "Numbers (ef = 46, af41 = 34). Separate with commas"}}
+  - {name: precedence, title: {ja: precedence, en: Precedence}, type: "list<int>", min: 0, max: 7, note: {ja: "数で書く。複数はカンマで区切る", en: "Numbers. Separate with commas"}}
+  - {name: queue, title: {ja: キュー, en: Queue}, type: enum, values: [high, medium, normal, low], note: {ja: "この条件に合った通信を入れる優先度のキュー", en: "The priority queue for the packets of this condition"}}

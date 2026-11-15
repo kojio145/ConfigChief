@@ -1,0 +1,46 @@
+{# Line monitoring. Syntax: cmdref 4.11. A watch group holds what is watched
+   ("event") and what is done ("action"); it works once "network-monitor" is
+   switched on. The static routes that name the watch become its actions.
+   The event is written without an output interface (Ver.10.6 and later:
+   README). The timeout and the delays have no line here: those cells are not
+   read. #}
+{% for k in t.tracks %}
+{% set what = '回線監視 ' ~ k.id %}
+{% if ' ' in k.id %}
+{{ fail(what ~ ' の番号・名前に空白があります（NEC IX では、ウォッチグループの名前になります）') }}
+{% endif %}
+watch-group {{ k.id }} 10
+{% if k.type == 'icmp' %}
+{% set target = k.target | required(what ~ ' の監視先') %}
+{% if target and not ((target ~ '/32') is cidr) %}
+{{ fail(what ~ ' の監視先「' ~ target ~ '」は IPv4 アドレスで書きます') }}
+{% endif %}
+  event 10 ip unreach-host {{ target }}{{ ' source ' ~ k.source_if if k.source_if else '' }}
+{% if k.fail_count != '' %}
+  probe-counter variance {{ k.fail_count }}
+{% endif %}
+{% if k.restore_count != '' %}
+  probe-counter restorer {{ k.restore_count }}
+{% endif %}
+{% if k.interval != '' %}
+  probe-timer variance {{ k.interval }}
+{% endif %}
+{% elif k.type == 'interface' %}
+  event 10 interface-down {{ k.target | required(what ~ ' の監視先（IF 名）') }}
+{% else %}
+{{ fail(what ~ ' の監視の方法「' ~ k.type ~ '」は、このパックでは書けません（書き方を確かめていません。追加コンフィグに書いてください）') }}
+{% endif %}
+{% set n = namespace(a=0) %}
+{% for r in t.static_routes %}
+{% if r.track == k.id %}
+{% if r.vrf %}
+{{ fail('経路 ' ~ r.prefix ~ '（VRF ' ~ r.vrf ~ '）の回線監視は、このパックでは書けません（VRF の経路を止める行を確かめていません）') }}
+{% endif %}
+{% set n.a = n.a + 10 %}
+  action {{ n.a }} ip shutdown-route {{ r.prefix }}{{ ' ' ~ r.next_hop if r.next_hop else '' }}
+{% endif %}
+{% endfor %}
+!
+network-monitor {{ k.id }} enable
+!
+{% endfor %}

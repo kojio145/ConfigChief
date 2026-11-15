@@ -1,0 +1,5 @@
+hostname ix-d02
+!
+ip router ospf 1
+router bgp 64500
+  neighbor 203.0.113.54 remote-as 64501

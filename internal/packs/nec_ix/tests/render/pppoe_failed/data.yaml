@@ -1,0 +1,17 @@
+# PPPoE rows the pack cannot write (made-up values): each tells why.
+tables:
+  devices:
+    - hostname: ix-e05
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true}
+    - {name: GigaEthernet0.1, enabled: true, ipv4: negotiated}
+    - {name: GigaEthernet1.0, enabled: true}
+  pppoe:
+    # The logical interface is the base interface of a port.
+    - {name: ppp-sample-a, physical_if: GigaEthernet1.0, logical_if: GigaEthernet1.0, username: sample-a@example.com, password: dummy-pppoe-secret-a}
+    # The physical side is another port; the name is too long for a profile.
+    - {name: ppp-sample-with-a-name-too-long-b, physical_if: GigaEthernet1.0, logical_if: GigaEthernet0.1, username: sample-b@example.com, password: dummy-pppoe-secret-b}
+    # The sub-interface is not on the sheet.
+    - {name: ppp-sample-c, physical_if: GigaEthernet1.0, logical_if: GigaEthernet1.1, username: sample-c@example.com, password: dummy-pppoe-secret-c}
+findings: [G-601]

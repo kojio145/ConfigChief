@@ -1,0 +1,59 @@
+# Cisco IOS / IOS-XE (routers). The syntax follows the vendor's public command
+# references; README.md names the books and what is not confirmed yet.
+id: cisco_ios
+title: {ja: "Cisco IOS / IOS-XE（ルータ）", en: "Cisco IOS / IOS-XE (routers)"}
+version: 0.2.0
+schema: 1
+syntax: indent
+comment_prefixes: ["!"]
+output:
+  encoding: utf-8
+  newline: lf
+  indent: " "
+end_marker: '^end$'
+
+detect:
+  - {match: '^Building configuration', score: 3}
+  - {match: '^Current configuration : \d+ bytes', score: 5}
+  - {match: '^version \d+\.\d+', score: 2}
+  - {match: '^interface (Gigabit|Fast|TenGigabit)Ethernet\d', score: 2}
+  - {match: '^ip route (vrf \S+ )?\d+\.\d+\.\d+\.\d+ \d+\.\d+\.\d+\.\d+ ', score: 1}
+  - {match: '^line vty \d+', score: 2}
+  - {match: '^router (ospf|bgp) \d+', score: 1}
+
+blocks:
+  # The delimiter is one character, or the two characters "^C" that the device
+  # shows for Ctrl-C.
+  - id: banner
+    start: '^banner (?P<kind>\S+) (?P<delim>\^C|.)'
+    end_by: delim
+
+hostname: '^hostname (?P<name>\S+)$'
+
+# Terminal logs. The prompt is the host name, the mode in brackets, and ">" or
+# "#"; a command may be shortened as long as it stays unique; " --More-- " is
+# what the pager shows (Configuration Fundamentals Configuration Guide, "Using
+# the Cisco IOS Command-Line Interface"). "do" runs an EXEC command from a
+# configuration mode.
+session:
+  prompt: '^(?P<host>[\w.\-]+)(\((?P<mode>[^)]+)\))?[>#]'
+  show_config:
+    - '^(do\s+)?sh(o|ow)?\s+run\S*$'
+    - '^(do\s+)?sh(o|ow)?\s+start\S*$'
+  pager: ['^\s*--More--']
+
+interfaces:
+  types:
+    - {name: GigabitEthernet, short: [Gi, Gig], kind: physical}
+    - {name: FastEthernet, short: [Fa], kind: physical}
+    - {name: TenGigabitEthernet, short: [Te], kind: physical}
+    - {name: Ethernet, short: [Et, Eth], kind: physical}
+    - {name: Serial, short: [Se], kind: physical}
+    - {name: Loopback, short: [Lo], kind: loopback}
+    - {name: Tunnel, short: [Tu], kind: tunnel}
+    - {name: Dialer, short: [Di], kind: dialer}
+    - {name: Vlan, short: [Vl], kind: vlan}
+    - {name: Port-channel, short: [Po], kind: lag}
+    - {name: BVI, short: [], kind: other}
+    - {name: "Null", short: [Nu], kind: other}
+  subif: '^(?P<parent>.+)\.(?P<n>\d+)$'

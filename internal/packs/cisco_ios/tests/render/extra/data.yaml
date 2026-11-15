@@ -1,0 +1,39 @@
+# Extra configurations (spec 9.4), a value the pack has no line for
+# (G-602) and a line written twice (G-609). Made-up values.
+tables:
+  devices:
+    - hostname: rt-c03
+      vendor: cisco_ios
+      group: [sample-edge]
+  interfaces:
+    - {name: GigabitEthernet0/0, description: sample wan, enabled: true, ipv4: 203.0.113.33/30, vrf: VRF-SAMPLE-C}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: dhcp}
+    - {name: Loopback1, enabled: true, ipv4: "unnumbered:GigabitEthernet0/0"}
+  vrfs:
+    - {name: VRF-SAMPLE-C, rd: "64496:300"}
+  # The device has no line for the description of a list: G-602.
+  acls:
+    - {name: ACL-SAMPLE-C, type: extended, description: sample list}
+  acl_entries:
+    - {acl: ACL-SAMPLE-C, seq: 10, action: permit, protocol: ip, src: 192.0.2.0/24, dst: any}
+  ntp_servers:
+    - {server: 192.0.2.123, source_if: GigabitEthernet0/0}
+    - {server: 192.0.2.124}
+extra:
+  _all.j2: |
+    {# position: before interfaces #}
+    ip multicast-routing
+    !
+  "@sample-edge.j2": |
+    service timestamps log datetime msec
+    !
+  "@sample-core.j2": |
+    service sequence-numbers
+  rt-c03.j2: |
+    {# position: after services #}
+    ntp server 192.0.2.124
+    ntp update-calendar
+    !
+  rt-c04.j2: |
+    service compress-config
+findings: [G-602, G-609]

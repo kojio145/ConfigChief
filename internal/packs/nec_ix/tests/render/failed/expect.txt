@@ -1,0 +1,12 @@
+hostname ix-c05
+!
+ip route default 203.0.113.42
+!
+ip ufs-cache enable
+snmp-agent ip enable
+interface GigaEthernet0.0
+  ip address 203.0.113.41/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.1/25

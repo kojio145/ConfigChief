@@ -1,0 +1,48 @@
+{# The DHCP server. Syntax: cmdref 4.15 and 7.5. The addresses that are not
+   handed out stand outside the pools; each goes to the pool whose network
+   holds it. The device has no line for a range to hand out (it hands out the
+   network without the excluded addresses): the range cells are not read. #}
+{% for p in t.dhcp_pools %}
+{% set what = 'DHCP ' ~ p.name %}
+{% for x in p.excluded %}
+{% set ends = x | split('-') %}
+{% if ends | length != 2 or not ((ends[0] ~ '/32') is cidr) or not ((ends[1] ~ '/32') is cidr) %}
+{{ fail(what ~ ' の配らないアドレス「' ~ x ~ '」は書けません（192.0.2.1-192.0.2.10 の形で書きます。1 つだけなら同じアドレスを 2 つ）') }}
+{% elif not (ends[0] | in_net(p.network)) %}
+{{ fail(what ~ ' の配らないアドレス ' ~ x ~ ' が、ネットワーク ' ~ p.network ~ ' の外にあります') }}
+{% else %}
+ip dhcp excluded-address {{ ends[0] }}{{ ' ' ~ ends[1] if ends[1] != ends[0] else '' }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% for p in t.dhcp_pools %}
+{% set what = 'DHCP ' ~ p.name %}
+{% if ' ' in p.name %}
+{{ fail(what ~ ' の名前に空白があります') }}
+{% endif %}
+ip dhcp pool {{ p.name }}
+ network {{ p.network | ip }} {{ p.network | mask }}
+{% if p.default_router %}
+ default-router {{ p.default_router }}
+{% endif %}
+{% if p.dns_servers %}
+ dns-server {{ p.dns_servers | join(' ') }}
+{% endif %}
+{% if p.domain %}
+ domain-name {{ p.domain }}
+{% endif %}
+{# "2d" is two days, "36h" one day and twelve hours. #}
+{% if p.lease %}
+{% set n = p.lease[:-1] %}
+{% if not (n is digits) or p.lease[-1:] not in ['d', 'h'] or (n | int) == 0 %}
+{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は書けません（2d、12h の形で書きます）') }}
+{% elif p.lease[-1:] == 'd' %}
+ lease {{ n }}
+{% elif (n | int) % 24 == 0 %}
+{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は、日の形（' ~ ((n | int) // 24) ~ 'd）で書いてください') }}
+{% else %}
+ lease {{ (n | int) // 24 }} {{ (n | int) % 24 }}
+{% endif %}
+{% endif %}
+!
+{% endfor %}

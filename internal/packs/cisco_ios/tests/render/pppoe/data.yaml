@@ -1,0 +1,21 @@
+# PPPoE clients (made-up values). expect.txt is the configuration the
+# tables must turn into. The number of the pool is that of the Dialer
+# interface.
+tables:
+  devices:
+    - hostname: rt-e01
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, description: sample wan a, enabled: true}
+    - {name: GigabitEthernet0/1, description: sample wan b, enabled: true}
+    - {name: GigabitEthernet0/2, description: sample wan c, enabled: true}
+    - {name: GigabitEthernet0/3, enabled: true, ipv4: 198.51.100.1/24}
+    - {name: Dialer1, enabled: true, ipv4: negotiated, mtu: 1454, tcp_mss: 1414}
+    - {name: Dialer2, enabled: true, ipv4: negotiated}
+    - {name: Dialer10, enabled: true, ipv4: "unnumbered:GigabitEthernet0/3"}
+  pppoe:
+    - {name: Dialer1, physical_if: GigabitEthernet0/0, logical_if: Dialer1, username: sample-a@example.com, password: dummy-pppoe-secret-a, auth: chap}
+    - {name: wan-sample-b, physical_if: GigabitEthernet0/1, logical_if: Dialer2, username: sample-b@example.com, password: dummy-pppoe-secret-b, auth: pap, service_name: svc-sample-b}
+    - {name: wan-sample-c, physical_if: GigabitEthernet0/2, logical_if: Dialer10, username: sample-c@example.com, password: dummy-pppoe-secret-c, auth: chap_pap}
+  static_routes:
+    - {prefix: 0.0.0.0/0, out_if: Dialer1}

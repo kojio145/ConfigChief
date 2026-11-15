@@ -1,0 +1,128 @@
+{# BGP. Syntax: cmdref 4.7 and 7.7. The device has one BGP process: every row
+   of the BGP table has to carry the same AS number. What belongs to the
+   global table is written right under "router bgp"; what belongs to a VRF
+   under "address-family ipv4 vrf <name>". #}
+{% set procs = t.bgp_processes %}
+{% if procs %}
+{% for b in procs %}
+{% if b.asn != procs[0].asn %}
+{{ fail('BGP の AS 番号が行によって違います（Cisco の BGP は機器に 1 つです。全部の行で同じ番号にしてください）') }}
+{% endif %}
+{% endfor %}
+router bgp {{ procs[0].asn }}
+{% for b in procs %}
+{% set pad = ' ' if not b.vrf else '  ' %}
+{% if not b.vrf %}
+{% if b.router_id %}
+ bgp router-id {{ b.router_id }}
+{% endif %}
+{% if b.log_neighbor_changes == true %}
+ bgp log-neighbor-changes
+{% endif %}
+{% else %}
+ address-family ipv4 vrf {{ b.vrf }}
+{% endif %}
+{% for n in t.bgp_neighbors %}
+{% if n.vrf == b.vrf %}
+{% set nb = pad ~ 'neighbor ' ~ n.neighbor %}
+{{ nb }} remote-as {{ n.remote_as }}
+{% if n.description %}
+{{ nb }} description {{ n.description }}
+{% endif %}
+{% if n.password %}
+{{ nb }} password {{ n.password }}
+{% endif %}
+{% if n.ebgp_multihop != '' %}
+{{ nb }} ebgp-multihop {{ n.ebgp_multihop }}
+{% endif %}
+{% if n.update_source %}
+{{ nb }} update-source {{ n.update_source }}
+{% endif %}
+{% if n.enabled == false %}
+{{ nb }} shutdown
+{% endif %}
+{% if n.next_hop_self == true %}
+{{ nb }} next-hop-self
+{% endif %}
+{% if n.soft_reconfig_in == true %}
+{{ nb }} soft-reconfiguration inbound
+{% endif %}
+{% if n.prefix_list_in %}
+{{ nb }} prefix-list {{ n.prefix_list_in }} in
+{% endif %}
+{% if n.prefix_list_out %}
+{{ nb }} prefix-list {{ n.prefix_list_out }} out
+{% endif %}
+{% if n.filter_in %}
+{{ nb }} route-map {{ n.filter_in }} in
+{% endif %}
+{% if n.filter_out %}
+{{ nb }} route-map {{ n.filter_out }} out
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for w in t.bgp_networks %}
+{% if w.vrf == b.vrf %}
+{{ pad }}network {{ w.prefix | ip }} mask {{ w.prefix | mask }}
+{% endif %}
+{% endfor %}
+{% for r in t.bgp_redistribute %}
+{% if r.vrf == b.vrf %}
+{% set src = r.source %}
+{% if src == 'ospf' %}
+{# The line names the OSPF process: the one of the same VRF. #}
+{% set pid = namespace(v='', n=0) %}
+{% for p in t.ospf_processes %}
+{% if p.vrf == b.vrf %}
+{% set pid.v = p.process_id %}
+{% set pid.n = pid.n + 1 %}
+{% endif %}
+{% endfor %}
+{% if pid.n != 1 %}
+{{ fail('BGP' ~ ('（VRF ' ~ b.vrf ~ '）' if b.vrf else '') ~ ' の再配布の元 ospf は、同じ VRF の OSPF のプロセスがちょうど 1 つのときだけ書けます（今は ' ~ pid.n ~ ' つ）') }}
+{% endif %}
+{% set src = 'ospf ' ~ pid.v %}
+{% endif %}
+{{ pad }}redistribute {{ src }}{{ ' metric ' ~ r.metric if r.metric != '' else '' }}{{ ' route-map ' ~ r.filter if r.filter else '' }}
+{% endif %}
+{% endfor %}
+{% if b.vrf %}
+ exit-address-family
+{% endif %}
+{% endfor %}
+!
+{% endif %}
+{# A row that belongs to no process is written nowhere. #}
+{% for n in t.bgp_neighbors %}
+{% set known = namespace(v=false) %}
+{% for b in procs %}
+{% if b.vrf == n.vrf %}
+{% set known.v = true %}
+{% endif %}
+{% endfor %}
+{% if not known.v %}
+{{ fail('BGP ネイバー ' ~ n.neighbor ~ ' の VRF「' ~ n.vrf ~ '」の行が、BGP の表にありません（AS 番号が要ります）') }}
+{% endif %}
+{% endfor %}
+{% for w in t.bgp_networks %}
+{% set known = namespace(v=false) %}
+{% for b in procs %}
+{% if b.vrf == w.vrf %}
+{% set known.v = true %}
+{% endif %}
+{% endfor %}
+{% if not known.v %}
+{{ fail('BGP 広告経路 ' ~ w.prefix ~ ' の VRF「' ~ w.vrf ~ '」の行が、BGP の表にありません（AS 番号が要ります）') }}
+{% endif %}
+{% endfor %}
+{% for r in t.bgp_redistribute %}
+{% set known = namespace(v=false) %}
+{% for b in procs %}
+{% if b.vrf == r.vrf %}
+{% set known.v = true %}
+{% endif %}
+{% endfor %}
+{% if not known.v %}
+{{ fail('BGP 再配布 ' ~ r.source ~ ' の VRF「' ~ r.vrf ~ '」の行が、BGP の表にありません（AS 番号が要ります）') }}
+{% endif %}
+{% endfor %}

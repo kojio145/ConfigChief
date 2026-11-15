@@ -1,0 +1,69 @@
+hostname rt-q11
+!
+class-map match-any cm-q-rest
+ match access-group 120
+ match any
+class-map match-all cm-q-video
+ match dscp 34 36
+ match precedence 4
+class-map match-any cm-q-voice
+ match dscp 46
+ match access-group name acl-q-voice
+!
+policy-map pm-q-in
+ class cm-q-voice
+  set dscp 46
+ class class-default
+  police cir 5000000 bc 8000 conform-action transmit exceed-action set-dscp-transmit 10
+  set precedence 0
+policy-map pm-q-lan
+ class cm-q-voice
+  priority level 1
+ class cm-q-video
+  priority 512
+ class cm-q-rest
+  bandwidth 2000
+  police cir 3000000 conform-action transmit exceed-action drop
+policy-map pm-q-out
+ class cm-q-voice
+  priority percent 20 4000
+ class cm-q-video
+  bandwidth remaining percent 40
+  queue-limit 64 packets
+ class cm-q-rest
+  bandwidth remaining percent 20
+  shape average 4000000 16000 0
+ class class-default
+  fair-queue
+policy-map shape-Gi0-0-0
+ class class-default
+  shape average 10000000
+  service-policy pm-q-out
+policy-map shape-Gi0-0-2
+ class class-default
+  shape average 2000000 8000
+!
+interface GigabitEthernet0/0/0
+ ip address 203.0.113.1 255.255.255.252
+ service-policy output shape-Gi0-0-0
+ no shutdown
+!
+interface GigabitEthernet0/0/1
+ ip address 192.0.2.1 255.255.255.0
+ service-policy input pm-q-in
+ service-policy output pm-q-lan
+ no shutdown
+!
+interface GigabitEthernet0/0/2
+ ip address 198.51.100.1 255.255.255.0
+ service-policy output shape-Gi0-0-2
+ no shutdown
+!
+ip access-list extended 120
+ permit ip 192.0.2.0 0.0.0.255 any
+!
+ip access-list extended acl-q-voice
+ permit ip any host 203.0.113.9 precedence 5
+ permit ip any any dscp 46
+!
+end

@@ -1,0 +1,13 @@
+table: tunnels
+title: {ja: トンネル, en: Tunnels}
+since: M4
+key: [device, if_name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: if_name, title: {ja: トンネル IF, en: Tunnel interface}, type: ifname, required: true, note: {ja: "アドレスはインタフェースのシートに書く", en: "The address goes on the Interfaces sheet"}}
+  - {name: type, title: {ja: 種類, en: Type}, type: enum, values: [gre, ipip, ipsec, l2tpv3], required: true, note: {ja: "ipsec は IPsec のシートのトンネル IF と対になる", en: "ipsec pairs with the tunnel interface on the IPsec sheet"}}
+  - {name: source, title: {ja: 送信元, en: Source}, type: string, or_ifname: true, note: {ja: "IF 名かアドレス。種類が ipsec 以外では必須", en: "An interface or an address. Needed unless the type is ipsec"}}
+  - {name: destination, title: {ja: 宛先, en: Destination}, type: ip4, note: {ja: "種類が ipsec 以外では必須", en: "Needed unless the type is ipsec"}}
+  - {name: key, title: {ja: 鍵（GRE）, en: Key (GRE)}, type: int}
+  - {name: keepalive_interval, title: {ja: 監視間隔（秒）, en: Keepalive interval (s)}, type: int}
+  - {name: keepalive_retry, title: {ja: 監視の再送回数, en: Keepalive retries}, type: int}

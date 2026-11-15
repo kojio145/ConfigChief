@@ -1,0 +1,20 @@
+table: fhrp
+title: {ja: 冗長化（VRRP・HSRP）, en: FHRP (VRRP and HSRP)}
+since: M3
+key: [device, if_name, group]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: if_name, title: {ja: IF 名, en: Interface}, type: ifname, required: true}
+  - {name: protocol, title: {ja: 方式, en: Protocol}, type: enum, values: [vrrp, hsrp], required: true, note: {ja: "hsrp は Cisco のみ", en: "hsrp is Cisco only"}}
+  - {name: group, title: {ja: グループ番号, en: Group}, type: int, required: true}
+  - {name: version, title: {ja: 版, en: Version}, type: enum, values: ["1", "2", "3"], explicit: true}
+  - {name: virtual_ip, title: {ja: 仮想 IP, en: Virtual IP}, type: ip4, required: true}
+  - {name: priority, title: {ja: 優先度, en: Priority}, type: int, min: 1, max: 254, explicit: true}
+  - {name: preempt, title: {ja: 切り戻し, en: Preempt}, type: bool, explicit: true}
+  - {name: preempt_delay, title: {ja: 切り戻し待ち（秒）, en: Preempt delay (s)}, type: int}
+  - {name: advert_interval, title: {ja: 広告・Hello 間隔（秒）, en: Advertisement or hello interval (s)}, type: int, explicit: true}
+  - {name: hold, title: {ja: Hold（秒）, en: Hold time (s)}, type: int, note: {ja: "hsrp のみ", en: "hsrp only"}}
+  - {name: auth_type, title: {ja: 認証, en: Authentication}, type: enum, values: [none, simple, md5]}
+  - {name: auth_key, title: {ja: 鍵, en: Key}, type: secret}
+  - {name: track, title: {ja: 回線監視, en: Track}, type: ref, ref: tracks.id}
+  - {name: track_decrement, title: {ja: 監視断のときの減点, en: Track decrement}, type: int}

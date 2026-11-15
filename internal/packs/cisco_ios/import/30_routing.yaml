@@ -1,0 +1,204 @@
+# Static routes, VRFs, OSPF and BGP (stages M1 and M3).
+# Syntax: cmdref 4.3, 4.5, 4.6, 4.7, 7.6, 7.7 and 7.10.
+rules:
+  # The order of the options in the output of the device is not confirmed, so
+  # "name" and "track" are read in any order. "tag", "permanent", "dhcp",
+  # "global" and "multicast" have no column: such a line stays unknown.
+  - id: route.static
+    match: '^ip route(?: vrf (?P<vrf>\S+))? (?P<net>\d+\.\d+\.\d+\.\d+) (?P<mask>\d+\.\d+\.\d+\.\d+)(?: (?P<ifn>[A-Za-z][\w/.:-]*))?(?: (?P<nh>\d+\.\d+\.\d+\.\d+))?(?: (?P<dist>\d+))?(?: name (?P<name>\S+)| track (?P<track>\d+))*$'
+    when: "(ifn or nh) and ifn not in ['name', 'track', 'tag', 'permanent', 'dhcp', 'global', 'multicast']"
+    row:
+      table: static_routes
+      key:
+        vrf: "{{ vrf }}"
+        prefix: "{{ net | with_mask(mask) | network }}"
+        next_hop: "{{ nh }}"
+        out_if: "{{ ifn | ifname }}"
+    set: {distance: "{{ dist }}", track: "{{ track }}", description: "{{ name }}"}
+
+  # ---- VRF ----
+  - id: vrf
+    match: '^(?:ip vrf|vrf definition) (?P<name>\S+)$'
+    row: {table: vrfs, key: {name: "{{ name }}"}}
+    children:
+      - id: vrf.rd
+        match: '^rd (?P<rd>\S+)$'
+        set: {rd: "{{ rd }}"}
+      - id: vrf.description
+        match: '^description (?P<text>.+)$'
+        set: {description: "{{ text }}"}
+      # The switch that makes the VRF carry IPv4: the dataset has no column
+      # for it, and the template always writes it.
+      - id: vrf.af
+        match: '^address-family ipv4$'
+        ignore: VRF で IPv4 を使う印（表に列がありません。生成では必ず書きます）
+      - id: vrf.af.end
+        match: '^exit-address-family$'
+        ignore: 終わりの印
+
+  # ---- OSPF ----
+  - id: ospf
+    match: '^router ospf (?P<pid>\d+)(?: vrf (?P<vrf>\S+))?$'
+    row: {table: ospf_processes, key: {process_id: "{{ pid }}"}}
+    set: {vrf: "{{ vrf }}"}
+    children:
+      - id: ospf.router_id
+        match: '^router-id (?P<id>\d+\.\d+\.\d+\.\d+)$'
+        set: {router_id: "{{ id }}"}
+      - id: ospf.reference_bandwidth
+        match: '^auto-cost reference-bandwidth (?P<n>\d+)$'
+        set: {reference_bandwidth: "{{ n }}"}
+      - id: ospf.area.type
+        match: '^area (?P<area>\S+) (?P<kind>stub|nssa)(?P<nosum> no-summary)?$'
+        row: {table: ospf_areas, key: {process_id: "{{ pid }}", area: "{{ area }}"}}
+        set: {type: "{{ ('totally_' if nosum else '') ~ kind }}"}
+      - id: ospf.area.range
+        match: '^area (?P<area>\S+) range (?P<ip>\d+\.\d+\.\d+\.\d+) (?P<mask>\d+\.\d+\.\d+\.\d+)(?: (?P<adv>advertise|not-advertise))?$'
+        row:
+          table: ospf_ranges
+          key: {process_id: "{{ pid }}", area: "{{ area }}", prefix: "{{ ip | with_mask(mask) | network }}"}
+        set: {advertise: "{{ 'true' if adv == 'advertise' else ('false' if adv == 'not-advertise' else '') }}"}
+      # "subnets" is read and not kept: the dataset has no column for it.
+      - id: ospf.redistribute
+        match: '^redistribute (?P<src>connected|static|rip|bgp \d+)(?: metric (?P<metric>\d+)| metric-type (?P<mtype>1|2)| subnets| route-map (?P<map>\S+))*$'
+        row:
+          table: ospf_redistribute
+          key: {process_id: "{{ pid }}", source: "{{ 'bgp' if src is startingwith('bgp') else src }}"}
+        set: {metric: "{{ metric }}", metric_type: "{{ mtype }}", filter: "{{ map }}"}
+      - id: ospf.default_originate
+        match: '^default-information originate(?P<always> always)?(?: metric (?P<metric>\d+))?$'
+        set: {default_originate: "{{ 'always' if always else 'when_present' }}", default_metric: "{{ metric }}"}
+      - id: ospf.passive.default
+        match: '^passive-interface default$'
+        set: {passive_default: true}
+      - id: ospf.passive
+        match: '^(?P<no>no )?passive-interface (?P<ifn>\S+)$'
+        emit:
+          - table: x_ospf_passive
+            key: {process_id: "{{ pid }}", if_name: "{{ ifn | ifname }}"}
+            set: {passive: "{{ 'false' if no else 'true' }}"}
+      - id: ospf.network
+        match: '^network (?P<addr>\d+\.\d+\.\d+\.\d+) (?P<wc>\d+\.\d+\.\d+\.\d+) area (?P<area>\S+)$'
+        emit:
+          - table: x_ospf_net
+            key: {process_id: "{{ pid }}", prefix: "{{ addr | with_wildcard(wc) | network }}"}
+            set: {area: "{{ area }}"}
+
+  # ---- BGP ----
+  # The lines of a neighbor, "network" and "redistribute" stand in three
+  # places: under "router bgp", under "address-family ipv4" and under
+  # "address-family ipv4 vrf". The rules are written once, under bgp.afv (the
+  # place where "vrf" is in sight), and the other two places borrow them with
+  # children_from. There "vrf" reads as "": the global table.
+  - id: bgp
+    match: '^router bgp (?P<asn>\d+)$'
+    row: {table: bgp_processes, key: {vrf: ""}}
+    set: {asn: "{{ asn }}"}
+    children_from: bgp.afv
+    children:
+      - id: bgp.router_id
+        match: '^bgp router-id (?P<id>\d+\.\d+\.\d+\.\d+)$'
+        set: {router_id: "{{ id }}"}
+      - id: bgp.log_neighbor_changes
+        match: '^bgp log-neighbor-changes$'
+        set: {log_neighbor_changes: true}
+
+      # A line that only holds other lines.
+      - id: bgp.af
+        match: '^address-family ipv4$'
+        children_from: bgp.afv
+
+      - id: bgp.afv
+        match: '^address-family ipv4 vrf (?P<vrf>\S+)$'
+        row: {table: bgp_processes, key: {vrf: "{{ vrf }}"}}
+        set: {asn: "{{ asn }}"}
+        children:
+          - id: bgp.neighbor.remote_as
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) remote-as (?P<ras>\d+)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {remote_as: "{{ ras }}"}
+          - id: bgp.neighbor.description
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) description (?P<text>.+)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {description: "{{ text }}"}
+          - id: bgp.neighbor.password
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) password (?:0 )?(?P<pw>\S+)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {password: "{{ pw }}"}
+          - id: bgp.neighbor.multihop
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) ebgp-multihop (?P<ttl>\d+)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {ebgp_multihop: "{{ ttl }}"}
+          - id: bgp.neighbor.update_source
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) update-source (?P<ifn>\S+)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {update_source: "{{ ifn | ifname }}"}
+          - id: bgp.neighbor.shutdown
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) shutdown$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {enabled: false}
+          - id: bgp.neighbor.next_hop_self
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) next-hop-self$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {next_hop_self: true}
+          - id: bgp.neighbor.soft_in
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) soft-reconfiguration inbound$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {soft_reconfig_in: true}
+          - id: bgp.neighbor.prefix_list
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) prefix-list (?P<list>\S+) (?P<dir>in|out)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {"prefix_list_{{ dir }}": "{{ list }}"}
+          - id: bgp.neighbor.route_map
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) route-map (?P<map>\S+) (?P<dir>in|out)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {"filter_{{ dir }}": "{{ map }}"}
+          # Without "mask" the length comes from the address class: not read.
+          - id: bgp.network
+            match: '^network (?P<net>\d+\.\d+\.\d+\.\d+) mask (?P<mask>\d+\.\d+\.\d+\.\d+)$'
+            row: {table: bgp_networks, key: {vrf: "{{ vrf }}", prefix: "{{ net | with_mask(mask) | network }}"}}
+          # The number of the OSPF process is read and not kept: the template
+          # writes that of the one process of the same VRF.
+          - id: bgp.redistribute
+            match: '^redistribute (?P<src>connected|static|rip|ospf \d+)(?: metric (?P<metric>\d+)| route-map (?P<map>\S+))*$'
+            row: {table: bgp_redistribute, key: {vrf: "{{ vrf }}", source: "{{ 'ospf' if src is startingwith('ospf') else src }}"}}
+            set: {metric: "{{ metric }}", filter: "{{ map }}"}
+
+      - id: bgp.af.end
+        match: '^exit-address-family$'
+        ignore: 終わりの印
+
+derive:
+  # An interface runs OSPF when a "network" line of a process has its address
+  # inside, or when the interface names the process itself.
+  - id: ospf.interface
+    for: interfaces
+    as: i
+    let:
+      oi: "lookup('x_ospf_if', if_name=i.name)"
+      net: "covering('x_ospf_net', 'prefix', i.ipv4)"
+      pid: "oi.process_id if oi.process_id else net.process_id"
+      proc: "lookup('ospf_processes', process_id=pid)"
+      pv: "lookup('x_ospf_passive', process_id=pid, if_name=i.name)"
+    when: "pid and proc.vrf == i.vrf"
+    row: {table: ospf_interfaces, key: {process_id: "{{ pid }}", if_name: "{{ i.name }}"}}
+    set:
+      area: "{{ oi.area if oi.area else net.area }}"
+      cost: "{{ oi.cost }}"
+      priority: "{{ oi.priority }}"
+      hello: "{{ oi.hello }}"
+      dead: "{{ oi.dead }}"
+      network_type: "{{ oi.network_type }}"
+      passive: "{{ pv.passive }}"
+      auth_type: "{{ oi.auth_type }}"
+      auth_key_id: "{{ oi.auth_key_id }}"
+      auth_key: "{{ oi.auth_key }}"
+
+  - id: hsrp.version
+    for: fhrp
+    as: f
+    let:
+      v: "lookup('x_hsrp_version', if_name=f.if_name)"
+    when: "v.version and f.protocol == 'hsrp'"
+    row: {table: fhrp, key: {if_name: "{{ f.if_name }}", group: "{{ f.group }}"}}
+    set: {version: "{{ v.version }}"}

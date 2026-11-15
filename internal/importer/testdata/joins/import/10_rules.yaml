@@ -1,0 +1,81 @@
+rules:
+  - id: host
+    match: '^hostname (?P<name>\S+)$'
+    row: {table: devices, key: {}}
+
+  # Several values on a line: blanks and commas both part them.
+  - id: servers
+    match: '^servers (?P<list>.+)$'
+    row: {table: devices, key: {}}
+    append: {name_servers: "{{ list }}"}
+
+  # One line for the whole device: a work table with an empty key.
+  - id: common.source
+    match: '^common source (?P<ifn>\S+)$'
+    emit:
+      - table: x_common
+        key: {}
+        set: {source_if: "{{ ifn | ifname }}"}
+
+  # A value nothing reads: the line goes back to unknown.
+  - id: common.spare
+    match: '^common spare (?P<text>\S+)$'
+    emit:
+      - table: x_common
+        key: {}
+        set: {spare: "{{ text }}"}
+
+  - id: if
+    match: '^interface (?P<name>\S+)$'
+    row:
+      table: interfaces
+      key: {name: "{{ name | ifname }}"}
+    children:
+      - id: if.ipv4
+        match: '^ip address (?P<ip>\S+) (?P<mask>\S+)$'
+        set: {ipv4: "{{ ip | with_mask(mask) }}"}
+
+  - id: net
+    match: '^area-net (?P<prefix>\S+) area (?P<area>\S+)$'
+    emit:
+      - table: x_net
+        key: {prefix: "{{ prefix | network }}"}
+        set: {area: "{{ area }}"}
+
+  - id: ntp
+    match: '^ntp (?P<server>\S+)$'
+    row: {table: ntp_servers, key: {server: "{{ server }}"}}
+
+  - id: relay
+    match: '^relay-servers (?P<ifn>\S+) (?P<list>.+)$'
+    emit:
+      - table: x_relay
+        key: {if_name: "{{ ifn | ifname }}"}
+        set: {servers: "{{ list }}"}
+
+derive:
+  # Over a table of the design data: one row for each interface whose address
+  # is inside a network; the smallest network wins.
+  - id: ospf.interface
+    for: interfaces
+    as: i
+    let:
+      net: "covering('x_net', 'prefix', i.ipv4)"
+    when: "net.area"
+    row: {table: ospf_interfaces, key: {process_id: "1", if_name: "{{ i.name }}"}}
+    set: {area: "{{ net.area }}"}
+
+  - id: ntp.source
+    for: ntp_servers
+    as: s
+    let:
+      g: "lookup('x_common')"
+    when: "g.source_if"
+    row: {table: ntp_servers, key: {server: "{{ s.server }}"}}
+    set: {source_if: "{{ g.source_if }}"}
+
+  - id: relay.each
+    for: x_relay
+    as: r
+    row: {table: interfaces, key: {name: "{{ r.if_name }}"}}
+    append: {dhcp_relay: "{{ r.servers }}"}

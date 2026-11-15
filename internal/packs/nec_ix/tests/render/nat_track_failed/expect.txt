@@ -1,0 +1,3 @@
+hostname ix-n02
+!
+watch-group wg-sample-route 10

@@ -1,0 +1,30 @@
+# Build artifacts
+/build/bin/
+/dist/
+*.exe
+
+# Wails (frontend/dist is hand-authored source here, so it is committed)
+/frontend/node_modules/
+/frontend/wailsjs/
+
+# Case folders made while trying the tool (never commit real project data)
+/cases/
+/testdata/local/
+*.local.yaml
+
+# Logs
+/logs/
+*.log
+
+# Python tooling
+__pycache__/
+
+# OS / editor
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
+
+# Secrets (API keys) — other projects use the same convention
+.env
+.env.*

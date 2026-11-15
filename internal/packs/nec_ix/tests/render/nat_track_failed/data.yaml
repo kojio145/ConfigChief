@@ -1,0 +1,19 @@
+# What the pack cannot write of line monitoring and NAT: each is told with
+# its reason, and no file is written (made-up values).
+tables:
+  devices:
+    - hostname: ix-n02
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.45/30}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 192.0.2.129/25}
+  tracks:
+    - {id: wg-sample-route, type: route, target: 198.51.100.0/24}
+  nat_rules:
+    # No interface outside.
+    - {name: nat1, type: static, local_ip: 192.0.2.130, global_ip: 198.51.100.130}
+    # A pool.
+    - {name: nat2, type: pat_pool, pool_start: 198.51.100.17, pool_end: 198.51.100.22, pool_prefix: 29, outside_if: GigaEthernet0.0}
+    # A forwarded port without the switch, to another address, to another port.
+    - {name: nat3, type: static_port, protocol: tcp, local_ip: 192.0.2.131, local_port: 8080, global_ip: 198.51.100.131, global_port: 80, outside_if: GigaEthernet1.0}
+findings: [G-601, G-606]

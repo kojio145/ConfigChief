@@ -1,0 +1,7 @@
+# Only lines that carry no setting: what the display adds, what the device
+# writes by itself, and the end mark (appendix B 3.5).
+ignore:
+  - {match: '^Building configuration\.\.\.$', reason: 表示上の行}
+  - {match: '^Current configuration : \d+ bytes$', reason: 表示上の行}
+  - {match: '^version \d+\.\d+$', reason: 機器が自動で付ける行}
+  - {match: '^end$', reason: 終わりの印}

@@ -1,0 +1,10 @@
+table: snmp_hosts
+title: {ja: SNMP 通知先, en: SNMP hosts}
+since: M1
+key: [device, host]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: host, title: {ja: 通知先, en: Host}, type: ip4, required: true}
+  - {name: version, title: {ja: 版, en: Version}, type: enum, values: ["1", 2c, "3"]}
+  - {name: community, title: {ja: コミュニティ, en: Community}, type: secret}
+  - {name: source_if, title: {ja: 送信元 IF, en: Source interface}, type: ifname}

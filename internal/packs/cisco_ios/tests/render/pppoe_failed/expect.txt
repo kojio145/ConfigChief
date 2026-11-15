@@ -1,0 +1,3 @@
+hostname rt-e05
+!
+end

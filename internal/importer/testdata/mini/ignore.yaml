@@ -1,0 +1,3 @@
+ignore:
+  - {match: '^service nagle$', reason: 機器が自動で付ける行}
+  - {match: '^end$', reason: 終わりの印}

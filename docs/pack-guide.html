@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>メーカーパックの書き方 - ConfigChief</title>
+<style>
+  :root { --ground:#f6f8fb; --panel:#fff; --panel-2:#eef2f7; --ink:#1b2430; --ink-soft:#4c5a6b; --line:#dde4ec; --accent:#2563eb; }
+  @media (prefers-color-scheme: dark) { :root { --ground:#0f141b; --panel:#171e28; --panel-2:#1f2835; --ink:#e6ebf2; --ink-soft:#aab6c5; --line:#2a3542; --accent:#6ea0ff; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink); font-family:"Segoe UI","Hiragino Sans","Noto Sans JP",system-ui,sans-serif; line-height:1.7; }
+  main { max-width:960px; margin:0 auto; padding:32px 20px 64px; }
+  nav { font-size:.9rem; margin-bottom:24px; } nav a { margin-right:14px; }
+  h1 { font-size:1.9rem; margin:0 0 16px; } h2 { font-size:1.3rem; margin:36px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line); } h3 { font-size:1.1rem; margin:24px 0 8px; }
+  a { color:var(--accent); }
+  code { background:var(--panel-2); padding:1px 5px; border-radius:4px; font-size:.92em; }
+  pre { background:var(--panel-2); padding:12px 14px; border-radius:8px; overflow-x:auto; line-height:1.5; } pre code { background:none; padding:0; }
+  table { border-collapse:collapse; margin:12px 0; display:block; overflow-x:auto; } th, td { border:1px solid var(--line); padding:5px 9px; vertical-align:top; } th { background:var(--panel-2); text-align:left; }
+  blockquote { margin:12px 0; padding:8px 16px; border-left:4px solid #e0a800; background:var(--panel); }
+  img { max-width:100%; height:auto; border:1px solid var(--line); border-radius:8px; }
+  footer { margin-top:48px; color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--line); padding-top:16px; }
+</style>
+</head>
+<body>
+<main>
+<nav><a href="index.html">ConfigChief</a><a href="manual.html">使い方</a><a href="tables.html">シートと列</a><a href="checks.html">チェック</a><a href="pack-guide.html">パックの書き方</a><a href="https://github.com/kojio145/ConfigChief">GitHub</a></nav>
+<h1>メーカーパックの書き方</h1>
+<p>ConfigChief の本体は、メーカーを知りません。コンフィグの読み方・書き方・語の対応は、すべて「メーカーパック」というフォルダ（YAML とテンプレートのテキスト）にあります。新しいメーカーや新しい設定は、パックを足す・直すことで対応します。プログラムは直しません。</p>
+<p>同梱のパック（<code>internal/packs/cisco_ios</code>・<code>internal/packs/nec_ix</code>）が、いちばんの見本です。このページと並べて読んでください。</p>
+<h2>1. はじめに決まりを 4 つ</h2>
+<ol>
+<li><b>確かめていない書き方は、規則にしない。</b> 読めない行は「未対応」として人に見えます。誤って読むより安全です。メーカーが公開しているコマンドリファレンスで構文を確かめ、資料の名前と版を README に書きます</li>
+<li><b>取り込みの規則とテンプレートは、対で書く。</b> 書き出した文面を同じパックで読み直し、元の表と同じになることを、ツールが毎回確かめます（往復の確認）</li>
+<li><b>黙って落とさない。</b> 設定として意味のある行を「無視」に入れてはいけません。書けない値は、テンプレートで理由と直し方を付けて止めます</li>
+<li><b>見本は架空の値で書く。</b> アドレスは例示用（<code>192.0.2.0/24</code>・<code>198.51.100.0/24</code>・<code>203.0.113.0/24</code>・<code>2001:db8::/32</code>）、AS 番号は <code>64496</code>〜<code>64511</code>、名前は <code>example.com</code>・<code>rt-a01</code> のような自作のものを使います。現場で見た値は、形を変えても使いません</li>
+</ol>
+<h2>2. 作って試す</h2>
+<pre><code>packs/&lt;パックの ID&gt;/
+  pack.yaml        基本の情報、メーカーの判定、文面の形、IF 名、端末ログの切り出し
+  ignore.yaml      無視する行
+  import/*.yaml    取り込みの規則（ファイル名の順に読む）
+  defaults.yaml    行が無いときの機器の動き（既定値）
+  lexicon.yaml     語の対応（中立の語 ↔ メーカーの語）
+  render.yaml      コンフィグを書く順番
+  templates/*.j2   テンプレート
+  adapt.yaml       このメーカーの書き方への置き換え（要るときだけ）
+  errors.yaml      機器のエラーメッセージの形（投入ログのチェック用）
+  words.txt        コマンドの語（未対応の行の持ち出し用レポートで残す語。無くてもよい）
+  tests/import/&lt;名前&gt;/input.txt, expect.yaml
+  tests/render/&lt;名前&gt;/data.yaml, expect.txt
+  README.md        対応の一覧、参照した資料、確かめていないこと</code></pre>
+<ul>
+<li>案件フォルダの <code>packs/</code> に置いたパックは、同じ ID の同梱パックより優先されます。まず同梱のパックを写して、案件の中で直して試すのが早道です</li>
+<li><code>ConfigChief.exe pack test &lt;フォルダ&gt;</code> が、パックの検査と試験を行います。<code>--lines</code> を付けると行ごとの状態、<code>--dump</code> を付けるとできた表が出ます</li>
+<li><code>ConfigChief.exe pack columns &lt;フォルダ&gt;</code> が、パックが読む列・書く列の一覧を出します</li>
+<li>表と列の一覧は <a href="tables.html">tables.md</a> です。規則とテンプレートでは、内部名（<code>interfaces</code>・<code>ipv4</code> など）を使います</li>
+</ul>
+<h2>3. pack.yaml</h2>
+<pre><code>id: sample_os
+title: {ja: &#34;見本の OS&#34;, en: &#34;Sample OS&#34;}
+version: 0.1.0
+schema: 1
+syntax: indent                  # indent = 字下げで親子が決まる。flat = すべての行が同じ階層
+comment_prefixes: [&#34;!&#34;]
+output: {encoding: utf-8, newline: lf, indent: &#34; &#34;}
+end_marker: &#39;^end$&#39;             # 無ければ「途中で切れている疑い」と知らせる
+
+detect:                         # 当たった行の点を足し、合計の高いパックを選ぶ
+  - {match: &#39;^interface GigabitEthernet\d&#39;, score: 2}
+  - {match: &#39;^line vty \d+&#39;, score: 2}
+
+hostname: &#39;^hostname (?P&lt;name&gt;\S+)$&#39;
+
+interfaces:
+  types:
+    - {name: GigabitEthernet, short: [Gi, Gig], kind: physical}
+    - {name: Loopback, short: [Lo], kind: loopback}
+    - {name: Tunnel, short: [Tu], kind: tunnel}
+  subif: &#39;^(?P&lt;parent&gt;.+)\.(?P&lt;n&gt;\d+)$&#39;
+
+session:                        # 端末ログから、設定の部分だけを切り出す
+  prompt: &#39;^(?P&lt;host&gt;[\w.\-]+)(\((?P&lt;mode&gt;[^)]+)\))?[&gt;#]&#39;
+  show_config: [&#39;^show running-config$&#39;]
+  pager: [&#39;--More--&#39;]</code></pre>
+<ul>
+<li><b>判定</b>: 文面の先頭 500 行に <code>detect</code> を当てます。合計が 3 点未満か、1 位と 2 位の差が 2 点未満なら、人が選びます</li>
+<li><b>IF 名</b>: フィルタ <code>ifname</code> が省略形を正式な名前に直します。<code>Null</code>・<code>on</code>・<code>yes</code>・<code>no</code> のような名前は、YAML が別の値として読むので引用符で囲みます（<code>name: &#34;Null&#34;</code>）</li>
+<li><b>端末ログ</b>: <code>show_config</code> は行の終わり（<code>$</code>）まで書きます（<code>show running-config interface …</code> のような一部の表示を、全体として拾わないため）。<code>pager</code> は跡そのものだけを書きます</li>
+</ul>
+<h2>4. 取り込みの規則（import/*.yaml）</h2>
+<pre><code>rules:
+  - id: if
+    match: &#39;^interface (?P&lt;name&gt;\S+)$&#39;
+    row: {table: interfaces, key: {name: &#34;{{ name | ifname }}&#34;}}
+    children:
+      - id: if.description
+        match: &#39;^description (?P&lt;v&gt;.+)$&#39;
+        set: {description: &#34;{{ v }}&#34;}
+      - id: if.ipv4
+        match: &#39;^ip address (?P&lt;ip&gt;\S+) (?P&lt;mask&gt;\S+)$&#39;
+        set: {ipv4: &#34;{{ ip | with_mask(mask) }}&#34;}
+      - id: if.ipv4.secondary
+        match: &#39;^ip address (?P&lt;ip&gt;\S+) (?P&lt;mask&gt;\S+) secondary$&#39;
+        append: {ipv4_secondary: &#34;{{ ip | with_mask(mask) }}&#34;}
+      - id: if.shutdown
+        match: &#39;^shutdown$&#39;
+        set: {enabled: false}</code></pre>
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>id</td><td>規則の名前（パックの中で 1 つ）。行の対応と試験に出ます</td></tr>
+<tr><td>match</td><td>正規表現（Go の RE2）。行の全体に当てるので <code>^</code> と <code>$</code> を書きます。<code>(?P&lt;名前&gt;…)</code> で取った値が変数になります</td></tr>
+<tr><td>when</td><td>追加の条件（式）。偽なら、当たらなかったことにします</td></tr>
+<tr><td>row</td><td>行を開きます（<code>table</code> と <code>key</code>）。同じキーの行があれば、その行に足します</td></tr>
+<tr><td>set</td><td>開いている行の列に値を入れます。空になった値は入れません</td></tr>
+<tr><td>append</td><td>複数の値を持つ列に値を足します（空白とカンマで区切って、その数だけ）</td></tr>
+<tr><td>emit</td><td>別の表に行を作ります（<code>table</code>・<code>key</code>・<code>set</code>・<code>append</code>）</td></tr>
+<tr><td>children</td><td>子の行に当てる規則</td></tr>
+<tr><td>children_from</td><td>別の規則の ID。その規則の <code>children</code> を、ここでも使います</td></tr>
+<tr><td>ignore</td><td>理由の文。この行を「無視」にします（子の行の中で使います）</td></tr>
+</table>
+<p>当て方の決まり:</p>
+<ul>
+<li>照合する文面は、行頭の字下げと行末の空白を除き、連続した空白を 1 つにしたものです</li>
+<li>同じ階層の規則は、ファイル名の順 → 書いた順に試し、<b>最初に当たった 1 つ</b>を使います。限定的な規則を先に書きます</li>
+<li>どの規則にも当たらない行は「未対応」です。その子もすべて「未対応」です</li>
+<li>値は、入れるときに列の型の書き方に直します（<code>01500</code> → <code>1500</code>、<code>Gi0/1</code> → 正式な IF 名）。型に合わない値の行は、何も入れずに「未対応」になります</li>
+<li><code>row</code> のキーには、機器（ホスト名）が自動で入ります</li>
+<li><code>match</code> だけで値を入れない規則が書けるのは、子の行を持つ入れ物の行（<code>address-family ipv4</code> など）と、「列が空であること」と同じ意味の行（<code>no ip address</code> など）だけです。README に一覧を書きます</li>
+</ul>
+<p>式（<code>{{ }}</code> の中と <code>when</code>）は Jinja2 の書き方です。取り出した名前のほか、<code>parent</code>（直近の親の規則で取った値）、<code>row</code>（開いている行）、<code>device</code>（ホスト名）が使えます。</p>
+<h3>4.1 無視する行（ignore.yaml）</h3>
+<pre><code>ignore:
+  - {match: &#39;^Building configuration&#39;, reason: 表示上の行}
+  - {match: &#39;^version \d&#39;, reason: 機器が自動で付ける行}
+  - {match: &#39;^end$&#39;, reason: 終わりの印}</code></pre>
+<p>入れてよいのは、表示上の行・機器が自動で付ける行・終わりの印だけです。</p>
+<h3>4.2 分かれて書かれた設定をまとめる（derive）</h3>
+<p>1 つの設定がいくつかの場所に分かれているメーカーでは、いったん作業用の表（名前が <code>x_</code> で始まる。列は自由）に入れ、すべての行を読み終えてからまとめます。</p>
+<pre><code>derive:
+  - id: nat.pool.join
+    for: x_nat_use                # 作業用の表の 1 行ずつを u として回す
+    as: u
+    let:
+      pool: &#34;lookup(&#39;x_nat_pool&#39;, name=u.pool)&#34;
+    when: &#34;pool.start&#34;
+    row: {table: nat_rules, key: {name: &#34;{{ u.name }}&#34;}}
+    set: {pool_start: &#34;{{ pool.start }}&#34;, pool_end: &#34;{{ pool.end }}&#34;}</code></pre>
+<ul>
+<li><code>lookup(表, 列=値, …)</code> は 1 行、<code>first(表, …)</code> は最初の 1 行、<code>rows(表, …)</code> はすべての行を返します。<code>covering(表, 列, アドレス)</code> は、アドレスを含むいちばん細かいネットワークの行を返します</li>
+<li><b>どの derive にも使われなかった作業用の行は、元の行が「未対応」に戻ります。</b> 使われなかった値も同じです。作業用の表に入れただけでは「取り込み済み」になりません</li>
+<li><code>remove: true</code> の derive は、別の表に写し終えた行を表から外します（例: IPsec が通信を選ぶためだけに使うアクセスリスト）。<code>when</code> に「写し終えたこと」と「ほかの設定が使っていないこと」を必ず書きます</li>
+</ul>
+<h3>4.3 既定値（defaults.yaml）</h3>
+<pre><code>defaults:
+  - {table: interfaces, column: enabled, value: true}
+  - {table: ospf_interfaces, column: hello, value: 10, when: &#34;row.network_type in [&#39;broadcast&#39;, &#39;&#39;]&#34;}</code></pre>
+<p>行が無いときの機器の動きを書きます。取り込みでは空の列を埋め、書き出しでは「明示」の列が空のときに使います。<b>コマンドリファレンスで確かめた値だけ</b>を書きます。</p>
+<h3>4.4 語の対応（lexicon.yaml）</h3>
+<pre><code>ike_encryption:          # 種類の名前
+  aes256: &#34;aes 256&#34;      # 中立の語: メーカーの語
+  aes128: aes</code></pre>
+<p>テンプレートでは <code>{{ r.ike_encryption | lex(&#39;ike_encryption&#39;) }}</code>（中立 → メーカー）、取り込みでは <code>{{ v | unlex(&#39;ike_encryption&#39;) }}</code>（メーカー → 中立）と書きます。対応が無い語は、取り込みでは「未対応」、書き出しではエラー（G-603）になります。</p>
+<h2>5. 書き出し（render.yaml と templates/）</h2>
+<pre><code># render.yaml
+sections:
+  - {id: system,     template: system.j2}
+  - {id: interfaces, template: interfaces.j2}
+  - {id: extra,      slot: extra}       # 追加コンフィグが入る場所
+  - {id: footer,     template: footer.j2}</code></pre>
+<pre><code>{# templates/interfaces.j2 #}
+{% for i in t.interfaces %}
+interface {{ i.name }}
+{% if i.description %}
+ description {{ i.description }}
+{% endif %}
+{% if i.ipv4 is cidr %}
+ ip address {{ i.ipv4 | ip }} {{ i.ipv4 | mask }}
+{% endif %}
+{% if i.enabled == false %}
+ shutdown
+{% endif %}
+!
+{% endfor %}</code></pre>
+<p>テンプレートで使える値: <code>device</code>（機器の行）、<code>t.表の名前</code>（その機器の行の並び）、<code>all.表の名前</code>（全機器の行。相手の値を引くとき）、<code>project</code>（案件の設定）。</p>
+<table>
+<tr><th>フィルタ・関数</th><th>内容</th></tr>
+<tr><td>ip / mask / wildcard / prefixlen / network / broadcast</td><td><code>192.0.2.1/30</code> から、アドレス・マスク・ワイルドカード・長さ・ネットワーク・ブロードキャスト</td></tr>
+<tr><td>with_mask(m) / with_wildcard(w)</td><td>アドレスとマスク（ワイルドカード）から <code>アドレス/長さ</code> を作る</td></tr>
+<tr><td>ifname / ifshort</td><td>IF 名を正式な形／省略形にする</td></tr>
+<tr><td>lex(種類) / unlex(種類)</td><td>語の対応</td></tr>
+<tr><td>required(文)</td><td>空ならエラーにする（G-606）。例 <code>{{ r.outside_if | required(&#39;外側 IF&#39;) }}</code></td></tr>
+<tr><td>fail(文)</td><td>エラーにして止める（G-601）。文には、理由と直し方を書きます</td></tr>
+<tr><td>is cidr / is digits</td><td>値が「アドレス/長さ」の形か／数字だけか</td></tr>
+</table>
+<p>書くときの決まり:</p>
+<ul>
+<li>ブロック（<code>{% … %}</code>）は 1 行に 1 つ、単独で書きます（その行は出力に残りません）</li>
+<li>真偽の値をそのまま出しません（<code>True</code> と出ます）。<code>{{ &#39;no &#39; if not x }}</code> のように文字にします</li>
+<li>文字の加工は、メソッド（<code>.split()</code>）ではなくフィルタ（<code>| split</code>）で書きます</li>
+<li>割り算 <code>/</code> は小数になります。整数にするなら <code>//</code> を使います</li>
+<li><code>default</code> フィルタは使いません（空の値を黙って別の値にするため）</li>
+</ul>
+<p><b>読まなかった値は、G-602 として指摘されます。</b> 表に値があるのに、どのテンプレートも読まなかったセルです。別メーカーから来た値を、このパックが書けないときに出ます。「このメーカーには無い設定」と宣言して黙らせる仕組みは、わざと作っていません。</p>
+<h3>5.1 このメーカーの書き方への置き換え（adapt.yaml）</h3>
+<p>表にある設定を、このメーカーが<b>別の形でなら書ける</b>とき、パックが書き出しの前に行を置き換えられます。置き換えたことは、必ず G-614（警告）で知らせます。</p>
+<pre><code>adapt:
+  - id: qos.remaining
+    for: qos_policies
+    as: p
+    when: &#34;p.bandwidth_remaining&#34;
+    row: {table: qos_policies, key: {policy: &#34;{{ p.policy }}&#34;, class: &#34;{{ p.class }}&#34;}}
+    set: {bandwidth_percent: &#34;{{ p.bandwidth_remaining }}&#34;}
+    clear: [bandwidth_remaining]
+    note: &#34;「帯域（残りの %）」はこの機種に無いので、「帯域（%）」として書きます&#34;</code></pre>
+<ul>
+<li>書き方は derive と同じです。足したのは <code>clear</code>（<code>for</code> の行の列を空にする）と <code>note</code>（知らせる文。必須。空の文になった回は知らせません）</li>
+<li>扱えるのは設計データの表だけです。パラメータブックは変えません。テンプレートと往復の確認は、置き換えた後の行を見ます</li>
+<li><b>書けない値を黙って落とすためには使いません。</b> 動きが変わる置き換えは、使う人が「それでよい」と言ったものだけにします</li>
+</ul>
+<h2>6. 試験</h2>
+<pre><code># tests/import/basic/expect.yaml
+tables:
+  interfaces:
+    - {name: GigabitEthernet0/0, description: sample wan, ipv4: 192.0.2.1/30, enabled: true}
+unknown:                 # 「未対応」になるはずの行（これ以外が未対応になると不合格）
+  - &#34;ip sla 10&#34;</code></pre>
+<pre><code># tests/render/basic/data.yaml
+tables:
+  devices:
+    - {hostname: rt-a01, vendor: sample_os}
+  interfaces:
+    - {name: GigabitEthernet0/0, ipv4: 192.0.2.1/30, enabled: true}
+findings: []             # 出るはずの指摘の ID（例 [G-601]）。書かなければ「指摘なし」を期待</code></pre>
+<ul>
+<li>取り込みの試験は、<code>input.txt</code> を読んで、<code>expect.yaml</code> に書いた行と値があること、未対応の行が一覧と同じであることを確かめます</li>
+<li>書き出しの試験は、<code>data.yaml</code> から作った文面が <code>expect.txt</code> と同じであること、読み直した結果が表と同じであることを確かめます</li>
+<li>うまく書けないときの形（<code>fail</code> で止まること）も、試験にしておきます</li>
+</ul>
+<h2>7. パックの検査</h2>
+<p><code>pack test</code> と起動のときに、次を確かめます。誤りがあるパックは読み込みません。</p>
+<ul>
+<li>YAML として読める。正規表現が読める（<code>^</code> <code>$</code> の無い規則は警告）</li>
+<li>規則・derive・既定値が指す表と列が、定義にある。キーの列がその表のキーである。複数の値の列に <code>append</code>、1 つの値の列に <code>set</code> を使っている</li>
+<li>決まった値（<code>set: {speed: auto}</code>）と既定値が、列の型に合う</li>
+<li><code>lex</code>・<code>unlex</code> の種類が lexicon.yaml にある。メーカーの語が重なっていない</li>
+<li>規則と derive の ID が重なっていない</li>
+<li>入れる規則があるのに、どこからも使われない作業用の表がない</li>
+</ul>
+<h2>8. README に書くこと</h2>
+<p>使う人が「取り込み済み」の意味を確かめられるように、次を書きます。</p>
+<ul>
+<li>対応の一覧（読める行と、入る表）。取り込みだけで書き出せないものは、そう書く</li>
+<li>参照した資料の名前と版、確かめた機種と版</li>
+<li><b>値を入れない規則</b>と、その理由</li>
+<li><b>読んで、表には入れない語</b>（行は「取り込み済み」になるが、行の一部を入れる列が無いもの）</li>
+<li><b>読まない行</b>（見本で「未対応」になる行と、その理由）</li>
+<li><b>確かめていないこと</b>（資料に決まりが無かった点。実機の出力が手に入ったら、ここから確かめる）</li>
+</ul>
+<footer>ConfigChief (MIT License) by KJO. このページは docs/ の Markdown から作っています。</footer>
+</main>
+</body>
+</html>

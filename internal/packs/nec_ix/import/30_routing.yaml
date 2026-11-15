@@ -1,0 +1,161 @@
+# Static routes, OSPF and BGP (stages M1 and M3).
+# Syntax: cmdref 4.3, 4.5, 4.6 and 4.7.
+rules:
+  # The next hop and the interface stand in either order. "connected",
+  # "metric", "tag" and "dhcp" have no column: such a line stays unknown.
+  - id: route.static
+    match: '^ip route(?: vrf (?P<vrf>\S+))? (?P<dst>default|\d+\.\d+\.\d+\.\d+/\d+)(?: (?P<nh>\d+\.\d+\.\d+\.\d+))?(?: (?P<ifn>[A-Za-z][A-Za-z-]*\d+(?::\d+)?\.\d+|BVI\d+))?(?: (?P<nh2>\d+\.\d+\.\d+\.\d+))?(?: distance (?P<dist>\d+))?$'
+    when: "(nh or ifn) and not (nh and nh2)"
+    row:
+      table: static_routes
+      key:
+        vrf: "{{ vrf }}"
+        prefix: "{{ '0.0.0.0/0' if dst == 'default' else (dst | network) }}"
+        next_hop: "{{ nh if nh else nh2 }}"
+        out_if: "{{ ifn | ifname }}"
+    set: {distance: "{{ dist }}"}
+
+  # ---- OSPF ----
+  - id: ospf
+    match: '^ip router ospf (?P<pid>\d+)$'
+    row: {table: ospf_processes, key: {process_id: "{{ pid }}"}}
+    children:
+      - id: ospf.router_id
+        match: '^router-id (?P<id>\d+\.\d+\.\d+\.\d+)$'
+        set: {router_id: "{{ id }}"}
+      # The other options of "nssa" have no column.
+      - id: ospf.area.type
+        match: '^area (?P<area>\S+) (?P<kind>stub|nssa)(?P<nosum> no-summary)?$'
+        row: {table: ospf_areas, key: {process_id: "{{ pid }}", area: "{{ area }}"}}
+        set: {type: "{{ ('totally_' if nosum else '') ~ kind }}"}
+      - id: ospf.area.range
+        match: '^area (?P<area>\S+) range (?P<prefix>\d+\.\d+\.\d+\.\d+/\d+) (?P<adv>advertise|not-advertise)$'
+        row:
+          table: ospf_ranges
+          key: {process_id: "{{ pid }}", area: "{{ area }}", prefix: "{{ prefix | network }}"}
+        set: {advertise: "{{ 'true' if adv == 'advertise' else 'false' }}"}
+      # The AS number after "bgp" is read and not kept; "tag" has no column.
+      - id: ospf.redistribute
+        match: '^redistribute (?P<src>connected|static|rip|bgp(?: \d+)?)(?: metric (?P<metric>\d+))?(?: metric-type (?P<mtype>1|2))?(?: route-map (?P<map>\S+))?$'
+        row:
+          table: ospf_redistribute
+          key: {process_id: "{{ pid }}", source: "{{ 'bgp' if src is startingwith('bgp') else src }}"}
+        set: {metric: "{{ metric }}", metric_type: "{{ mtype }}", filter: "{{ map }}"}
+      - id: ospf.default_originate
+        match: '^originate-default(?P<always> always)?(?: metric (?P<metric>\d+))?$'
+        set: {default_originate: "{{ 'always' if always else 'when_present' }}", default_metric: "{{ metric }}"}
+      - id: ospf.passive
+        match: '^passive-interface (?P<ifn>[A-Za-z]\S*)$'
+        emit:
+          - table: x_ospf_passive
+            key: {process_id: "{{ pid }}", if_name: "{{ ifn | ifname }}"}
+            set: {passive: "true"}
+      # A network is given by its prefix or by the name of an interface.
+      - id: ospf.network
+        match: '^network (?P<prefix>\d+\.\d+\.\d+\.\d+/\d+) area (?P<area>\S+)$'
+        emit:
+          - table: x_ospf_net
+            key: {process_id: "{{ pid }}", prefix: "{{ prefix | network }}"}
+            set: {area: "{{ area }}"}
+      - id: ospf.network.interface
+        match: '^network (?P<ifn>[A-Za-z]\S*) area (?P<area>\S+)$'
+        emit:
+          - table: x_ospf_netif
+            key: {if_name: "{{ ifn | ifname }}"}
+            set: {process_id: "{{ pid }}", area: "{{ area }}"}
+
+  # ---- BGP ----
+  # What belongs to the session stands under "router bgp"; what belongs to the
+  # routes stands under "address-family ipv4 unicast".
+  - id: bgp
+    match: '^router bgp (?P<asn>\d+)$'
+    row: {table: bgp_processes, key: {vrf: ""}}
+    set: {asn: "{{ asn }}"}
+    children:
+      - id: bgp.router_id
+        match: '^router-id (?P<id>\d+\.\d+\.\d+\.\d+)$'
+        set: {router_id: "{{ id }}"}
+      - id: bgp.neighbor.remote_as
+        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) remote-as (?P<ras>\d+)$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {remote_as: "{{ ras }}"}
+      - id: bgp.neighbor.update_source
+        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) update-source (?P<ifn>[A-Za-z]\S*)$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {update_source: "{{ ifn | ifname }}"}
+      - id: bgp.neighbor.description
+        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) description (?P<text>.+)$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {description: "{{ text }}"}
+      - id: bgp.neighbor.password
+        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) password (?P<pw>\S+)$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {password: "{{ pw }}"}
+      - id: bgp.neighbor.ebgp_multihop
+        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) ebgp-multihop (?P<ttl>\d+)$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {ebgp_multihop: "{{ ttl }}"}
+      - id: bgp.neighbor.timers
+        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) timers (?P<ka>\d+) (?P<hold>\d+)$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {keepalive: "{{ ka }}", holdtime: "{{ hold }}"}
+      - id: bgp.neighbor.shutdown
+        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) shutdown$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {enabled: false}
+
+      # A line that only holds the lines under it.
+      - id: bgp.af
+        match: '^address-family ipv4(?: unicast)?$'
+        children:
+          - id: bgp.af.network
+            match: '^network (?P<prefix>\d+\.\d+\.\d+\.\d+/\d+)$'
+            row: {table: bgp_networks, key: {vrf: "", prefix: "{{ prefix | network }}"}}
+          # With the number of an OSPF process the line stays unknown.
+          - id: bgp.af.redistribute
+            match: '^redistribute (?P<src>connected|static|rip|ospf)(?: metric (?P<metric>\d+))?(?: route-map (?P<map>\S+))?$'
+            row: {table: bgp_redistribute, key: {vrf: "", source: "{{ src }}"}}
+            set: {metric: "{{ metric }}", filter: "{{ map }}"}
+          - id: bgp.af.neighbor.prefix_list
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) distribute-list (?P<list>\S+) (?P<dir>in|out)$'
+            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {"prefix_list_{{ dir }}": "{{ list }}"}
+          - id: bgp.af.neighbor.route_map
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) route-map (?P<map>\S+) (?P<dir>in|out)$'
+            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {"filter_{{ dir }}": "{{ map }}"}
+          - id: bgp.af.neighbor.next_hop_self
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) next-hop-self$'
+            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {next_hop_self: true}
+          - id: bgp.af.neighbor.send_default
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) send-default$'
+            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {default_originate: true}
+
+derive:
+  # An interface runs OSPF when a "network" line names it, or has its address
+  # inside. A process is not tied to a VRF here, so an interface in a VRF is
+  # left out.
+  - id: ospf.interface
+    for: interfaces
+    as: i
+    let:
+      oi: "lookup('x_ospf_if', if_name=i.name)"
+      nif: "lookup('x_ospf_netif', if_name=i.name)"
+      net: "covering('x_ospf_net', 'prefix', i.ipv4)"
+      pid: "nif.process_id if nif.process_id else net.process_id"
+      pv: "lookup('x_ospf_passive', process_id=pid, if_name=i.name)"
+    when: "pid and not i.vrf"
+    row: {table: ospf_interfaces, key: {process_id: "{{ pid }}", if_name: "{{ i.name }}"}}
+    set:
+      area: "{{ nif.area if nif.process_id else net.area }}"
+      cost: "{{ oi.cost }}"
+      priority: "{{ oi.priority }}"
+      hello: "{{ oi.hello }}"
+      dead: "{{ oi.dead }}"
+      network_type: "{{ oi.network_type }}"
+      passive: "{{ pv.passive }}"
+      auth_type: "{{ oi.auth_type }}"
+      auth_key_id: "{{ oi.auth_key_id }}"
+      auth_key: "{{ oi.auth_key }}"

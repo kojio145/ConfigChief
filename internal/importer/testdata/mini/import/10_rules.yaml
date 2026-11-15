@@ -1,0 +1,102 @@
+rules:
+  - id: host
+    match: '^hostname (?P<name>\S+)$'
+    row: {table: devices, key: {}}
+
+  - id: banner
+    match: '^banner login .*$'
+    row: {table: devices, key: {}}
+    set: {banner: "{{ body }}"}
+
+  - id: snmp.location
+    match: '^snmp location (?P<text>.+)$'
+    row: {table: devices, key: {}}
+    set: {snmp_location: "{{ text }}", note: "line {{ line.number }}"}
+
+  - id: if
+    match: '^interface (?P<name>\S+)$'
+    row:
+      table: interfaces
+      key: {name: "{{ name | ifname }}"}
+    children:
+      - id: if.description
+        match: '^description (?P<text>.+)$'
+        set: {description: "{{ text }}"}
+      - id: if.ipv4
+        match: '^ip address (?P<ip>\S+) (?P<mask>\S+)$'
+        set: {ipv4: "{{ ip | with_mask(mask) }}"}
+      - id: if.helper
+        match: '^helper (?P<server>\S+)$'
+        append: {dhcp_relay: "{{ server }}"}
+      - id: if.shutdown
+        match: '^shutdown$'
+        set: {enabled: false}
+      - id: if.note
+        match: '^note (?P<text>.+)$'
+        set: {note: "{{ parent.name }}/{{ row.description }}/{{ text }}"}
+      - id: if.empty
+        match: '^alias(?P<text>.*)$'
+        set: {note: "{{ text }}"}
+      - id: if.bad
+        match: '^bad address (?P<ip>\S+)$'
+        set: {ipv4: "{{ ip | with_mask('255.0.255.0') }}"}
+      - id: if.tunnel
+        match: '^tunnel-profile (?P<profile>\S+)$'
+        emit:
+          - table: x_tunnel_bind
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {profile: "{{ profile }}"}
+
+  - id: profile
+    match: '^profile (?P<name>\S+)$'
+    row:
+      table: x_profiles
+      key: {name: "{{ name }}"}
+    children:
+      - id: profile.peer
+        match: '^peer (?P<addr>\S+)$'
+        set: {peer: "{{ addr }}"}
+      - id: profile.color
+        match: '^color (?P<color>\S+)$'
+        set: {color: "{{ color }}"}
+
+  - id: ntp
+    match: '^ntp server (?P<server>\S+)$'
+    row:
+      table: ntp_servers
+      key: {server: "{{ server }}"}
+
+  - id: user.admin
+    match: '^user (?P<name>\S+) role (?P<role>\S+)$'
+    when: "role == 'admin'"
+    row:
+      table: users
+      key: {name: "{{ name }}"}
+    set: {privilege: admin}
+
+  - id: user.other
+    match: '^user (?P<name>\S+) role (?P<role>\S+)$'
+    when: "role == 'operator'"
+    row:
+      table: users
+      key: {name: "{{ name }}"}
+    set: {privilege: operator}
+
+  - id: console
+    match: '^line console$'
+    ignore: 機器が自動で付ける行
+    ignore_children: true
+
+derive:
+  - id: tunnel
+    for: x_tunnel_bind
+    as: b
+    let:
+      prof: "lookup('x_profiles', name=b.profile)"
+    when: "prof"
+    row:
+      table: tunnels
+      key: {if_name: "{{ b.if_name }}"}
+    set:
+      type: gre
+      destination: "{{ prof.peer }}"

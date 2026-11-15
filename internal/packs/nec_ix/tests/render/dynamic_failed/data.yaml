@@ -1,0 +1,32 @@
+# What the pack cannot write of OSPF, BGP and the redundancy groups: each is
+# told with its reason, and no file is written (made-up values).
+tables:
+  devices:
+    - hostname: ix-d02
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.53/30}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.66/26, vrf: vrf-sample-d}
+  vrfs:
+    - {name: vrf-sample-d}
+  ospf_processes:
+    # No "passive-interface default" on this device.
+    - {process_id: 1, passive_default: true}
+  ospf_interfaces:
+    # An interface inside a VRF.
+    - {process_id: 1, if_name: GigaEthernet1.0, area: "0"}
+    # A key without the kind of authentication.
+    - {process_id: 1, if_name: GigaEthernet0.0, area: "0", auth_key: dummy-ospf-pw}
+  bgp_processes:
+    - {asn: 64500}
+    # BGP inside a VRF.
+    - {vrf: vrf-sample-d, asn: 64500}
+  bgp_neighbors:
+    # A keepalive without its hold time.
+    - {neighbor: 203.0.113.54, remote_as: 64501, keepalive: 10}
+    - {vrf: vrf-sample-d, neighbor: 198.51.100.65, remote_as: 64502}
+  fhrp:
+    # No HSRP on this device.
+    - {if_name: GigaEthernet0.0, protocol: hsrp, group: 1, virtual_ip: 203.0.113.55}
+    - {if_name: GigaEthernet1.0, protocol: vrrp, group: 2, virtual_ip: 198.51.100.65, auth_type: md5, auth_key: dummy-vrrp-d}
+findings: [G-601, G-606, V-113]

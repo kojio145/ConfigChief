@@ -1,0 +1,38 @@
+hostname rt-q12
+!
+class-map match-any cm-q-one
+ match precedence 5
+ match dscp 34
+class-map match-any cm-q-pq-high
+ match dscp 46
+class-map match-any cm-q-pq-normal
+ match access-group name al-q-biz
+class-map match-any cm-q-pq-low
+ match any
+!
+policy-map pm-q-out
+ class cm-q-one
+  bandwidth percent 30
+ class cm-q-pq-high
+  priority level 1
+  queue-limit 10 packets
+ class cm-q-pq-normal
+  bandwidth remaining percent 75
+  queue-limit 30 packets
+ class cm-q-pq-low
+  bandwidth remaining percent 25
+  queue-limit 40 packets
+policy-map shape-Gi0-0
+ class class-default
+  shape average 10000000
+  service-policy pm-q-out
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.1 255.255.255.252
+ service-policy output shape-Gi0-0
+ no shutdown
+!
+ip access-list extended al-q-biz
+ permit ip 192.0.2.0 0.0.0.255 any
+!
+end

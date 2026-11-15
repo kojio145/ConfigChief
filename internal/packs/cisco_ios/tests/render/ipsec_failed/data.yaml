@@ -1,0 +1,21 @@
+# IPsec rows the pack cannot write (made-up values): each tells why.
+tables:
+  devices:
+    - hostname: rt-v05
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.9/30}
+    - {name: Tunnel1, enabled: true, ipv4: 192.0.2.209/30}
+    - {name: Tunnel2, enabled: true, ipv4: 192.0.2.213/30}
+  tunnels:
+    - {if_name: Tunnel1, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.20}
+    - {if_name: Tunnel2, type: gre, source: GigabitEthernet0/0, destination: 203.0.113.30}
+  ipsec_tunnels:
+    - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: 203.0.113.20, psk: dummy-psk-sample-a, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
+    # IKE version 2; another proposal of IKE; the tunnel is a GRE tunnel.
+    - {name: Tunnel2, style: tunnel_if, tunnel_if: Tunnel2, peer_address: 203.0.113.30, psk: dummy-psk-sample-b, ike_version: 2, ike_encryption: aes128, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
+    # Not "<map>/<number>".
+    - {name: vpn-sample-c, style: policy, local_if: GigabitEthernet0/0, peer_address: 203.0.113.40, psk: dummy-psk-sample-c, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
+    # No selector; the peer is not an address; the interface is not on the sheet.
+    - {name: CMAP-SAMPLE/10, style: policy, local_if: GigabitEthernet0/9, peer_address: any, psk: dummy-psk-sample-d, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
+findings: [G-601]

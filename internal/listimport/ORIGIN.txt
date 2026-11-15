@@ -1,0 +1,9 @@
+table.go, steps.go and suggest.go are copied from PalaTerm (github.com/kojio145/palaterm, MIT, same author)
+internal/listimport at commit f3fb42d (2026-11-07), and the step and condition types of rule.go from its
+internal/model/importrule.go.
+Kept as a copy on purpose, so that the two tools can move at their own pace (spec 17.1).
+
+Left out: plan.go (merging into PalaTerm's device list), guess.go (guessing its OS types), choices.go, and the
+parts of the others about its device fields and passwords. New here: rule.go (a rule gives rows of the design
+data, written as YAML), convert.go, draft.go and the step "cidr".
+Fixes made here should be carried back by hand when they matter to PalaTerm too.

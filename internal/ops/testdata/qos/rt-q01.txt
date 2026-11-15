@@ -1,0 +1,38 @@
+version 15.2
+hostname rt-q01
+!
+class-map match-any cm-q-voice
+ match dscp ef
+class-map match-any cm-q-biz
+ match access-group name acl-q-biz
+!
+policy-map pm-q-child
+ class cm-q-voice
+  priority percent 20
+ class cm-q-biz
+  bandwidth remaining percent 40
+ class class-default
+  fair-queue
+policy-map pm-q-wan
+ class class-default
+  shape average 10000000
+  service-policy pm-q-child
+policy-map pm-q-lan
+ class cm-q-biz
+  police cir 5000000 conform-action transmit exceed-action drop
+  set dscp af21
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.1 255.255.255.252
+ service-policy output pm-q-wan
+!
+interface GigabitEthernet0/1
+ ip address 192.0.2.1 255.255.255.0
+ service-policy input pm-q-lan
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.2
+!
+ip access-list extended acl-q-biz
+ permit ip 192.0.2.0 0.0.0.255 198.51.100.0 0.0.0.255
+!
+end

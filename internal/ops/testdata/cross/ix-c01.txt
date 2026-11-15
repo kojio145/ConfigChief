@@ -1,0 +1,69 @@
+hostname ix-c01
+timezone +09 00
+!
+username admin password plain dummy-admin-secret-sample administrator
+username backup password plain dummy-backup-secret-sample
+username monitor password plain dummy-monitor-secret-sample monitor
+!
+ip name-server 192.0.2.53
+ip name-server 192.0.2.54
+!
+ip route default 203.0.113.10
+ip route 192.0.2.64/26 203.0.113.10 distance 10
+ip route 198.18.30.0/24 203.0.113.10 GigaEthernet0.0
+!
+snmp-agent ip enable
+snmp-agent ip community dummy-ro-comm ro
+snmp-agent ip host 192.0.2.60 dummy-ro-comm version 2
+snmp-agent ip trap-source Loopback0.0
+snmp-agent location sample-site-c rack 2
+snmp-agent contact netops@example.net
+!
+ntp server 192.0.2.123
+ntp server 192.0.2.124
+ntp source Loopback0.0
+!
+syslog ip host 192.0.2.50
+syslog ip host 192.0.2.51
+syslog facility local6
+!
+ssh-server ip enable
+terminal timeout 10
+!
+ip dhcp-relay enable
+!
+device GigaEthernet0
+  speed auto
+  duplex auto
+!
+device GigaEthernet1
+  speed 1000
+  duplex full
+!
+interface GigaEthernet0.0
+  description to rt-c02
+  ip address 203.0.113.9/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  description sample lan
+  ip address 198.51.100.129/25
+  ip address 198.51.100.1/25 secondary
+  ip dhcp-relay server 192.0.2.67
+  ip mtu 1400
+  ip tcp adjust-mss 1360
+  no shutdown
+!
+interface GigaEthernet1.1
+  description sample vlan 30
+  encapsulation dot1q 30
+  ip address 192.0.2.129/26
+  no shutdown
+!
+interface GigaEthernet2.0
+  shutdown
+!
+interface Loopback0.0
+  description sample loopback
+  ip address 192.0.2.9/32
+!

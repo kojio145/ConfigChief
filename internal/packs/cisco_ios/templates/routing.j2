@@ -1,0 +1,10 @@
+{# Static routes. Syntax: cmdref 4.3. The name of a route is one word. #}
+{% for r in t.static_routes %}
+{% if ' ' in r.description %}
+{{ fail('経路 ' ~ r.prefix ~ ' の説明に空白があります（Cisco の経路の名前は 1 語です）') }}
+{% endif %}
+ip route{{ ' vrf ' ~ r.vrf if r.vrf else '' }} {{ r.prefix | ip }} {{ r.prefix | mask }}{{ ' ' ~ r.out_if if r.out_if else '' }}{{ ' ' ~ r.next_hop if r.next_hop else '' }}{{ ' ' ~ r.distance if r.distance else '' }}{{ ' name ' ~ r.description if r.description else '' }}{{ ' track ' ~ r.track if r.track else '' }}
+{% endfor %}
+{% if t.static_routes %}
+!
+{% endif %}

@@ -1,0 +1,23 @@
+table: bgp_neighbors
+title: {ja: BGP ネイバー, en: BGP neighbors}
+since: M3
+key: [device, vrf, neighbor]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name, note: {ja: "空 = VRF なし（全体の経路表）", en: "Empty = no VRF (the global table)"}}
+  - {name: neighbor, title: {ja: ネイバーアドレス, en: Neighbor}, type: ip4, required: true}
+  - {name: remote_as, title: {ja: 相手 AS 番号, en: Remote AS}, type: int, required: true}
+  - {name: description, title: {ja: 説明, en: Description}, type: string}
+  - {name: enabled, title: {ja: 有効, en: Enabled}, type: bool}
+  - {name: update_source, title: {ja: 送信元 IF, en: Update source}, type: ifname}
+  - {name: ebgp_multihop, title: {ja: eBGP マルチホップ, en: eBGP multihop}, type: int}
+  - {name: password, title: {ja: パスワード, en: Password}, type: secret}
+  - {name: keepalive, title: {ja: Keepalive（秒）, en: Keepalive (s)}, type: int}
+  - {name: holdtime, title: {ja: Hold（秒）, en: Hold time (s)}, type: int}
+  - {name: next_hop_self, title: {ja: ネクストホップを自分にする, en: Next hop self}, type: bool}
+  - {name: default_originate, title: {ja: デフォルト経路の広告, en: Default originate}, type: bool}
+  - {name: soft_reconfig_in, title: {ja: 受信経路の保持, en: Soft reconfiguration in}, type: bool}
+  - {name: prefix_list_in, title: {ja: 受信フィルタ, en: Prefix list in}, type: ref, ref: prefix_lists.name}
+  - {name: prefix_list_out, title: {ja: 送信フィルタ, en: Prefix list out}, type: ref, ref: prefix_lists.name}
+  - {name: filter_in, title: {ja: 受信の経路制御, en: Filter in}, type: string, note: {ja: "条件の名前。中身は追加コンフィグに書く", en: "The name of the policy. What it does goes into the extra config"}}
+  - {name: filter_out, title: {ja: 送信の経路制御, en: Filter out}, type: string, note: {ja: "条件の名前。中身は追加コンフィグに書く", en: "The name of the policy. What it does goes into the extra config"}}

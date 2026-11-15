@@ -1,0 +1,20 @@
+# IPsec rows the pack cannot write (made-up values): each tells why.
+tables:
+  devices:
+    - hostname: ix-v05
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.9/30}
+    - {name: Tunnel0.0, enabled: true, ipv4: "unnumbered:GigaEthernet0.0"}
+    - {name: Tunnel1.0, enabled: true, ipv4: "unnumbered:GigaEthernet0.0"}
+  tunnels:
+    - {if_name: Tunnel0.0, type: ipsec}
+    # No row on the IPsec sheet for this tunnel.
+    - {if_name: Tunnel1.0, type: ipsec}
+  ipsec_tunnels:
+    - {name: Tunnel0.0, style: tunnel_if, tunnel_if: Tunnel0.0, peer_address: 203.0.113.20, psk: dummy-psk-sample-a, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, nat_traversal: true}
+    # The style "policy"; NAT traversal on one row only.
+    - {name: vpn-sample-b, style: policy, local_if: GigaEthernet0.0, peer_address: 203.0.113.30, psk: dummy-psk-sample-b, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1}
+    # A tunnel interface that is not on the sheet of the tunnels; a retry count without an interval.
+    - {name: vpn-sample-c, style: tunnel_if, tunnel_if: Tunnel5.0, peer_address: 203.0.113.40, psk: dummy-psk-sample-c, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, dpd_retry: 3, nat_traversal: true}
+findings: [G-601]

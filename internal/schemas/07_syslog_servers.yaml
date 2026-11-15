@@ -1,0 +1,11 @@
+table: syslog_servers
+title: {ja: ログ転送先, en: Syslog servers}
+since: M1
+key: [device, server]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: server, title: {ja: 転送先, en: Server}, type: string, required: true, note: {ja: "アドレスか名前", en: "An address or a name"}}
+  - {name: facility, title: {ja: ファシリティ, en: Facility}, type: string}
+  - {name: severity, title: {ja: 重要度, en: Severity}, type: enum, values: [emergencies, alerts, critical, errors, warnings, notifications, informational, debugging], note: {ja: "この重要度以上を送る", en: "This level and above are sent"}}
+  - {name: source_if, title: {ja: 送信元 IF, en: Source interface}, type: ifname}
+  - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name}

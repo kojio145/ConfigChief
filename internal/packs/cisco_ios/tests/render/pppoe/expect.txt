@@ -1,0 +1,56 @@
+hostname rt-e01
+!
+interface Dialer1
+ ip address negotiated
+ mtu 1454
+ ip tcp adjust-mss 1414
+ encapsulation ppp
+ dialer pool 1
+ ppp authentication chap callin
+ ppp chap hostname sample-a@example.com
+ ppp chap password dummy-pppoe-secret-a
+ no shutdown
+!
+interface Dialer2
+ ip address negotiated
+ encapsulation ppp
+ dialer pool 2
+ ppp authentication pap callin
+ ppp pap sent-username sample-b@example.com password dummy-pppoe-secret-b
+ no shutdown
+!
+interface Dialer10
+ ip unnumbered GigabitEthernet0/3
+ encapsulation ppp
+ dialer pool 10
+ ppp authentication chap pap callin
+ ppp chap hostname sample-c@example.com
+ ppp chap password dummy-pppoe-secret-c
+ ppp pap sent-username sample-c@example.com password dummy-pppoe-secret-c
+ no shutdown
+!
+interface GigabitEthernet0/0
+ description sample wan a
+ pppoe enable group global
+ pppoe-client dial-pool-number 1
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description sample wan b
+ pppoe enable group global
+ pppoe-client dial-pool-number 2 service-name svc-sample-b
+ no shutdown
+!
+interface GigabitEthernet0/2
+ description sample wan c
+ pppoe enable group global
+ pppoe-client dial-pool-number 10
+ no shutdown
+!
+interface GigabitEthernet0/3
+ ip address 198.51.100.1 255.255.255.0
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 Dialer1
+!
+end

@@ -1,0 +1,9 @@
+table: vrfs
+title: {ja: VRF, en: VRFs}
+since: M3
+key: [device, name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: 名前, en: Name}, type: string, required: true}
+  - {name: rd, title: {ja: RD, en: RD}, type: string}
+  - {name: description, title: {ja: 説明, en: Description}, type: string}

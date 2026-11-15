@@ -1,0 +1,13 @@
+{# Static routes. Syntax: cmdref 4.3 (the next hop stands before the
+   interface). A route has no name on this device: the description is not
+   read. The watch of a line is not part of "ip route": tracking.j2 writes it
+   as an action of the watch group. #}
+{% for r in t.static_routes %}
+{% if not r.next_hop and not r.out_if %}
+{{ fail('経路 ' ~ r.prefix ~ ' に、次ホップも出力 IF もありません') }}
+{% endif %}
+ip route{{ ' vrf ' ~ r.vrf if r.vrf else '' }} {{ 'default' if r.prefix == '0.0.0.0/0' else r.prefix }}{{ ' ' ~ r.next_hop if r.next_hop else '' }}{{ ' ' ~ r.out_if if r.out_if else '' }}{{ ' distance ' ~ r.distance if r.distance else '' }}
+{% endfor %}
+{% if t.static_routes %}
+!
+{% endif %}

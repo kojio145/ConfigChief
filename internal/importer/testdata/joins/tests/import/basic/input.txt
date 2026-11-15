@@ -1,0 +1,18 @@
+! sample configuration of a made-up device
+hostname rt-c01
+servers 192.0.2.53 192.0.2.54,192.0.2.55
+common source Lo0
+common spare sample-text
+interface GigabitEthernet0/1
+ ip address 198.51.100.1 255.255.255.0
+interface GigabitEthernet0/2
+ ip address 203.0.113.1 255.255.255.252
+interface Loopback0
+ ip address 192.0.2.1 255.255.255.255
+area-net 198.51.100.0/24 area 1
+area-net 198.51.100.0/25 area 2
+area-net 203.0.113.0/30 area 0
+area-net 192.0.2.128/25 area 9
+ntp 192.0.2.123
+ntp 192.0.2.124
+relay-servers Gi0/1 192.0.2.67 192.0.2.68

@@ -1,0 +1,23 @@
+# What the device writes back after a command (appendix B 4.4). The first
+# entry that matches a line counts. Sources: cmdref 7.14.
+#
+# "% <word> -- Invalid command." is the one form the manuals show for a wrong
+# command; the word is the part the device did not take. The device has no
+# caret line.
+errors:
+  - {id: invalid, match: '^% .+ -- Invalid command\.', level: rejected}
+  - {id: occupied, match: '^% CONFIG process is occupied\.', level: rejected}
+  - {id: exists, match: "^% User '.+' is already configured[.]", level: rejected}
+# Printed after a command that was taken.
+warnings:
+  - {id: restart, match: '^% ?You must (restart|RELOAD) the router for this configuration to take effect\.', level: warning}
+  - {id: strength, match: '^% (Authentication |Privacy )?[Pp]assword strength estimation:', level: warning}
+  - {id: user, match: "^% (User '.+' has been (added|deleted)|Current user's password has been changed)[.]", level: warning}
+  - {id: warning, match: '^% Warning:', level: warning}
+  - {id: bgp, match: '^% Need to (reset all neighbors to take effect|clear route table take effect) of the command\.', level: warning}
+  - {id: hint, match: '^% You may use .svintr-config. command', level: warning}
+# Any other answer: the pack does not know whether the command was taken.
+# An event line ("10:23:55 ETH.047: ...") and a line of the start-up
+# ("%BOOT-INFO: ...") are no answers and match nothing here.
+others:
+  - {id: other, match: '^% ', level: unknown}

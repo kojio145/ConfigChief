@@ -1,0 +1,8 @@
+table: bgp_networks
+title: {ja: BGP 広告経路, en: BGP networks}
+since: M3
+key: [device, vrf, prefix]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name, note: {ja: "空 = VRF なし（全体の経路表）", en: "Empty = no VRF (the global table)"}}
+  - {name: prefix, title: {ja: 広告する経路, en: Prefix}, type: net4, required: true}

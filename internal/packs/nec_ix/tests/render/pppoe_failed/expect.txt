@@ -1,0 +1,14 @@
+hostname ix-e05
+!
+interface GigaEthernet0.0
+  no shutdown
+!
+interface GigaEthernet0.1
+  ip address ipcp
+  ppp binding ppp-sample-with-a-name-too-long-b
+  no shutdown
+!
+interface GigaEthernet1.0
+  ppp binding ppp-sample-a
+  no shutdown
+!

@@ -1,0 +1,28 @@
+table: connections
+title: {ja: 接続, en: Connections}
+since: M4
+key: [name]
+columns:
+  - {name: name, title: {ja: 接続名, en: Name}, type: string, required: true}
+  - {name: type, title: {ja: 種類, en: Type}, type: enum, values: [ipsec, gre, gre_over_ipsec], required: true}
+  - {name: a_device, title: {ja: 機器 A, en: Device A}, type: ref, ref: devices.hostname, required: true}
+  - {name: z_device, title: {ja: 機器 Z, en: Device Z}, type: ref, ref: devices.hostname, required: true, also: ["(管理外)"], note: {ja: "相手が管理外なら (管理外)", en: "(管理外) when the other end is not managed here"}}
+  - {name: a_local_if, title: {ja: A の外向き IF, en: A local interface}, type: ifname}
+  - {name: z_local_if, title: {ja: Z の外向き IF, en: Z local interface}, type: ifname}
+  - {name: a_address, title: {ja: A の外向きアドレス, en: A address}, type: ip4, note: {ja: "空なら IF のアドレス", en: "Empty = the address of the interface"}}
+  - {name: z_address, title: {ja: Z の外向きアドレス, en: Z address}, type: ip4, note: {ja: "空なら IF のアドレス", en: "Empty = the address of the interface"}}
+  - {name: a_tunnel_if, title: {ja: A のトンネル IF, en: A tunnel interface}, type: ifname}
+  - {name: z_tunnel_if, title: {ja: Z のトンネル IF, en: Z tunnel interface}, type: ifname}
+  - {name: a_tunnel_ip, title: {ja: A のトンネル IF アドレス, en: A tunnel address}, type: cidr4}
+  - {name: z_tunnel_ip, title: {ja: Z のトンネル IF アドレス, en: Z tunnel address}, type: cidr4}
+  - {name: psk, title: {ja: 事前共有鍵, en: Pre-shared key}, type: secret}
+  - {name: ike_version, title: {ja: IKE の版, en: IKE version}, type: enum, values: ["1", "2"]}
+  - {name: ike_mode, title: {ja: IKE のモード, en: IKE mode}, type: enum, values: [main, aggressive]}
+  - {name: ike_encryption, title: {ja: IKE 暗号, en: IKE encryption}, type: enum, values: [des, 3des, aes128, aes192, aes256, aes128gcm, aes256gcm, "null"]}
+  - {name: ike_hash, title: {ja: IKE ハッシュ, en: IKE hash}, type: enum, values: [md5, sha1, sha256, sha384, sha512]}
+  - {name: ike_dh, title: {ja: IKE DH グループ, en: IKE DH group}, type: enum, values: [dh1, dh2, dh5, dh14, dh15, dh16, dh19, dh20, dh21, dh24]}
+  - {name: ike_lifetime, title: {ja: IKE 有効時間（秒）, en: IKE lifetime (s)}, type: int}
+  - {name: esp_encryption, title: {ja: ESP 暗号, en: ESP encryption}, type: enum, values: [des, 3des, aes128, aes192, aes256, aes128gcm, aes256gcm, "null"]}
+  - {name: esp_hash, title: {ja: ESP ハッシュ, en: ESP hash}, type: enum, values: [md5, sha1, sha256, sha384, sha512]}
+  - {name: pfs, title: {ja: PFS, en: PFS}, type: enum, values: [none, dh1, dh2, dh5, dh14, dh15, dh16, dh19, dh20, dh21, dh24]}
+  - {name: ipsec_lifetime, title: {ja: IPsec 有効時間（秒）, en: IPsec lifetime (s)}, type: int}

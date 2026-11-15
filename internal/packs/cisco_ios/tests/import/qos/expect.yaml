@@ -1,0 +1,35 @@
+# QoS (stage M6, MQC). The parent policy that only shapes the whole
+# interface is folded into the binding of the child.
+tables:
+  qos_classes:
+    - {name: cm-q-voice, match: any}
+    - {name: cm-q-video, match: all}
+    - {name: cm-q-prec, match: all}
+    - {name: cm-q-any, match: any}
+  qos_class_matches:
+    - {class: cm-q-voice, seq: 10, acl: "", dscp: [46]}
+    - {class: cm-q-voice, seq: 20, acl: acl-q-voice, dscp: []}
+    - {class: cm-q-video, seq: 10, dscp: [34, 36, 34]}
+    - {class: cm-q-prec, seq: 10, precedence: [5, 3]}
+    - {class: cm-q-any, seq: 10, acl: "", dscp: [], precedence: []}
+    - {class: cm-q-any, seq: 20, acl: "120"}
+  qos_policies:
+    - {policy: pm-q-child, class: cm-q-voice, seq: 10, priority: true, bandwidth_percent: 20}
+    - {policy: pm-q-child, class: cm-q-video, seq: 20, bandwidth_remaining: 40, queue_limit: [64]}
+    - {policy: pm-q-child, class: cm-q-prec, seq: 30, priority: true, priority_level: 2}
+    - {policy: pm-q-child, class: default, seq: 40, fair_queue: true}
+    - {policy: pm-q-in, class: cm-q-voice, seq: 10, set_dscp: 46}
+    - {policy: pm-q-in, class: cm-q-any, seq: 20, police_bps: 2000000, police_bc: 8000, police_exceed: set_dscp, police_exceed_value: 10}
+    - {policy: pm-q-in, class: default, seq: 30, police_bps: 5000000, police_exceed: drop, set_precedence: 0}
+    - {policy: pm-q-plain, class: cm-q-video, seq: 10, bandwidth_kbps: 2000, shape_bps: 4000000, shape_bc: 16000, shape_be: 0}
+    - {policy: pm-q-plain, class: cm-q-prec, seq: 20, priority: true, bandwidth_kbps: 512, priority_burst: 4000}
+  qos_bindings:
+    - {if_name: GigabitEthernet0/0/0, direction: output, policy: pm-q-child, shape_bps: 10000000}
+    - {if_name: GigabitEthernet0/0/1, direction: input, policy: pm-q-in, shape_bps: ""}
+    - {if_name: GigabitEthernet0/0/1, direction: output, policy: pm-q-plain}
+    - {if_name: Tunnel1, direction: output, policy: "", shape_bps: 2000000}
+  acl_entries:
+    - {acl: acl-q-voice, seq: 20, dscp: 46}
+    - {acl: acl-q-voice, seq: 30, dst: 203.0.113.9, precedence: 5}
+unknown:
+  - "qos pre-classify"

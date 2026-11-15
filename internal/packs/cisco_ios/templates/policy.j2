@@ -1,0 +1,131 @@
+{# Access lists and prefix lists. Syntax: cmdref 4.9 and 7.1.
+   A list is written in the named form, also when its name is a number
+   ("ip access-list standard 10" is the same list as "access-list 10").
+   The entries of a list numbered 10, 20, 30 ... are written without their
+   numbers, as a device that does not keep the numbers shows them. Any other
+   numbering is written out on every line, the remarks too (a remark with a
+   number is for IOS XE 16.12 and later: README). #}
+{% for a in t.acls %}
+{% set kind = a.type | required('ACL ' ~ a.name ~ ' の種類') %}
+ip access-list {{ kind }} {{ a.name }}
+{% set n = namespace(i=0, plain=true) %}
+{% for x in t.acl_entries %}
+{% if x.acl == a.name %}
+{% set n.i = n.i + 1 %}
+{% if x.seq != n.i * 10 %}
+{% set n.plain = false %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for x in t.acl_entries %}
+{% if x.acl == a.name %}
+{% set no = '' if n.plain else x.seq ~ ' ' %}
+{% set what = 'ACL ' ~ a.name ~ ' の ' ~ x.seq ~ ' 番' %}
+{% if x.action == 'remark' %}
+ {{ no }}remark {{ x.remark | required(what ~ 'の注記') }}
+{% else %}
+{# An address: any, a host, or a network with its wildcard. #}
+{% set ad = namespace(s='', d='') %}
+{% for side in ['s', 'd'] %}
+{% set v = x.src if side == 's' else x.dst %}
+{% set w = '' %}
+{% if v == 'any' %}
+{% set w = 'any' %}
+{% elif v is cidr %}
+{% set w = (v | ip) ~ ' ' ~ (v | wildcard) %}
+{% elif v and (v ~ '/32') is cidr %}
+{% set w = 'host ' ~ v %}
+{% elif v %}
+{{ fail(what ~ 'のアドレス「' ~ v ~ '」は書けません（any、192.0.2.1、192.0.2.0/24 の形で書きます）') }}
+{% endif %}
+{% if side == 's' %}
+{% set ad.s = w %}
+{% else %}
+{% set ad.d = w %}
+{% endif %}
+{% endfor %}
+{% if kind == 'standard' %}
+{% for f in x.flags %}
+{% if f != 'log' %}
+{{ fail(what ~ 'の付加条件「' ~ f ~ '」は、標準 ACL には書けません（書けるのは log だけです）') }}
+{% endif %}
+{% endfor %}
+{% if x.dscp != '' or x.precedence != '' %}
+{{ fail(what ~ ': DSCP・precedence は、標準 ACL には書けません（種類を extended にしてください）') }}
+{% endif %}
+ {{ no }}{{ x.action }} {{ ad.s | required(what ~ 'の送信元') }}{{ ' log' if 'log' in x.flags else '' }}
+{% else %}
+{% set proto = x.protocol | required(what ~ 'のプロトコル') %}
+{% if proto == 'ah' %}
+{% set proto = 'ahp' %}
+{% endif %}
+{% if not (proto in ['ip', 'tcp', 'udp', 'icmp', 'gre', 'esp', 'ahp', 'ospf'] or proto is digits) %}
+{{ fail(what ~ 'のプロトコル「' ~ x.protocol ~ '」は書けません（ip tcp udp icmp esp ah gre ospf か番号で書きます）') }}
+{% endif %}
+{# A port: 80, 1000-2000, >1023, <1024, !80. Numbers only. #}
+{% set pt = namespace(s='', d='') %}
+{% if proto in ['tcp', 'udp'] %}
+{% for side in ['s', 'd'] %}
+{% set p = x.src_port if side == 's' else x.dst_port %}
+{% set w = '' %}
+{% if p %}
+{% set op = ' eq ' %}
+{% if '-' in p %}
+{% set op = ' range ' %}
+{% elif '>' in p %}
+{% set op = ' gt ' %}
+{% elif '<' in p %}
+{% set op = ' lt ' %}
+{% elif '!' in p %}
+{% set op = ' neq ' %}
+{% endif %}
+{% set nums = p | replace('>', '') | replace('<', '') | replace('!', '') | split('-') %}
+{% for one in nums %}
+{% if not (one is digits) %}
+{{ fail(what ~ 'のポート「' ~ p ~ '」は書けません（80、1000-2000、>1023、<1024、!80 の形で、番号で書きます）') }}
+{% endif %}
+{% endfor %}
+{% set w = op ~ (nums | join(' ')) %}
+{% endif %}
+{% if side == 's' %}
+{% set pt.s = w %}
+{% else %}
+{% set pt.d = w %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% set tail = namespace(v='') %}
+{% if proto == 'icmp' and x.icmp_type %}
+{% set tail.v = ' ' ~ x.icmp_type %}
+{% endif %}
+{% if x.dscp != '' and x.precedence != '' %}
+{{ fail(what ~ ': DSCP と precedence は、どちらか 1 つだけ書きます') }}
+{% elif x.dscp != '' %}
+{% set tail.v = tail.v ~ ' dscp ' ~ x.dscp %}
+{% elif x.precedence != '' %}
+{% set tail.v = tail.v ~ ' precedence ' ~ x.precedence %}
+{% endif %}
+{% if tail.v and (x.dscp != '' or x.precedence != '') and proto in ['tcp', 'udp', 'icmp'] %}
+{{ fail(what ~ ': DSCP・precedence は、プロトコルが ip などポートの無い行にだけ書けます（tcp・udp・icmp の行は、取り込み直しで読めません）') }}
+{% endif %}
+{% for f in ['established', 'fragments', 'log'] %}
+{% if f in x.flags %}
+{% if f == 'established' and proto != 'tcp' %}
+{{ fail(what ~ 'の established は、プロトコルが tcp の行にだけ書けます') }}
+{% endif %}
+{% set tail.v = tail.v ~ ' ' ~ f %}
+{% endif %}
+{% endfor %}
+ {{ no }}{{ x.action }} {{ proto }} {{ ad.s | required(what ~ 'の送信元') }}{{ pt.s }} {{ ad.d | required(what ~ 'の宛先') }}{{ pt.d }}{{ tail.v }}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+!
+{% endfor %}
+{% for p in t.prefix_lists %}
+ip prefix-list {{ p.name }} seq {{ p.seq }} {{ p.action }} {{ p.prefix }}{{ ' ge ' ~ p.ge if p.ge != '' else '' }}{{ ' le ' ~ p.le if p.le != '' else '' }}
+{% endfor %}
+{% if t.prefix_lists %}
+!
+{% endif %}

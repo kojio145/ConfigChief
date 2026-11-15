@@ -1,0 +1,229 @@
+Current configuration : 6144 bytes
+
+!
+! NEC Portable Internetwork Core Operating System Software
+! IX Series IX2107 (magellan-sec) Software, Version 10.11.6
+!
+hostname ix-a01
+timezone +09 00
+!
+logging buffered 131072
+logging subsystem all warn
+logging timestamp datetime
+!
+username admin password hash dummy0hash0sample0admin0001 administrator
+username operator password hash dummy0hash0sample0oper00002 operator
+username monitor password hash dummy0hash0sample0moni00003 monitor
+!
+ip ufs-cache enable
+ip name-server 192.0.2.53
+ip name-server 192.0.2.54
+ip route default GigaEthernet0.1
+ip route 192.0.2.64/26 203.0.113.2 distance 10
+ip route 198.18.20.0/24 Tunnel0.0
+ip route vrf vrf-sample-a 198.18.10.0/24 192.0.2.194
+ip dhcp enable
+ip dhcp-relay enable
+ip dhcp excluded-address 198.51.100.1 198.51.100.10
+!
+ip access-list acl-sample-in permit tcp src 198.51.100.0/24 dest any dport eq 443
+ip access-list acl-sample-in permit udp src any sport eq 53 dest 198.51.100.0/24
+ip access-list acl-sample-in permit tcp src any dest 192.0.2.80/32 dport gt 1023
+ip access-list acl-sample-in permit icmp src any dest any
+ip access-list acl-sample-in deny ip src any dest any
+ip access-list acl-sample-out permit ip src 198.51.100.0/24 dest any
+ip access-list acl-sample-mgmt permit ip src 192.0.2.0/24 dest any
+ip access-list acl-sample-nat permit ip src 198.51.100.0/24 dest any
+ip access-list acl-sample-vpn permit ip src any dest any
+ip access-list acl-sample-seq sequence-mode 10
+ip access-list acl-sample-seq 10 permit ip src 192.0.2.0/25 dest any
+ip access-list acl-sample-seq 20 deny tcp src any dest any dport range 8000 8080
+ip access-list acl-sample-seq 30 deny udp src any dest any dport neq 123
+!
+ip prefix-list pl-sample-in 5 permit 0.0.0.0/0
+ip prefix-list pl-sample-out 10 permit 198.51.100.0/24 max 28
+ip prefix-list pl-sample-out 20 deny 0.0.0.0/0 max 32
+!
+ike proposal ike-sample-prop encryption aes-256 hash sha2-256 group 2048-bit lifetime 86400
+!
+ike policy ike-sample-pol peer 203.0.113.20 key dummy-psk-sample ike-sample-prop
+ike keepalive ike-sample-pol 30 3
+ike nat-traversal
+!
+ipsec autokey-proposal ipsec-sample-prop esp-aes-256 esp-sha lifetime time 3600
+!
+ipsec autokey-map ipsec-sample-map acl-sample-vpn peer 203.0.113.20 pfs 2048-bit ipsec-sample-prop
+!
+snmp-agent ip enable
+snmp-agent ip community dummy-ro-comm acl-sample-mgmt
+snmp-agent ip community dummy-rw-community rw
+snmp-agent ip host 192.0.2.60 dummy-ro-comm version 2
+snmp-agent ip trap-source Loopback0.0
+snmp-agent location sample-site-a
+snmp-agent contact netops@example.com
+!
+ntp ip enable
+ntp server 192.0.2.123
+ntp server 192.0.2.124
+ntp source Loopback0.0
+!
+syslog ip host 192.0.2.50
+syslog facility local6
+!
+telnet-server ip enable
+telnet-server ip access-list acl-sample-mgmt
+ssh-server ip enable
+ssh-server ip access-list acl-sample-mgmt
+terminal timeout 10
+!
+vrrp enable
+!
+watch-group wg-sample-a 10
+  event 10 ip unreach-host 203.0.113.2 source GigaEthernet2.0
+  action 10 ip shutdown-route 192.0.2.64/26 203.0.113.2
+  action 20 ip decrement-vrrp-priority 1 20
+  probe-counter variance 3
+  probe-counter restorer 2
+  probe-timer variance 10
+  probe-timer restorer 10
+!
+watch-group wg-sample-b 20
+  event 10 interface-down GigaEthernet2.0
+  action 10 ip shutdown-route 198.18.20.0/24
+!
+network-monitor wg-sample-a enable
+network-monitor wg-sample-b enable
+!
+ppp profile ppp-sample-a
+  authentication myname example-user@example.net
+  authentication password example-user@example.net dummy-ppp-password
+  authentication accept chap
+!
+ip dhcp profile dhcp-sample-lan
+  assignable-range 198.51.100.100 198.51.100.199
+  default-gateway 198.51.100.1
+  dns-server 192.0.2.53 192.0.2.54
+  domain-name example.com
+  lease-time 43200
+!
+ip router ospf 1
+  router-id 192.0.2.1
+  originate-default always
+  passive-interface GigaEthernet1.0
+  area 1 stub no-summary
+  area 1 range 198.51.100.0/24 advertise
+  network 192.0.2.1/32 area 0
+  network 203.0.113.0/30 area 0
+  network GigaEthernet1.0 area 1
+  redistribute static metric 100 metric-type 1
+!
+router bgp 64496
+  router-id 192.0.2.1
+  neighbor 192.0.2.2 remote-as 64496
+  neighbor 192.0.2.2 update-source Loopback0.0
+  neighbor 192.0.2.2 shutdown
+  neighbor 203.0.113.2 remote-as 64497
+  neighbor 203.0.113.2 description to rt-b01
+  neighbor 203.0.113.2 password dummy-bgp-key
+  neighbor 203.0.113.2 timers 30 90
+  neighbor 203.0.113.30 remote-as 64498
+  neighbor 203.0.113.30 ebgp-multihop 2
+  address-family ipv4 unicast
+    network 198.51.100.0/24
+    redistribute connected
+    neighbor 192.0.2.2 next-hop-self
+    neighbor 203.0.113.2 distribute-list pl-sample-in in
+    neighbor 203.0.113.2 distribute-list pl-sample-out out
+    neighbor 203.0.113.30 send-default
+  !
+!
+device GigaEthernet0
+!
+device GigaEthernet1
+  speed 1000
+  duplex full
+!
+device GigaEthernet2
+  description sample-uplink-port
+!
+interface GigaEthernet0.0
+  no ip address
+  no shutdown
+!
+interface GigaEthernet1.0
+  description sample-lan
+  ip address 198.51.100.2/24
+  ip address 203.0.113.129/25 secondary
+  ipv6 enable
+  ipv6 address 2001:db8:1::2/64
+  ip proxy-arp
+  ip dhcp binding dhcp-sample-lan
+  ip filter acl-sample-in 10 in
+  ip filter acl-sample-seq 20 in
+  ip filter acl-sample-out 10 out
+  ip ospf priority 100
+  vrrp 1 ip 198.51.100.1
+  vrrp 1 priority 110
+  vrrp 1 timers advertisement 3
+  vrrp 1 authentication dummy-vrrp
+  no shutdown
+!
+interface GigaEthernet2.0
+  description to rt-b01
+  ip address 203.0.113.1/30
+  ip mtu 1454
+  ip nat enable
+  ip nat static 198.51.100.20 203.0.113.200
+  ip ospf cost 10
+  ip ospf network point-to-point
+  ip ospf hello-interval 5
+  ip ospf dead-interval 20
+  ip ospf authentication message-digest
+  ip ospf message-digest-key 1 dummy-ospf-key
+  no shutdown
+!
+interface GigaEthernet2.1
+  encapsulation dot1q 10
+  ip address 192.0.2.130/25
+  ip dhcp-relay server 192.0.2.67
+  no shutdown
+!
+interface GigaEthernet2.2
+  encapsulation dot1q 20
+  ip vrf forwarding vrf-sample-a
+  ip address 192.0.2.193/26
+  shutdown
+!
+interface GigaEthernet0.1
+  description sample-pppoe
+  ppp binding ppp-sample-a
+  ip address ipcp
+  ip tcp adjust-mss auto
+  ip napt enable
+  ip napt inside list acl-sample-nat
+  ip napt static 198.51.100.21 tcp 443
+  no shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.1/32
+!
+interface Null0.0
+  no ip address
+!
+interface Tunnel0.0
+  description sample-ipsec
+  tunnel mode ipsec
+  ip unnumbered GigaEthernet1.0
+  ip tcp adjust-mss 1300
+  ipsec policy tunnel ipsec-sample-map
+  no shutdown
+!
+interface Tunnel1.0
+  tunnel mode gre
+  tunnel source GigaEthernet2.0
+  tunnel destination 203.0.113.30
+  tunnel key 100
+  tunnel keepalive period 10 retries 3
+  ip address 198.18.0.1/30
+  ip mtu 1400
+  no shutdown

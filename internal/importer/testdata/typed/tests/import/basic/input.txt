@@ -1,0 +1,27 @@
+hostname rt-d01
+!
+interface Gi0/1
+ mtu 01500
+ speed AUTO
+ address 192.0.2.1/30
+ proxy Yes
+ relay 192.0.2.67, 192.0.2.68
+!
+interface Gi0/2
+ mtu big
+ speed 2500
+ address 192.0.2.300/24
+ proxy maybe
+ relay 192.0.2.67 not-an-address
+ colour red
+ relay-one 192.0.2.67
+ mtu-more 1400
+ rename Gi0/9
+!
+route 198.51.100.0/24 192.0.2.2 010
+route 198.51.100.1/24 192.0.2.2
+route 203.0.113.0/24 192.0.2.2 300
+route-by 203.0.113.0/24 5
+shelf top
+peer 192.0.2.9 as 64500
+peer 192.0.2.10 as none

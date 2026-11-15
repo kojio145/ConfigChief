@@ -1,0 +1,42 @@
+# What this device writes in another way than the design data has it
+# (appendix B 5.7). Each step tells what it did as G-614. The answers behind
+# the steps: hearing.md, the table of QoS (2026-11-15).
+adapt:
+  # "bandwidth remaining percent" is not of this device (cmdref 7.15 (7) 5).
+  - id: qos.remaining
+    for: qos_policies
+    as: p
+    when: "p.bandwidth_remaining"
+    row: {table: qos_policies, key: {policy: "{{ p.policy }}", class: "{{ p.class }}"}}
+    set: {bandwidth_percent: "{{ p.bandwidth_remaining }}"}
+    clear: [bandwidth_remaining]
+    note: "QoS のポリシー {{ p.policy }} のクラス {{ p.class }}: 「帯域（残りの %）」は NEC IX に無いので、「帯域（%）」{{ p.bandwidth_remaining }} として書きます（残りではなく、全体に対する割合になります）"
+  # The device has one level of priority (cmdref 7.15 (7) 3).
+  - id: qos.level
+    for: qos_policies
+    as: p
+    when: "p.priority_level"
+    clear: [priority_level]
+    note: "QoS のポリシー {{ p.policy }} のクラス {{ p.class }}: 「優先の段」（{{ p.priority_level }}）は NEC IX に無いので、段のない「優先して送る」として書きます（段の違いは無くなります）"
+  # class-local and class-default take 10 % each unless they have a
+  # bandwidth of their own (cmdref 7.15 (2)). The values are not changed.
+  - id: qos.percent.total
+    for: qos_policies
+    as: p
+    let:
+      mine: "rows('qos_policies', policy=p.policy)"
+      head: "mine | first"
+      own: "mine | selectattr('class', 'in', ['default', 'local']) | selectattr('bandwidth_percent') | list | length"
+      total: "(mine | selectattr('bandwidth_percent') | map(attribute='bandwidth_percent') | map('int') | sum) + 10 * (2 - own)"
+    when: "head.class == p.class and total > 100"
+    note: "QoS のポリシー {{ p.policy }}: 帯域（%）の合計が {{ total }}% で、100% を超えます（NEC IX は、class-local と class-default に各 10% を取ります）。値は変えていません。% を直してください"
+  # A row of class-default or class-local with nothing in it says nothing
+  # (the import makes no row of such a line either): it is not a row.
+  - id: qos.adapt.bare
+    for: qos_policies
+    as: p
+    let:
+      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.shape_bps or p.shape_bc or p.shape_be or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue"
+    when: "p.class in ['default', 'local'] and not more"
+    remove: true
+    note: "{{ '' }}"

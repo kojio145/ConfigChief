@@ -1,0 +1,41 @@
+# OSPF, BGP and VRRP (made-up values). expect.txt is the configuration the
+# tables must turn into.
+tables:
+  devices:
+    - hostname: ix-d01
+      vendor: nec_ix
+  interfaces:
+    - {name: Loopback0.0, ipv4: 192.0.2.201/32}
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.49/30}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.2/24}
+    - {name: GigaEthernet2.0, enabled: true, ipv4: 198.51.100.130/25}
+  prefix_lists:
+    - {name: pl-sample-d-in, seq: 10, action: permit, prefix: 0.0.0.0/0}
+  ospf_processes:
+    - {process_id: 1, router_id: 192.0.2.201, default_originate: always, default_metric: 50}
+  ospf_interfaces:
+    - {process_id: 1, if_name: Loopback0.0, area: "0", passive: true}
+    - {process_id: 1, if_name: GigaEthernet0.0, area: "0", cost: 20, priority: 0, hello: 5, dead: 20, network_type: point_to_point, auth_type: md5, auth_key_id: 1, auth_key: dummy-ospf-key-d}
+    - {process_id: 1, if_name: GigaEthernet1.0, area: "1", auth_type: simple, auth_key: dummy-ospf-pw}
+  ospf_areas:
+    - {process_id: 1, area: "1", type: totally_stub}
+  ospf_ranges:
+    - {process_id: 1, area: "1", prefix: 198.51.100.0/24}
+    - {process_id: 1, area: "0", prefix: 192.0.2.192/26, advertise: false}
+  ospf_redistribute:
+    - {process_id: 1, source: static, metric: 100, metric_type: "1"}
+    - {process_id: 1, source: bgp, filter: rm-sample-d}
+  bgp_processes:
+    - {asn: 64500, router_id: 192.0.2.201}
+  bgp_neighbors:
+    - {neighbor: 203.0.113.50, remote_as: 64501, description: to sample upstream, password: dummy-bgp-key-d, ebgp_multihop: 2, keepalive: 10, holdtime: 30, prefix_list_in: pl-sample-d-in, filter_out: rm-sample-d, default_originate: true}
+    - {neighbor: 192.0.2.202, remote_as: 64500, update_source: Loopback0.0, next_hop_self: true, enabled: false}
+  bgp_networks:
+    - {prefix: 198.51.100.0/24}
+  bgp_redistribute:
+    - {source: ospf, metric: 10}
+    - {source: static, filter: rm-sample-d}
+  fhrp:
+    - {if_name: GigaEthernet1.0, protocol: vrrp, group: 1, virtual_ip: 198.51.100.1, priority: 110, preempt: true, advert_interval: 3, auth_type: simple, auth_key: dummy-vrrp-d}
+    - {if_name: GigaEthernet2.0, protocol: vrrp, group: 10, virtual_ip: 198.51.100.129, preempt: false}
+findings: [V-113]

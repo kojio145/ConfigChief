@@ -1,0 +1,324 @@
+{# Interfaces. Syntax: cmdref 4.2, 4.6 and 4.8. The VRF comes before the
+   addresses: the device takes the addresses off when the VRF of an interface
+   changes. OSPF and the redundancy groups (HSRP, VRRP in the older form) of
+   an interface stand under it. #}
+{# An interface runs one OSPF process, of its own VRF. #}
+{% for o in t.ospf_interfaces %}
+{% set n = namespace(rows=0, seen=false) %}
+{% for x in t.ospf_interfaces %}
+{% if x.if_name == o.if_name %}
+{% set n.rows = n.rows + 1 %}
+{% endif %}
+{% endfor %}
+{% if n.rows > 1 %}
+{{ fail('OSPF インタフェース ' ~ o.if_name ~ ' の行が ' ~ n.rows ~ ' つあります（Cisco では、1 つのインタフェースは 1 つのプロセスに入ります）') }}
+{% endif %}
+{% for i in t.interfaces %}
+{% if i.name == o.if_name %}
+{% set n.seen = true %}
+{% for p in t.ospf_processes %}
+{% if p.process_id == o.process_id and p.vrf != i.vrf %}
+{{ fail('OSPF インタフェース ' ~ o.if_name ~ ' の VRF「' ~ i.vrf ~ '」が、OSPF ' ~ o.process_id ~ ' の VRF「' ~ p.vrf ~ '」と違います') }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('OSPF インタフェース ' ~ o.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{% for f in t.fhrp %}
+{% set n = namespace(seen=false) %}
+{% for i in t.interfaces %}
+{% if i.name == f.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('冗長化の IF ' ~ f.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{% for u in t.tunnels %}
+{% set n = namespace(seen=false) %}
+{% for i in t.interfaces %}
+{% if i.name == u.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('トンネル IF ' ~ u.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{# PPPoE: the port and the Dialer interface meet by the number of the pool
+   (cmdref 7.12). The design data has no such number: that of the Dialer
+   interface is taken, which no other row can have. #}
+{% for p in t.pppoe %}
+{% set what = 'PPPoE ' ~ p.name %}
+{% set n = namespace(phys=false, logic=false, same=0) %}
+{% for i in t.interfaces %}
+{% if i.name == p.physical_if %}
+{% set n.phys = true %}
+{% endif %}
+{% if i.name == p.logical_if %}
+{% set n.logic = true %}
+{% endif %}
+{% endfor %}
+{% for q in t.pppoe %}
+{% if q.physical_if == p.physical_if or q.logical_if == p.logical_if %}
+{% set n.same = n.same + 1 %}
+{% endif %}
+{% endfor %}
+{% set num = p.logical_if | replace('Dialer', '') %}
+{% if not p.logical_if is startingwith('Dialer') or not num is digits or num | int < 1 or num | int > 255 %}
+{{ fail(what ~ ' の論理 IF「' ~ p.logical_if ~ '」は書けません（Cisco では Dialer1〜Dialer255 です。番号をプールの番号に使います）') }}
+{% elif not n.logic %}
+{{ fail(what ~ ' の論理 IF ' ~ p.logical_if ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% if not n.phys %}
+{{ fail(what ~ ' の物理 IF ' ~ p.physical_if ~ ' が、インタフェースの表にありません') }}
+{% elif p.physical_if == p.logical_if %}
+{{ fail(what ~ ' の物理 IF と論理 IF が同じです（Cisco では、回線につながるポートと Dialer を分けて書きます）') }}
+{% endif %}
+{% if n.same > 1 %}
+{{ fail(what ~ ': 同じ物理 IF か同じ論理 IF を使う PPPoE の行が、ほかにあります（Cisco では、1 つのポートに 1 つのプールです）') }}
+{% endif %}
+{% if ' ' in p.service_name or '"' in p.service_name %}
+{{ fail(what ~ ' のサービス名に、空白か引用符があります（このパックは 1 語の名前だけを書きます）') }}
+{% endif %}
+{% endfor %}
+{% for i in t.interfaces %}
+interface {{ i.name }}
+{% if i.description %}
+ description {{ i.description }}
+{% endif %}
+{% if i.bandwidth %}
+ bandwidth {{ i.bandwidth }}
+{% endif %}
+{% if i.encap_vlan %}
+ encapsulation dot1Q {{ i.encap_vlan }}
+{% endif %}
+{% if i.vrf %}
+ vrf forwarding {{ i.vrf }}
+{% endif %}
+{% if i.ipv4 is cidr %}
+ ip address {{ i.ipv4 | ip }} {{ i.ipv4 | mask }}
+{% elif i.ipv4 is startingwith('unnumbered:') %}
+ ip unnumbered {{ i.ipv4 | replace('unnumbered:', '') }}
+{% elif i.ipv4 %}
+ ip address {{ i.ipv4 }}
+{% endif %}
+{% for a in i.ipv4_secondary %}
+ ip address {{ a | ip }} {{ a | mask }} secondary
+{% endfor %}
+{% for a in i.ipv6 %}
+ ipv6 address {{ a }}
+{% endfor %}
+{% if i.acl_in %}
+ ip access-group {{ i.acl_in }} in
+{% endif %}
+{% if i.acl_out %}
+ ip access-group {{ i.acl_out }} out
+{% endif %}
+{% for a in i.dhcp_relay %}
+ ip helper-address {{ a }}
+{% endfor %}
+{% if i.proxy_arp == true %}
+ ip proxy-arp
+{% elif i.proxy_arp == false %}
+ no ip proxy-arp
+{% endif %}
+{% if i.mtu %}
+ mtu {{ i.mtu }}
+{% endif %}
+{% if i.ip_mtu %}
+ ip mtu {{ i.ip_mtu }}
+{% endif %}
+{% if i.nat_role %}
+ ip nat {{ i.nat_role }}
+{% endif %}
+{% if i.tcp_mss %}
+ ip tcp adjust-mss {{ i.tcp_mss }}
+{% endif %}
+{% if i.duplex %}
+ duplex {{ i.duplex }}
+{% endif %}
+{% if i.speed == '10000' %}
+{{ fail(i.name ~ ' の速度 10000 は、このパックでは書けません（書き方を確かめていません）') }}
+{% elif i.speed %}
+ speed {{ i.speed }}
+{% endif %}
+{% for o in t.ospf_interfaces %}
+{% if o.if_name == i.name %}
+{% set what = i.name ~ ' の OSPF' %}
+ ip ospf {{ o.process_id }} area {{ o.area | required(what ~ ' のエリア') }}
+{% if o.auth_type == 'md5' %}
+ ip ospf authentication message-digest
+ ip ospf message-digest-key {{ o.auth_key_id | required(what ~ ' の鍵番号') }} md5 {{ o.auth_key | required(what ~ ' の鍵') }}
+{% elif o.auth_type == 'simple' %}
+ ip ospf authentication
+ ip ospf authentication-key {{ o.auth_key | required(what ~ ' の鍵') }}
+{% elif o.auth_type == 'none' %}
+ ip ospf authentication null
+{% endif %}
+{% if o.auth_type in ['', 'none'] and (o.auth_key or o.auth_key_id != '') %}
+{{ fail(what ~ ' に鍵がありますが、認証が simple でも md5 でもありません') }}
+{% elif o.auth_type == 'simple' and o.auth_key_id != '' %}
+{{ fail(what ~ ' の鍵番号は、認証が md5 のときだけ書けます') }}
+{% endif %}
+{% if o.network_type %}
+ ip ospf network {{ o.network_type | lex('ospf_network') }}
+{% endif %}
+{% if o.cost != '' %}
+ ip ospf cost {{ o.cost }}
+{% endif %}
+{% if o.priority != '' %}
+ ip ospf priority {{ o.priority }}
+{% endif %}
+{% if o.hello != '' %}
+ ip ospf hello-interval {{ o.hello }}
+{% endif %}
+{% if o.dead != '' %}
+ ip ospf dead-interval {{ o.dead }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# A tunnel: GRE is what the device does without a "tunnel mode" line. #}
+{% for u in t.tunnels %}
+{% if u.if_name == i.name %}
+{% set what = i.name ~ ' のトンネル' %}
+ tunnel source {{ u.source | required(what ~ ' の送信元') }}
+ tunnel destination {{ u.destination | required(what ~ ' の宛先') }}
+{% if u.type != 'gre' %}
+ tunnel mode {{ u.type | lex('tunnel_mode') }}
+{% endif %}
+{% if u.key != '' %}
+{% if u.type != 'gre' %}
+{{ fail(what ~ ' の鍵は、種類が gre のときだけ書けます') }}
+{% endif %}
+ tunnel key {{ u.key }}
+{% endif %}
+{% if u.keepalive_interval != '' or u.keepalive_retry != '' %}
+ keepalive {{ u.keepalive_interval | required(what ~ ' の監視間隔（再送回数と組で書きます）') }} {{ u.keepalive_retry | required(what ~ ' の監視の再送回数（監視間隔と組で書きます）') }}
+{% endif %}
+{# IPsec on the tunnel interface: the profile of ipsec.j2. #}
+{% if u.type == 'ipsec' %}
+{% set sec = namespace(seen=false) %}
+{% for r in t.ipsec_tunnels %}
+{% if r.style == 'tunnel_if' and r.tunnel_if == i.name %}
+{% set sec.seen = true %}
+ tunnel protection ipsec profile PROF-{{ i.name }}
+{% endif %}
+{% endfor %}
+{% if not sec.seen %}
+{{ fail(what ~ ' は種類が ipsec ですが、IPsec の表に、このトンネル IF の行がありません') }}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# A crypto map: one for an interface (ipsec.j2). #}
+{% set cmap = namespace(done=false) %}
+{% for r in t.ipsec_tunnels %}
+{% if r.style == 'policy' and r.local_if == i.name and not cmap.done %}
+ crypto map {{ (r.name | split('/'))[0] }}
+{% set cmap.done = true %}
+{% endif %}
+{% endfor %}
+{# PPPoE. The port: the switch, then the pool. The Dialer interface: the
+   answer to the authentication of the other side only ("callin"). Without
+   a method the name and the password are given for both. #}
+{% for p in t.pppoe %}
+{% set pool = p.logical_if | replace('Dialer', '') %}
+{% if p.physical_if == i.name %}
+ pppoe enable group global
+ pppoe-client dial-pool-number {{ pool }}{{ ' service-name ' ~ p.service_name if p.service_name else '' }}
+{% endif %}
+{% if p.logical_if == i.name %}
+{% set what = 'PPPoE ' ~ p.name %}
+{% set user = p.username | required(what ~ ' の接続 ID') %}
+{% set pw = p.password | required(what ~ ' の接続パスワード') %}
+{% if ' ' in user or ' ' in pw %}
+{{ fail(what ~ ' の接続 ID か接続パスワードに、空白があります') }}
+{% endif %}
+ encapsulation ppp
+ dialer pool {{ pool }}
+{% if p.auth %}
+ ppp authentication {{ p.auth | replace('_', ' ') }} callin
+{% endif %}
+{% if p.auth != 'pap' %}
+ ppp chap hostname {{ user }}
+ ppp chap password {{ pw }}
+{% endif %}
+{% if p.auth != 'chap' %}
+ ppp pap sent-username {{ user }} password {{ pw }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# HSRP version 2 is one setting of the interface. #}
+{% set hsrp = namespace(v='', n=0) %}
+{% for f in t.fhrp %}
+{% if f.if_name == i.name and f.protocol == 'hsrp' %}
+{% if hsrp.n > 0 and f.version != hsrp.v %}
+{{ fail(i.name ~ ' の HSRP の版が、グループによって違います（版はインタフェースに 1 つです）') }}
+{% endif %}
+{% set hsrp.v = f.version %}
+{% set hsrp.n = hsrp.n + 1 %}
+{% endif %}
+{% endfor %}
+{% if hsrp.v == '2' %}
+ standby version 2
+{% elif hsrp.v == '3' %}
+{{ fail(i.name ~ ' の HSRP の版 3 はありません（1 か 2 です）') }}
+{% endif %}
+{% for f in t.fhrp %}
+{% if f.if_name == i.name %}
+{% set what = i.name ~ ' の冗長化のグループ ' ~ f.group %}
+{% set g = ('standby ' if f.protocol == 'hsrp' else 'vrrp ') ~ f.group %}
+ {{ g }} ip {{ f.virtual_ip | required(what ~ ' の仮想 IP') }}
+{% if f.priority != '' %}
+ {{ g }} priority {{ f.priority }}
+{% endif %}
+{% if f.preempt == true %}
+ {{ g }} preempt{{ ' delay minimum ' ~ f.preempt_delay if f.preempt_delay != '' else '' }}
+{% elif f.preempt_delay != '' %}
+{{ fail(what ~ ' の切り戻し待ちは、切り戻しが有効のときだけ書けます') }}
+{% elif f.preempt == false %}
+ no {{ g }} preempt
+{% endif %}
+{% if f.protocol == 'hsrp' %}
+{% if f.advert_interval != '' or f.hold != '' %}
+ {{ g }} timers {{ f.advert_interval | required(what ~ ' の Hello 間隔（Hold と組で書きます）') }} {{ f.hold | required(what ~ ' の Hold（Hello 間隔と組で書きます）') }}
+{% endif %}
+{% if f.auth_type == 'simple' %}
+ {{ g }} authentication text {{ f.auth_key | required(what ~ ' の鍵') }}
+{% elif f.auth_type == 'md5' %}
+{{ fail(what ~ ' の認証 md5 は、このパックでは書けません（書き方を確かめていません。追加コンフィグに書いてください）') }}
+{% elif f.auth_key %}
+{{ fail(what ~ ' に鍵がありますが、認証が simple ではありません') }}
+{% endif %}
+{% elif f.advert_interval != '' %}
+ {{ g }} timers advertise {{ f.advert_interval }}
+{% endif %}
+{% if f.track %}
+ {{ g }} track {{ f.track }}{{ ' decrement ' ~ f.track_decrement if f.track_decrement != '' else '' }}
+{% elif f.track_decrement != '' %}
+{{ fail(what ~ ' の減点は、回線監視を書いたときだけ書けます') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# QoS: the policy, or the parent that shapes the whole interface (qos.j2). #}
+{% for b in t.qos_bindings %}
+{% if b.if_name == i.name %}
+{% if b.shape_bps != '' %}
+ service-policy {{ b.direction }} shape-{{ b.if_name | ifshort | replace('/', '-') | replace('.', '-') }}
+{% elif b.policy %}
+ service-policy {{ b.direction }} {{ b.policy }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if i.enabled == false %}
+ shutdown
+{% else %}
+ no shutdown
+{% endif %}
+!
+{% endfor %}

@@ -1,0 +1,38 @@
+hostname ix-q01
+!
+ip access-list acl-q-biz permit ip src 192.0.2.0/24 dest 198.51.100.0/24
+!
+ip access-list qos-d1 permit ip src any dest any dscp 46
+!
+class-map match-any cm-q-biz
+  match ip access-list acl-q-biz
+class-map match-any cm-q-voice
+  match ip access-list qos-d1
+!
+policy-map pm-q-child
+  class cm-q-voice
+    priority percent 20
+  class cm-q-biz
+    bandwidth percent 40
+  class class-local
+  class class-default
+policy-map pm-q-lan
+  class cm-q-biz
+    set ip dscp 18
+  class class-local
+  class class-default
+!
+ip route default 203.0.113.2
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.1/30
+  service-policy enable
+  service-policy output pm-q-child
+  traffic-shape rate 10000000
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 192.0.2.1/24
+  service-policy input pm-q-lan
+  no shutdown
+!

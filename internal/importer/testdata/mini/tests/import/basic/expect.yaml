@@ -1,0 +1,20 @@
+tables:
+  devices:
+    - {hostname: rt-a01, snmp_location: Sample room}
+  interfaces:
+    - {name: GigabitEthernet0/1, description: to rt-b01, ipv4: 192.0.2.5/30, enabled: false, dhcp_relay: [198.51.100.10, 198.51.100.11]}
+    - {name: GigabitEthernet0/2, ipv4: 192.0.2.9/30, enabled: true, kind: physical}
+    - {name: Loopback0, kind: loopback, mtu: ""}
+  tunnels:
+    - {if_name: GigabitEthernet0/2, type: gre, destination: 203.0.113.1}
+unknown:
+  - "mystery knob 5"
+  - "deeper mystery"
+  - "bad address 192.0.2.77"
+  - "tunnel-profile PROF-SAMPLE-MISSING"
+  - "color blue"
+  - "profile PROF-SAMPLE-UNUSED"
+  - "peer 203.0.113.2"
+  - "stray child"
+  - "user monitor role guest"
+ignored_min: 5

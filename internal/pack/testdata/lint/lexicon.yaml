@@ -1,0 +1,3 @@
+duplex:
+  full: full-duplex
+  half: half-duplex

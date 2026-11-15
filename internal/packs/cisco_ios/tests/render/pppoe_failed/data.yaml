@@ -1,0 +1,16 @@
+# PPPoE rows the pack cannot write (made-up values): each tells why.
+tables:
+  devices:
+    - hostname: rt-e05
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true}
+    - {name: GigabitEthernet0/1, enabled: true}
+    - {name: Dialer1, enabled: true, ipv4: negotiated}
+  pppoe:
+    # The logical interface is not a Dialer interface.
+    - {name: wan-sample-a, physical_if: GigabitEthernet0/0, logical_if: GigabitEthernet0/0.1, username: sample-a@example.com, password: dummy-pppoe-secret-a}
+    # Two rows on the same Dialer interface; the port of the second is not on the sheet.
+    - {name: wan-sample-b, physical_if: GigabitEthernet0/1, logical_if: Dialer1, username: sample-b@example.com, password: dummy-pppoe-secret-b}
+    - {name: wan-sample-c, physical_if: GigabitEthernet0/9, logical_if: Dialer1, username: sample-c@example.com, password: dummy-pppoe-secret-c, service_name: svc sample}
+findings: [G-601]

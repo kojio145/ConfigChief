@@ -1,0 +1,35 @@
+hostname rt-c03
+!
+vrf definition VRF-SAMPLE-C
+ rd 64496:300
+ address-family ipv4
+ exit-address-family
+!
+ip multicast-routing
+!
+interface GigabitEthernet0/0
+ description sample wan
+ vrf forwarding VRF-SAMPLE-C
+ ip address 203.0.113.33 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet0/1
+ ip address dhcp
+ no shutdown
+!
+interface Loopback1
+ ip unnumbered GigabitEthernet0/0
+ no shutdown
+!
+ip access-list extended ACL-SAMPLE-C
+ permit ip 192.0.2.0 0.0.0.255 any
+!
+ntp server 192.0.2.123 source GigabitEthernet0/0
+ntp server 192.0.2.124
+!
+ntp server 192.0.2.124
+ntp update-calendar
+!
+service timestamps log datetime msec
+!
+end

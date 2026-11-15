@@ -1,0 +1,42 @@
+hostname rt-q01
+!
+class-map match-any cm-q-mark
+ match access-group name al-q-biz
+class-map match-any cm-q-pq-high
+ match dscp 46
+class-map match-any cm-q-pq-normal
+ match access-group name al-q-biz
+class-map match-any cm-q-pq-low
+ match any
+!
+policy-map pm-q-lan
+ class cm-q-mark
+  set dscp 18
+policy-map pm-q-wan
+ class cm-q-pq-high
+  priority level 1
+ class cm-q-pq-normal
+  bandwidth remaining percent 75
+ class cm-q-pq-low
+  bandwidth remaining percent 25
+policy-map shape-Gi0-0
+ class class-default
+  shape average 10000000
+  service-policy pm-q-wan
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.1 255.255.255.252
+ service-policy output shape-Gi0-0
+ no shutdown
+!
+interface GigabitEthernet0/1
+ ip address 192.0.2.1 255.255.255.0
+ service-policy input pm-q-lan
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.2 1
+!
+ip access-list extended al-q-biz
+ permit ip 192.0.2.0 0.0.0.255 198.51.100.0 0.0.0.255
+!
+end

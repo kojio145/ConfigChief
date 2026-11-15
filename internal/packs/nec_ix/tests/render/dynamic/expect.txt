@@ -1,0 +1,74 @@
+hostname ix-d01
+!
+ip prefix-list pl-sample-d-in 10 permit 0.0.0.0/0
+!
+ip router ospf 1
+  router-id 192.0.2.201
+  area 1 stub no-summary
+  area 0 range 192.0.2.192/26 not-advertise
+  area 1 range 198.51.100.0/24 advertise
+  redistribute bgp route-map rm-sample-d
+  redistribute static metric 100 metric-type 1
+  originate-default always metric 50
+  passive-interface Loopback0.0
+  network GigaEthernet0.0 area 0
+  network GigaEthernet1.0 area 1
+  network Loopback0.0 area 0
+!
+router bgp 64500
+  router-id 192.0.2.201
+  neighbor 192.0.2.202 remote-as 64500
+  neighbor 192.0.2.202 update-source Loopback0.0
+  neighbor 192.0.2.202 shutdown
+  neighbor 203.0.113.50 remote-as 64501
+  neighbor 203.0.113.50 description to sample upstream
+  neighbor 203.0.113.50 password dummy-bgp-key-d
+  neighbor 203.0.113.50 ebgp-multihop 2
+  neighbor 203.0.113.50 timers 10 30
+  address-family ipv4 unicast
+    network 198.51.100.0/24
+    redistribute ospf metric 10
+    redistribute static route-map rm-sample-d
+    neighbor 192.0.2.202 next-hop-self
+    neighbor 203.0.113.50 distribute-list pl-sample-d-in in
+    neighbor 203.0.113.50 route-map rm-sample-d out
+    neighbor 203.0.113.50 send-default
+!
+vrrp enable
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.49/30
+  ip ospf cost 20
+  ip ospf priority 0
+  ip ospf hello-interval 5
+  ip ospf dead-interval 20
+  ip ospf network point-to-point
+  ip ospf authentication message-digest
+  ip ospf message-digest-key 1 dummy-ospf-key-d
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.2/24
+  ip ospf hello-interval 10
+  ip ospf dead-interval 40
+  ip ospf authentication
+  ip ospf authentication-key dummy-ospf-pw
+  vrrp 1 ip 198.51.100.1
+  vrrp 1 priority 110
+  vrrp 1 preempt
+  vrrp 1 timers advertisement 3
+  vrrp 1 authentication dummy-vrrp-d
+  no shutdown
+!
+interface GigaEthernet2.0
+  ip address 198.51.100.130/25
+  vrrp 10 ip 198.51.100.129
+  vrrp 10 priority 100
+  no vrrp 10 preempt
+  no shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.201/32
+  ip ospf hello-interval 10
+  ip ospf dead-interval 40
+!

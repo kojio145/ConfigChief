@@ -1,0 +1,56 @@
+# OSPF, BGP and the redundancy groups (made-up values). expect.txt is the
+# configuration the tables must turn into.
+tables:
+  devices:
+    - hostname: rt-d01
+      vendor: cisco_ios
+  vrfs:
+    - {name: VRF-SAMPLE-D, rd: "64496:500"}
+  interfaces:
+    - {name: Loopback0, enabled: true, ipv4: 192.0.2.201/32}
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.49/30}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 198.51.100.2/24}
+    - {name: GigabitEthernet0/2, enabled: true, ipv4: 198.51.100.130/25}
+    - {name: GigabitEthernet0/3, enabled: true, ipv4: 192.0.2.65/26, vrf: VRF-SAMPLE-D}
+  tracks:
+    - {id: "5", type: interface, target: GigabitEthernet0/0}
+  prefix_lists:
+    - {name: PL-SAMPLE-D-IN, seq: 10, action: permit, prefix: 0.0.0.0/0}
+  ospf_processes:
+    - {process_id: 1, router_id: 192.0.2.201, reference_bandwidth: 10000, passive_default: true, default_originate: always, default_metric: 50}
+    - {process_id: 20, vrf: VRF-SAMPLE-D, router_id: 192.0.2.65, default_originate: when_present}
+  ospf_interfaces:
+    - {process_id: 1, if_name: Loopback0, area: "0", passive: true}
+    - {process_id: 1, if_name: GigabitEthernet0/0, area: "0", passive: false, cost: 20, priority: 0, hello: 5, dead: 20, network_type: point_to_point, auth_type: md5, auth_key_id: 1, auth_key: dummy-ospf-key-d}
+    - {process_id: 1, if_name: GigabitEthernet0/1, area: "1", auth_type: simple, auth_key: dummy-ospf-pw}
+    - {process_id: 20, if_name: GigabitEthernet0/3, area: 0.0.0.5, auth_type: none}
+  ospf_areas:
+    - {process_id: 1, area: "1", type: totally_stub}
+    - {process_id: 20, area: 0.0.0.5, type: nssa}
+  ospf_ranges:
+    - {process_id: 1, area: "1", prefix: 198.51.100.0/24}
+    - {process_id: 1, area: "0", prefix: 192.0.2.192/26, advertise: false}
+  ospf_redistribute:
+    - {process_id: 1, source: static, metric: 100, metric_type: "1"}
+    - {process_id: 1, source: bgp, filter: RM-SAMPLE-D}
+    - {process_id: 20, source: connected}
+  bgp_processes:
+    - {asn: 64500, router_id: 192.0.2.201, log_neighbor_changes: true}
+    - {vrf: VRF-SAMPLE-D, asn: 64500}
+  bgp_neighbors:
+    - {neighbor: 203.0.113.50, remote_as: 64501, description: to sample upstream, password: dummy-bgp-key-d, ebgp_multihop: 2, prefix_list_in: PL-SAMPLE-D-IN, filter_out: RM-SAMPLE-D}
+    - {neighbor: 192.0.2.202, remote_as: 64500, update_source: Loopback0, next_hop_self: true, soft_reconfig_in: true, enabled: false}
+    - {vrf: VRF-SAMPLE-D, neighbor: 192.0.2.66, remote_as: 64502}
+  bgp_networks:
+    - {prefix: 198.51.100.0/24}
+    - {vrf: VRF-SAMPLE-D, prefix: 192.0.2.64/26}
+  bgp_redistribute:
+    - {source: ospf, metric: 10}
+    - {source: static, filter: RM-SAMPLE-D}
+    - {vrf: VRF-SAMPLE-D, source: connected}
+  fhrp:
+    - {if_name: GigabitEthernet0/1, protocol: hsrp, group: 1, version: "2", virtual_ip: 198.51.100.1, priority: 110, preempt: true, preempt_delay: 60, advert_interval: 1, hold: 4, auth_type: simple, auth_key: dummy-hsrp-d, track: "5", track_decrement: 20}
+    - {if_name: GigabitEthernet0/1, protocol: hsrp, group: 2, version: "2", virtual_ip: 198.51.100.3, preempt: false}
+    - {if_name: GigabitEthernet0/2, protocol: vrrp, group: 10, virtual_ip: 198.51.100.129, priority: 120, preempt: true, preempt_delay: 30, advert_interval: 3, track: "5"}
+    - {if_name: GigabitEthernet0/2, protocol: vrrp, group: 11, virtual_ip: 198.51.100.131, preempt: false}
+findings: [V-113]

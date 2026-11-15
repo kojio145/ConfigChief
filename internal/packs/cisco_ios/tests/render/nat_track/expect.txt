@@ -1,0 +1,61 @@
+hostname rt-n01
+!
+vrf definition VRF-SAMPLE-M
+ address-family ipv4
+ exit-address-family
+!
+vrf definition VRF-SAMPLE-N
+ description sample vrf n
+ rd 64496:400
+ address-family ipv4
+ exit-address-family
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.41 255.255.255.252
+ ip nat outside
+ no shutdown
+!
+interface GigabitEthernet0/1
+ ip address 192.0.2.1 255.255.255.128
+ ip nat inside
+ no shutdown
+!
+interface GigabitEthernet0/2
+ vrf forwarding VRF-SAMPLE-N
+ ip address 192.0.2.129 255.255.255.128
+ no shutdown
+!
+ip sla 1
+ icmp-echo 203.0.113.42 source-interface GigabitEthernet0/0
+ threshold 2000
+ timeout 2000
+ frequency 5
+ip sla schedule 1 life forever start-time now
+track 1 ip sla 1 reachability
+ delay up 10 down 5
+!
+ip sla 2
+ icmp-echo 198.51.100.1
+ frequency 60
+ip sla schedule 2 life forever start-time now
+track 2 ip sla 2 reachability
+!
+track 3 interface GigabitEthernet0/0 line-protocol
+ delay down 3
+!
+ip route 0.0.0.0 0.0.0.0 192.0.2.2 200
+ip route 0.0.0.0 0.0.0.0 203.0.113.42 track 1
+!
+ip access-list standard ACL-SAMPLE-NAT
+ permit 192.0.2.0 0.0.0.127
+!
+ip nat inside source list ACL-SAMPLE-NAT interface GigabitEthernet0/0 overload
+ip nat pool nat2 198.51.100.17 198.51.100.22 prefix-length 29
+ip nat inside source list ACL-SAMPLE-NAT pool nat2 overload
+ip nat inside source static tcp 192.0.2.11 8080 198.51.100.11 80
+ip nat inside source static udp 192.0.2.12 514 interface GigabitEthernet0/0 514
+ip nat pool sample-pool 198.51.100.33 198.51.100.38 prefix-length 29
+ip nat inside source list ACL-SAMPLE-NAT pool sample-pool
+ip nat inside source static 192.0.2.10 198.51.100.10
+!
+end

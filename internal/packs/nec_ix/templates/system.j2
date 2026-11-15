@@ -1,0 +1,49 @@
+{# The device as a whole and its users. Syntax: cmdref 4.1 and 4.4. The device
+   has no domain name of its own and no enable password, and the form of a
+   banner in the saved text is not known: those cells are not read. #}
+hostname {{ device.hostname }}
+{% if device.timezone %}
+{# Hours and minutes with a sign ("+09 00"); the device has no name for the
+   zone. The cell has to be in the form the import gives back. #}
+{% set tz = device.timezone %}
+{% set sign = '-' if tz is startingwith('-') else '+' %}
+{% set hm = (tz | replace('+', '') | replace('-', '')) | split(':') %}
+{% set ok = namespace(v=false) %}
+{% if (tz is startingwith('+') or tz is startingwith('-')) and hm[0] is digits %}
+{% if hm | length == 1 %}
+{% set ok.v = (tz == (sign ~ (hm[0] | int))) %}
+{% elif hm | length == 2 and hm[1] is digits and hm[1] | length == 2 and hm[1] != '00' %}
+{% set ok.v = (tz == (sign ~ (hm[0] | int) ~ ':' ~ hm[1])) %}
+{% endif %}
+{% endif %}
+{% if not ok.v %}
+{{ fail('タイムゾーンは「+9」「+5:30」の形で書きます（NEC IX は時刻帯の名前を持ちません。JST +9 は +9 と書いてください）') }}
+{% endif %}
+timezone {{ sign }}{{ ('0' ~ hm[0]) if hm[0] | length == 1 else hm[0] }} {{ hm[1] if hm | length == 2 else '00' }}
+{% endif %}
+!
+{% for u in t.users %}
+{% set role = '' if not u.privilege else ('monitor' if u.privilege == 'monitor' else (u.privilege | lex('user_role'))) %}
+{% if u.secret_form == 'hashed' %}
+{# What a hash of this device looks like is not known. One that starts with
+   "$" is the form of another vendor, and the device cannot take it. #}
+{% if u.secret is startingwith('$') %}
+{{ fail('ユーザ ' ~ u.name ~ ' のパスワードは、別メーカーのハッシュです（$ で始まります）。ハッシュは別メーカーへ引き継げません') }}
+{% endif %}
+username {{ u.name }} password hash {{ u.secret | required('パスワード') }}{{ ' ' ~ role if role else '' }}
+{% else %}
+{% if ' ' in u.secret %}
+{{ fail('ユーザ ' ~ u.name ~ ' のパスワードに空白があります（空白を含む値の書き方を確かめていません）') }}
+{% endif %}
+username {{ u.name }} password plain {{ u.secret | required('パスワード') }}{{ ' ' ~ role if role else '' }}
+{% endif %}
+{% endfor %}
+{% if t.users %}
+!
+{% endif %}
+{% for a in device.name_servers %}
+ip name-server {{ a }}
+{% endfor %}
+{% if device.name_servers %}
+!
+{% endif %}

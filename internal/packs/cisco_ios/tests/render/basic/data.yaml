@@ -1,0 +1,62 @@
+# The design data of one device (made-up values), written as the tables of
+# appendix A. expect.txt is the configuration it must turn into. A row without
+# "device" belongs to the device of the test.
+tables:
+  devices:
+    - hostname: rt-c01
+      vendor: cisco_ios
+      model: sample-model
+      site: sample-site-c
+      domain_name: example.net
+      name_servers: [192.0.2.53, 192.0.2.54]
+      timezone: JST +9
+      enable_secret: $1$dummy$SampleHashForTestsOnly444
+      secret_form: hashed
+      snmp_location: sample-site-c rack 2
+      snmp_contact: netops@example.net
+      banner: "sample banner: authorized access only"
+  interfaces:
+    - {name: Loopback0, description: sample loopback, enabled: true, ipv4: 192.0.2.9/32}
+    - name: GigabitEthernet0/0
+      description: to rt-c02
+      enabled: true
+      ipv4: 203.0.113.9/30
+      bandwidth: 100000
+      mtu: 1500
+      speed: auto
+      duplex: auto
+    - name: GigabitEthernet0/1
+      description: sample lan
+      enabled: true
+      ipv4: 198.51.100.129/25
+      ipv4_secondary: [198.51.100.1/25]
+      dhcp_relay: [192.0.2.67]
+      proxy_arp: false
+      nat_role: inside
+      tcp_mss: 1360
+      ip_mtu: 1400
+      speed: 1000
+      duplex: full
+    - {name: GigabitEthernet0/2, enabled: true}
+    - {name: GigabitEthernet0/2.30, description: sample vlan 30, enabled: true, encap_vlan: 30, ipv4: 192.0.2.129/26}
+    - {name: GigabitEthernet0/3, enabled: false}
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: 203.0.113.10}
+    - {prefix: 192.0.2.64/26, next_hop: 203.0.113.10, distance: 10, description: sample-backup}
+    - {prefix: 198.18.30.0/24, out_if: GigabitEthernet0/0, next_hop: 203.0.113.10}
+  users:
+    - {name: admin, privilege: admin, secret: $1$dummy$SampleHashForTestsOnly555, secret_form: hashed}
+    - {name: monitor, privilege: 1, secret: $9$dummy$SampleHashForTestsOnly666, secret_form: hashed}
+    - {name: backup, secret: dummy-backup-secret-sample}
+  remote_access:
+    - {protocols: [ssh], ssh_version: 2, idle_timeout: 10, auth: local}
+  ntp_servers:
+    - {server: 192.0.2.123, prefer: true, source_if: Loopback0}
+    - {server: 192.0.2.124, source_if: Loopback0}
+  syslog_servers:
+    - {server: 192.0.2.50, facility: local6, severity: warnings, source_if: Loopback0}
+    - {server: 192.0.2.51, facility: local6, severity: warnings, source_if: Loopback0}
+  snmp_communities:
+    - {community: dummy-ro-comm, access: ro}
+  snmp_hosts:
+    - {host: 192.0.2.60, version: 2c, community: dummy-ro-comm, source_if: Loopback0}

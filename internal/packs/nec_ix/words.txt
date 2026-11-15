@@ -1,0 +1,18 @@
+# Words of commands, from the public command references of the vendors (the
+# list of what was read is in the README). A report of unhandled lines that
+# leaves a site keeps the words of the pack's files and these, and hides every
+# other word (spec 8.6). One word or more on a line; "#" starts a note.
+# Made by a script of the maintainers from the public command references; words added by hand are kept.
+activate adaptive addressname addrname adjacency aggregate algorithm alias ambiguous asnotation
+assignment association average based bba bdi bri bridge brief building byte callin cautiously change
+changes channel classify client clock code comp compatibility compatible con concentrator conform
+console continue cos crypto custom definition detail detected dial dialer directed discovery drop
+dynamic ecdsa eigrp encr encrypt exec extendable fecn fhp force forced fragments frequency gcm
+generate generating gigabitethernet gigaethernetn gmac hairpinning hmac http iap ibgp idname igmp
+inbound incomplete information invoke ipaddr ipicmpecho irb iri isakmp keyring lac license linenum
+link lns login lzs master minimum mnemonic modulus mru msec native non nsap packet packets pad path
+payload peak permanent persistent pir platform poll poor portfast precendence previous provide pvc
+random ratio reconfiguration redirects release request resequence reserved restoration reversible
+ring rsa rtp rtr seal secondaries security segment sent severity should sig size sla soft stability
+standby state stateful subnets suppress sync threshold tpid transform translate transmit transport
+tunneln updown very violate vpnv vty yyyy

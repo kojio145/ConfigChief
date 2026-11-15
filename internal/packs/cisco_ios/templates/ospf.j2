@@ -1,0 +1,76 @@
+{# OSPF. Syntax: cmdref 4.6 and 7.6. An interface joins a process by its own
+   line ("ip ospf <id> area <area>", interfaces.j2): no "network" line is
+   written. "subnets" is always written with "redistribute": without it only
+   classful networks are taken, and the dataset has no column for it. #}
+{% for p in t.ospf_processes %}
+{% set what = 'OSPF ' ~ p.process_id %}
+router ospf {{ p.process_id }}{{ ' vrf ' ~ p.vrf if p.vrf else '' }}
+{% if p.router_id %}
+ router-id {{ p.router_id }}
+{% endif %}
+{% if p.reference_bandwidth != '' %}
+ auto-cost reference-bandwidth {{ p.reference_bandwidth }}
+{% endif %}
+{% for a in t.ospf_areas %}
+{% if a.process_id == p.process_id %}
+{% if a.type in ['stub', 'totally_stub'] %}
+ area {{ a.area }} stub{{ ' no-summary' if a.type == 'totally_stub' else '' }}
+{% elif a.type in ['nssa', 'totally_nssa'] %}
+ area {{ a.area }} nssa{{ ' no-summary' if a.type == 'totally_nssa' else '' }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for r in t.ospf_ranges %}
+{% if r.process_id == p.process_id %}
+ area {{ r.area }} range {{ r.prefix | ip }} {{ r.prefix | mask }}{{ ' advertise' if r.advertise == true else (' not-advertise' if r.advertise == false else '') }}
+{% endif %}
+{% endfor %}
+{% for r in t.ospf_redistribute %}
+{% if r.process_id == p.process_id %}
+{% set src = r.source %}
+{% if src == 'bgp' %}
+{% set asn = namespace(v='') %}
+{% for b in t.bgp_processes %}
+{% if not asn.v or b.vrf == p.vrf %}
+{% set asn.v = b.asn %}
+{% endif %}
+{% endfor %}
+{% if not asn.v %}
+{{ fail(what ~ ' の再配布の元 bgp は、BGP の表に行（AS 番号）が要ります') }}
+{% endif %}
+{% set src = 'bgp ' ~ asn.v %}
+{% endif %}
+ redistribute {{ src }}{{ ' metric ' ~ r.metric if r.metric != '' else '' }}{{ ' metric-type ' ~ r.metric_type if r.metric_type else '' }}{{ ' route-map ' ~ r.filter if r.filter else '' }} subnets
+{% endif %}
+{% endfor %}
+{% if p.default_originate in ['when_present', 'always'] %}
+ default-information originate{{ ' always' if p.default_originate == 'always' else '' }}{{ ' metric ' ~ p.default_metric if p.default_metric != '' else '' }}
+{% elif p.default_metric != '' %}
+{{ fail(what ~ ' の広告のメトリックは、デフォルト経路の広告が when_present か always のときだけ書けます') }}
+{% endif %}
+{% if p.passive_default == true %}
+ passive-interface default
+{% endif %}
+{% for o in t.ospf_interfaces %}
+{% if o.process_id == p.process_id %}
+{% if o.passive == true %}
+ passive-interface {{ o.if_name }}
+{% elif o.passive == false %}
+ no passive-interface {{ o.if_name }}
+{% endif %}
+{% endif %}
+{% endfor %}
+!
+{% endfor %}
+{# What stands under the interfaces needs its process here. #}
+{% for o in t.ospf_interfaces %}
+{% set known = namespace(v=false) %}
+{% for p in t.ospf_processes %}
+{% if p.process_id == o.process_id %}
+{% set known.v = true %}
+{% endif %}
+{% endfor %}
+{% if not known.v %}
+{{ fail('OSPF インタフェース ' ~ o.if_name ~ ' のプロセス番号 ' ~ o.process_id ~ ' が、OSPF の表にありません') }}
+{% endif %}
+{% endfor %}

@@ -1,0 +1,35 @@
+hostname rt-p01
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.21 255.255.255.252
+ ip access-group ACL-SAMPLE-IN in
+ no shutdown
+!
+ip access-list standard 10
+ permit 192.0.2.0 0.0.0.127
+!
+ip access-list extended ACL-SAMPLE-IN
+ permit tcp any host 198.51.100.80 eq 443 log
+ permit tcp 192.0.2.0 0.0.0.255 gt 1023 198.51.100.0 0.0.0.255 range 8000 8080
+ permit tcp any 198.51.100.0 0.0.0.255 established
+ permit udp any eq 53 any neq 123
+ permit icmp any any echo-reply
+ permit ahp host 203.0.113.22 host 203.0.113.21
+ permit 89 any any
+ deny ip any any fragments log
+!
+ip access-list standard ACL-SAMPLE-MGMT
+ remark sample management hosts
+ permit 192.0.2.0 0.0.0.255
+ permit host 198.51.100.7
+ deny any log
+!
+ip access-list extended ACL-SAMPLE-SEQ
+ 5 remark numbered by hand
+ 15 permit udp any any lt 1024
+!
+ip prefix-list PL-SAMPLE-IN seq 5 permit 0.0.0.0/0
+ip prefix-list PL-SAMPLE-OUT seq 10 permit 198.51.100.0/24 le 28
+ip prefix-list PL-SAMPLE-OUT seq 20 deny 0.0.0.0/0 le 32
+!
+end

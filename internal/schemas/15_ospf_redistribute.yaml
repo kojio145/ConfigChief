@@ -1,0 +1,11 @@
+table: ospf_redistribute
+title: {ja: OSPF 再配布, en: OSPF redistribute}
+since: M3
+key: [device, process_id, source]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: process_id, title: {ja: プロセス番号, en: Process ID}, type: int, required: true}
+  - {name: source, title: {ja: 再配布の元, en: Source}, type: enum, values: [connected, static, bgp, rip], required: true}
+  - {name: metric, title: {ja: メトリック, en: Metric}, type: int}
+  - {name: metric_type, title: {ja: メトリックの種類, en: Metric type}, type: enum, values: ["1", "2"]}
+  - {name: filter, title: {ja: 経路制御の条件, en: Filter}, type: string, note: {ja: "条件の名前。中身は追加コンフィグに書く", en: "The name of the policy. What it does goes into the extra config"}}

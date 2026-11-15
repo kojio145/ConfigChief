@@ -1,0 +1,18 @@
+table: ospf_interfaces
+title: {ja: OSPF インタフェース, en: OSPF interfaces}
+since: M3
+key: [device, process_id, if_name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: process_id, title: {ja: プロセス番号, en: Process ID}, type: int, required: true}
+  - {name: if_name, title: {ja: IF 名, en: Interface}, type: ifname, required: true}
+  - {name: area, title: {ja: エリア, en: Area}, type: string, required: true, explicit: true, note: {ja: "0 と 0.0.0.0 は同じ値として扱う", en: "0 and 0.0.0.0 are the same value"}}
+  - {name: cost, title: {ja: コスト, en: Cost}, type: int}
+  - {name: priority, title: {ja: 優先度, en: Priority}, type: int, min: 0, max: 255}
+  - {name: hello, title: {ja: Hello 間隔（秒）, en: Hello interval (s)}, type: int, explicit: true}
+  - {name: dead, title: {ja: Dead 間隔（秒）, en: Dead interval (s)}, type: int, explicit: true}
+  - {name: network_type, title: {ja: 網の種類, en: Network type}, type: enum, values: [broadcast, point_to_point, nbma, point_to_multipoint], explicit: true}
+  - {name: passive, title: {ja: 受動, en: Passive}, type: bool}
+  - {name: auth_type, title: {ja: 認証, en: Authentication}, type: enum, values: [none, simple, md5], explicit: true}
+  - {name: auth_key_id, title: {ja: 鍵番号, en: Key ID}, type: int}
+  - {name: auth_key, title: {ja: 鍵, en: Key}, type: secret}

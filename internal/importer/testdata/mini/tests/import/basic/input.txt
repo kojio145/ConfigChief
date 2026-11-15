@@ -1,0 +1,41 @@
+! sample configuration of a made-up device
+hostname rt-a01
+banner login ^
+ Sample banner
+! still the banner
+^
+interface GigabitEthernet0/1
+ description to rt-b01
+ ip address 192.0.2.1 255.255.255.252
+ ip address 192.0.2.5 255.255.255.252
+ helper 198.51.100.10
+ helper 198.51.100.11
+ shutdown
+ note first
+ alias
+ mystery knob 5
+  deeper mystery
+ bad address 192.0.2.77
+interface Gi0/2
+ ip address 192.0.2.9 255.255.255.252
+ tunnel-profile PROF-SAMPLE-A
+interface Gi0/3
+ tunnel-profile PROF-SAMPLE-MISSING
+interface Lo0
+ ip address 192.0.2.254 255.255.255.255
+profile PROF-SAMPLE-A
+ peer 203.0.113.1
+ color blue
+profile PROF-SAMPLE-UNUSED
+ peer 203.0.113.2
+ntp server 198.51.100.20
+ stray child
+snmp location Sample room
+service nagle
+line console
+ speed 9600
+ parity none
+user admin role admin
+user monitor role guest
+
+end

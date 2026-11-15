@@ -1,0 +1,6 @@
+defaults:
+  - {table: interfaces, column: enabled, value: true}
+  # Wrong: not a number, a column that is not there, a table that is not there.
+  - {table: interfaces, column: mtu, value: big}
+  - {table: interfaces, column: colour, value: red}
+  - {table: shelves, column: name, value: top}

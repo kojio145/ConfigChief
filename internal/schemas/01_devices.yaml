@@ -1,0 +1,20 @@
+table: devices
+title: {ja: 機器, en: Devices}
+since: M1
+key: [hostname]
+columns:
+  - {name: hostname, title: {ja: ホスト名, en: Hostname}, type: string, required: true, note: {ja: "機器の名前。全シートの「機器」列の参照先", en: "The name of the device. The Device column of every sheet points here"}}
+  - {name: vendor, title: {ja: メーカー, en: Vendor}, type: string, generate: false, required: true, note: {ja: "メーカーパックの ID。例 cisco_ios、nec_ix", en: "The id of the vendor pack, e.g. cisco_ios, nec_ix"}}
+  - {name: model, title: {ja: 機種, en: Model}, type: string, generate: false, note: {ja: "パックの機種定義の ID。空でも生成できるが、IF 対応の案とポートの検査が使えない", en: "The id of a model in the pack. May be empty"}}
+  - {name: os_version, title: {ja: OS 版, en: OS version}, type: string, generate: false}
+  - {name: group, title: {ja: グループ, en: Group}, type: "list<string>", generate: false, note: {ja: "@グループ名 で行をまとめて当てるための名前。複数はカンマで区切る", en: "Names used as @group in the Device column. Separate with commas"}}
+  - {name: site, title: {ja: 拠点, en: Site}, type: string, generate: false}
+  - {name: domain_name, title: {ja: ドメイン名, en: Domain name}, type: string}
+  - {name: name_servers, title: {ja: DNS サーバ, en: Name servers}, type: "list<ip4>"}
+  - {name: timezone, title: {ja: 時刻帯, en: Time zone}, type: string, note: {ja: "例 JST +9。名前は省ける（+9）。分があれば +5:30", en: "e.g. JST +9. The name may be left out (+9). With minutes: +5:30"}}
+  - {name: enable_secret, title: {ja: 特権パスワード, en: Enable secret}, type: secret}
+  - {name: secret_form, title: {ja: パスワードの形, en: Secret form}, type: enum, values: [plain, hashed], note: {ja: "取り込んだ値がハッシュのとき hashed。別メーカーへは引き継げない", en: "hashed when the imported value is a hash; it cannot go to another vendor"}}
+  - {name: snmp_location, title: {ja: SNMP 設置場所, en: SNMP location}, type: string}
+  - {name: snmp_contact, title: {ja: SNMP 連絡先, en: SNMP contact}, type: string}
+  - {name: banner, title: {ja: バナー, en: Banner}, type: text, note: {ja: "ログインの前に出す文", en: "The text shown before login"}}
+  - {name: note, title: {ja: 備考, en: Note}, type: string, generate: false, note: {ja: "生成には使わない", en: "Not used for generation"}}

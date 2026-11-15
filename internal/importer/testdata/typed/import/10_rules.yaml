@@ -1,0 +1,70 @@
+rules:
+  - id: host
+    match: '^hostname (?P<name>\S+)$'
+    row: {table: devices, key: {}}
+
+  # The name is written without the ifname filter: the short form is made
+  # whole by the type of the column.
+  - id: if
+    match: '^interface (?P<name>\S+)$'
+    row: {table: interfaces, key: {name: "{{ name }}"}}
+    children:
+      - id: if.mtu
+        match: '^mtu (?P<n>\S+)$'
+        set: {mtu: "{{ n }}"}
+      - id: if.speed
+        match: '^speed (?P<s>\S+)$'
+        set: {speed: "{{ s }}"}
+      - id: if.addr
+        match: '^address (?P<a>\S+)$'
+        set: {ipv4: "{{ a }}"}
+      - id: if.proxy
+        match: '^proxy (?P<b>\S+)$'
+        set: {proxy_arp: "{{ b }}"}
+      - id: if.relay
+        match: '^relay (?P<list>.+)$'
+        append: {dhcp_relay: "{{ list }}"}
+      # Wrong on purpose: a column that is not there.
+      - id: if.colour
+        match: '^colour (?P<c>\S+)$'
+        set: {colour: "{{ c }}"}
+      # Wrong on purpose: set on a list column, append on a single one.
+      - id: if.relay-one
+        match: '^relay-one (?P<a>\S+)$'
+        set: {dhcp_relay: "{{ a }}"}
+      - id: if.mtu-more
+        match: '^mtu-more (?P<n>\S+)$'
+        append: {mtu: "{{ n }}"}
+      # Wrong on purpose: a key column changed after the row is open.
+      - id: if.rename
+        match: '^rename (?P<n>\S+)$'
+        set: {name: "{{ n }}"}
+
+  - id: route
+    match: '^route (?P<prefix>\S+) (?P<nh>\S+)(?: (?P<dist>\S+))?$'
+    row: {table: static_routes, key: {prefix: "{{ prefix }}", next_hop: "{{ nh }}"}}
+    set: {distance: "{{ dist }}"}
+
+  # Wrong on purpose: a key made of a column that is not in the key.
+  - id: route.by
+    match: '^route-by (?P<prefix>\S+) (?P<d>\S+)$'
+    row: {table: static_routes, key: {prefix: "{{ prefix }}", distance: "{{ d }}"}}
+
+  # Wrong on purpose: a table that is not there.
+  - id: shelf
+    match: '^shelf (?P<n>\S+)$'
+    row: {table: shelves, key: {name: "{{ n }}"}}
+
+  - id: peer
+    match: '^peer (?P<ip>\S+) as (?P<asn>\S+)$'
+    emit:
+      - table: x_peer
+        key: {ip: "{{ ip }}"}
+        set: {asn: "{{ asn }}"}
+
+derive:
+  - id: peer.row
+    for: x_peer
+    as: p
+    row: {table: bgp_neighbors, key: {neighbor: "{{ p.ip }}"}}
+    set: {remote_as: "{{ p.asn }}"}

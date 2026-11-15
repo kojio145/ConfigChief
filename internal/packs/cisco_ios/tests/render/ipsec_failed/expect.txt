@@ -1,0 +1,22 @@
+hostname rt-v05
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.9 255.255.255.252
+ crypto map vpn-sample-c
+ no shutdown
+!
+interface Tunnel1
+ ip address 192.0.2.209 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.20
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-Tunnel1
+ no shutdown
+!
+interface Tunnel2
+ ip address 192.0.2.213 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.30
+ no shutdown
+!
+end

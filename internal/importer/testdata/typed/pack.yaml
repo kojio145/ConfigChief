@@ -1,0 +1,19 @@
+# A made-up vendor, to test what the table definitions do to an import: values
+# are brought to one way of writing, and a line with a value that does not fit
+# stays "unknown". Some of its rules are wrong on purpose. It does not describe
+# a real device.
+id: typed
+title: {ja: "試験用の小さなパック（型の確かめ）", en: "Types test pack"}
+version: 0.0.1
+schema: 1
+syntax: indent
+comment_prefixes: ["!"]
+
+detect:
+  - {match: '^hostname \S+$', score: 2}
+
+hostname: '^hostname (?P<name>\S+)$'
+
+interfaces:
+  types:
+    - {name: GigabitEthernet, short: [Gi], kind: physical}

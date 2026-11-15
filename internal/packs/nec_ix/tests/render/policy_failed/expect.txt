@@ -1,0 +1,2 @@
+hostname ix-p05
+!

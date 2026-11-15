@@ -1,0 +1,27 @@
+hostname ix-q12
+!
+ip access-list qos-d1 permit ip src any dest any dscp 34
+ip access-list qos-d1 permit ip src any dest any dscp 36
+ip access-list qos-d2 permit ip src any dest any dscp 46
+!
+class-map match-all cm-q-video
+  match ip access-list qos-d1
+class-map match-any cm-q-voice
+  match ip access-list qos-d2
+!
+policy-map pm-q-out
+  class cm-q-voice
+    priority
+  class cm-q-video
+    bandwidth percent 60
+  class class-local
+  class class-default
+    bandwidth percent 35
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.1/30
+  service-policy enable
+  service-policy output pm-q-out
+  traffic-shape rate 10000000
+  no shutdown
+!

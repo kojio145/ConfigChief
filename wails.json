@@ -1,0 +1,16 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "ConfigChief",
+  "outputfilename": "ConfigChief",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "KJO"
+  },
+  "info": {
+    "productName": "ConfigChief",
+    "comments": "Network device configuration to vendor-neutral tables and back"
+  }
+}

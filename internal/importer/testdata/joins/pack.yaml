@@ -1,0 +1,20 @@
+# A made-up vendor, to test how the import engine joins lines that stand far
+# apart: lists, the network that covers an address, and tables for the whole
+# device. It does not describe a real device.
+id: joins
+title: {ja: "試験用の小さなパック（行のつなぎ）", en: "Joins test pack"}
+version: 0.0.1
+schema: 1
+syntax: indent
+comment_prefixes: ["!"]
+
+detect:
+  - {match: '^hostname \S+$', score: 2}
+
+hostname: '^hostname (?P<name>\S+)$'
+
+interfaces:
+  types:
+    - {name: GigabitEthernet, short: [Gi], kind: physical}
+    - {name: Loopback, short: [Lo], kind: loopback}
+  subif: '^(?P<parent>.+)\.(?P<n>\d+)$'

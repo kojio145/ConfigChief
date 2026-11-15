@@ -1,0 +1,32 @@
+# VRFs, line monitoring and NAT (made-up values). expect.txt is the
+# configuration the tables must turn into.
+tables:
+  devices:
+    - hostname: rt-n01
+      vendor: cisco_ios
+  vrfs:
+    - {name: VRF-SAMPLE-N, rd: "64496:400", description: sample vrf n}
+    - {name: VRF-SAMPLE-M}
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.41/30, nat_role: outside}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 192.0.2.1/25, nat_role: inside}
+    - {name: GigabitEthernet0/2, enabled: true, ipv4: 192.0.2.129/25, vrf: VRF-SAMPLE-N}
+  tracks:
+    - {id: "1", type: icmp, target: 203.0.113.42, source_if: GigabitEthernet0/0, interval: 5, timeout: 2000, up_delay: 10, down_delay: 5}
+    - {id: "2", type: icmp, target: 198.51.100.1}
+    - {id: "3", type: interface, target: GigabitEthernet0/0, down_delay: 3}
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: 203.0.113.42, track: "1"}
+    - {prefix: 0.0.0.0/0, next_hop: 192.0.2.2, distance: 200}
+  acls:
+    - {name: ACL-SAMPLE-NAT, type: standard}
+  acl_entries:
+    - {acl: ACL-SAMPLE-NAT, seq: 10, action: permit, src: 192.0.2.0/25}
+  nat_rules:
+    - {name: nat1, type: pat_interface, match_acl: ACL-SAMPLE-NAT, outside_if: GigabitEthernet0/0}
+    - {name: nat2, type: pat_pool, match_acl: ACL-SAMPLE-NAT, pool_start: 198.51.100.17, pool_end: 198.51.100.22, pool_prefix: 29}
+    - {name: sample-pool, type: dynamic_pool, match_acl: ACL-SAMPLE-NAT, pool_start: 198.51.100.33, pool_end: 198.51.100.38, pool_prefix: 29}
+    - {name: sample-web, type: static, local_ip: 192.0.2.10, global_ip: 198.51.100.10}
+    - {name: nat5, type: static_port, protocol: tcp, local_ip: 192.0.2.11, local_port: 8080, global_ip: 198.51.100.11, global_port: 80}
+    - {name: nat6, type: static_port, protocol: udp, local_ip: 192.0.2.12, local_port: 514, global_ip: interface, outside_if: GigabitEthernet0/0, global_port: 514}
+findings: [V-113]

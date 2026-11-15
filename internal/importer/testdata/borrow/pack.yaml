@@ -1,0 +1,17 @@
+# A made-up vendor, to test children_from: rules written under one line and
+# used under other lines too. It does not describe a real device.
+id: borrow
+title: {ja: "試験用の小さなパック（規則の使い回し）", en: "Rule reuse test pack"}
+version: 0.0.1
+schema: 1
+syntax: indent
+comment_prefixes: ["!"]
+
+detect:
+  - {match: '^hostname \S+$', score: 2}
+
+hostname: '^hostname (?P<name>\S+)$'
+
+interfaces:
+  types:
+    - {name: GigabitEthernet, short: [Gi], kind: physical}
