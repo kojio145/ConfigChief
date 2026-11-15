@@ -62,6 +62,7 @@ License: [MIT](LICENSE). Third-party notices: [THIRD-PARTY-NOTICES.md](THIRD-PAR
 - [シートと列の一覧](docs/tables.md)
 - [チェックの一覧](docs/checks.md)
 - [メーカーパックの書き方](docs/pack-guide.md)
+- [開発記（Zenn）](https://zenn.dev/kjo145/articles/configchief-config-to-excel-and-back)
 
 ## ビルド
 
