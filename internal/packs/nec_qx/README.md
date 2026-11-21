@@ -121,6 +121,12 @@ encrypted のユーザ・特権パスワード、`cipher` の回線パスワー�
 | ポートセキュリティ | `port-security port-mode autolearn` を「ポートセキュリティ」の有効として読み、「覚えた MAC を設定に残す」も有効にします（このモードが覚えたアドレスは、設定に残る secure MAC になります）。`intrusion-mode blockmac` は protect、`disableport` は shutdown |
 | DHCP のリース | いちばん大きい単位で持ちます（`expired day 0 hour 1 minute 30` は `90m`、`expired unlimited` は `infinite`） |
 
+## 変更の投入の書き方（`change`。「ひな形から作る」の今との差）
+
+`pack.yaml` の `change`（別紙 B 2.5）。設定のビューへは `system-view`（コマンドマニュアル 1.1.14）、ユーザビューへ戻るのは `return`（1.1.12）、1 段抜けるのは `quit`（1.1.11）、行を消すのは `undo` の形。`undo` は多くの命令で先頭の語だけを取るので、`description` は `undo description` で消す。`undo shutdown` ⇄ `shutdown`。
+
+- **確かめていないこと**: `undo` に行の全部を付けた形が通らない命令（引数を取らない `undo` の命令）が、`description` のほかにどれだけあるか。実機で弾かれた行は投入ログのチェックで分かるので、`forms` に足していく。保存（`save`）は付けない
+
 ## 端末ログの読み方
 
 | 項目 | 読み方 |

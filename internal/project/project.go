@@ -57,7 +57,7 @@ const ConfigFile = "project.yaml"
 // only; the rest is for the user to fill.
 var folders = []string{
 	"input/old", "input/new", "input/customer", "input/logs",
-	"extra", "mappings", "rules", "templates", "packs",
+	"extra", "mappings", "fill", "vars", "rules", "templates", "packs",
 	"state/snapshots", "state/backup", "out",
 }
 

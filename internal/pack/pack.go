@@ -58,6 +58,10 @@ type Pack struct {
 	// Models is models.yaml (appendix B 6); empty: the pack knows no model.
 	Models []*Model
 
+	// Change is how a change is put in (appendix B 2.5); nil: the pack
+	// makes no change commands.
+	Change *Change
+
 	Warnings []string // what the checks of appendix B 8 found but allow
 }
 
@@ -277,6 +281,54 @@ type packY struct {
 		ShowConfig []string `yaml:"show_config"`
 		Pager      []string `yaml:"pager"`
 	} `yaml:"session"`
+	Change *struct {
+		Begin    []string `yaml:"begin"`
+		End      []string `yaml:"end"`
+		Exit     string   `yaml:"exit"`
+		Negate   string   `yaml:"negate"`
+		Unnegate bool     `yaml:"unnegate"`
+		Exits    []struct {
+			Parent string `yaml:"parent"`
+			Exit   string `yaml:"exit"`
+		} `yaml:"exits"`
+		Forms []struct {
+			Match  string `yaml:"match"`
+			Remove string `yaml:"remove"`
+		} `yaml:"forms"`
+	} `yaml:"change"`
+}
+
+// Change is how the vendor takes a change (appendix B 2.5): the lines that
+// enter and leave the configuration mode, the line that goes up one level
+// from a block, and how a line is removed.
+type Change struct {
+	Begin []string
+	End   []string
+	Exit  string
+	// Exits are blocks left with a line of their own (Cisco's address
+	// families): the first whose Parent matches the block's line counts.
+	Exits []ChangeExit
+	// Negate is put before a line to remove it ("no "); with Unnegate a
+	// line that starts with it is removed by writing it without ("no
+	// shutdown" → "shutdown").
+	Negate   string
+	Unnegate bool
+	// Forms remove a line some other way: the first whose Match matches
+	// the line (without its indentation) gives the line, $1… taken from
+	// it.
+	Forms []ChangeForm
+}
+
+// ChangeExit is a block with an exit line of its own.
+type ChangeExit struct {
+	Parent *regexp.Regexp
+	Exit   string
+}
+
+// ChangeForm is a way of removing lines.
+type ChangeForm struct {
+	Match  *regexp.Regexp
+	Remove string
 }
 
 // reserved are the names a rule's values use for themselves (appendix B 3.4).
@@ -413,6 +465,33 @@ func Load(fsys fs.FS) (*Pack, error) {
 		if ses.Prompt != nil {
 			p.Session = ses
 		}
+	}
+
+	if c := py.Change; c != nil {
+		ch := &Change{Begin: c.Begin, End: c.End, Exit: c.Exit, Negate: c.Negate, Unnegate: c.Unnegate}
+		if strings.TrimSpace(ch.Negate) == "" {
+			l.errf("pack.yaml change: negate（行を消すときに前に付ける語）がありません")
+		}
+		if p.Syntax == "indent" && strings.TrimSpace(ch.Exit) == "" {
+			l.errf("pack.yaml change: exit（ブロックを 1 段抜ける行）がありません")
+		}
+		for _, x := range c.Exits {
+			if re := l.re("pack.yaml change.exits", x.Parent); re != nil {
+				if strings.TrimSpace(x.Exit) == "" {
+					l.errf("pack.yaml change.exits: exit がありません")
+				}
+				ch.Exits = append(ch.Exits, ChangeExit{re, x.Exit})
+			}
+		}
+		for _, f := range c.Forms {
+			if re := l.re("pack.yaml change.forms", f.Match); re != nil {
+				if strings.TrimSpace(f.Remove) == "" {
+					l.errf("pack.yaml change.forms: remove がありません")
+				}
+				ch.Forms = append(ch.Forms, ChangeForm{re, f.Remove})
+			}
+		}
+		p.Change = ch
 	}
 
 	// ignore.yaml

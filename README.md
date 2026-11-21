@@ -9,6 +9,7 @@ ConfigChief reads router and switch configurations into a vendor-neutral table (
 - The program knows no vendor: everything about a vendor lives in a text "vendor pack"
 - Bundled packs: Cisco IOS / IOS-XE (routers, small routers with a built-in switch, Catalyst switches), NEC UNIVERGE IX (routers) and NEC QX series (switches)
 - The parameter book can be edited in Excel or in a table editor inside the program (with a draft that survives a restart)
+- Templates with variables: write one configuration with `{{variables}}`, fill it from another system's list (Excel / CSV) or the parameter book, and get each site's configuration — or the change commands against its configuration now
 - The user interface and the documents are in Japanese (for now)
 
 > **Not verified on real devices.** The bundled packs were written from the vendors' public command references. Run every generated configuration on a lab device before you use it.
@@ -36,10 +37,11 @@ License: [MIT](LICENSE). Third-party notices: [THIRD-PARTY-NOTICES.md](THIRD-PAR
 - **検証と投入の後**: 検証機の投入ログから弾かれた行を探し、投入後の設定とパラメータブックの違いを出します
 - **納品物**: Excel のひな形に値を流し込んだ納品用パラメータシート、相手に渡すパラメータ表
 - **新規構築**: 空のパラメータブックから 1 台目を作り、複製して増やせます
+- **ひな形から作る**: 変数入りのコンフィグ（`{{変数}}`・`{{#each}}`）を 1 つ書けば、他システムの一覧ファイル（Excel・CSV）やパラメータブックの値から、拠点ごとの新規コンフィグや変更コマンドをまとめて作れます。今のコンフィグとの差から投入（足す行と、印を付けた所だけ消す行）も作れます。実機 1 台のコンフィグから、ひな形の案も作れます
 
 同梱のパック: Cisco IOS / IOS-XE（ルータ、内蔵スイッチ付きの小型ルータ、Catalyst 系のスイッチ）、NEC UNIVERGE IX（ルータ）、NEC QX シリーズ（スイッチ）。
 
-対応している設定: 機器の基本（ユーザ・遠隔ログイン・NTP・syslog・SNMP〈版 3 を含む〉）・インタフェース・VLAN・スイッチポート・LAG・スパニングツリー・ブリッジ・ポートミラー・スタティック経路・VRF・OSPF・BGP・VRRP/HSRP・経路制御の方針（ルートマップ・ポリシールーティング）・ACL・プレフィックスリスト・NAT・回線監視・PPPoE・DHCP・IPsec（IKEv1・IKEv2）・GRE・EtherIP・L2TP・QoS・IPv6（アドレス・RA・経路・フィルタ・OSPFv3・BGP・IPoE のトンネル）。メーカーによって、機能が無くて書けないものや、パックが読まない書き方があります（[使い方](docs/manual.md) の 11 章と、各パックの README）。
+対応している設定: 機器の基本（ユーザ・遠隔ログイン・NTP・syslog・SNMP〈版 3 を含む〉）・インタフェース・VLAN・スイッチポート・LAG・スパニングツリー・ブリッジ・ポートミラー・スタティック経路・VRF・OSPF・BGP・VRRP/HSRP・経路制御の方針（ルートマップ・ポリシールーティング）・ACL・プレフィックスリスト・NAT・回線監視・PPPoE・DHCP・IPsec（IKEv1・IKEv2）・GRE・EtherIP・L2TP・QoS・IPv6（アドレス・RA・経路・フィルタ・OSPFv3・BGP・IPoE のトンネル）。メーカーによって、機能が無くて書けないものや、パックが読まない書き方があります（[使い方](docs/manual.md) の 12 章と、各パックの README）。
 
 ## 守っていること
 

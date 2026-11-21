@@ -22,7 +22,7 @@ var Version = "0.0.0-dev"
 // Commands are the first words that make an invocation a command. Anything
 // else given to the program of the window is a case folder to open.
 var Commands = []string{"version", "--version", "help", "--help", "init", "import", "book", "clone", "compare", "generate", "check", "approve",
-	"judge", "customer", "sites", "logs", "verify", "export", "diff", "pack"}
+	"judge", "customer", "fill", "sites", "logs", "verify", "export", "diff", "pack"}
 
 // IsCommand tells whether the arguments of the program are a command.
 func IsCommand(args []string) bool {
@@ -57,6 +57,9 @@ const usage = `usage:
   ConfigChief.exe customer --project <dir> --draft <一覧のファイル名> [--sheet <シート名>]
   ConfigChief.exe customer --project <dir> --apply <指紋>[,<指紋>...]
   ConfigChief.exe customer --project <dir> --apply-rule S-501|S-503 [--devices <*|@グループ|ホスト名,...>]
+  ConfigChief.exe fill    --project <dir> --list
+  ConfigChief.exe fill    --project <dir> --template <名前> [--diff old|new|logs] [--device <機器>[,<機器>...]]
+  ConfigChief.exe fill    --project <dir> --draft <コンフィグのファイル> --device <機器> [--name <ひな形の名前>]
   ConfigChief.exe export  --project <dir> --what sheet|peer [--secrets show|mask]
   ConfigChief.exe export  --project <dir> --what unhandled [--source old|new]
   ConfigChief.exe logs    --project <dir>
@@ -96,6 +99,8 @@ func Run(args []string, out, errOut io.Writer) int {
 		return cmdJudge(args[1:], out, errOut)
 	case len(args) >= 1 && args[0] == "customer":
 		return cmdCustomer(args[1:], out, errOut)
+	case len(args) >= 1 && args[0] == "fill":
+		return cmdFill(args[1:], out, errOut)
 	case len(args) >= 1 && args[0] == "sites":
 		return cmdSites(args[1:], out, errOut)
 	case len(args) >= 1 && args[0] == "logs":

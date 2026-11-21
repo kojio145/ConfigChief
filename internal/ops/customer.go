@@ -228,6 +228,16 @@ func (e *Env) Customer(write bool, now time.Time) (*CustomerOutcome, error) {
 		}
 		out.Lists = append(out.Lists, l)
 	}
+	// A list a variable rule reads (spec 9.7.2) is in use too.
+	if vfs, err := e.VarFiles(); err == nil {
+		for _, f := range vfs {
+			if f.Rule != nil {
+				if file, err := listFile(f.Rule.Location(), inputs); err == nil {
+					used[file] = true
+				}
+			}
+		}
+	}
 	for _, p := range inputs {
 		if !used[p] {
 			out.Unmapped = append(out.Unmapped, p)

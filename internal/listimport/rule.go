@@ -65,7 +65,7 @@ type Target struct {
 // while the value is empty), a template (text with {header} placeholders),
 // or a fixed value.
 type Field struct {
-	To       string   `yaml:"to" json:"to"`
+	To       string   `yaml:"to,omitempty" json:"to"`
 	Column   string   `yaml:"column,omitempty" json:"column"`
 	Fallback []string `yaml:"fallback,omitempty" json:"fallback"`
 	Template string   `yaml:"template,omitempty" json:"template"`

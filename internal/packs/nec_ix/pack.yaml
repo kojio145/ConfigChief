@@ -50,3 +50,15 @@ interfaces:
   # "GigaEthernet0.0" is the base interface of the port; ".1" and up are
   # sub-interfaces.
   subif: '^(?P<parent>.+)\.(?P<n>[1-9]\d*)$'
+
+# How a change is put in (appendix B 2.5): "configure" from the operation
+# mode, "exit" out of every mode (from the global configuration mode back to
+# the operation mode), and the "no" form of a command; "shutdown" and
+# "no shutdown" are the pair the command reference lists (機能説明書 2.1,
+# コマンドリファレンスマニュアル). Saving ("write memory") is left to the person.
+change:
+  begin: [configure]
+  end: [exit]
+  exit: exit
+  negate: "no "
+  unnegate: true

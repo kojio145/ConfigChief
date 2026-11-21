@@ -73,3 +73,17 @@ interfaces:
     - {name: Tunnel, short: [], kind: tunnel}
     - {name: "NULL", short: [], kind: other}
   subif: '^(?P<parent>.+)\.(?P<n>\d+)$'
+
+# How a change is put in (appendix B 2.5): "system-view" from the user view,
+# "quit" up one view, "return" back to the user view, and "undo" (コマンド
+# マニュアル 1.1.11・1.1.12・1.1.14). "undo" takes the leading keywords of
+# most commands; the description is removed as "undo description".
+# Saving ("save") is left to the person.
+change:
+  begin: [system-view]
+  end: [return]
+  exit: quit
+  negate: "undo "
+  unnegate: true
+  forms:
+    - {match: '^description ', remove: 'undo description'}

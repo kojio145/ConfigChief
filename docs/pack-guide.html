@@ -89,6 +89,20 @@ session:                        # 端末ログから、設定の部分だけを�
 <li><b>区切りの行で階層を閉じる</b>: <code>comment_closes: true</code> と書くと、<code>comment_prefixes</code> で始まる行が、開いている階層をすべて閉じます（区切りの次の行は、字下げがあっても一番上の階層）。設定の部分ごとに <code>#</code> の行で区切り、機器全体の 1 行の設定を 1 字下げて保存するメーカー（同梱の <code>nec_qx</code>）のためのものです。字下げのある区切りの行（<code> #</code>）は、その字下げと同じか、それより深い階層だけを閉じます。書かなければ、区切りの行は階層に関わりません</li>
 <li><b>IF 名</b>: フィルタ <code>ifname</code> が省略形を正式な名前に直します。<code>Null</code>・<code>on</code>・<code>yes</code>・<code>no</code> のような名前は、YAML が別の値として読むので引用符で囲みます（<code>name: &#34;Null&#34;</code>）</li>
 <li><b>端末ログ</b>: <code>show_config</code> は行の終わり（<code>$</code>）まで書きます（<code>show running-config interface …</code> のような一部の表示を、全体として拾わないため）。<code>pager</code> は跡そのものだけを書きます</li>
+<li><b>変更の投入</b>（<code>change</code>。書かなくてもよい）: 「ひな形から作る」で、今のコンフィグとの差から投入を作るときの書き方です（使い方 8 章）。書かないパックの機器には、差の投入を作りません</li>
+</ul>
+<pre><code>change:
+  begin: [configure terminal]     # 設定モードに入る行
+  end: [end]                      # 設定モードから出る行
+  exit: exit                      # ブロック（interface など）を 1 段抜ける行
+  exits:                          # 別の行で抜けるブロック（最初に当たったもの）
+    - {parent: &#39;^address-family &#39;, exit: exit-address-family}
+  negate: &#34;no &#34;                   # 行を消すとき前に付ける語
+  unnegate: true                  # 「no …」の行は「no」を外して消す（no shutdown → shutdown）
+  forms:                          # 別の形で消す行（最初に当たったもの。$1… は当たった所）
+    - {match: &#39;^description &#39;, remove: &#39;no description&#39;}</code></pre>
+<ul>
+<li><code>begin</code>・<code>end</code>・<code>exit</code> は、メーカーの公開資料で確かめた行だけを書きます。保存のコマンドは書きません（保存するかは人が決めます）</li>
 </ul>
 <h2>4. 取り込みの規則（import/*.yaml）</h2>
 <pre><code>rules:

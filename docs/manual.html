@@ -32,7 +32,7 @@
 <li>同じ入力からは、いつも同じ出力になります</li>
 <li>読めなかった行は「未対応」として必ず一覧に出します（黙って落としません）</li>
 <li>対応しているメーカーは Cisco IOS / IOS-XE（ルータ、内蔵スイッチ付きの小型ルータ、Catalyst 系のスイッチ）、NEC UNIVERGE IX（ルータ）、NEC QX シリーズ（スイッチ）です。メーカーごとの読み方・書き方は「メーカーパック」というテキストのファイルにあり、足すことができます（<a href="pack-guide.html">パックの書き方</a>）</li>
-<li>対応している設定: 機器の基本（ユーザ・遠隔ログイン・NTP・syslog・SNMP〈版 3 を含む〉・バナー・ログ）、インタフェース、VLAN・スイッチポート・LAG・スパニングツリー・ブリッジ・ポートミラー、スタティック経路・VRF・OSPF・BGP・VRRP / HSRP、経路制御の方針（ルートマップ・ポリシールーティング・AS パスとコミュニティのリスト）、ACL・プレフィックスリスト・NAT・回線監視、PPPoE・DHCP、IPsec（IKEv1・IKEv2）・GRE・EtherIP・L2TP（LNS・LAC・L2TPv3）、QoS、IPv6（アドレス・RA・DHCPv6・経路・フィルタ・OSPFv3・BGP・IPv6 の網のトンネル）。メーカーに機能が無いものや、パックが読まない書き方もあります（11 章と、各パックの README）</li>
+<li>対応している設定: 機器の基本（ユーザ・遠隔ログイン・NTP・syslog・SNMP〈版 3 を含む〉・バナー・ログ）、インタフェース、VLAN・スイッチポート・LAG・スパニングツリー・ブリッジ・ポートミラー、スタティック経路・VRF・OSPF・BGP・VRRP / HSRP、経路制御の方針（ルートマップ・ポリシールーティング・AS パスとコミュニティのリスト）、ACL・プレフィックスリスト・NAT・回線監視、PPPoE・DHCP、IPsec（IKEv1・IKEv2）・GRE・EtherIP・L2TP（LNS・LAC・L2TPv3）、QoS、IPv6（アドレス・RA・DHCPv6・経路・フィルタ・OSPFv3・BGP・IPv6 の網のトンネル）。メーカーに機能が無いものや、パックが読まない書き方もあります（12 章と、各パックの README）</li>
 </ul>
 <blockquote><p><b>大事な注意</b>: 同梱のパックは、メーカーが公開しているコマンドリファレンスを読んで作りました。<b>実機の出力では確かめていません。</b> 生成したコンフィグは、必ず検証機に流して確かめてから使ってください。何を確かめていないかは、各パックの README（<a href="https://github.com/kojio145/ConfigChief/blob/main/internal/packs/cisco_ios/README.md">Cisco IOS</a>・<a href="https://github.com/kojio145/ConfigChief/blob/main/internal/packs/nec_ix/README.md">NEC IX</a>・<a href="https://github.com/kojio145/ConfigChief/blob/main/internal/packs/nec_qx/README.md">NEC QX</a>）の「確かめていないこと」にあります。</p></blockquote>
 <p>ほかのページ: <a href="tables.html">シートと列の一覧</a> ・ <a href="checks.html">チェックの一覧</a> ・ <a href="pack-guide.html">パックの書き方</a></p>
@@ -41,7 +41,7 @@
 <ul>
 <li>署名の無い exe なので、初めて起動するときに Microsoft Defender SmartScreen の警告が出ることがあります。「詳細情報」→「実行」で起動できます。取った exe は、リリースのページの SHA-256 と比べて確かめられます（PowerShell: <code>Get-FileHash ConfigChief.exe</code>）</li>
 <li>何も付けずに起動すると、画面が開きます。案件フォルダを付けて起動すると、その案件を開きます</li>
-<li>コマンドを付けて起動すると、窓を開かずにそのコマンドを行って終わります（8 章）</li>
+<li>コマンドを付けて起動すると、窓を開かずにそのコマンドを行って終わります（9 章）</li>
 <li>書き込むのは、案件フォルダの中と、<code>%APPDATA%\ConfigChief</code>（最近使った案件の一覧と、画面の作業フォルダ）だけです。レジストリは書きません</li>
 </ul>
 <p><img src="img/home.png" alt="ホームの画面。旧コンフィグ・パラメータブック・生成とチェック・納品物の操作が並ぶ"></p>
@@ -56,6 +56,8 @@
   input/logs/        検証機・本番の投入ログ、投入後の設定ログ
   extra/             追加コンフィグ（パックが書けない設定を、人が書いて差し込む）
   mappings/          外部一覧の、列の対応
+  fill/              ひな形（変数入りのコンフィグ。8 章）
+  vars/              変数ルール（一覧の列 → 変数。8 章）
   rules/             案件ごとのチェックのルール
   templates/         納品用パラメータシートのひな形
   packs/             案件専用のメーカーパック（同じ ID の同梱パックより優先）
@@ -264,7 +266,77 @@
 <li>書いた文面がそのまま出ます。Jinja2 の書き方で、パラメータブックの値を使えます（例: <code>{{ device.hostname }}</code>）</li>
 <li>差し込む位置は、先頭の行で指定できます（例: <code>{# position: after interfaces #}</code>）。指定が無ければ、末尾の手前です</li>
 </ul>
-<h2>8. コマンドライン</h2>
+<h2>8. ひな形から作る（変数入りのコンフィグ）</h2>
+<p>変数入りのコンフィグ（ひな形）を 1 つ書けば、一覧ファイルやパラメータブックの値から、拠点ごとの新規コンフィグや、設定変更の投入をまとめて作れます。PalaTerm のコマンドセットの変数（<code>{{変数}}</code>・<code>{{#each}}</code>）と同じ書き方で、一覧の読み方は外部一覧の列対応と同じです。パックの取り込み規則に無い設定でも、拠点ごとに値が違う定型の設定なら作れます（メーカーを知らないまま文字を差し込むので、生成のチェックはかけません）。</p>
+<p>画面は左のメニューの「ひな形から作る」、コマンドは <code>fill</code> です。</p>
+<h3>置くもの</h3>
+<table>
+<tr><th>置き場</th><th>中身</th></tr>
+<tr><td><code>input/customer/</code></td><td>一覧ファイル（xlsx・xls・csv。外部一覧と同じ置き場で、同じ一覧を両方に使えます）</td></tr>
+<tr><td><code>vars/&lt;名前&gt;.yaml</code></td><td>変数ルール: 一覧のどの列を、どの変数にするか</td></tr>
+<tr><td><code>fill/&lt;名前&gt;.txt</code></td><td>ひな形: 変数入りのコンフィグ・変更コマンド</td></tr>
+</table>
+<h3>1. 変数ルールを作る</h3>
+<p>「変数ルール」のタブで一覧のファイルを選び、「この一覧の変数ルールを作る」を押します。見出しの行と機器名の列は、ツールが案を入れます。「見出しから全部足す」で、一覧の見出しをそのまま変数にできます（名前は後で直せます）。</p>
+<p>読み方は PalaTerm の「変数の取り込み設定」と同じです。</p>
+<ul>
+<li>値の加工（区切る・置き換える・マスクをプレフィックス長にする…）と「空のときは別の列」は、外部一覧の列対応と同じものが使えます。列を先に選ぶと、変数の名前は見出しから入ります</li>
+<li>「値が空のとき」: その機器は作らない（既定）／その行を出さない／決まった値を使う</li>
+<li>1 拠点が複数行の一覧（VLAN・経路など）は、そのまま読めます。同じ機器名の行は全部その機器の行になり、<b>機器名のセルが空の行は、上の機器の続きの行</b>になります（機器名を最初の行にだけ書いている一覧）</li>
+<li><b>読まない行（除外）</b>: 「一覧の列」の元の値か、「変数」の加工した後の値で決めます。機器名のある行を除外すると、その機器の続きの行も使いません</li>
+<li><b>機器名の照合</b>: 一覧の機器名とブックの機器名（今との差では、今のコンフィグのホスト名も）を比べるとき、全角・半角、空白、ドメイン部（最初の「.」から後ろ）、「-」と「_」の違いを無視するかを選べます。大文字・小文字と前後の空白は、いつも無視します</li>
+<li>1 行に冗長の 2 台分が載っている一覧は、「2 台目以降を足す」で、2 台目の機器名の列と、2 台目で列が違う変数だけを選びます。選ばない変数は 1 台目と同じ列の値です。2 台目の機器名が空の行では 2 台目を作りません。機器名がどちらも空の行は、上の 2 台それぞれの続きです</li>
+<li>「試しに読む」で、先頭の行の読み方（何台目か・続きの行・元の値 → 変数の値・除外の理由）と、機器ごとの値の表、ブックに無い機器の名前が出ます（何も書きません）</li>
+</ul>
+<pre><code># vars/sites.yaml
+version: 1
+file: sites.xlsx
+sheet: 拠点一覧
+header_row: 1
+match: {width: true, domain: true}
+exclude:
+  - {column: 状態, op: equals, value: 廃止}
+device: {column: ホスト名}
+vars:
+  - {name: wan, column: WAN IP, steps: [{type: cidr}]}
+  - {name: desc, column: 拠点名, empty: line}
+  - {name: mtu, column: MTU, default: &#34;1500&#34;}</code></pre>
+<h3>2. ひな形を書く</h3>
+<p>「ひな形」のタブに書きます。変数のボタンを押すと、カーソルの位置に入ります。</p>
+<table>
+<tr><th>書き方</th><th>意味</th></tr>
+<tr><td><code>{{名前}}</code></td><td>変数の値。空ならその機器は作りません（理由が一覧に出ます）</td></tr>
+<tr><td><code>{{名前?}}</code></td><td>空なら、その行を出しません</td></tr>
+<tr><td><code>{{表.列}}</code></td><td>パラメータブックの値（例: <code>{{devices.hostname}}</code>。表と列はシート名・見出しでも書けます）</td></tr>
+<tr><td><code>{{#each}}</code> … <code>{{/each}}</code></td><td>間の行を、その機器の一覧の行の数だけ繰り返します。<code>{{#each 名前}}</code> で、変数ルールかブックの表を指せます</td></tr>
+<tr><td><code>{{#if 名前}}</code> … <code>{{#else}}</code> … <code>{{/if}}</code></td><td>条件に合うときだけ出します（<code>名前=値</code>・<code>名前!=値</code>・<code>!名前</code> も書けます）</td></tr>
+<tr><td><code>{{#sync}}</code> … <code>{{/sync}}</code></td><td>今との差で投入を作るとき、間のブロックをひな形どおりにそろえます（ひな形に無い行を消します）</td></tr>
+<tr><td><code>{{#sync ip route}}</code> … <code>{{/sync}}</code></td><td>その語で始まる行を、ひな形どおりにそろえます</td></tr>
+<tr><td><code>{{! メモ}}</code></td><td>人のためのメモ。出力しません</td></tr>
+</table>
+<pre><code>hostname {{devices.hostname}}
+interface GigabitEthernet0/0
+ description {{desc?}}
+ ip address {{wan}}
+{{#sync ip route}}
+{{#each routes}}
+ip route {{dst}} {{nh}}
+{{/each}}
+{{/sync}}</code></pre>
+<ul>
+<li><code>{{#…}}</code>・<code>{{/…}}</code>・<code>{{! …}}</code> は 1 行に単独で書きます</li>
+<li>変数ルールに無い名前（打ち間違い）は、「確かめる」・保存・作るときに、行番号つきで出ます。黙って空にはしません</li>
+</ul>
+<p><b>1 台から案を作る</b>: 実機 1 台のコンフィグと機器名を選ぶと、その機器の値（変数ルールの一覧の行・ブックの「機器」の表）が出てくる所を <code>{{変数}}</code> に置き換えた案が、欄に入ります。2 文字以下の値・真偽の値・同じ値の変数は置き換えず、注意に出します。1 拠点が複数行の一覧は、行ごとのかたまりがそろっていれば <code>{{#each}}</code> で囲みます。案を直してから保存します。</p>
+<h3>3. 作る</h3>
+<p>「作る」のタブでひな形を選び、作るものを選びます。</p>
+<ul>
+<li><b>全文</b>: 機器ごとのファイルを <code>out/&lt;日時&gt;/fill/&lt;ひな形&gt;/&lt;機器&gt;.txt</code> に書きます。新規コンフィグも、変数入りで書いた変更コマンドも、これで作ります</li>
+<li><b>今との差から投入</b>: ひな形を「あるべき姿」として、機器ごとの今のコンフィグ（旧コンフィグ・新コンフィグ・投入後のログから選ぶ）と比べ、投入するコマンドを作ります<ul><li>足す行: ひな形にあって今に無い行は、全部足します（親の行 <code>interface …</code> を前に付け、終わったら <code>exit</code> で戻ります）</li><li>消す行（<code>no …</code>）: <b><code>{{#sync}}</code> の印を付けた所だけ</b>です。印が無ければ足すだけで、想定外の行を消しません</li><li>残る行: ひな形が書くブロックにあって、ひな形に無い今の行は、消さずに一覧に出します（消すべきものが無いかを見ます）</li><li>設定モードへの出入り（Cisco は <code>configure terminal</code> … <code>end</code>、NEC IX は <code>configure</code> … <code>exit</code>、NEC QX は <code>system-view</code> … <code>return</code>）は付けます。保存のコマンドは付けません</li><li>差が無い機器は「変更なし」です</li></ul></li>
+<li>作らなかった機器は、理由（値が空・一覧に行が無い・ブックに無い・今のコンフィグが無い）と一緒に一覧に出ます</li>
+<li>報告書 <code>out/&lt;日時&gt;/reports/fill.xlsx</code>・<code>.html</code> に、機器ごとの結果・変数の値・差（足す・消す・残る）が出ます。変数の名前に <code>password</code>・<code>secret</code>・<code>key</code> などを含む値と、ブックの秘密の列は伏せます</li>
+</ul>
+<h2>9. コマンドライン</h2>
 <p>画面と同じ処理を、窓を開かずに行えます。バッチファイルから呼ぶと、終わるまで待ち、<code>%ERRORLEVEL%</code> で終了コードを見られます（0 = 見るものなし、1 = 未承認の指摘などが残っている、2 = 実行できなかった）。</p>
 <pre><code>ConfigChief.exe init     &lt;dir&gt; [--name &lt;案件名&gt;] [--kind migration|new]
 ConfigChief.exe import   --project &lt;dir&gt; [--source old|new] [--pack &lt;ID&gt;] [--use &lt;ファイル&gt;]
@@ -280,6 +352,9 @@ ConfigChief.exe approve  --project &lt;dir&gt; --remove &lt;承認の ID&gt;
 ConfigChief.exe judge    --project &lt;dir&gt; [--source old|new] [--all]
 ConfigChief.exe judge    --project &lt;dir&gt; [--source old|new] --group &lt;ID&gt; --verdict manual|not_needed|hold|none [--devices &lt;範囲&gt;] [--reason &lt;理由&gt;] --by &lt;名前&gt;
 ConfigChief.exe customer --project &lt;dir&gt; [--draft &lt;ファイル&gt; [--sheet &lt;シート&gt;]] [--apply &lt;指紋&gt;,… | --apply-rule S-501|S-503 [--devices &lt;範囲&gt;]]
+ConfigChief.exe fill     --project &lt;dir&gt; --list
+ConfigChief.exe fill     --project &lt;dir&gt; --template &lt;名前&gt; [--diff old|new|logs] [--device &lt;機器&gt;[,&lt;機器&gt;…]]
+ConfigChief.exe fill     --project &lt;dir&gt; --draft &lt;コンフィグのファイル&gt; --device &lt;機器&gt; [--name &lt;ひな形の名前&gt;]
 ConfigChief.exe export   --project &lt;dir&gt; --what sheet|peer [--secrets show|mask]
 ConfigChief.exe export   --project &lt;dir&gt; --what unhandled [--source old|new]
 ConfigChief.exe logs     --project &lt;dir&gt;
@@ -296,9 +371,10 @@ ConfigChief.exe help</code></pre>
 <li><code>import --pack &lt;ID&gt;</code>: メーカーを自動で決められないファイルを、そのパックで読みます。<code>import --use &lt;ファイル&gt;</code>: 同じホスト名のファイルが 2 つ以上あるとき、取り込むファイルを選びます（ファイル名だけか、<code>input/old/&lt;ファイル名&gt;</code> の形）。どちらも、選んだ結果は案件に残ります</li>
 <li><code>book --new</code>: 見出しだけのパラメータブックを作ります（新規構築）。<code>book --replace</code>: 設計データのシートを空にしてから書きます（機器対応・IF 対応のシートは変えません）</li>
 <li><code>generate --device &lt;ホスト名&gt;</code>: 1 台だけ生成します</li>
+<li><code>fill --template &lt;名前&gt;</code>: ひな形に値を入れて、機器ごとのファイルを作ります。<code>--diff old|new|logs</code> で、今のコンフィグとの差から投入を作ります。<code>fill --draft</code>: 1 台のコンフィグから、ひな形の案を <code>fill/</code> に作ります（8 章）</li>
 </ul>
 <p>端末に直接打ったときは、Windows の決まりで、端末は終わりを待たずに次の入力を受け付けます（結果の文字は出ます）。待たせたいときは <code>start /wait ConfigChief.exe …</code> と打ちます。</p>
-<h2>9. そのほかの機能</h2>
+<h2>10. そのほかの機能</h2>
 <ul>
 <li><b>比較</b>: 旧コンフィグ・新コンフィグ・パラメータブックのうち 2 つを、設計データとして比べます。文面どうしの比較（<code>diff</code>）と、階層を見た比較（<code>diff --tree</code>。親の行の下に違いを出します）もあります</li>
 <li><b>外部一覧</b>: 他のシステムなどが出力した Excel・CSV の列を、<code>mappings/</code> の列対応でパラメータブックの列に結び付け、値の違いを出します。選んだ値をパラメータブックに反映できます。列対応は画面で作れます: 値の加工（区切る・置き換える・置き換え表など）は 1 段ごとに結果を見ながら書け、「空のときは別の列」も選べます。要らなくなった列対応ファイルは画面から消せます（<code>state/backup/</code> に移ります）</li>
@@ -306,7 +382,7 @@ ConfigChief.exe help</code></pre>
 <li><b>納品用パラメータシート</b>: <code>templates/</code> に置いた Excel のひな形に、値を流し込みます。ひな形が無ければ標準の形で出します</li>
 <li><b>未対応の行の持ち出し用レポート</b>（<code>export --what unhandled</code>）: 未対応の行を、値と名前を伏せた「形」にして出します。現場の外へ持ち出して、パックを直す材料にするためのものです。<b>渡す前に、必ず中身を見てください</b></li>
 </ul>
-<h2>10. 困ったとき</h2>
+<h2>11. 困ったとき</h2>
 <table>
 <tr><th>起きたこと</th><th>見るところ</th></tr>
 <tr><td>メーカーを判定できない</td><td>取り込みの画面で、候補からパックを選びます（<code>import --pack &lt;ID&gt;</code>）</td></tr>
@@ -320,7 +396,7 @@ ConfigChief.exe help</code></pre>
 <tr><td>機器に弾かれた</td><td><code>logs</code> の一覧に、弾かれた行と機器の返事が出ます。実機の書き方がパックと違うときは、追加コンフィグで補うか、パックを直します</td></tr>
 <tr><td>「保存していない変更が ○ 件あります」と出る</td><td>画面の表の編集の下書きが残っています。表の編集で「保存」するか、「下書きを捨てる」を押します。生成とチェックは、保存済みのパラメータブックで動きます</td></tr>
 </table>
-<h2>11. 制限</h2>
+<h2>12. 制限</h2>
 <ul>
 <li><b>実機の出力では確かめていません</b>（冒頭の注意）。同梱のパックの書き方は、メーカーが公開しているコマンドリファレンスと設定ガイドで確かめたものです。機器が保存する設定の語の順番・字下げ・既定値の行が省かれるかなどは、資料の例で見た範囲にとどまります。生成したコンフィグは、必ず検証機で確かめてください</li>
 <li>表示は日本語だけです</li>

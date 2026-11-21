@@ -382,3 +382,11 @@ table.grid td.fillp { background: #eaf2fd; box-shadow: inset 0 0 0 1px #8fb4e8; 
 .g-findbar input[type="text"] { width: 190px; }
 .g-fopt { font-size: 12px; white-space: nowrap; }
 .g-ask { width: 100%; font-size: 14px; }
+
+/* ひな形から作る (spec 14.7) */
+.fill-text { width: 100%; box-sizing: border-box; font-family: Consolas, "MS Gothic", monospace; font-size: 13px; line-height: 1.5; tab-size: 8; }
+.fill-out { font-family: Consolas, "MS Gothic", monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; background: var(--panel, #f6f7f9); border: 1px solid var(--border, #d0d4da); border-radius: 6px; padding: 8px 12px; max-height: 480px; overflow: auto; }
+.fill-names { margin: 6px 0; }
+.fill-names .row { flex-wrap: wrap; }
+
+label.check { white-space: nowrap; margin-right: 10px; }

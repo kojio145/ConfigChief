@@ -29,6 +29,7 @@
     res: newRes(),
     mig: newMig(),
     cus: newCus(),
+    fil: newFil(),
     logs: newLogs(),
     exp: { mask: "show", view: null },
     nb: { from: "", to: "", said: [] },
@@ -217,6 +218,7 @@
     st.sites = { source: "book", view: null, tab: 1 };
     st.res = newRes();
     st.cus = newCus();
+    st.fil = newFil();
     st.logs = newLogs();
     st.exp = { mask: "show", view: null };
     st.nb = { from: "", to: "", said: [] };
@@ -264,6 +266,10 @@
       loadMaps();
       return;
     }
+    if (page === "fill" && !st.fil.view) {
+      loadFill();
+      return;
+    }
     if (page === "judge" && !st.jdg.views[st.jdg.source]) {
       loadJudge();
       return;
@@ -285,6 +291,7 @@
       item("mapping", "対応", true),
       item("edit", "表の編集", true),
       item("customer", "外部一覧", true),
+      item("fill", "ひな形から作る", true),
       item("result", "結果", true),
       item("logs", "ログ", true),
       item("compare", "比較", false),
@@ -302,7 +309,7 @@
     if (st.error) {
       main.appendChild(h("div", { class: "box error" }, button("閉じる", () => { st.error = ""; render(); }, { class: "link close" }), st.error));
     }
-    const pages = { cases: casesPage, home: homePage, import: importPage, judge: judgePage, mapping: mappingPage, edit: editPage, customer: customerPage, result: resultPage, logs: logsPage, compare: comparePage };
+    const pages = { cases: casesPage, home: homePage, import: importPage, judge: judgePage, mapping: mappingPage, edit: editPage, customer: customerPage, fill: fillPage, result: resultPage, logs: logsPage, compare: comparePage };
     afterDraw = [];
     add(main, [pages[st.page]()]);
     main.scrollTop = same ? top : 0;
@@ -1330,6 +1337,495 @@
     ];
   }
 
+  // ---- ひな形から作る (spec 9.7, 14.7) ----
+
+  function newFil() {
+    return { view: null, tab: "templates", sel: "", name: "", text: "", saved: "", faults: null, msg: "", draft: { file: "", device: "", view: null },
+      redit: null, rnew: "", run: { template: "", diff: "", devices: "", view: null, sel: "" } };
+  }
+
+  function loadFill(then) {
+    run("ひな形を読んでいます", async () => {
+      const fl = st.fil;
+      fl.view = await api().Fill();
+      const v = fl.view;
+      if (fl.sel && !v.templates.some((t) => t.path === fl.sel)) fl.sel = "";
+      if (!fl.sel && !fl.text && v.templates.length) openTemplate(v.templates[0]);
+      if (!fl.run.template && v.templates.length) fl.run.template = v.templates[0].name;
+      if (then) await then();
+    });
+  }
+
+  function openTemplate(t) {
+    const fl = st.fil;
+    fl.sel = t ? t.path : "";
+    fl.name = t ? t.name : "";
+    fl.text = t ? t.text : "";
+    fl.saved = fl.text;
+    fl.faults = t && t.err ? [t.err] : null;
+    fl.draft.view = null;
+  }
+
+  function fillPage() {
+    const fl = st.fil;
+    if (!fl.view) return [h("h1", null, "ひな形から作る"), h("p", { class: "dim" }, "読んでいます。")];
+    return [
+      h("h1", null, "ひな形から作る"),
+      h("p", { class: "dim" }, "変数入りのひな形（fill/）に、一覧ファイル（input/customer/）の値とパラメータブックの値を入れて、機器ごとのコンフィグや投入を作ります。一覧のどの列をどの変数にするかは変数ルール（vars/）に書きます。"),
+      h("div", { class: "row" },
+        seg([["templates", "ひな形"], ["rules", "変数ルール"], ["run", "作る"]], fl.tab, (x) => { fl.tab = x; render(); }),
+        button("読み直す", () => loadFill()),
+        button("fill を開く", () => show("fill")),
+        button("vars を開く", () => show("vars")),
+        button("input/customer を開く", () => show("input/customer"))),
+      boxes("info", fl.msg ? [fl.msg] : []),
+      fl.tab === "templates" ? fillTemplates() : fl.tab === "rules" ? fillRules() : fillRun(),
+    ];
+  }
+
+  // insertAt puts text at the caret of the editor (or around the chosen
+  // lines, for a part: before and after are whole lines).
+  function insertAt(ta, text, before, after) {
+    const fl = st.fil;
+    const s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
+    if (before) {
+      const ls = v.lastIndexOf("\n", s - 1) + 1;
+      let le = v.indexOf("\n", Math.max(e - 1, s));
+      if (le < 0) le = v.length;
+      const mid = v.slice(ls, le);
+      ta.value = v.slice(0, ls) + before + "\n" + mid + (mid ? "\n" : "") + after + v.slice(le);
+    } else {
+      ta.value = v.slice(0, s) + text + v.slice(e);
+      ta.selectionStart = ta.selectionEnd = s + text.length;
+    }
+    fl.text = ta.value;
+    ta.focus();
+  }
+
+  function fillTemplates() {
+    const fl = st.fil;
+    const v = fl.view;
+    const ta = h("textarea", { class: "fill-text", spellcheck: "false", rows: "26", value: fl.text, oninput: (e) => { fl.text = e.target.value; }, id: "fill-text" });
+    const pick = async (path) => {
+      if (fl.text !== fl.saved && !(await ask("ひな形を切り替えますか", "保存していない変更は消えます。", "切り替える"))) { render(); return; }
+      openTemplate(v.templates.find((t) => t.path === path) || null);
+      render();
+    };
+    const save = () => run("ひな形を保存しています", async () => {
+      let name = fl.name;
+      if (!fl.sel) {
+        name = (fl.name || "").trim();
+        if (!name) throw new Error("新しいひな形の名前を入れてください（例: branch）");
+      }
+      const [rel, fault] = await api().TemplateSave(fl.sel, name, fl.text);
+      fl.view = await api().Fill();
+      openTemplate(fl.view.templates.find((t) => t.path === rel) || null);
+      fl.faults = fault ? [fault] : (await api().TemplateCheck(fl.text));
+      fl.msg = `保存しました: ${rel}`;
+    });
+    const check = () => run("ひな形を確かめています", async () => { fl.faults = await api().TemplateCheck(fl.text); });
+    const remove = async () => {
+      if (!(await ask("このひな形を消しますか", `${fl.sel} を fill から外します（state/backup に移すので、戻せます）。`, "消す"))) return;
+      run("ひな形を消しています", async () => {
+        const kept = await api().TemplateDelete(fl.sel);
+        fl.msg = `消しました: ${fl.sel}（控え: ${kept}）`;
+        openTemplate(null);
+        fl.view = await api().Fill();
+      });
+    };
+    const draft = () => run("1 台から案を作っています", async () => {
+      const d = fl.draft;
+      d.view = await api().FillDraft(d.file, d.device);
+      fl.sel = "";
+      fl.text = d.view.text;
+      fl.saved = "";
+      fl.name = fl.name || "";
+      fl.faults = null;
+    });
+    const parts = [
+      ["{{#each}}", "{{/each}}", "選んだ行を、一覧の行の数だけ繰り返します（間の変数から一覧を決めます）"],
+      ["{{#if 名前}}", "{{/if}}", "選んだ行を、条件に合うときだけ出します（名前を書き換えます）"],
+      ["{{#sync}}", "{{/sync}}", "今との差で投入を作るとき、選んだブロックをひな形どおりにそろえます（ひな形に無い行を消します）"],
+    ];
+    const opts = [["", "（新しいひな形）"]].concat(v.templates.map((t) => [t.path, t.name + (t.err ? "（誤りあり）" : "")]));
+    const dr = fl.draft;
+    if (!dr.file && v.configs.length) dr.file = v.configs[0];
+    return [
+      h("div", { class: "row" },
+        h("span", null, "ひな形"), select(opts, fl.sel, pick),
+        fl.sel ? null : [h("span", null, "名前"), h("input", { type: "text", value: fl.name, placeholder: "例: branch", oninput: (e) => { fl.name = e.target.value; }, id: "fill-name" })],
+        button("保存", save, { class: "primary", id: "fill-save" }),
+        button("確かめる", check, { id: "fill-check" }),
+        fl.sel ? button("このひな形を消す", remove, { class: "link" }) : null),
+      fl.faults && fl.faults.length ? h("div", { class: "box error" }, "ひな形の誤り:\n" + fl.faults.join("\n")) : fl.faults ? h("div", { class: "box info" }, "誤りはありません。") : null,
+      h("div", { class: "row small" },
+        h("span", { class: "dim" }, "選んだ行を囲む:"),
+        parts.map(([b, a, tip]) => button(b + " … " + a, () => insertAt($("fill-text"), "", b, a), { title: tip })),
+        button("{{! メモ}}", () => insertAt($("fill-text"), "{{! }}"), { title: "人のためのメモ。出力しません" })),
+      v.names.length
+        ? h("details", { class: "fill-names" }, h("summary", null, "変数を入れる（押すとカーソルの位置に入ります）"),
+          v.names.map((g) => h("div", { class: "row small" },
+            h("span", { class: "dim" }, g.title),
+            button(`{{#each ${g.each}}}`, () => insertAt($("fill-text"), "", `{{#each ${g.each}}}`, "{{/each}}"), { class: "link", title: "選んだ行を、この一覧・表の行の数だけ繰り返します" }),
+            g.names.map((n) => button(`{{${n}}}`, () => insertAt($("fill-text"), `{{${n}}}`), { class: "link" })))))
+        : h("p", { class: "dim small" }, "変数ルールがまだありません。「変数ルール」のタブで作ると、ここに変数のボタンが出ます。"),
+      ta,
+      h("p", { class: "dim small" }, "書き方: {{名前}} 値（空ならその機器は作らない）、{{名前?}} 空ならその行を出さない、{{表.列}} パラメータブックの値、{{#each}}…{{/each}} 一覧の行の数だけ繰り返す、{{#if 名前}}…{{#else}}…{{/if}} 条件（名前=値・!名前も可）、{{#sync}}…{{/sync}} 今との差でそろえる所、{{#sync ip route}} その語の行をそろえる、{{! メモ}}。"),
+      h("h3", null, "1 台から案を作る"),
+      h("p", { class: "dim small" }, "実機 1 台のコンフィグと、その機器の値（変数ルールの一覧の行・ブックの「機器」の表）から、値の所を {{変数}} に置き換えた案を上の欄に入れます（まだ保存しません）。"),
+      v.configs.length
+        ? h("div", { class: "row" },
+          h("span", null, "コンフィグ"), select(v.configs.map((f) => [f, f]), dr.file, (x) => { dr.file = x; }),
+          h("span", null, "機器"), h("input", { type: "text", value: dr.device, placeholder: "例: rt-a01", oninput: (e) => { dr.device = e.target.value; }, id: "fill-draft-device" }),
+          button("案を作る", draft, { id: "fill-draft" }))
+        : h("p", { class: "dim small" }, "input/old・new・logs にコンフィグがありません。"),
+      dr.view ? [
+        boxes("info", [`${dr.view.file} の ${dr.view.device} から作りました。` + (dr.view.replaced.length ? "置き換えた変数: " + dr.view.replaced.join("、") : "置き換えた値はありません。")]),
+        boxes("warn", dr.view.notes)] : null,
+    ];
+  }
+
+  function newVarRule(file) {
+    return { version: 1, file, sheet: "", sheetIndex: 0, headerRow: 0, dataRow: 0, startCol: "", mergeOnlyFirst: false, exclude: [],
+      match: { width: false, space: false, domain: false, dash: false }, device: newField(""), vars: [], also: [], name: "", path: "" };
+  }
+
+  // locOf is a variable rule as a column mapping that says where the table
+  // is: what the sample of a list takes.
+  const locOf = (r) => ({ version: 1, file: r.file, sheet: r.sheet, sheetIndex: Number(r.sheetIndex) || 0, headerRow: Number(r.headerRow) || 0,
+    dataRow: Number(r.dataRow) || 0, startCol: r.startCol, mergeOnlyFirst: r.mergeOnlyFirst, names: "new", exclude: [], rows: [], path: "" });
+
+  // emptyOf is what an empty value of a variable does, as the page offers
+  // it (PalaTerm's three: not made, the line left out, a fixed value).
+  const emptyOf = (x) => x._empty || (x.empty === "line" ? "line" : x.default ? "value" : "stop");
+
+  // varName makes a variable's name of a header (PalaTerm fills the name in
+  // from the column chosen first).
+  const varName = (hd) => hd.replace(/[^\p{L}\p{N}_-]+/gu, "_").replace(/^[^\p{L}_]+/u, "").replace(/_+$/, "") || "v";
+
+  function cleanField(f) {
+    const c = JSON.parse(JSON.stringify(f));
+    const src = srcOf(c);
+    delete c._src; delete c._try; delete c._tryFrom;
+    c.fallback = (c.fallback || []).filter((x) => x);
+    if (src !== "column") { c.column = ""; c.fallback = []; }
+    if (src !== "template") c.template = "";
+    if (src !== "value") c.value = "";
+    return c;
+  }
+
+  function cleanVarRule(r) {
+    const c = JSON.parse(JSON.stringify(r));
+    c.headerRow = Number(c.headerRow) || 0;
+    c.dataRow = Number(c.dataRow) || 0;
+    c.sheetIndex = Number(c.sheetIndex) || 0;
+    c.device = cleanField(r.device);
+    c.vars = r.vars.map((x) => {
+      const e = emptyOf(x);
+      const f = Object.assign(cleanField(x), { name: x.name, empty: e === "line" ? "line" : "" });
+      if (e !== "value") f.default = "";
+      return f;
+    });
+    c.also = r.also.map((a) => ({ label: a.label || "", device: cleanField(a.device), vars: a.vars.map((x) => Object.assign(cleanField(x), { name: x.name, empty: "" })) }));
+    c.exclude = r.exclude.map((x) => ({ column: x._on === "var" ? "" : x.column || "", var: x._on === "var" ? x.var || "" : "", op: x.op, value: x.value || "" }));
+    c.match = Object.assign({ width: false, space: false, domain: false, dash: false }, r.match || {});
+    return c;
+  }
+
+  async function varSample(ed) {
+    ed.tryv = null;
+    try {
+      ed.sample = await api().ListSample(locOf(ed.rule));
+      ed.err = "";
+      if (!Number(ed.rule.headerRow)) ed.rule.headerRow = ed.sample.headerRow;
+      ed.rule.sheet = ed.sample.sheet;
+      // The device column: the guess of the host name column.
+      if (!ed.rule.device.column) {
+        const host = ed.sample.suggest.find((f) => f.to === "hostname" && f.column);
+        const names = ed.sample.headers.map((x) => x.name);
+        const guess = host ? host.column : names.find((x) => /host|ホスト|機器|device|装置|ルータ|router|switch|スイッチ/i.test(x)) || names[0];
+        if (guess) ed.rule.device.column = guess;
+      }
+    } catch (e) {
+      ed.sample = null;
+      ed.err = errText(e);
+    }
+  }
+
+  function fillRules() {
+    const fl = st.fil;
+    const v = fl.view;
+    if (fl.redit) return varEditor();
+    const t = {
+      name: "変数ルール", header: ["ファイル", "一覧", "機器名の列", "変数", "状態"], code: [],
+      rows: v.rules.map((x) => {
+        const r = x.rule;
+        return [x.path, r ? r.file : "", r ? r.device.column || r.device.template || r.device.value : "", r ? r.vars.map((y) => y.name).join("、") : "",
+          x.problems.length ? "誤りがあります:\n" + x.problems.join("\n") : "読めます"];
+      }),
+      marks: v.rules.map((x) => (x.problems.length ? "unknown" : "")),
+    };
+    const open = (i) => {
+      const x = v.rules[i];
+      if (!x.rule) { st.error = `${x.path} は変数ルールとして読めません。テキストエディタで直してください:\n${x.problems.join("\n")}`; render(); return; }
+      run("一覧を読んでいます", async () => {
+        const ed = { path: x.path, name: x.name, rule: JSON.parse(JSON.stringify(x.rule)), sample: null, tryv: null, err: "", open: "" };
+        await varSample(ed);
+        fl.redit = ed;
+        fl.msg = "";
+      });
+    };
+    const create = (file) => run("一覧を読んでいます", async () => {
+      const ed = { path: "", name: fl.rnew || "", rule: newVarRule(file), sample: null, tryv: null, err: "", open: "" };
+      await varSample(ed);
+      fl.redit = ed;
+      fl.msg = "";
+    });
+    if (!fl.rfile || !v.lists.includes(fl.rfile)) fl.rfile = v.lists[0] || "";
+    return [
+      h("h2", null, "変数ルール"),
+      h("p", { class: "dim" }, "「一覧のどの列を、どの変数にするか」を書いたファイルです。一覧の読み方（見出しの行・除外・加工）は外部一覧の列対応と同じです。行を押すと開きます。"),
+      v.rules.length ? tableView(t, { id: "fill/rules", onPick: open }) : h("p", { class: "dim" }, "まだありません。"),
+      h("h2", null, "新しく作る"),
+      v.lists.length
+        ? h("div", { class: "row" },
+          h("span", null, "一覧のファイル"), select(v.lists.map((f) => [f, f]), fl.rfile, (x) => { fl.rfile = x; }),
+          button("この一覧の変数ルールを作る", () => create(fl.rfile), { class: "primary", id: "var-new" }))
+        : h("p", { class: "dim" }, "input/customer にファイルがありません。一覧（xlsx・xls・csv）を置いてから「読み直す」を押してください。"),
+    ];
+  }
+
+  function varEditor() {
+    const fl = st.fil;
+    const ed = fl.redit;
+    const r = ed.rule;
+    const sm = ed.sample;
+    const v = fl.view;
+    const headers = sm ? sm.headers.map((x) => x.name) : [];
+    const text = (obj, key, props) => h("input", Object.assign({ type: "text", value: obj[key] || "", oninput: (e) => { obj[key] = e.target.value; } }, props));
+    const headerSelect = (value, onpick) => {
+      const opts = [["", "（選ぶ）"]].concat(headers.map((x) => [x, x]));
+      if (value && !headers.includes(value)) opts.push([value, value + "（一覧にありません）"]);
+      return select(opts, value || "", onpick);
+    };
+    const resampleV = () => run("一覧を読んでいます", () => varSample(ed));
+    const firstValue = (f) => {
+      if (!sm || srcOf(f) !== "column") return "";
+      const hd = sm.headers.find((x) => x.name === f.column);
+      if (!hd) return "";
+      for (let i = Number(r.headerRow) || 0; i < sm.grid.length; i++) {
+        const val = (sm.grid[i] || [])[hd.col - 1];
+        if (val) return val;
+      }
+      return "";
+    };
+    // fieldCells are the cells of a field: where its value comes from, the
+    // steps and the default.
+    const fieldCells = (f, id, noDefault) => {
+      const src = srcOf(f);
+      return [
+        h("td", null, select(SOURCES, src, (x) => { f._src = x; render(); })),
+        h("td", null, src === "column" ? headerSelect(f.column, (x) => { f.column = x; if ("name" in f && !f.name && x) f.name = varName(x); render(); })
+          : src === "template" ? text(f, "template", { placeholder: "{見出し}/{見出し}" }) : text(f, "value")),
+        h("td", null, h("span", { class: "small" }, f.steps.length ? f.steps.map((s) => STEPS[s.type] || s.type).join(" → ") : "（なし）"), " ",
+          button(ed.open === id ? "たたむ" : "直す", () => { ed.open = ed.open === id ? "" : id; render(); }, { class: "link" })),
+        noDefault ? null : h("td", null, text(f, "default")),
+      ];
+    };
+    const stepRow = (f, id, n) => (ed.open === id ? h("tr", { class: "steps" }, h("td", { colspan: String(n) }, stepEditor(f, false, firstValue(f)))) : null);
+    const close = async () => {
+      if (!(await ask("変数ルールを閉じますか", "保存していない変更は消えます。", "閉じる"))) return;
+      fl.redit = null;
+      render();
+    };
+    const tryIt = () => run("試しに読んでいます", async () => { ed.tryv = await api().VarTry(cleanVarRule(r)); st.jump = "var-try"; });
+    const save = () => run("変数ルールを保存しています", async () => {
+      ed.path = await api().VarSave(ed.path, ed.name, cleanVarRule(r));
+      fl.msg = `保存しました: ${ed.path}`;
+      fl.view = await api().Fill();
+    });
+    const remove = async () => {
+      if (!(await ask("この変数ルールを消しますか", `${ed.path} を vars から外します（state/backup に移すので、戻せます）。`, "消す"))) return;
+      run("変数ルールを消しています", async () => {
+        const kept = await api().VarDelete(ed.path);
+        fl.msg = `消しました: ${ed.path}（控え: ${kept}）`;
+        fl.redit = null;
+        fl.view = await api().Fill();
+      });
+    };
+    const EMPTY = [["stop", "その機器は作らない"], ["line", "その行を出さない"], ["value", "決まった値を使う"]];
+    if (!r.match) r.match = { width: false, space: false, domain: false, dash: false };
+    for (const c of r.exclude) if (!c._on) c._on = c.var ? "var" : "column";
+    const out = [
+      h("h2", null, ed.path ? `変数ルール ${ed.path}` : "新しい変数ルール（まだ保存していません）"),
+      h("div", { class: "row" },
+        ed.path ? null : [h("span", null, "名前"), text(ed, "name", { placeholder: "例: sites（{{#each sites}} で呼べます）", id: "var-name" })],
+        button("試しに読む", tryIt, { id: "var-try-button" }),
+        button("保存", save, { class: "primary", id: "var-save" }),
+        button("閉じる", close),
+        ed.path ? button("このファイルを消す", remove, { class: "link" }) : null),
+      boxes("error", ed.err ? [ed.err] : []),
+      h("h3", null, "一覧のどこを読むか"),
+      h("div", { class: "form-grid" },
+        h("label", null, "一覧のファイル", text(r, "file", { onchange: resampleV })),
+        h("label", null, "シート", sm && sm.sheets.length
+          ? select(sm.sheets.map((x) => [x, x]), sm.sheet, (x) => { r.sheet = x; r.sheetIndex = 0; r.headerRow = 0; resampleV(); })
+          : text(r, "sheet", { onchange: resampleV })),
+        h("label", null, "見出しの行", h("input", { type: "number", min: "1", value: r.headerRow || "", onchange: (e) => { r.headerRow = Number(e.target.value) || 0; resampleV(); } })),
+        h("label", null, "値の最初の行", h("input", { type: "number", min: "0", value: r.dataRow || "", placeholder: "見出しの次の行", onchange: (e) => { r.dataRow = Number(e.target.value) || 0; resampleV(); } })),
+        h("label", null, "表の左端の列", text(r, "startCol", { placeholder: "自動（A、D、AB…）", onchange: resampleV })),
+        h("label", null, "結合セル", select([["", "範囲の全部のセルに値がある"], ["1", "左上のセルだけに値がある"]], r.mergeOnlyFirst ? "1" : "", (x) => { r.mergeOnlyFirst = x === "1"; resampleV(); }))),
+    ];
+    if (sm) {
+      const width = Math.max(1, ...sm.grid.map((row) => row.length));
+      const cols = [];
+      for (let c = 0; c < width; c++) cols.push(c);
+      const letter = (n) => { let s = ""; for (n += 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s; };
+      out.push(boxes("warn", sm.err ? [sm.err] : []), boxes("warn", sm.warnings),
+        h("p", { class: "dim small" }, `${sm.file} のシート「${sm.sheet}」の上の ${sm.grid.length} 行です（全部で ${sm.rows} 行）。行番号を押すと、その行を見出しの行にします。`),
+        h("div", { class: "table-wrap sample" }, h("table", null,
+          h("thead", null, h("tr", null, h("th", null, ""), cols.map((c) => h("th", null, letter(c))))),
+          h("tbody", null, sm.grid.map((row, i) => h("tr", { class: cls(i + 1 === Number(r.headerRow) && "hdr", i + 1 < Number(r.headerRow) && "above") },
+            h("th", { class: "pick", onclick: () => { r.headerRow = i + 1; r.dataRow = 0; resampleV(); } }, String(i + 1)),
+            cols.map((c) => h("td", { title: row[c] || null }, row[c] || ""))))))));
+    }
+    out.push(
+      h("h3", null, "読まない行（除外）"),
+      h("p", { class: "dim small" }, "どれか 1 つに当てはまる行は使いません（機器名のある行なら、その機器の続きの行も使いません）。「一覧の列」は元の値、「変数」は加工した後の値で決めます。"),
+      r.exclude.map((c, i) => h("div", { class: "row" },
+        select([["column", "一覧の列"], ["var", "変数"]], c._on, (x) => { c._on = x; render(); }),
+        c._on === "var"
+          ? select([["", "（選ぶ）"]].concat(r.vars.map((y) => [y.name, y.name])), c.var || "", (x) => { c.var = x; })
+          : headerSelect(c.column, (x) => { c.column = x; }),
+        select(v.ops.map((o) => [o, OPS[o] || o]), c.op, (x) => { c.op = x; render(); }),
+        c.op === "empty" || c.op === "notempty" ? null : text(c, "value"),
+        button("消す", () => { r.exclude.splice(i, 1); render(); }, { class: "link" }))),
+      h("div", { class: "row" }, button("条件を足す", () => { r.exclude.push({ column: "", var: "", op: "equals", value: "", _on: "column" }); render(); })));
+    const head = (first) => h("thead", null, h("tr", null, [first, "値の元", "値", "加工", "空のときの値"].map((x) => h("th", null, x))));
+    out.push(
+      h("h3", null, "機器名の列"),
+      h("p", { class: "dim small" }, "ブックの機器・今のコンフィグのホスト名と突き合わせる列です（前後の空白・全角半角・大文字小文字の違いは見ません）。"),
+      h("div", { class: "table-wrap" }, h("table", { class: "fields" }, head(""), h("tbody", null,
+        h("tr", null, h("td", null, "★ 機器名"), fieldCells(r.device, "dev")), stepRow(r.device, "dev", 5)))),
+      h("div", { class: "row small" },
+        h("span", { class: "dim" }, "機器名の照合: 一覧の機器名とブックの機器名を比べるとき、次の違いを無視します（大文字・小文字と前後の空白は常に無視します）"),
+        [["width", "全角・半角"], ["space", "空白"], ["domain", "ドメイン部（最初の「.」から後ろ）"], ["dash", "「-」と「_」"]].map(([k, l]) =>
+          h("label", { class: "check" }, h("input", { type: "checkbox", checked: !!r.match[k], onchange: (e) => { r.match[k] = e.target.checked; } }), " " + l))),
+      h("h3", null, "変数"),
+      h("p", { class: "dim small" }, "名前は文字か _ で始め、文字・数字・_・- で付けます（列を先に選ぶと、名前は見出しから入ります）。ひな形には {{名前}} と書きます。同じ機器名の行が何行もあると、その機器の 2 行目以降になります。機器名のセルが空の行は、上の機器の続きの行です。"));
+    const vrows = [];
+    r.vars.forEach((x, i) => {
+      const id = "v" + i;
+      vrows.push(h("tr", null,
+        h("td", null, text(x, "name", { placeholder: "例: wan_ip" })),
+        fieldCells(x, id, true),
+        h("td", null, select(EMPTY, emptyOf(x), (y) => { x._empty = y; render(); }), emptyOf(x) === "value" ? text(x, "default", { placeholder: "決まった値" }) : null),
+        h("td", null, button("消す", () => { r.vars.splice(i, 1); ed.open = ""; render(); }, { class: "link" }))));
+      vrows.push(stepRow(x, id, 6));
+    });
+    out.push(
+      h("div", { class: "table-wrap" }, h("table", { class: "fields" },
+        h("thead", null, h("tr", null, ["変数の名前", "値の元", "値", "加工", "値が空のとき", ""].map((x) => h("th", null, x)))),
+        h("tbody", null, vrows))),
+      h("div", { class: "row" },
+        button("変数を足す", () => { r.vars.push(Object.assign(newField(""), { name: "", empty: "" })); render(); }, { id: "var-add" }),
+        headers.length ? button("見出しから全部足す", () => {
+          const have = new Set(r.vars.map((x) => x.column));
+          for (const hd of headers) {
+            if (hd === r.device.column || have.has(hd)) continue;
+            r.vars.push(Object.assign(newField(""), { name: varName(hd), column: hd, empty: "" }));
+          }
+          render();
+        }, { title: "一覧の見出しを、そのまま変数にします（名前は後で直せます）" }) : null));
+    // The second and later devices of a line.
+    out.push(h("h3", null, "同じ行の 2 台目以降（冗長の予備機など）"),
+      h("p", { class: "dim small" }, "1 行に 2 台分（冗長構成のメインとバックアップなど）が載っている一覧は、2 台目を足して、2 台目の機器名の列と、2 台目で列が違う変数だけを選びます。選ばない変数は 1 台目と同じ列の値です。2 台目の機器名が空の行では 2 台目を作りません。機器名がどちらも空の行は、上の 2 台それぞれの続きです。"));
+    r.also.forEach((a, ai) => {
+      const rows = [h("tr", null, h("td", null, `★ ${ai + 2} 台目の機器名`, h("br"), text(a, "label", { placeholder: "名前（例: バックアップ）" })), fieldCells(a.device, `a${ai}`), h("td", null, ""))];
+      rows.push(stepRow(a.device, `a${ai}`, 6));
+      a.vars.forEach((x, i) => {
+        const id = `a${ai}v${i}`;
+        rows.push(h("tr", null,
+          h("td", null, select(r.vars.map((y) => [y.name, y.name]), x.name, (y) => { x.name = y; })),
+          fieldCells(x, id),
+          h("td", null, button("消す", () => { a.vars.splice(i, 1); render(); }, { class: "link" }))));
+        rows.push(stepRow(x, id, 6));
+      });
+      out.push(h("div", { class: "target-card" },
+        h("div", { class: "table-wrap" }, h("table", { class: "fields" }, head(""), h("tbody", null, rows))),
+        h("div", { class: "row" },
+          button("この台の変数を足す", () => { a.vars.push(Object.assign(newField(""), { name: (r.vars[0] || {}).name || "", empty: "" })); render(); }, { disabled: !r.vars.length }),
+          button(`${ai + 2} 台目を消す`, () => { r.also.splice(ai, 1); render(); }, { class: "link" }))));
+    });
+    out.push(h("div", { class: "row" }, button("2 台目以降を足す", () => { r.also.push({ device: newField(""), vars: [] }); render(); })));
+    if (ed.tryv) {
+      const tv = ed.tryv;
+      out.push(h("h3", { id: "var-try" }, "試しに読んだ結果（何も書いていません）"));
+      if (tv.faults.length) out.push(h("div", { class: "box error" }, "この変数ルールには誤りがあります:\n" + tv.faults.join("\n")));
+      else {
+        const more = tv.devices - tv.known;
+        out.push(h("p", null, `${tv.file}: ${tv.lines} 行を読み（除外 ${tv.excluded} 行）、機器 ${tv.devices} 台の値になりました。`),
+          tv.noBook ? h("p", { class: "dim small" }, "パラメータブックがまだ無いので、機器名をブックと照らし合わせていません。")
+            : boxes(more > 0 ? "warn" : "info", [more > 0 ? `ブックに無い機器が ${more} 台あります: ${tv.unknown.join("、")}${more > tv.unknown.length ? " ほか" : ""}（機器名の照合の設定も見てください）` : `機器 ${tv.known} 台とも、ブックにあります。`]),
+          boxes("warn", tv.missing.length ? [`一覧に、見出し「${tv.missing.join("」「")}」がありません。空として読みました。`] : []),
+          boxes("warn", tv.warnings),
+          h("h4", null, "先頭の行の読み方"),
+          h("p", { class: "dim small" }, "一覧の元の値 → 変数の値。続きの行は、上の機器の行になります。"),
+          tableView(tv.sample, { id: "fill/try-sample" }),
+          h("h4", null, "機器ごとの値"),
+          tableView(tv.table, { id: "fill/try" }));
+      }
+    }
+    return out;
+  }
+
+  function fillRun() {
+    const fl = st.fil;
+    const v = fl.view;
+    const rn = fl.run;
+    if (!v.templates.length) return h("p", { class: "dim" }, "ひな形がまだありません。「ひな形」のタブで作ってください。");
+    if (!v.templates.some((t) => t.name === rn.template)) rn.template = v.templates[0].name;
+    const go = () => run(rn.diff ? "今との差から投入を作っています" : "ひな形に値を入れています", async () => {
+      const devs = rn.devices.split(/[,、\s]+/).map((x) => x.trim()).filter(Boolean);
+      rn.view = await api().FillRun(rn.template, rn.diff, devs);
+      rn.sel = "";
+    });
+    const out = [
+      h("div", { class: "form-grid" },
+        h("label", null, "ひな形", select(v.templates.map((t) => [t.name, t.name]), rn.template, (x) => { rn.template = x; })),
+        h("label", null, "作るもの", select([["", "全文（新規コンフィグ・変更コマンド）"], ["old", "今との差から投入（今 = 旧コンフィグ input/old）"], ["new", "今との差から投入（今 = 新コンフィグ input/new）"], ["logs", "今との差から投入（今 = 投入後のログ input/logs）"]], rn.diff, (x) => { rn.diff = x; render(); })),
+        h("label", null, "機器", h("input", { type: "text", value: rn.devices, placeholder: "空 = 全部。例: rt-a01, rt-a02", oninput: (e) => { rn.devices = e.target.value; }, id: "fill-devices" }))),
+      rn.diff ? h("p", { class: "dim small" }, "ひな形を「あるべき姿」として、機器ごとの今のコンフィグとの差から投入を作ります。足す行は全部、消す行（no …）は {{#sync}} の印の所だけです。保存のコマンドは付けません。") : null,
+      h("div", { class: "row" }, button("作る", go, { class: "primary", id: "fill-run" })),
+    ];
+    const rv = rn.view;
+    if (!rv) return out;
+    out.push(
+      h("h2", null, `結果: ${rv.template}`),
+      h("div", { class: "row" },
+        h("span", null, `機器 ${rv.devices.length}、作った ${rv.made}、作らなかった ${rv.notMade}`),
+        rv.dir ? button("出力のフォルダを開く", () => show(rv.dir)) : null,
+        button("報告書を開く", () => show(rv.report))),
+      boxes("warn", rv.notes));
+    const RES = { made: "作った", unchanged: "変更なし", not: "作らなかった" };
+    const t = { name: "機器", header: ["機器", "結果", "理由・行数"], code: [],
+      rows: rv.devices.map((d) => [d.name, RES[d.result], d.result === "made" ? `${d.lines} 行` + (d.left.length ? `（値が空で出さなかった行 ${d.left.length}）` : "") : d.why]),
+      marks: rv.devices.map((d) => (d.result === "not" ? "unknown" : "")) };
+    out.push(tableView(t, { id: "fill/run", onPick: (i) => { rn.sel = rv.devices[i].name; st.jump = "fill-one"; render(); }, selected: rv.devices.findIndex((d) => d.name === rn.sel) }));
+    const d = rv.devices.find((x) => x.name === rn.sel);
+    if (d) {
+      out.push(h("h3", { id: "fill-one" }, `${d.name}: ${RES[d.result]}`),
+        d.why ? h("div", { class: "box error" }, d.why) : null,
+        d.values.length ? h("p", { class: "dim small" }, d.values.join("　")) : null,
+        d.text ? h("pre", { class: "fill-out" }, d.text) : null);
+      if (rv.diff) {
+        const list = (title, items, mark) => (items.length ? [h("h4", null, `${title}（${items.length}）`), h("pre", { class: "fill-out" }, items.map((x) => mark + " " + x).join("\n"))] : null);
+        out.push(list("足す行", d.added, "+"), list("消す行", d.removed, "-"), list("残る行（ひな形に無いが消していない）", d.kept, "="));
+      }
+    }
+    return out;
+  }
+
   // ---- ログ ----
 
   function logsPage() {
@@ -1730,7 +2226,7 @@
 
   // stepEditor edits the processing of one field.
   function stepEditor(f, secret, first) {
-    const m = st.cus.maps;
+    const m = st.cus.maps || st.fil.view;
     // The value the steps are tried on: the first one of the list, until the
     // column changes or a person types another.
     if (f._try == null || f._tryFrom !== f.column) { f._try = first; f._tryFrom = f.column; }

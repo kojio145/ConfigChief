@@ -7,3 +7,8 @@ Left out: plan.go (merging into PalaTerm's device list), guess.go (guessing its 
 parts of the others about its device fields and passwords. New here: rule.go (a rule gives rows of the design
 data, written as YAML), convert.go, draft.go and the step "cidr".
 Fixes made here should be carried back by hand when they matter to PalaTerm too.
+
+vars.go (the variable rules of spec 9.7.2) follows PalaTerm's 変数ルール as of v1.10.5 (internal/model/fillrule.go
+and readFill and matchFillNames of app_fill.go): a row whose device cell is empty continues the device above, more
+devices on a row, exclusions on a column or on a variable (a device left out takes its continuing rows with it),
+and the match of device names (width, spaces, the domain part, "-" and "_"). Written here as YAML of a case folder.

@@ -71,6 +71,22 @@ session:                        # 端末ログから、設定の部分だけを�
 - **区切りの行で階層を閉じる**: `comment_closes: true` と書くと、`comment_prefixes` で始まる行が、開いている階層をすべて閉じます（区切りの次の行は、字下げがあっても一番上の階層）。設定の部分ごとに `#` の行で区切り、機器全体の 1 行の設定を 1 字下げて保存するメーカー（同梱の `nec_qx`）のためのものです。字下げのある区切りの行（` #`）は、その字下げと同じか、それより深い階層だけを閉じます。書かなければ、区切りの行は階層に関わりません
 - **IF 名**: フィルタ `ifname` が省略形を正式な名前に直します。`Null`・`on`・`yes`・`no` のような名前は、YAML が別の値として読むので引用符で囲みます（`name: "Null"`）
 - **端末ログ**: `show_config` は行の終わり（`$`）まで書きます（`show running-config interface …` のような一部の表示を、全体として拾わないため）。`pager` は跡そのものだけを書きます
+- **変更の投入**（`change`。書かなくてもよい）: 「ひな形から作る」で、今のコンフィグとの差から投入を作るときの書き方です（使い方 8 章）。書かないパックの機器には、差の投入を作りません
+
+```yaml
+change:
+  begin: [configure terminal]     # 設定モードに入る行
+  end: [end]                      # 設定モードから出る行
+  exit: exit                      # ブロック（interface など）を 1 段抜ける行
+  exits:                          # 別の行で抜けるブロック（最初に当たったもの）
+    - {parent: '^address-family ', exit: exit-address-family}
+  negate: "no "                   # 行を消すとき前に付ける語
+  unnegate: true                  # 「no …」の行は「no」を外して消す（no shutdown → shutdown）
+  forms:                          # 別の形で消す行（最初に当たったもの。$1… は当たった所）
+    - {match: '^description ', remove: 'no description'}
+```
+
+- `begin`・`end`・`exit` は、メーカーの公開資料で確かめた行だけを書きます。保存のコマンドは書きません（保存するかは人が決めます）
 
 ## 4. 取り込みの規則（import/*.yaml）
 

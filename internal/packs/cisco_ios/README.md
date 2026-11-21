@@ -301,6 +301,12 @@ IOS 15 M&T と IOS-XE のルータで共通のものです。右の列は、章�
 - **「トンネルの認証」は、`no l2tp tunnel authentication` が無ければ有効です**（機器の既定）。有効で `l2tp tunnel password` が無いグループは、「自分の名前（無ければホスト名）のユーザのパスワードを使う」の意味で、パスワードの列は空になります
 - **PPPoE を受けるポートは、機器に LAC がちょうど 1 つあるときだけ読みます**（Cisco は、PPPoE のグループと VPDN のグループを結び付けません）。グループの名前は表に持たず、書き出しでは L2TP の名前にします
 
+## 変更の投入の書き方（`change`。「ひな形から作る」の今との差）
+
+`pack.yaml` の `change`（別紙 B 2.5）。設定モードへは `configure terminal`、抜けるのは `end`、ブロックを 1 段抜けるのは `exit`、行を消すのは `no` の形、`no` で始まる行は `no` を外して戻す（Configuration Fundamentals「Using the Cisco IOS Command-Line Interface」）。`address-family` は、ガイドの見本のコンフィグの形どおり `exit-address-family` で抜ける。`username` は `no username <名前>`、`banner` は `no banner <種類>`、`description` は `no description` で消す。
+
+- **確かめていないこと**: `address-family` を `exit` でも抜けられるか。行の全部に `no` を付けた形が通らない命令が残っているか（実機で弾かれた行は、投入ログのチェックで分かる）。保存のコマンドは付けない
+
 ## 端末ログの読み方
 
 端末ソフトのログ（ログインから `show running-config` まで入ったもの）は、設定の部分だけを切り出して読みます。決まりは別紙 B 2.4、書いてある場所は `pack.yaml` の `session` です。

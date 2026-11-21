@@ -182,3 +182,22 @@ func (a *App) ListDelete(path string) (string, error) { return a.s.ListDelete(pa
 func (a *App) ListTrace(v string, steps []listimport.Step) []string {
 	return a.s.ListTrace(v, steps)
 }
+
+// The screen of the templates (spec 14.7).
+func (a *App) Fill() (*ui.FillView, error) { return a.s.Fill() }
+func (a *App) TemplateSave(path, name, text string) ([]string, error) {
+	return a.s.TemplateSave(path, name, text)
+}
+func (a *App) TemplateDelete(path string) (string, error)  { return a.s.TemplateDelete(path) }
+func (a *App) TemplateCheck(text string) ([]string, error) { return a.s.TemplateCheck(text) }
+func (a *App) VarSave(path, name string, r listimport.VarRule) (string, error) {
+	return a.s.VarSave(path, name, r)
+}
+func (a *App) VarDelete(path string) (string, error)               { return a.s.VarDelete(path) }
+func (a *App) VarTry(r listimport.VarRule) (*ui.VarTryView, error) { return a.s.VarTry(r) }
+func (a *App) FillDraft(file, device string) (*ui.FillDraftView, error) {
+	return a.s.FillDraft(file, device)
+}
+func (a *App) FillRun(template, diff string, devices []string) (*ui.FillRunView, error) {
+	return a.s.FillRun(template, diff, devices)
+}

@@ -58,3 +58,22 @@ interfaces:
     - {name: Virtual-Template, short: [], kind: other}
     - {name: "Null", short: [Nu], kind: other}
   subif: '^(?P<parent>.+)\.(?P<n>\d+)$'
+
+# How a change is put in (appendix B 2.5): "configure terminal" from
+# privileged EXEC, "exit" up one level, "end" out of the configuration mode,
+# the "no" form of a command, and a command without "no" to undo a "no" line
+# (Configuration Fundamentals, "Using the Cisco IOS Command-Line Interface").
+# "exit-address-family" ends an address family as the guide's sample
+# configuration writes it. Saving is left to the person.
+change:
+  begin: [configure terminal]
+  end: [end]
+  exit: exit
+  exits:
+    - {parent: '^address-family ', exit: exit-address-family}
+  negate: "no "
+  unnegate: true
+  forms:
+    - {match: '^banner (\S+)', remove: 'no banner $1'}
+    - {match: '^username (\S+) ', remove: 'no username $1'}
+    - {match: '^description ', remove: 'no description'}
