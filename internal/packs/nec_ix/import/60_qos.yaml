@@ -14,17 +14,60 @@ rules:
       # that only pick a DSCP or a precedence are turned into the columns
       # of the condition below (derive qos.match).
       - id: qos.class.acl
-        match: '^match ip access-list (?P<acl>\S+)(?: (?P<q>high|medium|normal|low))?$'
+        match: '^match ip access-list (?P<acl>\S+)(?: cos (?P<cos>[0-7]))?(?: (?P<q>high|medium|normal|low|sub-a|sub-b|sub-c|sub-d))?$'
         emit:
           - table: x_qos_match
             key: {class: "{{ parent.name }}", seq: "{{ (rows('x_qos_match', class=parent.name) | length + 1) * 10 }}"}
-            set: {acl: "{{ acl }}", queue: "{{ q }}"}
+            set: {acl: "{{ acl }}", cos: "{{ cos }}", queue: "{{ q | replace('-', '_') }}"}
       - id: qos.class.any
-        match: '^match any(?: (?P<q>high|medium|normal|low))?$'
+        match: '^match any(?: (?P<q>high|medium|normal|low|sub-a|sub-b|sub-c|sub-d))?$'
         emit:
           - table: x_qos_match
             key: {class: "{{ parent.name }}", seq: "{{ (rows('x_qos_match', class=parent.name) | length + 1) * 10 }}"}
-            set: {any: "true", queue: "{{ q }}"}
+            set: {any: "true", queue: "{{ q | replace('-', '_') }}"}
+      # ---- the other conditions (CRM 14-17; appendix A 3.26) ----
+      - id: qos.class.ipv6_acl
+        match: '^match ipv6 access-list (?P<acl>\S+)(?: (?P<q>high|medium|normal|low|sub-a|sub-b|sub-c|sub-d))?$'
+        emit:
+          - table: x_qos_match
+            key: {class: "{{ parent.name }}", seq: "{{ (rows('x_qos_match', class=parent.name) | length + 1) * 10 }}"}
+            set: {other: "true", ipv6_acl: "{{ acl }}", queue: "{{ q | replace('-', '_') }}"}
+      - id: qos.class.input_if
+        match: '^match input-interface (?P<ifn>\S+)(?: (?P<q>high|medium|normal|low|sub-a|sub-b|sub-c|sub-d))?$'
+        emit:
+          - table: x_qos_match
+            key: {class: "{{ parent.name }}", seq: "{{ (rows('x_qos_match', class=parent.name) | length + 1) * 10 }}"}
+            set: {other: "true", input_if: "{{ ifn | ifname }}", queue: "{{ q | replace('-', '_') }}"}
+      - id: qos.class.cos
+        match: '^match cos (?P<cos>[0-7])(?: (?P<q>high|medium|normal|low|sub-a|sub-b|sub-c|sub-d))?$'
+        emit:
+          - table: x_qos_match
+            key: {class: "{{ parent.name }}", seq: "{{ (rows('x_qos_match', class=parent.name) | length + 1) * 10 }}"}
+            set: {other: "true", cos: "{{ cos }}", queue: "{{ q | replace('-', '_') }}"}
+      - id: qos.class.qos_group
+        match: '^match qos-group (?P<g>\d+)(?: (?P<q>high|medium|normal|low|sub-a|sub-b|sub-c|sub-d))?$'
+        emit:
+          - table: x_qos_match
+            key: {class: "{{ parent.name }}", seq: "{{ (rows('x_qos_match', class=parent.name) | length + 1) * 10 }}"}
+            set: {other: "true", qos_group: "{{ g }}", queue: "{{ q | replace('-', '_') }}"}
+      - id: qos.class.self
+        match: '^match local-generate-packet(?: (?P<q>high|medium|normal|low|sub-a|sub-b|sub-c|sub-d))?$'
+        emit:
+          - table: x_qos_match
+            key: {class: "{{ parent.name }}", seq: "{{ (rows('x_qos_match', class=parent.name) | length + 1) * 10 }}"}
+            set: {other: "true", local_generated: "true", queue: "{{ q | replace('-', '_') }}"}
+      - id: qos.class.rtp
+        match: '^match rtp port (?P<lo>\d+) (?P<range>\d+)(?: (?P<q>high|medium|normal|low|sub-a|sub-b|sub-c|sub-d))?$'
+        emit:
+          - table: x_qos_match
+            key: {class: "{{ parent.name }}", seq: "{{ (rows('x_qos_match', class=parent.name) | length + 1) * 10 }}"}
+            set: {other: "true", rtp_port_start: "{{ lo }}", rtp_port_range: "{{ range }}", queue: "{{ q | replace('-', '_') }}"}
+      - id: qos.class.ngn
+        match: '^match ngn (?P<ifn>\S+)(?: qos-group (?P<g>\d+))?(?: (?P<q>high|medium|normal|low|sub-a|sub-b|sub-c|sub-d))?$'
+        emit:
+          - table: x_qos_match
+            key: {class: "{{ parent.name }}", seq: "{{ (rows('x_qos_match', class=parent.name) | length + 1) * 10 }}"}
+            set: {other: "true", ngn_if: "{{ ifn | ifname }}", qos_group: "{{ g }}", queue: "{{ q | replace('-', '_') }}"}
 
   # A policy has a row per class. The two classes of the device are
   # "default" (class-default) and "local" (class-local) in the dataset.
@@ -37,7 +80,7 @@ rules:
           table: qos_policies
           key:
             policy: "{{ parent.name }}"
-            class: "{{ 'default' if cls == 'class-default' else ('local' if cls == 'class-local' else cls) }}"
+            class: "{{ 'default' if cls == 'class-default' else ('local' if cls == 'class-local' else ('dynamic' if cls == 'class-dynamic' else cls)) }}"
         set: {seq: "{{ (rows('qos_policies', policy=parent.name) | length + 1) * 10 }}"}
         children:
           # Without a word the value is in kbps (CRM 14-10). The burst is in
@@ -70,9 +113,22 @@ rules:
           - id: qos.policy.set.precedence
             match: '^set ip precedence (?P<v>\d+)$'
             set: {set_precedence: "{{ v }}"}
+          # high, medium, normal, low, then sub-a to sub-d (CRM, chapter 14).
           - id: qos.policy.queue_limit
-            match: '^queue-limit (?P<v>\d+(?: \d+){0,3})$'
+            match: '^queue-limit (?P<v>\d+(?: \d+){0,7})$'
             append: {queue_limit: "{{ v }}"}
+          - id: qos.policy.set.cos
+            match: '^set cos (?P<v>[0-7])$'
+            set: {set_cos: "{{ v }}"}
+          - id: qos.policy.set.qos_group
+            match: '^set qos-group (?P<v>\d+)$'
+            set: {set_qos_group: "{{ v }}"}
+          - id: qos.policy.set.dscp6
+            match: '^set ipv6 dscp (?P<v>\d+)$'
+            set: {set_ipv6_dscp: "{{ v }}"}
+          - id: qos.policy.set.precedence6
+            match: '^set ipv6 precedence (?P<v>\d+)$'
+            set: {set_ipv6_precedence: "{{ v }}"}
 
 derive:
   # A list whose every entry is "permit ip src any dest any dscp N" (or
@@ -91,16 +147,24 @@ derive:
       u3: "first('nat_rules', match_acl=m.acl)"
       u4: "first('remote_access', acl=m.acl)"
       u5: "first('snmp_communities', acl=m.acl)"
-      u6: "lookup('x_ipsec_map', acl=m.acl)"
+      u6: "first('x_ipsec_map', acl=m.acl)"
       free: "not (u1.name or u2.name or u3.name or u4.acl or u5.acl or u6.name)"
-      cd: "free and all | length > 0 and d | length == all | length"
-      cp: "free and all | length > 0 and p | length == all | length"
-    when: "m.any or m.acl"
+      cd: "free and not m.cos and all | length > 0 and d | length == all | length"
+      cp: "free and not m.cos and all | length > 0 and p | length == all | length"
+    when: "m.any or m.acl or m.other"
     row: {table: qos_class_matches, key: {class: "{{ m.class }}", seq: "{{ m.seq }}"}}
     set:
       acl: "{{ '' if (cd or cp) else m.acl }}"
       queue: "{{ m.queue }}"
+      ipv6_acl: "{{ m.ipv6_acl }}"
+      input_if: "{{ m.input_if }}"
+      qos_group: "{{ m.qos_group }}"
+      local_generated: "{{ m.local_generated }}"
+      rtp_port_start: "{{ m.rtp_port_start }}"
+      rtp_port_range: "{{ m.rtp_port_range }}"
+      ngn_if: "{{ m.ngn_if }}"
     append:
+      cos: "{{ m.cos }}"
       dscp: "{% if cd %}{% for e in d %}{{ e.dscp }} {% endfor %}{% endif %}"
       precedence: "{% if cp %}{% for e in p %}{{ e.precedence }} {% endfor %}{% endif %}"
 
@@ -108,6 +172,7 @@ derive:
   # into the DSCP or precedence of the condition (qos.match).
   - id: qos.acl.entry.taken
     for: acl_entries
+    only_if: "rows('x_qos_match')"
     as: e
     let:
       m: "lookup('x_qos_match', acl=e.acl)"
@@ -129,6 +194,6 @@ derive:
     for: qos_policies
     as: p
     let:
-      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue or p.shape_bps or p.shape_bc or p.shape_be"
+      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue or p.set_cos or p.set_qos_group or p.set_ipv6_dscp or p.set_ipv6_precedence or p.shape_mode or p.shape_percent or p.police_percent or p.police_pir_bps or p.police_violate or p.police_violate_value or p.random_detect or p.queue_limit_unit or p.shape_bps or p.shape_bc or p.shape_be"
     when: "p.class in ['default', 'local'] and not (more)"
     remove: true

@@ -1,0 +1,107 @@
+hostname rt-q01
+!
+vrf definition cust-a
+ address-family ipv4
+ exit-address-family
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+ lifetime 28800
+crypto isakmp key dummy-psk-sample-name hostname ix-q09.example.com
+!
+crypto keyring KR-Virtual-Template1
+ pre-shared-key address 0.0.0.0 0.0.0.0 key dummy-psk-sample-vt
+crypto isakmp profile ISAKMP-Virtual-Template1
+ keyring KR-Virtual-Template1
+ match identity address 0.0.0.0
+ virtual-template 1
+!
+crypto ikev2 proposal IKEV2-PROP
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+!
+crypto ikev2 policy IKEV2-POL
+ proposal IKEV2-PROP
+!
+crypto ikev2 keyring IKEV2-KEYS
+ peer Tunnel2
+  address 203.0.113.40
+  pre-shared-key dummy-psk-sample-c
+!
+crypto ikev2 profile IKEV2-Tunnel2
+ match identity remote address 203.0.113.40 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS
+ lifetime 86400
+!
+crypto ipsec transform-set TS-Virtual-Template1 esp-aes 256 esp-sha256-hmac
+ mode tunnel
+!
+crypto ipsec transform-set TS-Tunnel1 esp-aes 256 esp-sha256-hmac
+ mode tunnel
+!
+crypto ipsec transform-set TS-Tunnel2 esp-aes 256 esp-sha256-hmac
+ mode tunnel
+!
+crypto ipsec profile PROF-Virtual-Template1
+ set transform-set TS-Virtual-Template1
+ set security-association lifetime seconds 3600
+!
+crypto ipsec profile PROF-Tunnel1
+ set transform-set TS-Tunnel1
+ set security-association lifetime seconds 3600
+!
+crypto ipsec profile PROF-Tunnel2
+ set transform-set TS-Tunnel2
+ set security-association lifetime seconds 28800
+ set ikev2-profile IKEV2-Tunnel2
+!
+interface GigabitEthernet0/0
+ description sample-wan
+ ip address 203.0.113.9 255.255.255.248
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description sample-lan
+ ip address 192.0.2.1 255.255.255.128
+ no shutdown
+!
+interface GigabitEthernet0/2
+ description sample-lan-cust-a
+ vrf forwarding cust-a
+ ip address 192.0.2.129 255.255.255.128
+ no shutdown
+!
+interface Tunnel1
+ ip unnumbered GigabitEthernet0/1
+ tunnel source GigabitEthernet0/0
+ tunnel destination ix-q09.example.com
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-Tunnel1
+ no shutdown
+!
+interface Tunnel2
+ vrf forwarding cust-a
+ ip unnumbered GigabitEthernet0/2
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.40
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-Tunnel2
+ no shutdown
+!
+interface Virtual-Template1 type tunnel
+ ip unnumbered GigabitEthernet0/1
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-Virtual-Template1
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.14 1
+ip route 198.51.100.128 255.255.255.128 Tunnel1 1
+ip route vrf cust-a 198.51.100.0 255.255.255.128 Tunnel2 1
+!
+end

@@ -1,0 +1,23 @@
+hostname rt-r07
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.1 255.255.255.248
+ no shutdown
+!
+router bgp 64496
+ bgp router-id 192.0.2.1
+ neighbor 203.0.113.2 remote-as 64497
+ neighbor 203.0.113.2 route-map RM-SAMPLE-MARK out
+ neighbor 203.0.113.3 remote-as 64498
+ neighbor 203.0.113.3 route-map RM-SAMPLE-MARK out
+ neighbor 203.0.113.3 send-community
+ neighbor 203.0.113.4 remote-as 64499
+ neighbor 203.0.113.4 route-map RM-SAMPLE-CLEAN out
+!
+route-map RM-SAMPLE-CLEAN permit 10
+ set community none
+!
+route-map RM-SAMPLE-MARK permit 10
+ set community 64496:100 additive
+!
+end

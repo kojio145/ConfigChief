@@ -1,0 +1,55 @@
+# A QX-type stack of switches (made-up values): hybrid ports, lists of VLANs, the voice VLAN, port security, MSTP, storm suppression by a rate, loop detection, DHCP snooping, IRF members and port mirroring.
+tables:
+  devices:
+    - {hostname: "sw-q09", os_version: "7.1.070", vendor: "nec_qx"}
+  interfaces:
+    - {name: "Bridge-Aggregation1", enabled: "true", kind: "lag"}
+    - {name: "GigabitEthernet1/0/1", enabled: "true", kind: "physical"}
+    - {name: "GigabitEthernet1/0/2", enabled: "true", kind: "physical"}
+    - {name: "GigabitEthernet1/0/3", enabled: "true", kind: "physical"}
+    - {name: "GigabitEthernet1/0/4", enabled: "true", kind: "physical"}
+    - {name: "GigabitEthernet1/0/23", enabled: "true", kind: "physical"}
+    - {name: "GigabitEthernet1/0/24", enabled: "true", kind: "physical"}
+    - {name: "FortyGigE1/0/53", enabled: "true", kind: "physical"}
+  l2_settings:
+    - {dhcp_snooping: "true", lacp_system_priority: "4096", loop_detect_action: "shutdown", loop_detect_interval: "10", loop_detect_vlans: ["10", "20", "30-32"], mst_name: "sample-region", mst_revision: "3", port_security: "true", stp_enabled: "true", stp_forward: "15", stp_hello: "2", stp_max_age: "20", stp_mode: "mst", stp_root: "primary"}
+  lags:
+    - {if_name: "GigabitEthernet1/0/23", group: "1", lacp_short: "true", mode: "active"}
+    - {if_name: "GigabitEthernet1/0/24", group: "1", mode: "active"}
+  mirror_sessions:
+    - {session: "1", destination_if: "GigabitEthernet1/0/5", sources_both: ["GigabitEthernet1/0/1"], sources_tx: ["GigabitEthernet1/0/2"]}
+    - {session: "2", destination_if: "GigabitEthernet1/0/4", sources_rx: ["GigabitEthernet1/0/3"]}
+  stack_members:
+    - {member: "1", description: "sample upper unit", priority: "32"}
+    - {member: "2", priority: "16"}
+  stp_instances:
+    - {instance: "1", root: "primary", vlans: ["10", "20"]}
+    - {instance: "2", priority: "8192", vlans: ["30-32"]}
+  switchports:
+    - {if_name: "Bridge-Aggregation1", allowed_vlans: ["all"], loop_detect_action: "shutdown", loop_detect_vlans: ["all"], mode: "trunk"}
+    - {if_name: "GigabitEthernet1/0/1", hybrid_tagged: ["30-32"], hybrid_untagged: ["10", "20"], mode: "hybrid", native_vlan: "10", storm_broadcast: "64kbps", storm_unicast: "1000pps", stp_cost: "20000", stp_guard: "root", stp_port_priority: "64", voice_vlan: "100"}
+    - {if_name: "GigabitEthernet1/0/2", access_vlan: "10", loop_detect_action: "no_learning", loop_detect_vlans: ["10"], mode: "access", port_security: "true", port_security_max: "2", port_security_sticky: "true", port_security_violation: "protect", stp_guard: "loop"}
+    - {if_name: "GigabitEthernet1/0/3", access_vlan: "20", mode: "access", port_security: "true", port_security_max: "1", port_security_sticky: "true"}
+    - {if_name: "GigabitEthernet1/0/4", access_vlan: "20", mode: "access"}
+    - {if_name: "GigabitEthernet1/0/23", allowed_vlans: ["all"], dhcp_snooping_trust: "true", mode: "trunk"}
+    - {if_name: "GigabitEthernet1/0/24", allowed_vlans: ["all"], dhcp_snooping_trust: "true", mode: "trunk"}
+    - {if_name: "FortyGigE1/0/53", mode: "access"}
+  vlans:
+    - {vlan_id: "1"}
+    - {vlan_id: "100", name: "sample-voice"}
+    - {vlan_id: "10"}
+    - {vlan_id: "20"}
+    - {vlan_id: "30"}
+    - {vlan_id: "31"}
+    - {vlan_id: "32"}
+    - {vlan_id: "99"}
+unknown:
+  - "irf domain 10"
+  - "stp instance 3 to 4 priority 12288"
+  - "stp instance 1 cost 2000"
+  - "port-security intrusion-mode disableport-temporarily"
+  - "port-security port-mode userlogin-secure"
+  - "irf-port 1/1"
+  - "port group interface Ten-GigabitEthernet1/0/49"
+  - "mirroring-group 3 remote-source"
+  - "mirroring-group 3 mirroring-port GigabitEthernet1/0/6 both"

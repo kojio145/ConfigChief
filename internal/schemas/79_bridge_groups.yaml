@@ -1,0 +1,14 @@
+table: bridge_groups
+title: {ja: ブリッジグループ, en: Bridge groups}
+since: M7
+key: [device, group]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: group, title: {ja: ブリッジグループ, en: Bridge group}, type: int, required: true, min: 1, max: 65535, note: {ja: "グループに入れる IF は、インタフェースの表の「ブリッジグループ」に書く。この表は、グループごとの設定があるときだけ", en: "The interfaces of the group stand in the interfaces table; this table is for the settings of a group, where there are any"}}
+  - {name: protocol, title: {ja: スパニングツリーの種類, en: Spanning tree protocol}, type: enum, values: [ieee, dec, vlan-bridge, ibm], note: {ja: "ブリッジグループで動かすスパニングツリー", en: "The spanning tree the bridge group runs"}}
+  - {name: priority, title: {ja: 優先度, en: Priority}, type: int, min: 0, max: 65535}
+  - {name: aging_time, title: {ja: MAC アドレスを忘れるまでの時間（秒）, en: Aging time (s)}, type: int, min: 10, max: 1000000}
+  - {name: table_size, title: {ja: 覚える MAC の数, en: MAC table size}, type: int, also: [unlimited], min: 0, max: 65535, note: {ja: "unlimited = 上限なし", en: "unlimited = no limit"}}
+  - {name: bridge_ip, title: {ja: IPv4 をブリッジする, en: Bridges IPv4}, type: bool, note: {ja: "無効 = このグループでは IPv4 をブリッジしない。空 = 機器の既定（する）", en: "Off = the group does not bridge IPv4. Empty = the default of the device (it does)"}}
+  - {name: bridge_ipv6, title: {ja: IPv6 をブリッジする, en: Bridges IPv6}, type: bool}
+  - {name: bridge_only_pppoe, title: {ja: PPPoE だけをブリッジする, en: Bridges PPPoE only}, type: bool}

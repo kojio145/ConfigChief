@@ -1,0 +1,37 @@
+# L2TP rows the pack cannot write (made-up values; appendix A 3.21): each
+# tells why, and how it is put right.
+tables:
+  devices:
+    - hostname: rt-c05
+      vendor: cisco_ios
+  interfaces:
+    - {name: Loopback0, enabled: true, ipv4: 203.0.113.1/32}
+    - {name: GigabitEthernet0/1, enabled: true}
+    - {name: GigabitEthernet0/2, enabled: true}
+    - {name: GigabitEthernet0/3, enabled: true}
+    - {name: Virtual-Template1, enabled: true, ipv4: "unnumbered:Loopback0"}
+    - {name: Virtual-Template2, enabled: true, ipv4: "unnumbered:Loopback0"}
+  users:
+    - {name: example-user, secret: dummy-user-secret-1, secret_form: plain}
+  l2tpv3:
+    # Set by hand, without the session IDs; a password with it.
+    - {if_name: GigabitEthernet0/1, peer_address: 203.0.113.2, vc_id: 101, profile: PW-SAMPLE-A, local_if: Loopback0, signaling: manual, password: dummy-l2tpv3-secret-a}
+    # Negotiated, with a cookie; "off" has no line.
+    - {if_name: GigabitEthernet0/2, peer_address: 203.0.113.2, vc_id: 102, profile: PW-SAMPLE-B, local_if: Loopback0, signaling: dynamic, local_cookie: "4 54321", pmtu: false}
+    # The same profile as the row above, with other settings.
+    - {if_name: GigabitEthernet0/3, peer_address: 203.0.113.2, vc_id: 103, profile: PW-SAMPLE-B, local_if: Loopback0, signaling: dynamic, hello: 30}
+    # The interface is not on the sheet.
+    - {if_name: GigabitEthernet0/9, peer_address: 203.0.113.2, vc_id: 104, profile: PW-SAMPLE-D, local_if: Loopback0, signaling: dynamic}
+  l2tp_groups:
+    # The LNS by its name; a password without the authentication.
+    - {name: lac-sample, role: lac, peer_address: lns.example.net, tunnel_auth: false, password: dummy-l2tp-secret-c, domains: [example.com]}
+    # No address of the LNS; what only another vendor writes.
+    - {name: lac-sample-b, role: lac, access_ifs: [GigabitEthernet0/3], idle_timeout: 120, tunnel_auth: false}
+    # Two interfaces for an LNS.
+    - {name: lns-sample, role: lns, logical_ifs: [Virtual-Template1, Virtual-Template2], tunnel_auth: false, auth: chap}
+  l2tp_users:
+    # The same name as a user of the device; an address of its own.
+    - {group: lns-sample, name: example-user, password: dummy-l2tp-user-secret-1, address: 192.0.2.130}
+    # A group that is not there.
+    - {group: lns-none, name: sample-user, password: dummy-l2tp-user-secret-2}
+findings: [G-601, G-606, G-614]

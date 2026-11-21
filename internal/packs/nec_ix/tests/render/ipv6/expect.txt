@@ -1,0 +1,125 @@
+hostname ix-v01
+!
+ipv6 route 2001:db8:100::/48 fe80::2%GigaEthernet2.0 distance 10
+ipv6 route 2001:db8:200::/48 2001:db8:0:1::2
+ipv6 route 2001:db8:300::/48 Null0.0
+ipv6 route default GigaEthernet0.0 ra
+!
+ipv6 access-list v6-sample-in permit tcp established src any dest 2001:db8:0:10::/64 dport eq 443
+ipv6 access-list v6-sample-in permit udp src 2001:db8::53/128 sport eq 53 dest any dport range 1024 65535
+ipv6 access-list v6-sample-in permit icmp neighbor-solicitation src any dest any
+ipv6 access-list v6-sample-in permit icmp type 134 src any dest any
+ipv6 access-list v6-sample-in permit 50 src 2001:db8:1::/48 dest any dscp 46
+ipv6 access-list v6-sample-in deny ip src any dest any fragments
+ipv6 prefix-list pl6-sample 5 permit 2001:db8::/32 min 48 max 64
+ipv6 prefix-list pl6-sample 10 deny any
+!
+ipv6 router ospf 1
+  router-id 192.0.2.1
+  network GigaEthernet2.0 area 0
+  network Loopback0.0 area 1
+  area 1 stub no-summary
+  area 1 default-cost 5
+  area 1 range 2001:db8:0:10::/60 advertise
+  area 1 range 2001:db8:0:20::/60 not-advertise
+  passive-interface Loopback0.0
+  originate-default metric 10
+  redistribute connected
+  redistribute static
+!
+ipv6 prefix ra1 2001:db8:0:1::/64 86400 14400 on-link
+ipv6 prefix ra2 2001:db8:0:11::/64 2592000 604800 on-link autonomous
+!
+ipv6 dhcp enable
+!
+ipv6 dhcp client-profile pd-sample
+  option-request dns-servers
+  option-request ntp-servers
+  ia-pd subscriber GigaEthernet1.0 ::1/64
+  ia-pd subscriber GigaEthernet2.2 eui-64
+  rapid-commit
+!
+ipv6 dhcp client-profile dhcpv6-4
+  information-request
+  option-request dns-servers
+!
+ipv6 dhcp server-profile dhcpv6-sample-lan
+  dns-server 2001:db8::53
+  dns-server dhcp
+!
+interface GigaEthernet0.0
+  description IPoE sample
+  ipv6 address autoconfig receive-default
+  ipv6 enable
+  ipv6 filter v6-sample-in 1 in
+  ipv6 dhcp client pd-sample
+  no shutdown
+!
+interface GigaEthernet1.0
+  description LAN sample
+  ip address 192.0.2.1/24
+  ipv6 nd ra enable
+  ipv6 nd ra max-interval 200
+  ipv6 nd ra min-interval 50
+  ipv6 nd ra lifetime 1800
+  ipv6 nd ra other-config-flag
+  ipv6 nd ra dns-server 2001:db8::53 2001:db8::54 600
+  ipv6 dhcp server dhcpv6-sample-lan
+  no shutdown
+!
+interface GigaEthernet2.0
+  description fixed sample
+  ipv6 address 2001:db8:0:1::1/64
+  ipv6 address 2001:db8:0:11::/64 eui-64
+  ipv6 address 2001:db8:0:12::1/64 anycast
+  ipv6 mtu 1500
+  no ipv6 nd ra enable
+  ipv6 nd ra prefix-advertisement ra1
+  ipv6 nd ra prefix-advertisement ra2
+  ipv6 ospf cost 20
+  ipv6 ospf priority 100
+  ipv6 ospf hello-interval 5
+  ipv6 ospf dead-interval 20
+  no shutdown
+!
+interface GigaEthernet2.1
+  description ND proxy WAN sample
+  encapsulation dot1q 10
+  ipv6 nd proxy GigaEthernet2.2 v6-sample-in
+  ipv6 dhcp client dhcpv6-4
+  no shutdown
+!
+interface GigaEthernet2.2
+  description ND proxy LAN sample
+  encapsulation dot1q 20
+  ipv6 nd ra enable
+  ipv6 nd ra managed-config-flag
+  no shutdown
+!
+interface Loopback0.0
+  ipv6 address 2001:db8::1/128
+!
+interface Tunnel0.0
+  ip unnumbered GigaEthernet1.0
+  tunnel mode 4-over-6
+  tunnel source GigaEthernet0.0
+  tunnel destination fqdn aftr.example.jp
+  no shutdown
+!
+interface Tunnel1.0
+  tunnel mode map-e ocn-fixed hostname sample-host.example.jp
+  ip address map-e
+  no shutdown
+!
+interface Tunnel2.0
+  tunnel mode v6pv ds-lite
+  ip address v6pv lan GigaEthernet1.0
+  no shutdown
+!
+interface Tunnel3.0
+  ip address 192.0.2.209/30
+  tunnel mode 4-over-6
+  tunnel source 2001:db8:0:1::1
+  tunnel destination 2001:db8:ffff::1
+  no shutdown
+!

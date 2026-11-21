@@ -1,0 +1,24 @@
+hostname ix-r04
+!
+ip router ospf 1
+  router-id 203.0.113.1
+!
+ip router rip
+  redistribute ospf 1
+  timers 10 60 20
+!
+interface GigaEthernet0.0
+  ip address 192.0.2.1/30
+  ip rip enable
+  ip rip send version 2
+  ip rip receive version 1 2
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 192.0.2.129/25
+  ip rip enable
+  no ip rip send
+  ip rip send version 2
+  ip rip receive version 2
+  no shutdown
+!

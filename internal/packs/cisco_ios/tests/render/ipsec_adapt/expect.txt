@@ -1,0 +1,59 @@
+hostname rt-c03
+!
+crypto ikev2 keyring IKEV2-KEYS
+ peer Tunnel1
+  address 203.0.113.20
+  pre-shared-key dummy-psk-sample-a
+ peer Tunnel2
+  address 203.0.113.21
+  pre-shared-key dummy-psk-sample-b
+!
+crypto ikev2 profile IKEV2-Tunnel1
+ match identity remote address 203.0.113.20 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS
+ lifetime 86400
+!
+crypto ikev2 profile IKEV2-Tunnel2
+ match identity remote address 203.0.113.21 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS
+ lifetime 86400
+!
+crypto ipsec transform-set TS-Tunnel1 esp-aes 256 esp-sha-hmac
+!
+crypto ipsec transform-set TS-Tunnel2 esp-aes 256 esp-sha-hmac
+!
+crypto ipsec profile PROF-Tunnel1
+ set transform-set TS-Tunnel1
+ set security-association lifetime seconds 3600
+ set ikev2-profile IKEV2-Tunnel1
+!
+crypto ipsec profile PROF-Tunnel2
+ set transform-set TS-Tunnel2
+ set security-association lifetime seconds 3600
+ set ikev2-profile IKEV2-Tunnel2
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.9 255.255.255.248
+ no shutdown
+!
+interface Tunnel1
+ ip address 192.0.2.209 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.20
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-Tunnel1
+ no shutdown
+!
+interface Tunnel2
+ ip address 192.0.2.213 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.21
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-Tunnel2
+ no shutdown
+!
+end

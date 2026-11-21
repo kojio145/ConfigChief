@@ -1,0 +1,17 @@
+{# VPN instances (README, "コンフィグの書き出し"). #}
+{% for v in t.vrfs %}
+ip vpn-instance {{ v.name }}
+{% if v.rd %}
+ route-distinguisher {{ v.rd }}
+{% endif %}
+{% if v.description %}
+ description {{ v.description }}
+{% endif %}
+{% if v.rt_import %}
+ vpn-target {{ v.rt_import | join(' ') }} import-extcommunity
+{% endif %}
+{% if v.rt_export %}
+ vpn-target {{ v.rt_export | join(' ') }} export-extcommunity
+{% endif %}
+#
+{% endfor %}

@@ -1,0 +1,61 @@
+hostname ix-q01
+!
+ip route default 203.0.113.14
+ip route 198.51.100.128/25 Tunnel1.0
+ip route vrf cust-a 198.51.100.0/25 Tunnel2.0
+!
+ip access-list sec-1 permit ip src any dest any
+ike proposal ike-prop-1 encryption aes-256 hash sha2-256 group 2048-bit lifetime 86400
+ike policy ike-1 peer-fqdn-ipv4 rt-q09.example.com key dummy-psk-sample-name ike-prop-1
+ipsec autokey-proposal ipsec-prop-1 esp-aes-256 esp-sha2-256 lifetime time 3600
+ipsec autokey-map ipsec-1 sec-1 peer-fqdn-ipv4 rt-q09.example.com pfs off ipsec-prop-1
+!
+ip access-list sec-2 permit ip src any dest any
+ike proposal ike-prop-2 encryption aes-256 hash sha2-256 group 2048-bit lifetime 86400
+ike policy ike-2 peer 203.0.113.40 key dummy-psk-sample-c ike-prop-2
+ipsec autokey-proposal ipsec-prop-2 esp-aes-256 esp-sha2-256 lifetime time 3600
+ipsec autokey-map ipsec-2 sec-2 peer 203.0.113.40 pfs off ipsec-prop-2
+!
+ip access-list sec-0 permit ip src any dest any
+ike proposal ike-prop-0 encryption aes-256 hash sha2-256 group 2048-bit lifetime 86400
+ike policy ike-0 peer any key dummy-psk-sample-vt ike-prop-0
+ipsec autokey-proposal ipsec-prop-0 esp-aes-256 esp-sha2-256 lifetime time 3600
+ipsec dynamic-map ipsec-0 sec-0 pfs off ike ike-0 ipsec-prop-0
+!
+ike nat-traversal
+!
+interface GigaEthernet0.0
+  description sample-wan
+  ip address 203.0.113.9/29
+  no shutdown
+!
+interface GigaEthernet1.0
+  description sample-lan
+  ip address 192.0.2.1/25
+  no shutdown
+!
+interface GigaEthernet2.0
+  description sample-lan-cust-a
+  ip vrf forwarding cust-a
+  ip address 192.0.2.129/25
+  no shutdown
+!
+interface Tunnel0.0
+  ip unnumbered GigaEthernet1.0
+  tunnel mode ipsec
+  ipsec policy tunnel ipsec-0 out
+  no shutdown
+!
+interface Tunnel1.0
+  ip unnumbered GigaEthernet1.0
+  tunnel mode ipsec
+  ipsec policy tunnel ipsec-1 out
+  no shutdown
+!
+interface Tunnel2.0
+  ip vrf forwarding cust-a
+  ip unnumbered GigaEthernet2.0
+  tunnel mode ipsec
+  ipsec policy tunnel ipsec-2 out
+  no shutdown
+!

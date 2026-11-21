@@ -1,0 +1,12 @@
+# The authentication of OSPFv3 by IPsec AH (appendix A 3.23, made-up
+# values): on an interface, for an area, and "null" (the interface does not
+# use the authentication of its area). The encryption stays unknown.
+tables:
+  ospfv3_interfaces:
+    - {process_id: 1, if_name: GigabitEthernet0/0, area: "0", auth_hash: sha1, auth_spi: 500, auth_key: 0123456789ABCDEF0123456789ABCDEF01234567}
+    - {process_id: 1, if_name: GigabitEthernet0/1, area: "1", auth_hash: none, auth_spi: ""}
+    - {process_id: 1, if_name: GigabitEthernet0/2, area: "1", auth_hash: ""}
+  ospfv3_areas:
+    - {process_id: 1, area: "1", auth_hash: md5, auth_spi: 1000, auth_key: "7 dummy7sample0A1B2C3D"}
+unknown:
+  - " ipv6 ospf encryption ipsec spi 600 esp null sha1 0123456789ABCDEF0123456789ABCDEF01234567"

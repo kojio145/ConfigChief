@@ -277,13 +277,19 @@ func (e *Env) Migration() (*Verdicts, error) {
 }
 
 // stateCells gives the cells of a finding for a row of a report: the check,
-// the state, the approval and the fingerprint, with the mark of the row.
-// All are empty if the difference is no finding.
+// the state, the approval, the fingerprint and how the finding is put
+// right, with the mark of the row. All are empty if the difference is no
+// finding.
 func stateCells(v *Verdicts, f check.Finding) ([]string, string) {
 	j := v.Of(f.Key)
 	if j == nil {
-		return []string{"", "", "", ""}, ""
+		return []string{"", "", "", "", ""}, ""
 	}
+	cells, mark := stateCellsOf(j)
+	return append(cells, check.Fix(j.RuleID)), mark
+}
+
+func stateCellsOf(j *Judged) ([]string, string) {
 	sev := check.SeverityTitle(j.Severity)
 	switch {
 	case j.Severity == check.Info:
@@ -297,7 +303,7 @@ func stateCells(v *Verdicts, f check.Finding) ([]string, string) {
 	return []string{j.RuleID, "未承認（" + sev + "）", "", j.Key}, report.MarkWarn
 }
 
-var stateHeader = []string{"チェック", "状態", "承認", "指紋"}
+var stateHeader = []string{"チェック", "状態", "承認", "指紋", "直し方"}
 
 // approvalSheet lists the approvals of the checks of a migration with the
 // findings each covers here.

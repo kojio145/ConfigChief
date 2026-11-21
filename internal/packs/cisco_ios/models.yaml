@@ -1,0 +1,31 @@
+# The shapes of routers with built-in switch ports (appendix B 6). The IDs
+# name the ports, not a product: "isr-8fe-1fe-1ge" has 8 Fast Ethernet switch
+# ports, a Fast Ethernet WAN port and a Gigabit Ethernet WAN port. The names
+# of the ports: README, "機種の定義".
+families:
+  - {id: ios, title: "IOS"}
+  - {id: ios-xe, title: "IOS-XE"}
+models:
+  - id: isr-4fe-1fe
+    title: {ja: "内蔵スイッチ付きの小型ルータ（スイッチ FE×4、WAN FE×1）", en: "Small router with a built-in switch (4 FE switch ports, 1 FE WAN)"}
+    family: ios
+    ports:
+      - {name: FastEthernet4, role: wan}
+      - {range: "FastEthernet[0-3]", role: switch}
+    logical: {loopback: "Loopback{n}", tunnel: "Tunnel{n}", subif: "{parent}.{vlan}", pppoe: "Dialer{i}", vlan: "Vlan{vlan}", lag: "Port-channel{n}"}
+  - id: isr-8fe-1fe-1ge
+    title: {ja: "内蔵スイッチ付きの小型ルータ（スイッチ FE×8、WAN GE×1・FE×1）", en: "Small router with a built-in switch (8 FE switch ports, 1 GE and 1 FE WAN)"}
+    family: ios
+    ports:
+      - {name: GigabitEthernet0, role: wan}
+      - {name: FastEthernet8, role: wan}
+      - {range: "FastEthernet[0-7]", role: switch}
+    logical: {loopback: "Loopback{n}", tunnel: "Tunnel{n}", subif: "{parent}.{vlan}", pppoe: "Dialer{i}", vlan: "Vlan{vlan}", lag: "Port-channel{n}"}
+  - id: isr-xe-8ge-2ge
+    title: {ja: "内蔵スイッチ付きの小型ルータ（IOS-XE。スイッチ GE×8、WAN GE×2）", en: "Small router with a built-in switch (IOS-XE; 8 GE switch ports, 2 GE WAN)"}
+    family: ios-xe
+    ports:
+      - {name: GigabitEthernet0/0/0, role: wan}
+      - {name: GigabitEthernet0/0/1, role: wan}
+      - {range: "GigabitEthernet0/1/[0-7]", role: switch}
+    logical: {loopback: "Loopback{n}", tunnel: "Tunnel{n}", subif: "{parent}.{vlan}", pppoe: "Dialer{i}", vlan: "Vlan{vlan}", lag: "Port-channel{n}"}

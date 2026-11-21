@@ -1,0 +1,35 @@
+# A small router with built-in switch ports (made-up values): access and
+# trunk ports, the interfaces of the VLANs, a tagged subinterface that is the
+# native VLAN, a LAG member and a bridge group with its BVI.
+tables:
+  vlans:
+    - {vlan_id: 10, name: sample-office}
+    - {vlan_id: 20, name: sample-guest}
+  interfaces:
+    - {name: FastEthernet0, kind: physical, description: office pc 1, enabled: true}
+    - {name: FastEthernet2, speed: 100, duplex: full}
+    - {name: FastEthernet3, enabled: false}
+    - {name: FastEthernet4, kind: physical}
+    - {name: GigabitEthernet8, ipv4: 203.0.113.2/30}
+    - {name: GigabitEthernet9.10, kind: subif, encap_vlan: 10, encap_native: true, ipv4: 198.51.100.129/25}
+    - {name: Port-channel1, kind: lag, bridge_group: 1}
+    - {name: Vlan1, kind: vlan, vlan_id: 1, enabled: false}
+    - {name: Vlan10, kind: vlan, vlan_id: 10, ipv4: 192.0.2.1/25, bridge_group: ""}
+    - {name: Vlan20, kind: vlan, vlan_id: 20, ipv4: 192.0.2.129/25}
+    - {name: BVI1, kind: bvi, ipv4: 198.51.100.1/25, bridge_group: 1, vlan_id: ""}
+  switchports:
+    - {if_name: FastEthernet0, mode: access, access_vlan: 10, stp_edge: "on", stp_bpdu_guard: ""}
+    - {if_name: FastEthernet1, mode: "", access_vlan: 10, stp_edge: "on", stp_bpdu_guard: true}
+    - {if_name: FastEthernet2, mode: access, access_vlan: 20}
+    - {if_name: FastEthernet3, mode: "", access_vlan: 20}
+    - {if_name: FastEthernet5, mode: "", access_vlan: ""}
+    - {if_name: FastEthernet6, mode: trunk, native_vlan: 99, allowed_vlans: [10, 20, 30-32], trunk_encapsulation: dot1q, nonegotiate: true}
+    - {if_name: FastEthernet7, mode: trunk, allowed_vlans: []}
+  lags:
+    - {if_name: GigabitEthernet9, group: 1, mode: ""}
+  l2_settings:
+    - {bridge_irb: true}
+  bridge_groups:
+    - {group: 1, protocol: ieee}
+unknown:
+  - "switchport trunk allowed vlan remove 20"

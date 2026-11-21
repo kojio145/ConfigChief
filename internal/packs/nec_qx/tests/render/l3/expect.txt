@@ -1,0 +1,124 @@
+#
+ sysname l3-q02
+#
+ undo stp global enable
+#
+vlan 10
+ name sample-office
+#
+vlan 20
+#
+acl basic 2000
+ rule 0 permit source 192.0.2.0 0.0.0.127
+#
+acl basic 2001
+ rule 0 permit source 192.0.2.10 0
+ rule 5 deny logging
+#
+acl advanced 3000
+ description sample office in
+ rule 0 permit tcp source 192.0.2.0 0.0.0.127 destination 198.51.100.10 0 destination-port eq 80
+ rule 5 permit tcp source 192.0.2.0 0.0.0.127 source-port gt 1023 destination-port range 8000 8080
+ rule 10 permit udp destination 198.51.100.53 0 destination-port eq 53
+ rule 15 permit tcp destination 198.51.100.0 0.0.0.255 established
+ rule 20 permit icmp icmp-type echo
+ rule 30 permit ospf
+ rule 35 permit 50 source 192.0.2.2 0 destination 203.0.113.2 0
+ rule 40 permit ip destination 203.0.113.0 0.0.0.255 dscp 46
+ rule 45 deny udp destination-port neq 53 logging
+ rule 100 deny ip
+#
+acl advanced name sample-out
+ rule 0 permit ip source 192.0.2.0 0.0.0.127
+ rule 5 deny ip fragment logging
+ rule 10 permit ip
+#
+ dhcp enable
+ dhcp server forbidden-ip 192.0.2.1 192.0.2.10
+ dhcp server forbidden-ip 192.0.2.126
+#
+dhcp server ip-pool sample-guest
+ network 203.0.113.0 mask 255.255.255.128
+ expired day 3
+#
+dhcp server ip-pool sample-office
+ network 192.0.2.0 mask 255.255.255.128
+ address range 192.0.2.11 192.0.2.100
+ gateway-list 192.0.2.1
+ dns-list 192.0.2.53 192.0.2.54
+ domain-name example.com
+ expired day 0 hour 12
+#
+interface GigabitEthernet1/0/1
+ port link-mode route
+ description to l3-q02
+ ip address 198.51.100.1 255.255.255.252
+ ospf cost 50
+ ospf dr-priority 0
+ ospf timer hello 5
+ ospf timer dead 20
+ ospf network-type p2p
+ ospf authentication-mode md5 1 plain dummy-ospf-key
+#
+interface GigabitEthernet1/0/2
+ port link-mode route
+ ip address 198.51.100.5 255.255.255.252
+#
+interface GigabitEthernet1/0/3
+ port link-type access
+ port access vlan 10
+#
+interface LoopBack0
+ ip address 198.51.100.254 255.255.255.255
+#
+interface Vlan-interface10
+ ip address 192.0.2.1 255.255.255.128
+ packet-filter 3000 inbound
+ packet-filter name sample-out outbound
+ vrrp version 2
+ vrrp vrid 10 virtual-ip 192.0.2.126
+ vrrp vrid 10 priority 120
+ vrrp vrid 10 preempt-mode delay 500
+ vrrp vrid 10 timer advertise 300
+ vrrp vrid 10 authentication-mode simple plain Example-Vrrp-1
+ vrrp vrid 11 virtual-ip 192.0.2.125
+ vrrp vrid 11 priority 100
+ undo vrrp vrid 11 preempt-mode
+ vrrp vrid 11 timer advertise 100
+#
+interface Vlan-interface20
+ ip address 203.0.113.129 255.255.255.128
+ dhcp select relay
+ dhcp relay server-address 198.51.100.67
+ dhcp relay server-address 198.51.100.68
+#
+ ip route-static 0.0.0.0 0 198.51.100.2
+ ip route-static 198.51.100.128 26 GigabitEthernet1/0/2 198.51.100.6
+ ip route-static 198.51.100.192 26 198.51.100.2 permanent
+ ip route-static 203.0.113.0 25 198.51.100.6 preference 100 tag 20 description sample backup
+ ip route-static 203.0.113.128 25 NULL0
+#
+ospf 1 router-id 198.51.100.254
+ bandwidth-reference 10000
+ default-route-advertise always cost 10
+ import-route static cost 20 type 1
+ silent-interface Vlan-interface10
+ area 0.0.0.0
+  network 198.51.100.1 0.0.0.0
+  network 198.51.100.5 0.0.0.0
+  abr-summary 192.0.2.0 24
+ area 0.0.0.1
+  network 192.0.2.1 0.0.0.0
+  stub no-summary
+  abr-summary 203.0.113.0 24 not-advertise
+ area 0.0.0.2
+  nssa
+#
+ telnet server enable
+ telnet server acl 2000
+ ssh server enable
+ ssh server acl 2000
+#
+line vty 0 63
+#
+return

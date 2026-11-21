@@ -1,0 +1,4 @@
+hostname ix-a05
+!
+username admin password plain Example-Secret-1 administrator
+!

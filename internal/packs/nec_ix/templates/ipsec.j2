@@ -1,39 +1,202 @@
-{# IPsec with IKEv1 and a pre-shared key, on a tunnel interface. Syntax:
-   cmdref 4.13 and 7.13. A row is an IKE proposal, an IKE policy, an IPsec
-   proposal and a map, each on one line; the map names an access list that
-   lets everything through, as the routes choose what goes into the tunnel.
-   The tunnel interface names the map (interfaces.j2). The names are made
-   from the number of the tunnel interface: the design data has none. #}
+{# IPsec with a pre-shared key: IKE version 1 and version 2 (appendix A 3.13
+   and 3.20). Syntax: cmdref 4.13 and 7.13, and the command reference,
+   chapter 13 (IPsec, IKE, IKEv2); the shapes: FD 2.35 and 2.36.
+
+   Version 1: a row is an IKE proposal, an IKE policy, an IPsec proposal and
+   a map, each on one line, and an access list for the map. A peer "any"
+   makes a dynamic map.
+   - On a tunnel interface (the style "tunnel_if") the list lets everything
+     through, as the routes choose what goes into the tunnel, and the tunnel
+     interface names the map (interfaces.j2). The names are made from the
+     number of the tunnel interface.
+   - Without one (the style "policy") the list is made from the selectors
+     of the row, and the interface of the row names the map (interfaces.j2).
+     A row that the LNS of L2TP names has no interface: the tunnel
+     interfaces of the LNS name the map, in transport mode. The map has the
+     name of the row, the other parts are numbered p1, p2 and so on.
+   Version 2 (tunnel interfaces only): the keys stand by the identity of who
+   uses them, a row is a profile, and the tunnel interface names the profile
+   and the peer (interfaces.j2). #}
 {% set rows = t.ipsec_tunnels %}
-{% set nat = namespace(on=0, off=0) %}
+{# NAT traversal of version 1: one line for the device where every row asks
+   for the same, else a line for each policy. #}
+{% set nat = namespace(on=0, off=0, same=true, head=none) %}
 {% for r in rows %}
-{% set what = 'IPsec ' ~ r.name %}
+{% if (r.ike_version | string) != '2' %}
 {% if r.nat_traversal == true %}
 {% set nat.on = nat.on + 1 %}
+{% if nat.head is none %}
+{% set nat.head = r %}
+{% elif r.nat_keepalive != nat.head.nat_keepalive or r.nat_force != nat.head.nat_force %}
+{% set nat.same = false %}
+{% endif %}
 {% else %}
 {% set nat.off = nat.off + 1 %}
 {% endif %}
-{% if r.nat_traversal == false %}
-{{ fail(what ~ ' の NAT 越え「無効」は書けません（NEC IX では、行が無いことが無効です。セルを空にしてください）') }}
 {% endif %}
-{% if r.style != 'tunnel_if' %}
-{{ fail(what ~ ' の方式「' ~ r.style ~ '」は、このパックでは書けません（書けるのは、トンネル IF に経路を向ける tunnel_if です。追加コンフィグに書いてください）') }}
+{% endfor %}
+{# ---- the keys of version 2, by identity ---- #}
+{% set k = namespace(ids=[], keys=[], any=false) %}
+{% for r in rows %}
+{% if (r.ike_version | string) == '2' and r.style == 'tunnel_if' %}
+{% set what = 'IPsec ' ~ r.name %}
+{% set k.any = true %}
+{% set psk = r.psk | required(what ~ ' の事前共有鍵') %}
+{% if (' ' in psk and not psk is startingwith('secret ')) or (' ' in r.psk_remote and not r.psk_remote is startingwith('secret ')) %}
+{{ fail(what ~ ' の鍵に、空白があります') }}
 {% endif %}
-{% if r.ike_version != '1' and r.ike_version != 1 %}
-{{ fail(what ~ ' の IKE の版 ' ~ r.ike_version ~ ' は、このパックでは書けません（書けるのは版 1 です。追加コンフィグに書いてください）') }}
+{% set form = 'hex' if r.psk_form == 'hex' else 'char' %}
+{# the own identity: written, or the address the tunnel sends from #}
+{% set id = namespace(l='', r='') %}
+{% if r.local_id %}
+{% set kind = r.local_id | split(':') | first %}
+{% set val = (r.local_id | split(':'))[1:] | join(':') %}
+{% if kind in ['address', 'fqdn', 'email', 'keyid'] and val and ' ' not in val %}
+{% set id.l = (kind | replace('address', 'ipv4') | replace('email', 'rfc822-addr')) ~ ' ' ~ val %}
+{% else %}
+{{ fail(what ~ ' の自分の ID「' ~ r.local_id ~ '」は書けません（「種類:値」の形で、種類は address・fqdn・email・keyid です）') }}
 {% endif %}
-{% if not ((r.peer_address ~ '/32') is cidr) %}
-{{ fail(what ~ ' の相手アドレス「' ~ r.peer_address ~ '」は書けません（このパックは、アドレスで書いた相手だけを書きます）') }}
+{% else %}
+{% for u in t.tunnels %}
+{% if u.if_name == r.tunnel_if and u.source %}
+{% if (u.source ~ '/32') is cidr %}
+{% set id.l = 'ipv4 ' ~ u.source %}
+{% else %}
+{% for i in t.interfaces %}
+{% if i.name == u.source and i.ipv4 is cidr %}
+{% set id.l = 'ipv4 ' ~ (i.ipv4 | ip) %}
 {% endif %}
-{% if r.style == 'tunnel_if' %}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if not id.l %}
+{{ fail(what ~ ' は自分の ID が空で、自分のアドレスも決まりません（NEC IX の IKEv2 は、鍵を ID で引きます。自分の ID を書くか、トンネルの送信元に、アドレスかアドレスを持つインタフェースを書いてください）') }}
+{% endif %}
+{% endif %}
+{# the identity of the peer: written, or its address, or its name #}
+{% if r.remote_id %}
+{% set kind = r.remote_id | split(':') | first %}
+{% set val = (r.remote_id | split(':'))[1:] | join(':') %}
+{% if kind in ['address', 'fqdn', 'email', 'keyid'] and val and ' ' not in val %}
+{% set id.r = (kind | replace('address', 'ipv4') | replace('email', 'rfc822-addr')) ~ ' ' ~ val %}
+{% else %}
+{{ fail(what ~ ' の相手の ID「' ~ r.remote_id ~ '」は書けません（「種類:値」の形で、種類は address・fqdn・email・keyid です）') }}
+{% endif %}
+{% elif (r.peer_address ~ '/32') is cidr %}
+{% set id.r = 'ipv4 ' ~ r.peer_address %}
+{% elif r.peer_address == 'any' %}
+{{ fail(what ~ ' は相手が any ですが、相手の ID が空です（NEC IX の IKEv2 は、アドレスの決まっていない相手を ID で見分けます。相手の ID を書いてください）') }}
+{% elif r.peer_address and ' ' not in r.peer_address %}
+{% set id.r = 'fqdn ' ~ r.peer_address %}
+{% endif %}
+{% for side in ['l', 'r'] %}
+{% set idv = id.l if side == 'l' else id.r %}
+{% set key = psk if (side == 'l' or not r.psk_remote) else r.psk_remote %}
+{% if idv %}
+{# A key the device saved encrypted is "secret <value>" in the cell. #}
+{% set line = 'ikev2 authentication psk id ' ~ idv ~ ' key ' ~ (key if key is startingwith('secret ') else (form ~ ' ' ~ key)) %}
+{% if idv in k.ids %}
+{% if line not in k.keys %}
+{{ fail(what ~ ': ID「' ~ idv ~ '」の鍵が、ほかの行と違います（NEC IX の IKEv2 では、鍵は ID に 1 つです。' ~ ('自分の ID が同じ行は、事前共有鍵をそろえてください' if side == 'l' else '相手の ID が同じ行は、相手を確かめる鍵をそろえてください') ~ '）') }}
+{% endif %}
+{% else %}
+{% set k.ids = k.ids + [idv] %}
+{% set k.keys = k.keys + [line] %}
+{{ line }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% if k.any %}
+!
+{% endif %}
+{% set pc = namespace(n=0) %}
+{% for r in rows %}
+{% set what = 'IPsec ' ~ r.name %}
+{% set two = (r.ike_version | string) == '2' %}
+{% set isaddr = ((r.peer_address ~ '/32') is cidr) %}
+{% set isany = (r.peer_address == 'any') %}
+{% set x = namespace(ok=false, tag='', map='', lns=false, sel=0, eip=false) %}
+{% if (r.ike_version | string) not in ['1', '2'] %}
+{{ fail(what ~ ' の IKE の版「' ~ r.ike_version ~ '」は書けません（1 か 2 です）') }}
+{% endif %}
+{% if not isaddr and not isany and (' ' in r.peer_address or not r.peer_address) %}
+{{ fail(what ~ ' の相手アドレス「' ~ r.peer_address ~ '」は書けません（アドレス・any・名前のどれかです）') }}
+{% endif %}
+{# The VRFs (appendix A 3.20; FD 2.17: the inside of a tunnel may be in a
+   VRF, the outside may not). The inner VRF of a tunnel interface is the VRF
+   of that interface (interfaces.j2). #}
+{% if r.outer_vrf %}
+{{ fail(what ~ ' の外側の VRF「' ~ r.outer_vrf ~ '」は書けません（NEC IX の VRF は、暗号化した通信が通る側＝トンネルの外側には使えません。機能説明書 2.17「IPsec Outer 対応 ×」。外側を VRF なしにできるなら、セルを空にしてください）') }}
+{% endif %}
+{% if r.inner_vrf and r.style == 'policy' %}
+{{ fail(what ~ ' の内側の VRF「' ~ r.inner_vrf ~ '」は書けません（NEC IX が VRF で IPsec を使うのは、トンネル IF 型です。方式を tunnel_if にして、トンネル IF の「VRF」に書いてください）') }}
+{% endif %}
+{% if r.style == 'policy' %}
+{# ---- the style "policy": a map on an interface, or on the tunnel
+   interfaces of an LNS (the row of L2TP names it; interfaces.j2). The map
+   takes the name of the row, the other parts a number of their own. ---- #}
+{% set pc.n = pc.n + 1 %}
+{% set x.tag = 'p' ~ pc.n %}
+{% set x.map = r.name | replace('/', '-') %}
+{% set x.ok = true %}
+{% for g in t.l2tp_groups %}
+{% if g.role == 'lns' and g.ipsec_policy == r.name %}
+{% set x.lns = true %}
+{% endif %}
+{% endfor %}
+{% if two %}
+{% set x.ok = false %}
+{{ fail(what ~ ' は方式が policy で IKE の版が 2 ですが、NEC IX の IKEv2 はトンネル IF 型だけです（方式を tunnel_if にしてトンネル IF を足すか、IKE の版を 1 にしてください）') }}
+{% endif %}
+{% if x.map | length > 30 or ' ' in x.map or '.' in x.map or ':' in x.map %}
+{{ fail(what ~ ' の名前は書けません（NEC IX では、ポリシーマップの名前になります。半角の英数字・「-」・「_」で 30 字までにしてください。「/」は「-」に置き換えて書きます）') }}
+{% endif %}
+{% for q in rows %}
+{% if q.style == 'policy' and q.name != r.name and (q.name | replace('/', '-')) == x.map %}
+{{ fail(what ~ ': ポリシーマップの名前（' ~ x.map ~ '）が、IPsec ' ~ q.name ~ ' と同じになります（どちらかの名前を変えてください）') }}
+{% endif %}
+{% endfor %}
+{% if x.lns %}
+{% if not isany or r.ipsec_mode != 'transport' %}
+{{ fail(what ~ ' は L2TP の受け口を守る行ですが、相手アドレスが any でないか、IPsec のモードが transport ではありません（NEC IX の LNS は、相手が any・トランスポートモードの IPsec と組で動きます）') }}
+{% endif %}
+{% if r.local_if %}
+{{ fail(what ~ ' は L2TP の受け口を守る行なので、「自分側 IF」（' ~ r.local_if ~ '）は書けません（NEC IX では、受け口のトンネル IF に当てます。セルを空にしてください）') }}
+{% endif %}
+{% else %}
+{% set lif = r.local_if | required(what ~ ' の自分側 IF（IPsec を当てるインタフェース。L2TP の受け口を守る行なら、L2TP の行の「IPsec の設定名」にこの行の名前を書きます）') %}
+{% set n = namespace(seen=false) %}
+{% for i in t.interfaces %}
+{% if i.name == lif %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if lif and not n.seen %}
+{{ fail(what ~ ' の自分側 IF ' ~ lif ~ ' が、インタフェースの表にありません') }}
+{% elif lif is startingwith('Tunnel') %}
+{{ fail(what ~ ' の自分側 IF ' ~ lif ~ ' は書けません（方式 policy は、トンネル IF でないインタフェースに当てます。トンネル IF を使うなら、方式を tunnel_if にしてください）') }}
+{% endif %}
+{% endif %}
+{% elif r.style == 'tunnel_if' %}
 {% set tif = r.tunnel_if | required(what ~ ' のトンネル IF') %}
 {% set num = tif | replace('Tunnel', '') | replace('.0', '') %}
+{% set x.tag = num %}
+{% set x.map = 'ipsec-' ~ num %}
+{% set x.ok = true %}
 {% set n = namespace(seen=false, same=0) %}
 {% for u in t.tunnels %}
 {% if u.if_name == tif %}
 {% set n.seen = true %}
-{% if u.type != 'ipsec' %}
-{{ fail(what ~ ' のトンネル IF ' ~ tif ~ ' は、トンネルの表で種類が ipsec ではありません') }}
+{% if u.type == 'etherip' %}
+{% set x.eip = true %}
+{% if r.ipsec_mode != 'transport' %}
+{{ fail(what ~ ' は EtherIP のトンネル ' ~ tif ~ ' を守る行ですが、IPsec のモードが transport ではありません（NEC IX は、EtherIP をトランスポートモードの IPsec で守ります。transport にしてください）') }}
+{% endif %}
+{% elif u.type != 'ipsec' %}
+{{ fail(what ~ ' のトンネル IF ' ~ tif ~ ' は、トンネルの表で種類が ipsec でも etherip でもありません') }}
 {% endif %}
 {% endif %}
 {% endfor %}
@@ -49,32 +212,287 @@
 {% elif n.same > 1 %}
 {{ fail(what ~ ': 同じトンネル IF を使う IPsec の行が、ほかにあります') }}
 {% endif %}
+{% else %}
+{{ fail(what ~ ' の方式「' ~ r.style ~ '」は書けません（tunnel_if か policy です）') }}
+{% endif %}
+{% if x.ok %}
+{% set num = x.tag %}
+{% if r.dpd_interval == '' and (r.dpd_retry != '' or r.dpd_retry_interval != '' or r.dpd_mode) %}
+{{ fail(what ~ ' の相手監視の再送回数・再送間隔・送り方は、間隔を書いたときだけ書けます') }}
+{% endif %}
+{% if r.nat_traversal != true and (r.nat_keepalive != '' or r.nat_force == true) %}
+{{ fail(what ~ ' の NAT 越えの維持間隔・「必ず使う」は、NAT 越えを有効にしたときだけ書けます') }}
+{% endif %}
+{% if r.ike_bind == true and not isany %}
+{{ fail(what ~ ' の「この IKE の相手だけに使う」は、相手アドレスが any のときだけ書けます（NEC IX の ike-binding は、相手の決まっていないマップの設定です）') }}
+{% endif %}
+{% if not two %}
+{# ---- IKE version 1 ---- #}
+{% if r.ike_encryption_more or r.ike_hash_more or r.ike_dh_more or r.ike_prf_more or r.esp_encryption_more or r.esp_hash_more or r.pfs_more %}
+{{ fail(what ~ ' の「（追加）」の列は、IKE の版 2 の行だけに書けます（版 1 の候補は、IPsec 追加の提案の表に 1 行ずつ書きます）') }}
+{% endif %}
+{% if r.nat_traversal == false %}
+{{ fail(what ~ ' の NAT 越え「無効」は書けません（NEC IX の IKE 版 1 では、行が無いことが無効です。セルを空にしてください）') }}
+{% endif %}
+{% if r.ipsec_mode == 'transport' and r.style == 'tunnel_if' and not x.eip %}
+{{ fail(what ~ ' の IPsec のモード「transport」は書けません（このパックが IKE 版 1 のトンネル IF 型で書くのは、トンネルモードです。トランスポートモードは、方式 policy の行か、EtherIP のトンネルを守る行にしてください）') }}
+{% endif %}
+{% if r.dpd_mode and r.dpd_mode != 'on_demand' %}
+{{ fail(what ~ ' の相手監視の送り方「' ~ r.dpd_mode ~ '」は書けません（NEC IX の IKE 版 1 は、通信が無いときだけ聞きます）') }}
+{% endif %}
 {% for a in t.acls %}
 {% if a.name == 'sec-' ~ num %}
 {{ fail(what ~ ': ACL の表に、このパックが IPsec のために作る ACL と同じ名前（' ~ a.name ~ '）の行があります。ACL の名前を変えてください') }}
 {% endif %}
 {% endfor %}
-{% if r.dpd_retry != '' and r.dpd_interval == '' %}
-{{ fail(what ~ ' の相手監視の再送回数は、間隔を書いたときだけ書けます') }}
-{% endif %}
 {% set psk = r.psk | required(what ~ ' の事前共有鍵') %}
-{% if ' ' in psk %}
+{% set saved = psk is startingwith('secret ') %}
+{% if ' ' in psk and not saved %}
 {{ fail(what ~ ' の事前共有鍵に、空白があります') }}
 {% endif %}
+{% if r.esp_hash == 'none' %}
+{{ fail(what ~ ' の ESP ハッシュ「none」は書けません（NEC IX の IKE 版 1 のプロポーザルに、ESP の認証を使わないと書く語がありません。版 2 にするか、ハッシュを書いてください）') }}
+{% endif %}
+{% set peer = ('peer ' ~ r.peer_address) if (isaddr or isany) else ('peer-fqdn-ipv4 ' ~ r.peer_address) %}
+{# The list of the map: the selectors of a row of the style "policy" (none:
+   everything), and everything for a tunnel interface, as the routes choose
+   what goes into the tunnel. #}
+{% for s in t.ipsec_selectors %}
+{% if s.tunnel == r.name %}
+{% set x.sel = x.sel + 1 %}
+{% if r.style == 'policy' %}
+{% set proto = s.protocol if s.protocol else 'ip' %}
+{% if proto not in ['ip', 'udp', 'tcp'] %}
+{{ fail(what ~ ' の対象通信 ' ~ s.seq ~ ' 番のプロトコル「' ~ s.protocol ~ '」は書けません（このパックが書くのは ip・udp・tcp です）') }}
+{% elif proto == 'ip' and (s.local_port != '' or s.remote_port != '') %}
+{{ fail(what ~ ' の対象通信 ' ~ s.seq ~ ' 番のポートは、プロトコルが udp か tcp のときだけ書けます') }}
+{% endif %}
+ip access-list sec-{{ num }} {{ s.seq }} permit {{ proto }} src {{ 'any' if s.local_net == '0.0.0.0/0' else s.local_net }}{{ ' sport eq ' ~ s.local_port if s.local_port != '' else '' }} dest {{ 'any' if s.remote_net == '0.0.0.0/0' else s.remote_net }}{{ ' dport eq ' ~ s.remote_port if s.remote_port != '' else '' }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# A tunnel interface with one selector: what the map tells the peer that
+   it protects (the identities of the second phase), while the routes still
+   choose what goes into the tunnel. #}
+{% set sid = namespace(l='', r='') %}
+{% if r.style == 'tunnel_if' and x.sel > 1 %}
+{{ fail(what ~ ' はトンネル IF 型ですが、対象通信の行が ' ~ x.sel ~ ' つあります（NEC IX のトンネル IF 型が相手に伝えられる範囲は 1 組です。1 行にまとめるか、方式を policy にしてください）') }}
+{% elif r.style == 'tunnel_if' and x.sel == 1 %}
+{% for s in t.ipsec_selectors %}
+{% if s.tunnel == r.name %}
+{% if (s.protocol and s.protocol != 'ip') or s.local_port != '' or s.remote_port != '' %}
+{{ fail(what ~ ' の対象通信 ' ~ s.seq ~ ' 番のプロトコル・ポートは書けません（NEC IX の IKE 版 1 のトンネル IF 型が相手に伝えるのは、アドレスの範囲だけです）') }}
+{% endif %}
+{# The number of the one selector is not written (adapt.yaml made it 10). #}
+{% if s.seq %}
+{% endif %}
+{% set sid.l = '' if s.local_net == '0.0.0.0/0' else (s.local_net | replace('/32', '')) %}
+{% set sid.r = '' if s.remote_net == '0.0.0.0/0' else (s.remote_net | replace('/32', '')) %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if x.sel == 0 or r.style == 'tunnel_if' %}
 ip access-list sec-{{ num }} permit ip src any dest any
-ike proposal ike-prop-{{ num }} encryption {{ r.ike_encryption | lex('ike_encryption') }} hash {{ r.ike_hash | lex('ike_hash') }} group {{ r.ike_dh | lex('dh_group') }}{{ ' lifetime ' ~ r.ike_lifetime if r.ike_lifetime != '' else '' }}
-ike policy ike-{{ num }} peer {{ r.peer_address }} key {{ psk }}{{ ' mode ' ~ r.ike_mode if r.ike_mode else '' }} ike-prop-{{ num }}
+{% endif %}
+ike proposal ike-prop-{{ num }} encryption {{ r.ike_encryption | required(what ~ ' の IKE 暗号') | lex('ike_encryption') }} hash {{ r.ike_hash | required(what ~ ' の IKE ハッシュ') | lex('ike_hash') }} group {{ r.ike_dh | required(what ~ ' の IKE DH グループ') | lex('dh_group') }}{{ ' lifetime ' ~ r.ike_lifetime if r.ike_lifetime != '' else '' }}
+{# More candidates than one (ipsec_proposals): a proposal each, named after
+   the first one; the policy and the map list them in the order of their
+   numbers. #}
+{% set more = namespace(ike='', sec='', i=1, s=1) %}
+{% for x2 in t.ipsec_proposals | natural(attribute='seq') %}
+{% if x2.tunnel == r.name and x2.phase == 'ike' %}
+{% set more.i = more.i + 1 %}
+{% if more.i == 5 %}
+{{ fail(what ~ ' の IKE の追加の提案が 4 行以上あります（NEC IX の IKE ポリシーに並べられるのは、全部で 4 つまでです）') }}
+{% endif %}
+{% set more.ike = more.ike ~ ',ike-prop-' ~ num ~ '-' ~ more.i %}
+ike proposal ike-prop-{{ num }}-{{ more.i }}{{ ' encryption ' ~ (x2.encryption | lex('ike_encryption')) if x2.encryption else '' }}{{ ' hash ' ~ (x2.hash | lex('ike_hash')) if x2.hash else '' }}{{ ' group ' ~ (x2.dh | lex('dh_group')) if x2.dh else '' }}{{ ' lifetime ' ~ x2.lifetime if x2.lifetime != '' else '' }}
+{% endif %}
+{% endfor %}
+ike policy ike-{{ num }} {{ peer }} key {{ (psk | replace('secret ', '')) if saved else psk }}{{ ' key-type secret 1' if saved else (' key-type hex' if r.psk_form == 'hex' else '') }}{{ ' mode ' ~ r.ike_mode if r.ike_mode else '' }} ike-prop-{{ num }}{{ more.ike }}
+{% for idc in ['local', 'remote'] %}
+{% set idv = r.local_id if idc == 'local' else r.remote_id %}
+{% if idv %}
+{% set kind = idv | split(':') | first %}
+{% set val = (idv | split(':'))[1:] | join(':') %}
+{% if kind in ['address', 'fqdn', 'email', 'keyid'] and val and ' ' not in val %}
+ike {{ idc }}-id ike-{{ num }} {{ kind | replace('email', 'user-fqdn') }} {{ val }}
+{% else %}
+{{ fail(what ~ ' の' ~ ('自分' if idc == 'local' else '相手') ~ 'の ID「' ~ idv ~ '」は書けません（「種類:値」の形で、種類は address・fqdn・email・keyid です）') }}
+{% endif %}
+{% endif %}
+{% endfor %}
 {% if r.dpd_interval != '' %}
 ike keepalive ike-{{ num }} {{ r.dpd_interval }}{{ ' ' ~ r.dpd_retry if r.dpd_retry != '' else '' }}
 {% endif %}
-ipsec autokey-proposal ipsec-prop-{{ num }} {{ r.esp_encryption | lex('esp_encryption') }} {{ r.esp_hash | lex('esp_hash') }}{{ ' lifetime time ' ~ r.ipsec_lifetime if r.ipsec_lifetime != '' else '' }}
-ipsec autokey-map ipsec-{{ num }} sec-{{ num }} peer {{ r.peer_address }}{{ ' pfs off' if r.pfs == 'none' else (' pfs ' ~ (r.pfs | lex('dh_group')) if r.pfs else '') }} ipsec-prop-{{ num }}
-!
+{% if r.nat_traversal == true and not (nat.off == 0 and nat.same) %}
+ike nat-traversal policy ike-{{ num }}{{ ' keepalive ' ~ r.nat_keepalive if r.nat_keepalive != '' else '' }}{{ ' force' if r.nat_force == true else '' }}
+{% endif %}
+{% if r.ipsec_lifetime_kb != '' %}
+{% set life = ' lifetime both ' ~ (r.ipsec_lifetime | required(what ~ ' の IPsec 有効時間（NEC IX は、有効量を有効時間と組で書きます）')) ~ ' ' ~ r.ipsec_lifetime_kb %}
+{% else %}
+{% set life = (' lifetime time ' ~ r.ipsec_lifetime) if r.ipsec_lifetime != '' else '' %}
+{% endif %}
+ipsec autokey-proposal ipsec-prop-{{ num }} {{ r.esp_encryption | required(what ~ ' の ESP 暗号') | lex('esp_encryption') }}{{ ' ' ~ (r.esp_hash | lex('esp_hash')) if (r.esp_hash and r.esp_hash != 'none') else '' }}{{ ' ' ~ (r.ah_hash | lex('ah_hash')) if r.ah_hash else '' }}{{ life }}
+{% for x2 in t.ipsec_proposals | natural(attribute='seq') %}
+{% if x2.tunnel == r.name and x2.phase == 'ipsec' %}
+{% set more.s = more.s + 1 %}
+{% if more.s == 9 %}
+{{ fail(what ~ ' の IPsec の追加の提案が 8 行以上あります（NEC IX のポリシーマップに並べられるのは、全部で 8 つまでです）') }}
+{% endif %}
+{% set more.sec = more.sec ~ ',ipsec-prop-' ~ num ~ '-' ~ more.s %}
+{% if x2.lifetime_kb != '' %}
+{% set xlife = ' lifetime both ' ~ (x2.lifetime | required(what ~ ' の追加の提案 ' ~ x2.seq ~ ' 番の有効時間（NEC IX は、有効量を有効時間と組で書きます）')) ~ ' ' ~ x2.lifetime_kb %}
+{% else %}
+{% set xlife = (' lifetime time ' ~ x2.lifetime) if x2.lifetime != '' else '' %}
+{% endif %}
+ipsec autokey-proposal ipsec-prop-{{ num }}-{{ more.s }}{{ ' ' ~ (x2.encryption | lex('esp_encryption')) if x2.encryption else '' }}{{ ' ' ~ (x2.hash | lex('esp_hash')) if x2.hash else '' }}{{ ' ' ~ (x2.ah_hash | lex('ah_hash')) if x2.ah_hash else '' }}{{ xlife }}
 {% endif %}
 {% endfor %}
-{% if nat.on > 0 and nat.off > 0 %}
-{{ fail('IPsec の NAT 越えが、行によって違います（NEC IX では機器に 1 つの設定です。全部の行を有効にするか、全部を空にしてください）') }}
-{% elif nat.on > 0 %}
-ike nat-traversal
+{% set pfs = ' pfs off' if r.pfs == 'none' else ((' pfs ' ~ (r.pfs | lex('dh_group'))) if r.pfs else '') %}
+{# A map for a peer "any" names its IKE policy on a tunnel interface (the
+   device may then start the second phase itself), and where the row says
+   that no peer of another policy is let in ("ike-binding"). #}
+{% if isany %}
+ipsec dynamic-map {{ x.map }} sec-{{ num }}{{ pfs }}{{ (' ike-binding ike-' ~ num) if r.ike_bind == true else ((' ike ike-' ~ num) if r.style == 'tunnel_if' else '') }} ipsec-prop-{{ num }}{{ more.sec }}
+{% else %}
+ipsec autokey-map {{ x.map }} sec-{{ num }} {{ peer }}{{ pfs }} ipsec-prop-{{ num }}{{ more.sec }}
+{% endif %}
+{% if sid.l %}
+ipsec local-id {{ x.map }} {{ sid.l }}
+{% endif %}
+{% if sid.r %}
+ipsec remote-id {{ x.map }} {{ sid.r }}
+{% endif %}
+!
+{% else %}
+{# ---- IKE version 2 ---- #}
+{% if r.dpd_mode and r.dpd_mode != 'periodic' %}
+{{ fail(what ~ ' の相手監視の送り方「' ~ r.dpd_mode ~ '」は書けません（NEC IX の IKE 版 2 は、いつも間隔ごとに聞きます）') }}
+{% endif %}
+{% if (r.dpd_retry != '' or r.dpd_retry_interval != '') and r.dpd_retry == '' %}
+{{ fail(what ~ ' の相手監視の再送間隔は、再送回数と組で書きます（NEC IX の IKE 版 2 の再送は、回数と間隔の組です）') }}
+{% endif %}
+ikev2 profile ikev2-{{ num }}
+{% if r.ipsec_lifetime != '' %}
+  child-lifetime {{ r.ipsec_lifetime }}
+{% endif %}
+{# A line of a proposal lists its values: the first one of the row, then
+   those of its "(more)" column. #}
+{% set mv = namespace(pfs='', enc='', hash='', dh='', ienc='', ihash='', prf='') %}
+{% for w in r.pfs_more %}
+{% set mv.pfs = mv.pfs ~ ' ' ~ (w | lex('ikev2_dh')) %}
+{% endfor %}
+{% for w in r.esp_encryption_more %}
+{% set mv.enc = mv.enc ~ ' ' ~ (w | lex('ikev2_encryption')) %}
+{% endfor %}
+{% for w in r.esp_hash_more %}
+{% set mv.hash = mv.hash ~ ' ' ~ (w | lex('ikev2_hash')) %}
+{% endfor %}
+{% for w in r.ike_dh_more %}
+{% set mv.dh = mv.dh ~ ' ' ~ (w | lex('ikev2_dh')) %}
+{% endfor %}
+{% for w in r.ike_encryption_more %}
+{% set mv.ienc = mv.ienc ~ ' ' ~ (w | lex('ikev2_encryption')) %}
+{% endfor %}
+{% for w in r.ike_hash_more %}
+{% set mv.ihash = mv.ihash ~ ' ' ~ (w | lex('ikev2_hash')) %}
+{% endfor %}
+{% for w in r.ike_prf_more %}
+{% set mv.prf = mv.prf ~ ' ' ~ (w | lex('ikev2_hash')) %}
+{% endfor %}
+{% if (mv.pfs and (not r.pfs or r.pfs == 'none')) or (mv.enc and not r.esp_encryption) or (mv.hash and (not r.esp_hash or r.esp_hash == 'none')) or (mv.dh and not r.ike_dh) or (mv.ienc and not r.ike_encryption) or (mv.ihash and not r.ike_hash) or (mv.prf and not r.ike_prf) %}
+{{ fail(what ~ ' の「（追加）」の列に値がありますが、その 1 つ目の値の列（IKE 暗号・ESP 暗号・PFS など）が空です（PFS は none でも並べられません）') }}
+{% endif %}
+{% for x2 in t.ipsec_proposals %}
+{% if x2.tunnel == r.name %}
+{{ fail(what ~ ' の追加の提案 ' ~ x2.seq ~ ' 番（段 ' ~ x2.phase ~ '）は書けません（NEC IX の IKEv2 は、候補を「（追加）」の列の値の並びで書きます。IPsec の行の「IKE 暗号（追加）」「ESP 暗号（追加）」などに書いてください）') }}
+{% endif %}
+{% endfor %}
+{% if r.pfs %}
+  child-pfs {{ 'off' if r.pfs == 'none' else (r.pfs | lex('ikev2_dh')) }}{{ mv.pfs }}
+{% endif %}
+{% if r.esp_encryption %}
+  child-proposal enc {{ r.esp_encryption | lex('ikev2_encryption') }}{{ mv.enc }}
+{% endif %}
+{% if r.esp_hash == 'none' %}
+  child-proposal integrity off
+{% elif r.esp_hash %}
+  child-proposal integrity {{ r.esp_hash | lex('ikev2_hash') }}{{ mv.hash }}
+{% endif %}
+{% if r.dpd_interval != '' %}
+  dpd interval {{ r.dpd_interval }}
+{% endif %}
+{% if r.ipsec_mode == 'transport' %}
+  ipsec-mode transport
+{% endif %}
+{% if r.local_id %}
+{% set kind = r.local_id | split(':') | first %}
+{% set val = (r.local_id | split(':'))[1:] | join(':') %}
+  local-authentication psk id {{ kind | replace('address', 'ipv4') | replace('email', 'rfc822-addr') }} {{ val }}
+{% else %}
+  local-authentication psk
+{% endif %}
+{% set ts = namespace(n=0, l='', r='') %}
+{% for s in t.ipsec_selectors %}
+{% if s.tunnel == r.name %}
+{% set ts.n = ts.n + 1 %}
+{% if s.seq %}
+{% endif %}
+{% set proto = s.protocol if s.protocol in ['tcp', 'udp'] else '' %}
+{% if s.protocol and s.protocol not in ['ip', 'tcp', 'udp'] %}
+{{ fail(what ~ ' の対象通信 ' ~ s.seq ~ ' 番のプロトコル「' ~ s.protocol ~ '」は書けません（このパックが書くのは ip・udp・tcp です）') }}
+{% elif not proto and (s.local_port != '' or s.remote_port != '') %}
+{{ fail(what ~ ' の対象通信 ' ~ s.seq ~ ' 番のポートは、プロトコルが udp か tcp のときだけ書けます') }}
+{% endif %}
+{% if s.local_net != '0.0.0.0/0' or proto %}
+{% set ts.l = 'ipv4' ~ (' protocol ' ~ proto if proto else '') ~ (' address ' ~ s.local_net if s.local_net != '0.0.0.0/0' else '') ~ (' port ' ~ s.local_port ~ ' ' ~ s.local_port if s.local_port != '' else '') %}
+{% endif %}
+{% if s.remote_net != '0.0.0.0/0' or proto %}
+{% set ts.r = 'ipv4' ~ (' protocol ' ~ proto if proto else '') ~ (' address ' ~ s.remote_net if s.remote_net != '0.0.0.0/0' else '') ~ (' port ' ~ s.remote_port ~ ' ' ~ s.remote_port if s.remote_port != '' else '') %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if ts.n > 1 %}
+{{ fail(what ~ ' に、対象通信の行が ' ~ ts.n ~ ' つあります（NEC IX の IKEv2 が提案する範囲は、自分側・相手側に 1 つずつです。1 行にまとめてください）') }}
+{% endif %}
+{% if ts.l %}
+  local-ts {{ ts.l }}
+{% endif %}
+{% if r.nat_traversal == true %}
+  nat-traversal{{ ' keepalive ' ~ r.nat_keepalive if r.nat_keepalive != '' else '' }}{{ ' force' if r.nat_force == true else '' }}
+{% elif r.nat_traversal == false %}
+  nat-traversal off
+{% endif %}
+{% if ts.r %}
+  remote-ts {{ ts.r }}
+{% endif %}
+{% if r.dpd_retry != '' %}
+  retransmit count {{ r.dpd_retry }} interval {{ r.dpd_retry_interval if r.dpd_retry_interval != '' else 'backoff' }}
+{% endif %}
+{% if r.ike_lifetime != '' %}
+  sa-lifetime {{ r.ike_lifetime }}
+{% endif %}
+{% if r.ike_dh %}
+  sa-proposal dh {{ r.ike_dh | lex('ikev2_dh') }}{{ mv.dh }}
+{% endif %}
+{% if r.ike_encryption %}
+{% if r.ike_encryption == 'null' %}
+{{ fail(what ~ ' の IKE 暗号「null」は書けません') }}
+{% endif %}
+  sa-proposal enc {{ r.ike_encryption | lex('ikev2_encryption') }}{{ mv.ienc }}
+{% endif %}
+{% if r.ike_hash %}
+  sa-proposal integrity {{ r.ike_hash | lex('ikev2_hash') }}{{ mv.ihash }}
+{% endif %}
+{% if r.ike_prf %}
+  sa-proposal prf {{ r.ike_prf | lex('ikev2_hash') }}{{ mv.prf }}
+{% endif %}
+!
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if nat.on > 0 and nat.off == 0 and nat.same %}
+ike nat-traversal{{ ' keepalive ' ~ nat.head.nat_keepalive if nat.head.nat_keepalive != '' else '' }}{{ ' force' if nat.head.nat_force == true else '' }}
 !
 {% endif %}

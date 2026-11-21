@@ -1,0 +1,10 @@
+table: as_path_lists
+title: {ja: AS パスのリスト, en: AS path lists}
+since: M7
+key: [device, name, seq]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: 名前, en: Name}, type: string, required: true, note: {ja: "Cisco は番号（1〜500）", en: "A number (1 to 500) on Cisco"}}
+  - {name: seq, title: {ja: 順番, en: Sequence}, type: int, required: true, note: {ja: "書いた順に 10 刻みで振る", en: "Counted in steps of 10 in the written order"}}
+  - {name: action, title: {ja: 動作, en: Action}, type: enum, values: [permit, deny], required: true}
+  - {name: regex, title: {ja: AS パスの正規表現, en: AS path regular expression}, type: string, required: true, note: {ja: "例 ^64496_", en: "e.g. ^64496_"}}

@@ -107,7 +107,7 @@ func cmdInit(args []string, out, errOut io.Writer) int {
 }
 
 func cmdImport(args []string, out, errOut io.Writer) int {
-	pos, val, _, err := options(args, []string{"--project", "--source", "--pack"}, nil)
+	pos, val, _, err := options(args, []string{"--project", "--source", "--pack", "--use"}, nil)
 	if err != nil || len(pos) != 0 {
 		if err != nil {
 			fmt.Fprintln(errOut, err)
@@ -123,6 +123,18 @@ func cmdImport(args []string, out, errOut io.Writer) int {
 	if source == "" {
 		source = "old"
 	}
+	if use := val["--use"]; use != "" {
+		// The file is named as the list shows it (input/old/a.txt) or by its
+		// name alone.
+		use = strings.ReplaceAll(use, "\\", "/")
+		if !strings.Contains(use, "/") {
+			use = "input/" + source + "/" + use
+		}
+		if err := e.ChooseFile(source, use, now()); err != nil {
+			fmt.Fprintln(errOut, err)
+			return 2
+		}
+	}
 	o, err := e.RunImport(source, val["--pack"], now())
 	if err != nil {
 		fmt.Fprintln(errOut, err)
@@ -133,6 +145,13 @@ func cmdImport(args []string, out, errOut io.Writer) int {
 	for _, f := range src.Files {
 		if f.Err != "" {
 			fmt.Fprintf(out, "  %s: 取り込めません: %s\n", f.Path, f.Err)
+			if len(f.Same) > 1 {
+				fmt.Fprintf(out, "    選ぶには: configchief import --project %s --source %s --use <ファイル>\n", val["--project"], source)
+			}
+			continue
+		}
+		if f.Left != "" {
+			fmt.Fprintf(out, "  %s: %s\n", f.Path, f.Left)
 			continue
 		}
 		n := f.Result.Count()

@@ -1,0 +1,63 @@
+hostname ix-f02
+!
+ip route default 203.0.113.62
+!
+ip access-list sec-sample-eip permit ip src any dest any
+ip access-list sec-sample-dyn permit ip src any dest any
+!
+ikev2 authentication psk id keyid sample-site-a key char dummy-psk-sample-a
+ikev2 authentication psk id keyid sample-site-b key char dummy-psk-sample-b
+!
+ike proposal ike-prop-sample encryption aes-256 hash sha2-256 group 2048-bit
+ike policy ike-sample-eip peer 203.0.113.65 key dummy-psk-sample-eip mode aggressive ike-prop-sample
+ike local-id ike-sample-eip keyid sample-eip
+ike policy ike-sample-any1 peer any key dummy-psk-sample-any1 mode aggressive ike-prop-sample
+ike policy ike-sample-any2 peer any key dummy-psk-sample-any2 mode aggressive ike-prop-sample
+!
+ipsec autokey-proposal ipsec-prop-sample esp-aes-256 esp-sha2-256 lifetime time 3600
+ipsec autokey-map ipsec-sample-eip sec-sample-eip peer 203.0.113.65 ipsec-prop-sample
+ipsec local-id ipsec-sample-eip 192.0.2.2
+ipsec dynamic-map ipsec-sample-dyn sec-sample-dyn ipsec-prop-sample
+!
+bridge irb enable
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.61/30
+  ipv6 address 2001:db8:0:61::1/64
+  no shutdown
+!
+interface GigaEthernet1.0
+  no ip address
+  bridge-group 1
+  no shutdown
+!
+interface Tunnel0.0
+  tunnel mode ether-ip ipsec
+  no ip address
+  ipsec policy transport ipsec-sample-eip with-id-payload
+  bridge-group 1
+  no shutdown
+!
+interface Tunnel1.0
+  tunnel mode ether-ip ipsec-ikev2
+  no ip address
+  bridge-group 1
+  ikev2 connect-type auto
+  ikev2 ipsec-mode transport
+  ikev2 local-authentication psk id keyid sample-site-a
+  ikev2 peer 203.0.113.69 authentication psk id keyid sample-site-b
+  no shutdown
+!
+interface Tunnel2.0
+  tunnel mode ether-ip ipv6
+  tunnel destination 2001:db8:0:65::1
+  tunnel source 2001:db8:0:61::1
+  no ip address
+  bridge-group 1
+  no shutdown
+!
+interface Tunnel3.0
+  tunnel mode ipsec
+  ip unnumbered GigaEthernet0.0
+  ipsec policy tunnel ipsec-sample-dyn out
+  no shutdown

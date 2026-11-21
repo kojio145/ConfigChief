@@ -1,0 +1,48 @@
+version 15.9
+hostname rt-v04
+!
+no cdp run
+lldp run
+vlan internal allocation policy ascending
+!
+vtp mode transparent
+!
+spanning-tree mode pvst
+spanning-tree loopguard default
+errdisable recovery cause bpduguard
+errdisable recovery interval 600
+!
+vlan 10,20
+!
+interface FastEthernet0
+ switchport access vlan 10
+ spanning-tree guard root
+ no cdp enable
+!
+interface FastEthernet1
+ switchport access vlan 10
+ no cdp enable
+ no lldp transmit
+!
+interface FastEthernet2
+ switchport access vlan 20
+ lldp receive
+!
+interface FastEthernet3
+ switchport access vlan 20
+!
+interface GigabitEthernet8
+ ip address 203.0.113.14 255.255.255.252
+ no cdp enable
+!
+interface Vlan10
+ ip address 192.0.2.1 255.255.255.128
+!
+interface Vlan20
+ ip address 192.0.2.129 255.255.255.128
+!
+monitor session 1 source interface Fa0
+monitor session 1 source interface Fa1 tx
+monitor session 1 destination interface Fa3
+!
+end

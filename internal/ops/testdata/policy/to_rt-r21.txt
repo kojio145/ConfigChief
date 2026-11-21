@@ -1,0 +1,73 @@
+hostname rt-r21
+!
+interface GigabitEthernet0/0
+ description to sample upstream
+ ip address 203.0.113.1 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description sample lan
+ ip address 198.51.100.1 255.255.255.0
+ ip policy route-map rm-r-pbr
+ ip ospf 1 area 0
+ ip ospf priority 1
+ ip ospf hello-interval 10
+ ip ospf dead-interval 40
+ no shutdown
+!
+interface Loopback0
+ description sample id
+ ip address 192.0.2.1 255.255.255.255
+ no shutdown
+!
+ip route 192.0.2.64 255.255.255.192 198.51.100.254 1 tag 100
+!
+router ospf 1
+ router-id 192.0.2.1
+ redistribute static metric 20 metric-type 1 tag 100 route-map rm-r-static subnets
+ no passive-interface GigabitEthernet0/1
+!
+router bgp 64496
+ bgp router-id 192.0.2.1
+ neighbor 203.0.113.2 remote-as 64497
+ neighbor 203.0.113.2 route-map rm-r-in in
+ neighbor 203.0.113.2 route-map rm-r-out out
+ neighbor 203.0.113.2 send-community
+ network 198.51.100.0 mask 255.255.255.0
+ redistribute ospf 1 route-map rm-r-o2b
+!
+ip access-list extended al-r-pbr
+ permit ip 198.51.100.0 0.0.0.127 any
+!
+ip prefix-list pl-r-any seq 10 permit 0.0.0.0/0 le 32
+ip prefix-list pl-r-in seq 5 permit 0.0.0.0/0 le 24
+ip prefix-list pl-r-out seq 5 permit 198.51.100.0/24
+!
+ip community-list standard CL-rm-r-in-10 permit 64497:100 local-as
+!
+route-map rm-r-in permit 10
+ match ip address prefix-list pl-r-in
+ match community CL-rm-r-in-10
+ set local-preference 200
+!
+route-map rm-r-in permit 20
+ match ip address prefix-list pl-r-any
+!
+route-map rm-r-o2b permit 10
+ set metric 100
+!
+route-map rm-r-out permit 10
+ match ip address prefix-list pl-r-out
+ set metric 10
+ set as-path prepend 64496 64496
+ set community 64496:50 additive
+!
+route-map rm-r-pbr permit 10
+ match ip address al-r-pbr
+ set ip next-hop 203.0.113.2
+!
+route-map rm-r-static permit 10
+ match tag 100
+ set metric-type type-1
+!
+end

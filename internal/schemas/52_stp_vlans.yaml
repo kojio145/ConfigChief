@@ -1,0 +1,14 @@
+table: stp_vlans
+title: {ja: VLAN ごとのスパニングツリー, en: Spanning tree per VLAN}
+since: M7
+key: [device, vlans]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: vlans, title: {ja: VLAN, en: VLANs}, type: string, required: true, note: {ja: "VLAN 番号。まとめて書くときは 10,20,30-40", en: "A VLAN ID, or several: 10,20,30-40"}}
+  - {name: priority, title: {ja: 優先度, en: Priority}, type: int, min: 0, max: 65535, note: {ja: "小さいほどルートブリッジになりやすい", en: "The lower, the more likely the root bridge"}}
+  - {name: hello_time, title: {ja: Hello 間隔（秒）, en: Hello time (s)}, type: int}
+  - {name: forward_time, title: {ja: 転送遅延（秒）, en: Forward time (s)}, type: int}
+  - {name: max_age, title: {ja: 最大エージ（秒）, en: Max age (s)}, type: int}
+  - {name: root, title: {ja: ルートブリッジの指定, en: Root bridge}, type: enum, values: [primary, secondary], note: {ja: "primary・secondary（優先度を機器が決める）", en: "primary, secondary (the device picks the priority)"}}
+  - {name: enabled, title: {ja: スパニングツリーを使う, en: Spanning tree}, type: bool, note: {ja: "無効 = この VLAN ではスパニングツリーを止める", en: "false = no spanning tree in these VLANs"}}
+  - {name: root_diameter, title: {ja: ネットワークの直径, en: Network diameter}, type: int, min: 2, max: 7, note: {ja: "「ルートブリッジにする」と一緒に書く。スイッチの段数（2〜7）", en: "With the root column: the number of switches across (2 to 7)"}}

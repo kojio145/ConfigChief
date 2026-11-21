@@ -1,0 +1,35 @@
+version 15.9
+hostname rt-v02
+!
+interface FastEthernet0
+ no ip address
+!
+interface FastEthernet1
+ no ip address
+!
+interface FastEthernet2
+ switchport access vlan 20
+!
+interface FastEthernet3
+ switchport access vlan 20
+!
+interface GigabitEthernet8
+ no ip address
+!
+interface GigabitEthernet8.10
+ encapsulation dot1Q 10
+ ip address 203.0.113.2 255.255.255.252
+!
+interface GigabitEthernet8.20
+ encapsulation dot1Q 20
+ ip address 203.0.113.6 255.255.255.252
+!
+interface Vlan1
+ ip address 192.0.2.1 255.255.255.128
+!
+interface Vlan20
+ ip address 192.0.2.129 255.255.255.128
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.1
+!
+end

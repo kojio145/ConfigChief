@@ -1,0 +1,440 @@
+# The device as a whole, and the management settings.
+# Syntax: README, "参照した資料" (the chapters are named on each group).
+rules:
+  # ---- the device (Device management commands, DNS commands) ----
+  # The line the device writes at the head. It tells the generation of the
+  # software: a rule whose line means something else in the generation
+  # before Version 7 asks for it (README, "Version 7 より前の世代").
+  - id: sys.version
+    match: '^version (?P<v>\d+\.\d+(?:\.\d+)?)(?:, Release \S+)?$'
+    row: {table: devices, key: {}}
+    set: {os_version: "{{ v }}"}
+  - id: sys.sysname
+    match: '^sysname (?P<name>\S+)$'
+    row: {table: devices, key: {}}
+
+  # The offset is hh:mm:ss; minutes and seconds may be left out. An offset
+  # with seconds has no form in the dataset and stays unknown.
+  - id: sys.timezone
+    match: '^clock timezone (?P<zone>\S+) (?P<sign>add|minus) (?P<h>\d+)(?::(?P<m>\d+)(?::(?P<s>\d+))?)?$'
+    when: "not s or s | int == 0"
+    row: {table: devices, key: {}}
+    set: {timezone: "{{ zone }} {{ '+' if sign == 'add' else '-' }}{{ h | int }}{{ (':' ~ m) if (m and m | int != 0) else '' }}"}
+
+  # The dataset has one domain name; the forms with "vpn-instance" stay unknown.
+  - id: sys.domain
+    match: '^dns domain (?P<name>\S+)$'
+    row: {table: devices, key: {}}
+    set: {domain_name: "{{ name }}"}
+  - id: sys.name_server
+    match: '^dns server (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+    row: {table: devices, key: {}}
+    append: {name_servers: "{{ addr }}"}
+  # The servers of a VPN instance (the dataset has one instance for all of
+  # them; a second one is a warning of the import).
+  - id: sys.name_server.vrf
+    match: '^dns server (?P<addr>\d+\.\d+\.\d+\.\d+) vpn-instance (?P<vrf>\S+)$'
+    row: {table: devices, key: {}}
+    append: {name_servers: "{{ addr }}"}
+    set: {name_servers_vrf: "{{ vrf }}"}
+
+  # Three banners have a column: "login" (before the login), "motd" (when
+  # the connection opens) and "shell" (after the login). "header legal" and
+  # "header incoming" (the generation before Version 7) stay unknown.
+  - id: sys.header
+    match: '^header login .*$'
+    row: {table: devices, key: {}}
+    set: {banner: "{{ body }}"}
+  - id: sys.header.motd
+    match: '^header motd .*$'
+    row: {table: devices, key: {}}
+    set: {banner_motd: "{{ body }}"}
+  - id: sys.header.shell
+    match: '^header shell .*$'
+    row: {table: devices, key: {}}
+    set: {banner_exec: "{{ body }}"}
+
+  # The password that lets a user take the full role ("super"). Only the
+  # form that names the role network-admin, or no role (README).
+  - id: sys.super.hash
+    match: '^super password(?: role network-admin)? hash (?P<value>\S+)$'
+    row: {table: devices, key: {}}
+    set: {enable_secret: "{{ value }}", secret_form: hashed}
+  - id: sys.super.simple
+    match: '^super password(?: role network-admin)? simple (?P<value>\S+)$'
+    row: {table: devices, key: {}}
+    set: {enable_secret: "{{ value }}", secret_form: plain}
+  # The generation before Version 7: levels in place of roles (3 is the
+  # highest and the default), and a password the device saved in a form it
+  # can turn back ("cipher").
+  - id: sys.super.level
+    match: '^super password(?: level (?P<lv>\d+))? (?P<form>simple|cipher) (?P<value>\S+)$'
+    when: "not lv or lv == '3'"
+    row: {table: devices, key: {}}
+    set: {enable_secret: "{{ value }}", secret_form: "{{ 'encrypted' if form == 'cipher' else 'plain' }}"}
+
+  # ---- users (AAA commands, local user view) ----
+  # A device management user. "class network" (users of the LAN access
+  # service) stays unknown.
+  - id: user
+    match: '^local-user (?P<name>\S+)(?: class manage)?$'
+    row: {table: users, key: {name: "{{ name }}"}}
+    children:
+      - id: user.password.hash
+        match: '^password hash (?P<value>\S+)$'
+        set: {secret: "{{ value }}", secret_form: hashed}
+      - id: user.password.simple
+        match: '^password simple (?P<value>\S+)$'
+        set: {secret: "{{ value }}", secret_form: plain}
+      # The generation before Version 7 ("password { cipher | simple }").
+      - id: user.password.cipher
+        match: '^password cipher (?P<value>\S+)$'
+        set: {secret: "{{ value }}", secret_form: encrypted}
+      # The same generation: levels 0 to 3 in place of roles (3 = manage).
+      - id: user.level
+        match: '^authorization-attribute level (?P<n>[0-3])$'
+        set: {privilege: "{{ 'admin' if n == '3' else n }}"}
+      - id: user.service
+        match: '^service-type (?P<list>ftp|(?:ssh|telnet|terminal)(?: (?:ssh|telnet|terminal))*)$'
+        append: {services: "{{ list }}"}
+      # A user may have several roles; the dataset has one privilege. The
+      # full role wins, then the first one written (README).
+      - id: user.role.admin
+        match: '^authorization-attribute user-role network-admin$'
+        set: {privilege: admin}
+      - id: user.role
+        match: '^authorization-attribute user-role (?P<role>[\w-]+)$'
+        set: {privilege: "{{ '' if row.privilege else ('operator' if role == 'network-operator' else role) }}"}
+
+  # ---- remote login (Login management commands, SSH commands) ----
+  # The servers are switched on for the device; a VTY line may narrow what
+  # it takes. Both are kept aside and joined below.
+  - id: ra.telnet
+    match: '^telnet server enable$'
+    emit:
+      - table: x_remote
+        key: {}
+        set: {telnet: "true"}
+  - id: ra.ssh
+    match: '^ssh server enable$'
+    emit:
+      - table: x_remote
+        key: {}
+        set: {ssh: "true"}
+  # A basic or an advanced list by its number; "mac" stays unknown.
+  - id: ra.acl
+    match: '^(?P<what>telnet|ssh) server acl (?P<acl>\d+)$'
+    emit:
+      - table: x_remote_acl
+        key: {}
+        set: {"{{ what }}": "{{ acl }}"}
+  # "user-interface" is the word of the generation before Version 7.
+  - id: vty
+    match: '^(?:line|user-interface) vty (?P<first>\d+)(?: (?P<last>\d+))?$'
+    row: {table: remote_access, key: {}}
+    children:
+      # "scheme" asks the AAA of the device, which is the local users unless
+      # a domain says otherwise (README). "none" has no word in the dataset.
+      - id: vty.auth
+        match: '^authentication-mode (?P<mode>scheme|password)$'
+        set: {auth: "{{ 'local' if mode == 'scheme' else 'password' }}"}
+      - id: vty.protocol
+        match: '^protocol inbound (?P<what>all|ssh|telnet)$'
+        emit:
+          - table: x_remote
+            key: {}
+            set: {inbound: "{{ what }}"}
+      - id: vty.timeout
+        match: '^idle-timeout (?P<min>\d+)(?: (?P<sec>\d+))?$'
+        set: {idle_timeout: "{{ min }}", idle_timeout_sec: "{{ sec if sec and sec | int != 0 else '' }}"}
+      - id: vty.password
+        match: '^set authentication password simple (?P<value>\S+)$'
+        set: {line_password: "{{ value }}"}
+      # What the device saved ("hash"; "cipher" in the generation before
+      # Version 7) is kept as the device shows it: "<kind> <value>"
+      # (appendix A 3.26).
+      - id: vty.password.saved
+        match: '^set authentication password (?P<form>hash|cipher) (?P<value>\S+)$'
+        set: {line_password: "{{ form }} {{ value }}"}
+
+  # The console (the AUX line of the device): how long it waits.
+  - id: con
+    match: '^(?:line|user-interface) aux (?P<first>\d+)(?: (?P<last>\d+))?$'
+    row: {table: devices, key: {}}
+    children:
+      - id: con.timeout
+        match: '^idle-timeout (?P<min>\d+)(?: (?P<sec>\d+))?$'
+        set: {console_timeout: "{{ min }}", console_timeout_sec: "{{ sec if sec and sec | int != 0 else '' }}"}
+
+  # ---- NTP (NTP commands). The form with "vpn-instance" stays unknown. ----
+  # "source-interface" is the word of the generation before Version 7.
+  - id: ntp.server
+    match: '^ntp-service unicast-server (?P<server>[\w.\-]+)(?: vpn-instance (?P<vrf>\S+))?(?:(?P<prefer> priority)| source(?:-interface)? (?P<src>[A-Za-z][\w-]*\d[\d/.]*)| authentication-keyid (?P<kid>\d+))*$'
+    when: "server != 'vpn-instance'"
+    row: {table: ntp_servers, key: {server: "{{ server }}"}}
+    set:
+      prefer: "{{ 'true' if prefer else '' }}"
+      source_if: "{{ src | ifname }}"
+      vrf: "{{ vrf }}"
+      auth_key_id: "{{ kid }}"
+  # Authentication: the switch, the keys and the keys that are trusted. A
+  # server gets its key when all three are there (the derive below). A key
+  # the device saved is kept as "cipher <value>".
+  - id: ntp.auth.enable
+    match: '^ntp-service authentication enable$'
+    emit:
+      - table: x_ntp_auth
+        key: {}
+        set: {enabled: "true"}
+  - id: ntp.auth.key
+    match: '^ntp-service authentication-keyid (?P<id>\d+) authentication-mode md5 (?:(?P<form>cipher|simple) )?(?P<value>\S+)$'
+    emit:
+      - table: x_ntp_key
+        key: {id: "{{ id }}"}
+        set: {key: "{{ 'cipher ' if form == 'cipher' else '' }}{{ value }}"}
+  - id: ntp.auth.trust
+    match: '^ntp-service reliable authentication-keyid (?P<id>\d+)$'
+    emit:
+      - table: x_ntp_trust
+        key: {id: "{{ id }}"}
+        set: {trusted: "true"}
+  # One line for the whole device: kept aside and put on each server.
+  - id: ntp.source
+    match: '^ntp-service source (?P<ifn>[A-Za-z][\w-]*\d[\d/.]*)$'
+    emit:
+      - table: x_ntp_source
+        key: {}
+        set: {source_if: "{{ ifn | ifname }}"}
+  # NTP is off without this line: it counts only together with a server.
+  - id: ntp.enable
+    match: '^ntp-service enable$'
+    emit:
+      - table: x_ntp
+        key: {}
+        set: {enabled: "true"}
+
+  # ---- syslog (Information center commands) ----
+  - id: syslog.source
+    match: '^info-center loghost source (?P<ifn>[A-Za-z][\w-]*\d[\d/.]*)$'
+    emit:
+      - table: x_logging
+        key: {}
+        set: {source_if: "{{ ifn | ifname }}"}
+  # "port" has no column and "ipv6" no form in the row: such lines stay
+  # unknown.
+  - id: syslog.host
+    match: '^info-center loghost (?:vpn-instance (?P<vrf>\S+) )?(?P<server>[\w.\-]+)(?: facility (?P<f>local[0-7]))?$'
+    when: "server not in ['source', 'ipv6', 'vpn-instance']"
+    row: {table: syslog_servers, key: {server: "{{ server }}"}}
+    set: {facility: "{{ f }}", vrf: "{{ vrf }}"}
+
+  # What goes to the log hosts and what is kept in the log buffer: the rule
+  # for all modules ("default") and the rules of single modules for the
+  # buffer. The other destinations (console, monitor, logfile) and "deny"
+  # stay unknown.
+  - id: syslog.severity
+    match: '^info-center source default loghost level (?P<sev>[a-z]+)$'
+    emit:
+      - table: x_logging
+        key: {}
+        set: {severity: "{{ sev | unlex('severity') }}"}
+  - id: log.severity
+    match: '^info-center source default logbuffer level (?P<sev>[a-z]+)$'
+    row: {table: devices, key: {}}
+    set: {log_severity: "{{ sev | unlex('severity') }}"}
+  - id: log.subsystem
+    match: '^info-center source (?P<mod>[A-Za-z][\w-]*) logbuffer level (?P<sev>[a-z]+)$'
+    when: "mod != 'default'"
+    row: {table: log_subsystems, key: {subsystem: "{{ mod }}"}}
+    set: {severity: "{{ sev | unlex('severity') }}"}
+  - id: log.buffer
+    match: '^(?P<no>undo )?info-center logbuffer$'
+    row: {table: devices, key: {}}
+    set: {log_buffer: "{{ 'false' if no else 'true' }}"}
+  # The time on a log: since the start of the device or by the clock. "none"
+  # has no word in the dataset; the time on what goes to a log host
+  # ("timestamp loghost") has no column.
+  - id: log.timestamp
+    match: '^info-center timestamp (?P<how>boot|date)$'
+    row: {table: devices, key: {}}
+    set: {log_timestamp: "{{ 'uptime' if how == 'boot' else 'datetime' }}"}
+  # The generation before Version 7 says it for logs and for debugging.
+  - id: log.timestamp.v5
+    match: '^info-center timestamp (?P<what>log|debugging) (?P<how>boot|date)$'
+    row: {table: devices, key: {}}
+    set: {"{{ 'log' if what == 'log' else 'debug' }}_timestamp": "{{ 'uptime' if how == 'boot' else 'datetime' }}"}
+
+  # ---- SNMP (SNMP commands) ----
+  - id: sys.snmp.location
+    match: '^snmp-agent sys-info location (?P<text>.+)$'
+    row: {table: devices, key: {}}
+    set: {snmp_location: "{{ text }}"}
+  - id: sys.snmp.contact
+    match: '^snmp-agent sys-info contact (?P<text>.+)$'
+    row: {table: devices, key: {}}
+    set: {snmp_contact: "{{ text }}"}
+  # The agent and the versions it speaks: they count only together with a
+  # community, a host, a location or a contact (the derives below).
+  - id: snmp.agent
+    match: '^snmp-agent$'
+    emit:
+      - table: x_snmp_agent
+        key: {}
+        set: {agent: "true"}
+  - id: snmp.version
+    match: '^snmp-agent sys-info version (?P<list>all|(?:v1|v2c|v3)(?: (?:v1|v2c|v3))*)$'
+    emit:
+      - table: x_snmp_version
+        key: {}
+        set: {versions: "{{ list }}"}
+  # A community, with the list that narrows it (by its number or its name).
+  # The device keeps a community it was given in plain text in an encrypted
+  # form ("cipher"): it is kept as the device shows it, "cipher <value>"
+  # (appendix A 3.26). "mib-view" stays unknown.
+  - id: snmp.community
+    match: '^snmp-agent community (?P<access>read|write) (?:(?P<form>simple|cipher) )?(?P<name>\S+)(?: acl (?:name )?(?P<acl>\S+))?$'
+    when: "name not in ['simple', 'cipher', 'mib-view', 'acl'] and acl not in ['ipv6', 'name']"
+    row: {table: snmp_communities, key: {community: "{{ 'cipher ' if form == 'cipher' else '' }}{{ name }}"}}
+    set: {access: "{{ access | unlex('snmp_access') }}", acl: "{{ acl }}"}
+  # A host for traps. Version 3 names a user and a level. "udp-port",
+  # "dscp", "vpn-instance", "ipv6" and "inform" stay unknown.
+  - id: snmp.host
+    match: '^snmp-agent target-host trap address udp-domain (?P<host>\d+\.\d+\.\d+\.\d+) params securityname (?P<community>\S+)(?: (?P<ver>v1|v2c)| (?P<v3>v3)(?: (?P<lvl>authentication|privacy))?)?$'
+    row: {table: snmp_hosts, key: {host: "{{ host }}"}}
+    set:
+      version: "{{ '3' if v3 else ((ver | unlex('snmp_version')) if ver else '') }}"
+      community: "{{ community }}"
+      security_level: "{{ ('auth' if lvl == 'authentication' else ('priv' if lvl == 'privacy' else 'noauth')) if v3 else '' }}"
+  # Version 3: a group says the level and the views, a user belongs to a
+  # group and has its passwords. The passwords the device saved ("cipher")
+  # are kept as "cipher <value>". The forms for IPv6 lists stay unknown.
+  - id: snmp.group
+    match: '^snmp-agent group v3 (?P<name>\S+)(?: (?P<level>authentication|privacy))?(?: read-view (?P<rv>\S+))?(?: write-view (?P<wv>\S+))?(?: notify-view (?P<nv>\S+))?(?: acl (?:name )?(?P<acl>\S+))?$'
+    when: "acl not in ['ipv6', 'name']"
+    emit:
+      - table: x_snmp_group
+        key: {name: "{{ name }}"}
+        set:
+          level: "{{ 'auth' if level == 'authentication' else ('priv' if level == 'privacy' else 'noauth') }}"
+          read_view: "{{ rv }}"
+          write_view: "{{ wv }}"
+          notify_view: "{{ nv }}"
+          acl: "{{ acl }}"
+  - id: snmp.user
+    match: '^snmp-agent usm-user v3 (?P<name>\S+) (?P<group>\S+)(?: (?P<form>cipher|simple) authentication-mode (?P<auth>md5|sha) (?P<ak>\S+)(?: privacy-mode (?P<priv>3des|aes128|des56) (?P<pk>\S+))?)?(?: acl (?:name )?(?P<acl>\S+))?$'
+    when: "acl not in ['ipv6', 'name']"
+    row: {table: snmp_users, key: {name: "{{ name }}"}}
+    set:
+      group: "{{ group }}"
+      auth: "{{ auth }}"
+      auth_key: "{{ (('cipher ' if form == 'cipher' else '') ~ ak) if ak else '' }}"
+      priv: "{{ (priv | unlex('snmp_priv')) if priv else '' }}"
+      priv_key: "{{ (('cipher ' if form == 'cipher' else '') ~ pk) if pk else '' }}"
+      acl: "{{ acl }}"
+  - id: snmp.trap_source
+    match: '^snmp-agent trap source (?P<ifn>[A-Za-z][\w-]*\d[\d/.]*)$'
+    emit:
+      - table: x_snmp
+        key: {}
+        set: {source_if: "{{ ifn | ifname }}"}
+
+derive:
+  # What the device answers on: the servers that are switched on, less what
+  # the VTY lines refuse.
+  - id: ra.protocols
+    for: x_remote
+    as: x
+    when: "x.ssh or x.telnet"
+    row: {table: remote_access, key: {}}
+    append: {protocols: "{{ 'ssh' if (x.ssh and x.inbound != 'telnet') else '' }} {{ 'telnet' if (x.telnet and x.inbound != 'ssh') else '' }}"}
+  # One list for both ways in, when the two servers name the same one (or
+  # only one server runs); else a list for each way (appendix A 3.25).
+  - id: ra.acl.join
+    for: x_remote_acl
+    as: x
+    let:
+      r: "lookup('x_remote')"
+      one: "(x.ssh and x.telnet and x.ssh == x.telnet) or (x.ssh and not x.telnet and not r.telnet) or (x.telnet and not x.ssh and not r.ssh)"
+    row: {table: remote_access, key: {}}
+    set:
+      acl: "{{ (x.ssh if x.ssh else x.telnet) if one else '' }}"
+      acl_ssh: "{{ '' if one else x.ssh }}"
+      acl_telnet: "{{ '' if one else x.telnet }}"
+
+  - id: ntp.enabled
+    for: ntp_servers
+    as: s
+    let:
+      g: "lookup('x_ntp')"
+    when: "g.enabled"
+    row: {table: ntp_servers, key: {server: "{{ s.server }}"}}
+  - id: ntp.source.each
+    for: ntp_servers
+    as: s
+    let:
+      g: "lookup('x_ntp_source')"
+    when: "g.source_if and not s.source_if"
+    row: {table: ntp_servers, key: {server: "{{ s.server }}"}}
+    set: {source_if: "{{ g.source_if }}"}
+
+  - id: syslog.source.each
+    for: syslog_servers
+    as: s
+    let:
+      g: "lookup('x_logging')"
+    when: "g.source_if or g.severity"
+    row: {table: syslog_servers, key: {server: "{{ s.server }}"}}
+    set: {source_if: "{{ g.source_if }}", severity: "{{ g.severity }}"}
+
+  # A server is proved by its key when authentication is on, the key is
+  # there and the key is trusted.
+  - id: ntp.auth.join
+    for: ntp_servers
+    as: s
+    let:
+      g: "lookup('x_ntp_auth')"
+      k: "lookup('x_ntp_key', id=s.auth_key_id)"
+      tr: "lookup('x_ntp_trust', id=s.auth_key_id)"
+    when: "s.auth_key_id | string != '' and g.enabled and k.key and tr.trusted"
+    row: {table: ntp_servers, key: {server: "{{ s.server }}"}}
+    set: {auth_key: "{{ k.key }}"}
+
+  # A user of version 3 takes the level and the views of its group.
+  - id: snmp.user.group
+    for: snmp_users
+    as: u
+    let:
+      g: "lookup('x_snmp_group', name=u.group)"
+    when: "g.level"
+    row: {table: snmp_users, key: {name: "{{ u.name }}"}}
+    set:
+      security_level: "{{ g.level }}"
+      read_view: "{{ g.read_view }}"
+      write_view: "{{ g.write_view }}"
+      notify_view: "{{ g.notify_view }}"
+      group_acl: "{{ g.acl }}"
+
+  - id: snmp.agent.used
+    for: devices
+    as: d
+    let:
+      g: "lookup('x_snmp_agent')"
+      n: "(rows('snmp_communities') | length) + (rows('snmp_hosts') | length) + (rows('snmp_users') | length)"
+    when: "g.agent and (n > 0 or d.snmp_location or d.snmp_contact)"
+    row: {table: devices, key: {}}
+  - id: snmp.version.used
+    for: devices
+    as: d
+    let:
+      g: "lookup('x_snmp_version')"
+      n: "(rows('snmp_communities') | length) + (rows('snmp_hosts') | length) + (rows('snmp_users') | length)"
+    when: "g.versions and n > 0"
+    row: {table: devices, key: {}}
+  - id: snmp.trap_source.each
+    for: snmp_hosts
+    as: h
+    let:
+      g: "lookup('x_snmp')"
+    when: "g.source_if"
+    row: {table: snmp_hosts, key: {host: "{{ h.host }}"}}
+    set: {source_if: "{{ g.source_if }}"}

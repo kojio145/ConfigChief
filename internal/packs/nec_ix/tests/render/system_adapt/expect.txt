@@ -1,0 +1,13 @@
+hostname ix-d03
+!
+logging subsystem all warn
+logging timestamp datetime
+!
+username sample-user password plain dummy-chap-secret-sample
+!
+syslog ip host 192.0.2.50
+syslog ip host 192.0.2.51
+!
+ssh-server ip enable
+terminal timeout 10
+!

@@ -1,0 +1,14 @@
+# EtherIP without a bridge group on the tunnel (made-up values; appendix A
+# 3.26): the pack tells what is missing.
+tables:
+  devices:
+    - hostname: ix-f03
+      vendor: nec_ix
+  l2_settings:
+    - {bridge_irb: true}
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.61/30}
+    - {name: Tunnel0.0, enabled: true}
+  tunnels:
+    - {if_name: Tunnel0.0, type: etherip, source: 203.0.113.61, destination: 203.0.113.65}
+findings: [G-601]

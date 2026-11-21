@@ -1,0 +1,81 @@
+#
+ version 5.1.1
+#
+ sysname sw-q07
+#
+ super password level 3 cipher $c$3$sampleSampleSampleSampleSample
+ super password level 2 simple Example-Super-2
+#
+ telnet server enable
+#
+ stp enable
+#
+ info-center timestamp log boot
+ info-center timestamp debugging date
+ info-center loghost 192.0.2.20 channel loghost facility local5
+ info-center loghost 192.0.2.21 facility local5
+#
+acl number 2000 match-order config
+ rule 0 permit source 192.0.2.0 0.0.0.127
+#
+acl number 3000 name sample-old
+ rule 0 permit ip
+#
+vlan 1
+#
+vlan 10
+#
+local-user admin
+ password cipher $c$3$dummyDummyDummyDummyDummyDummy
+ authorization-attribute level 3
+ service-type ssh telnet terminal
+#
+local-user monitor
+ password simple Example-Secret-5
+ authorization-attribute level 1
+ service-type telnet
+#
+interface Vlan-interface10
+ ip address 192.0.2.1 255.255.255.128
+ vrrp vrid 1 virtual-ip 192.0.2.126
+ vrrp vrid 1 timer advertise 5
+ vrrp vrid 1 preempt-mode timer delay 10
+ vrrp vrid 1 authentication-mode simple Example-Vrrp-5
+ vrrp vrid 2 virtual-ip 192.0.2.125
+ vrrp vrid 2 authentication-mode md5 cipher $c$3$sampleSampleSampleSample
+ ospf authentication-mode md5 1 cipher $c$3$dummyDummyDummyDummyDummy
+#
+interface Ethernet1/0/1
+ port link-mode bridge
+ port access vlan 10
+ stp edged-port enable
+ voice vlan 10 enable
+#
+interface Ethernet1/0/2
+ port link-mode bridge
+ stp edged-port disable
+#
+interface GigabitEthernet1/0/25
+ port link-mode bridge
+ port link-type trunk
+ port trunk permit vlan all
+#
+ospf 1
+ area 0.0.0.0
+  network 192.0.2.0 0.0.0.127
+#
+ snmp-agent
+ snmp-agent community read example-ro5 acl 2000
+ snmp-agent sys-info version v2c
+#
+ ntp-service unicast-server 192.0.2.10 source-interface Vlan-interface10
+#
+user-interface aux 0
+ idle-timeout 5 0
+user-interface vty 0 15
+ authentication-mode scheme
+ user privilege level 3
+ protocol inbound telnet
+ set authentication password cipher $c$3$sampleSampleSampleSampleSampleSample
+#
+return

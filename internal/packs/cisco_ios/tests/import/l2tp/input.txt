@@ -1,0 +1,88 @@
+hostname rt-c02
+!
+username admin privilege 15 secret 0 dummy-admin-secret-1
+username example-user password 0 dummy-l2tp-user-secret-1
+username sample-user password dummy-l2tp-user-secret-2
+!
+l2tp-class L2-CLASS-A
+ authentication
+ password 0 dummy-l2tpv3-secret-a
+ hostname rt-c02
+ hello 30
+ digest secret dummy-digest-secret-1 hash sha
+!
+l2tp-class L2-CLASS-H
+ hello 60
+!
+pseudowire-class PW-SAMPLE-A
+ encapsulation l2tpv3
+ protocol l2tpv3 L2-CLASS-A
+ ip local interface Loopback0
+ ip pmtu
+ ip dfbit set
+ ip tos reflect
+ sequencing both
+!
+pseudowire-class PW-SAMPLE-M
+ encapsulation l2tpv3
+ protocol none
+ ip local interface Loopback0
+!
+vpdn enable
+!
+vpdn-group LNS-SAMPLE
+ accept-dialin
+  protocol l2tp
+  virtual-template 1
+ terminate-from hostname rt-c09
+ local name rt-c02
+ l2tp tunnel password 0 dummy-l2tp-secret-c
+ session-limit 10
+!
+vpdn-group LAC-SAMPLE
+ request-dialin
+  protocol l2tp
+  domain example.com
+  domain example.net
+ initiate-to ip 198.51.100.1
+ local name rt-c02
+ no l2tp tunnel authentication
+!
+ip local pool POOL-SAMPLE 192.0.2.100 192.0.2.150
+!
+interface Loopback0
+ ip address 203.0.113.2 255.255.255.255
+!
+interface GigabitEthernet0/0
+ description sample-wan
+ ip address 203.0.113.10 255.255.255.252
+!
+interface GigabitEthernet0/1
+ description sample-l2-a
+ no ip address
+ xconnect 203.0.113.1 101 encapsulation l2tpv3 pw-class PW-SAMPLE-A
+!
+interface GigabitEthernet0/2
+ no ip address
+!
+interface GigabitEthernet0/2.10
+ description sample-l2-b
+ encapsulation dot1Q 10
+ xconnect 203.0.113.1 102 pw-class PW-SAMPLE-A
+!
+interface GigabitEthernet0/3
+ description sample-l2-c
+ no ip address
+ xconnect 203.0.113.3 201 encapsulation l2tpv3 manual pw-class PW-SAMPLE-M
+  l2tp id 111 222
+  l2tp cookie local 8 12345 67890
+  l2tp cookie remote 4 54321
+  l2tp hello L2-CLASS-H
+!
+interface Virtual-Template1
+ ip unnumbered Loopback0
+ peer default ip address pool POOL-SAMPLE
+ ppp authentication chap pap
+ ppp ipcp dns 192.0.2.53 192.0.2.54
+!
+end

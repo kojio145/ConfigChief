@@ -1,0 +1,530 @@
+# VPN instances, track entries with NQA, IPv6 routes, prefix lists, routing
+# policies, policy-based routing, BGP and OSPFv3.
+# Syntax: README, "参照した資料" (MPLS L3VPN, Track, NQA, IPv6 static routing,
+# Routing policy, Policy-based routing, BGP and OSPFv3 commands).
+rules:
+  # ---- VPN instances ----
+  # The route targets are read with the word that says which way they go;
+  # a line without the word stays unknown.
+  - id: vrf
+    match: '^ip vpn-instance (?P<name>\S+)$'
+    row: {table: vrfs, key: {name: "{{ name }}"}}
+    children:
+      - id: vrf.rd
+        match: '^route-distinguisher (?P<rd>\S+)$'
+        set: {rd: "{{ rd }}"}
+      - id: vrf.description
+        match: '^description (?P<text>.+)$'
+        set: {description: "{{ text }}"}
+      - id: vrf.rt.import
+        match: '^vpn-target (?P<list>\S+(?: \S+)*) (?P<how>import-extcommunity|both)$'
+        append: {rt_import: "{{ list }}"}
+        emit:
+          - table: x_vrf_rt
+            key: {name: "{{ name }}", list: "{{ list }}"}
+            set: {both: "{{ 'true' if how == 'both' else '' }}"}
+      - id: vrf.rt.export
+        match: '^vpn-target (?P<list>\S+(?: \S+)*) export-extcommunity$'
+        append: {rt_export: "{{ list }}"}
+
+  # ---- track entries (Track commands, NQA commands) ----
+  # An NQA operation that pings, its schedule and the track entry that
+  # watches its reaction make one row (the derive below). The names of the
+  # operation are not kept.
+  - id: nqa
+    match: '^nqa entry (?P<admin>\S+) (?P<tag>\S+)$'
+    emit:
+      - table: x_nqa
+        key: {admin: "{{ admin }}", tag: "{{ tag }}"}
+        set: {entry: "true"}
+    children:
+      - id: nqa.type
+        match: '^type icmp-echo$'
+        emit:
+          - table: x_nqa
+            key: {admin: "{{ admin }}", tag: "{{ tag }}"}
+            set: {type: icmp}
+        children:
+          - id: nqa.destination
+            match: '^destination ip (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+            emit:
+              - table: x_nqa
+                key: {admin: "{{ admin }}", tag: "{{ tag }}"}
+                set: {target: "{{ addr }}"}
+          - id: nqa.frequency
+            match: '^frequency (?P<ms>\d+)$'
+            when: "ms | int > 0 and ms | int % 1000 == 0"
+            emit:
+              - table: x_nqa
+                key: {admin: "{{ admin }}", tag: "{{ tag }}"}
+                set: {interval: "{{ ms | int // 1000 }}"}
+          - id: nqa.timeout
+            match: '^probe timeout (?P<ms>\d+)$'
+            emit:
+              - table: x_nqa
+                key: {admin: "{{ admin }}", tag: "{{ tag }}"}
+                set: {timeout: "{{ ms }}"}
+          - id: nqa.source.ip
+            match: '^source ip (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+            emit:
+              - table: x_nqa
+                key: {admin: "{{ admin }}", tag: "{{ tag }}"}
+                set: {source_ip: "{{ addr }}"}
+          - id: nqa.source.if
+            match: '^source interface (?P<ifn>[A-Za-z][A-Za-z-]*\d[\d/.:]*)$'
+            emit:
+              - table: x_nqa
+                key: {admin: "{{ admin }}", tag: "{{ tag }}"}
+                set: {source_if: "{{ ifn | ifname }}"}
+          - id: nqa.next_hop
+            match: '^next-hop ip (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+            emit:
+              - table: x_nqa
+                key: {admin: "{{ admin }}", tag: "{{ tag }}"}
+                set: {via_next_hop: "{{ addr }}"}
+          - id: nqa.vrf
+            match: '^vpn-instance (?P<vrf>\S+)$'
+            emit:
+              - table: x_nqa
+                key: {admin: "{{ admin }}", tag: "{{ tag }}"}
+                set: {vrf: "{{ vrf }}"}
+          # What the track entry watches: so many failed probes in a row.
+          - id: nqa.reaction
+            match: '^reaction (?P<item>\d+) checked-element probe-fail threshold-type consecutive (?P<n>\d+) action-type trigger-only$'
+            emit:
+              - table: x_nqa
+                key: {admin: "{{ admin }}", tag: "{{ tag }}"}
+                set: {reaction: "{{ item }}", fail_count: "{{ n }}"}
+  - id: nqa.schedule
+    match: '^nqa schedule (?P<admin>\S+) (?P<tag>\S+) start-time now lifetime forever$'
+    emit:
+      - table: x_nqa_schedule
+        key: {admin: "{{ admin }}", tag: "{{ tag }}"}
+        set: {runs: "true"}
+  - id: track.nqa
+    match: '^track (?P<id>\d+) nqa entry (?P<admin>\S+) (?P<tag>\S+) reaction (?P<item>\d+)$'
+    emit:
+      - table: x_track
+        key: {id: "{{ id }}"}
+        set: {admin: "{{ admin }}", tag: "{{ tag }}", reaction: "{{ item }}"}
+  # The physical state of an interface. "protocol ipv4|ipv6" stays unknown.
+  - id: track.interface
+    match: '^track (?P<id>\d+) interface (?P<ifn>[A-Za-z][A-Za-z-]*\d[\d/.:]*)(?: delay(?: negative (?P<neg>\d+)| positive (?P<pos>\d+))+)?$'
+    row: {table: tracks, key: {id: "{{ id }}"}}
+    set: {type: interface, target: "{{ ifn | ifname }}", down_delay: "{{ neg }}", up_delay: "{{ pos }}"}
+
+  # ---- IPv6 static routes ----
+  - id: route6.static
+    match: '^ipv6 route-static (?:vpn-instance (?P<vrf>\S+) )?(?P<dst>[0-9A-Fa-f:]+) (?P<len>\d+) (?:(?P<ifn>[A-Za-z][A-Za-z-]*\d[\d/.]*)(?: (?P<nh2>[0-9A-Fa-f:]+))?|(?P<nh>[0-9A-Fa-f:]+))(?: preference (?P<pref>\d+))?(?: description (?P<text>.+))?$'
+    when: "':' in (nh ~ nh2 ~ ifn) or ifn"
+    row:
+      table: ipv6_routes
+      key:
+        vrf: "{{ vrf }}"
+        prefix: "{{ (dst ~ '/' ~ len) | network }}"
+        next_hop: "{{ nh if nh else nh2 }}"
+        out_if: "{{ ifn | ifname }}"
+    set: {distance: "{{ pref }}", description: "{{ text }}"}
+
+  # ---- prefix lists ----
+  # A line with its index; a line without one gets the next ten.
+  - id: prefix_list
+    match: '^ip prefix-list (?P<name>\S+)(?: index (?P<seq>\d+))? (?P<action>permit|deny) (?P<ip>\d+\.\d+\.\d+\.\d+) (?P<len>\d+)(?: greater-equal (?P<ge>\d+))?(?: less-equal (?P<le>\d+))?$'
+    row: {table: prefix_lists, key: {name: "{{ name }}", seq: "{{ seq if seq else (rows('prefix_lists', name=name) | length + 1) * 10 }}"}}
+    set: {action: "{{ action }}", prefix: "{{ (ip ~ '/' ~ len) | network }}", ge: "{{ ge }}", le: "{{ le }}"}
+  - id: prefix_list6
+    match: '^ipv6 prefix-list (?P<name>\S+)(?: index (?P<seq>\d+))? (?P<action>permit|deny) (?P<ip>[0-9A-Fa-f:]+) (?P<len>\d+)(?: greater-equal (?P<ge>\d+))?(?: less-equal (?P<le>\d+))?$'
+    row: {table: ipv6_prefix_lists, key: {name: "{{ name }}", seq: "{{ seq if seq else (rows('ipv6_prefix_lists', name=name) | length + 1) * 10 }}"}}
+    set: {action: "{{ action }}", prefix: "{{ (ip ~ '/' ~ len) | network }}", ge: "{{ ge }}", le: "{{ le }}"}
+  - id: as_path
+    match: '^ip as-path (?P<name>\d+) (?P<action>permit|deny) (?P<regex>\S+)$'
+    row: {table: as_path_lists, key: {name: "{{ name }}", seq: "{{ (rows('as_path_lists', name=name) | length + 1) * 10 }}"}}
+    set: {action: "{{ action }}", regex: "{{ regex }}"}
+  # A basic community list by its number or its name; an advanced one (a
+  # regular expression) likewise.
+  - id: community_list
+    match: '^ip community-list (?:(?P<num>\d+)|basic (?P<name>\S+)) (?P<action>permit|deny) (?P<list>(?:\d+:\d+|internet|no-advertise|no-export|no-export-subconfed)(?: (?:\d+:\d+|internet|no-advertise|no-export|no-export-subconfed))*)$'
+    row: {table: community_lists, key: {name: "{{ num }}{{ name }}", seq: "{{ (rows('community_lists', name=(num ~ name)) | length + 1) * 10 }}"}}
+    set: {action: "{{ action }}", type: standard}
+    append: {communities: "{{ list }}"}
+  - id: community_list.advanced
+    match: '^ip community-list (?:(?P<num>\d+)|advanced (?P<name>\S+)) (?P<action>permit|deny) (?P<regex>\S+)$'
+    when: "':' not in regex or '[' in regex or '.' in regex or '*' in regex or '^' in regex or '_' in regex"
+    row: {table: community_lists, key: {name: "{{ num }}{{ name }}", seq: "{{ (rows('community_lists', name=(num ~ name)) | length + 1) * 10 }}"}}
+    set: {action: "{{ action }}", type: expanded, regex: "{{ regex }}"}
+
+  # ---- routing policies ----
+  # A node is a row. The clauses with no column (route-type, extcommunity,
+  # route-source, IPv6, "apply comm-list delete", "apply as-path ... replace",
+  # "apply origin egp") stay unknown.
+  - id: route_policy
+    match: '^route-policy (?P<name>\S+) (?P<action>permit|deny) node (?P<seq>\d+)$'
+    row: {table: route_policies, key: {name: "{{ name }}", seq: "{{ seq }}"}}
+    set: {action: "{{ action }}"}
+    children:
+      # The clauses of a node all have to match; the names in one cell of
+      # the dataset mean "one of them". So one clause of a kind is read, and
+      # a second one of the same kind stays unknown.
+      - id: route_policy.match.prefix
+        match: '^if-match ip address prefix-list (?P<list>\S+)$'
+        when: "not row.match_prefix_list"
+        append: {match_prefix_list: "{{ list }}"}
+      - id: route_policy.match.acl
+        match: '^if-match ip address acl (?P<acl>\S+)$'
+        when: "not row.match_acl"
+        append: {match_acl: "{{ acl }}"}
+      - id: route_policy.match.next_hop
+        match: '^if-match ip next-hop prefix-list (?P<list>\S+)$'
+        set: {match_next_hop_prefix_list: "{{ list }}"}
+      - id: route_policy.match.as_path
+        match: '^if-match as-path (?P<n>\d+)$'
+        set: {match_as_path: "{{ n }}"}
+      - id: route_policy.match.community
+        match: '^if-match community (?:name )?(?P<list>[^\s]+)(?P<whole> whole-match)?$'
+        when: "list != 'name'"
+        set: {match_community_list: "{{ list }}", match_community_exact: "{{ 'true' if whole else '' }}"}
+      - id: route_policy.match.interface
+        when: "not row.match_interface"
+        match: '^if-match interface (?P<list>[A-Za-z][A-Za-z-]*\d[\d/.:]*(?: [A-Za-z][A-Za-z-]*\d[\d/.:]*)*)$'
+        append: {match_interface: "{{ list }}"}
+      - id: route_policy.match.cost
+        match: '^if-match cost (?P<n>\d+)$'
+        set: {match_metric: "{{ n }}"}
+      - id: route_policy.match.tag
+        match: '^if-match tag (?P<n>\d+)$'
+        when: "not row.match_tag"
+        append: {match_tag: "{{ n }}"}
+      - id: route_policy.set.local_preference
+        match: '^apply local-preference (?P<n>\d+)$'
+        set: {set_local_preference: "{{ n }}"}
+      - id: route_policy.set.cost
+        match: '^apply cost (?:(?P<sign>[+-]) ?)?(?P<n>\d+)$'
+        set: {set_metric: "{{ sign }}{{ n }}"}
+      - id: route_policy.set.cost_type
+        match: '^apply cost-type (?P<t>internal|type-1|type-2)$'
+        set: {set_metric_type: "{{ t | replace('type-', '') }}"}
+      - id: route_policy.set.as_path
+        match: '^apply as-path (?P<list>\d+(?: \d+)*)$'
+        append: {set_as_path_prepend: "{{ list }}"}
+      - id: route_policy.set.community.none
+        match: '^apply community none$'
+        append: {set_community: none}
+      - id: route_policy.set.community
+        match: '^apply community (?P<list>(?:\d+:\d+|internet|no-advertise|no-export|no-export-subconfed)(?: (?:\d+:\d+|internet|no-advertise|no-export|no-export-subconfed))*)(?P<add> additive)?$'
+        append: {set_community: "{{ list }}"}
+        set: {set_community_additive: "{{ 'true' if add else '' }}"}
+      # The value that is local to the device and wins first is what the
+      # dataset calls weight.
+      - id: route_policy.set.weight
+        match: '^apply preferred-value (?P<n>\d+)$'
+        set: {set_weight: "{{ n }}"}
+      - id: route_policy.set.origin
+        match: '^apply origin (?P<o>igp|incomplete)$'
+        set: {set_origin: "{{ o }}"}
+      - id: route_policy.set.tag
+        match: '^apply tag (?P<n>\d+)$'
+        set: {set_tag: "{{ n }}"}
+      - id: route_policy.set.next_hop
+        match: '^apply ip-address next-hop (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+        append: {set_next_hop: "{{ addr }}"}
+
+  # ---- policy-based routing ----
+  # A policy for packets is a routing policy of its own kind here: its
+  # nodes go to the same table, and the interface (or the device, for its
+  # own packets) names it. "direct", "track" and the other clauses stay
+  # unknown.
+  - id: pbr
+    match: '^policy-based-route (?P<name>\S+) (?P<action>permit|deny) node (?P<seq>\d+)$'
+    row: {table: route_policies, key: {name: "{{ name }}", seq: "{{ seq }}"}}
+    set: {action: "{{ action }}"}
+    children:
+      - id: pbr.match.acl
+        match: '^if-match acl (?:name )?(?P<acl>\S+)$'
+        when: "acl != 'name' and not row.match_acl"
+        append: {match_acl: "{{ acl }}"}
+      - id: pbr.set.next_hop
+        when: "not row.set_next_hop"
+        match: '^apply next-hop (?P<list>\d+\.\d+\.\d+\.\d+(?: \d+\.\d+\.\d+\.\d+)?)$'
+        append: {set_next_hop: "{{ list }}"}
+  - id: pbr.device
+    match: '^ip local policy-based-route (?P<name>\S+)$'
+    row: {table: devices, key: {}}
+    set: {local_policy_route: "{{ name }}"}
+
+  # ---- BGP ----
+  # The public instance: its peers and the IPv4 and IPv6 unicast address
+  # families. A peer is said twice: with its AS number, and "enable" in the
+  # address family (README). Peer groups, VPN instances and the other
+  # address families stay unknown.
+  - id: bgp
+    match: '^bgp (?P<asn>\d+)$'
+    row: {table: bgp_processes, key: {vrf: ""}}
+    set: {asn: "{{ asn }}"}
+    children:
+      - id: bgp.router_id
+        match: '^router-id (?P<id>\d+\.\d+\.\d+\.\d+)$'
+        set: {router_id: "{{ id }}"}
+      - id: bgp.timer
+        match: '^timer keepalive (?P<k>\d+) hold (?P<h>\d+)$'
+        set: {keepalive: "{{ k }}", holdtime: "{{ h }}"}
+      - id: bgp.peer.as
+        match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) as-number (?P<ras>\d+)$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {remote_as: "{{ ras }}"}
+      - id: bgp.peer.description
+        match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) description (?P<text>.+)$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {description: "{{ text }}"}
+      - id: bgp.peer.source
+        match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) connect-interface (?P<ifn>[A-Za-z][A-Za-z-]*\d[\d/.:]*)$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {update_source: "{{ ifn | ifname }}"}
+      - id: bgp.peer.multihop
+        match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) ebgp-max-hop (?P<n>\d+)$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {ebgp_multihop: "{{ n }}"}
+      - id: bgp.peer.password
+        match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) password (?P<form>cipher|simple) (?P<pw>\S+)$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {password: "{{ 'cipher ' if form == 'cipher' else '' }}{{ pw }}"}
+      - id: bgp.peer.timer
+        match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) timer keepalive (?P<k>\d+) hold (?P<h>\d+)$'
+        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {keepalive: "{{ k }}", holdtime: "{{ h }}"}
+      - id: bgp.peer.ignore
+        match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) ignore$'
+        emit:
+          - table: x_bgp_ignore
+            key: {neighbor: "{{ (addr ~ '/128') | ip if ':' in addr else addr }}"}
+            set: {ignore: "true"}
+      # The same lines for a peer with an IPv6 address.
+      - id: bgp.peer6.as
+        match: '^peer (?P<addr>[0-9A-Fa-f:]+) as-number (?P<ras>\d+)$'
+        when: "':' in addr"
+        row: {table: bgp_ipv6_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {remote_as: "{{ ras }}"}
+      - id: bgp.peer6.description
+        match: '^peer (?P<addr>[0-9A-Fa-f:]+) description (?P<text>.+)$'
+        when: "':' in addr"
+        row: {table: bgp_ipv6_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {description: "{{ text }}"}
+      - id: bgp.peer6.source
+        match: '^peer (?P<addr>[0-9A-Fa-f:]+) connect-interface (?P<ifn>[A-Za-z][A-Za-z-]*\d[\d/.:]*)$'
+        when: "':' in addr"
+        row: {table: bgp_ipv6_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {update_source: "{{ ifn | ifname }}"}
+      - id: bgp.peer6.multihop
+        match: '^peer (?P<addr>[0-9A-Fa-f:]+) ebgp-max-hop (?P<n>\d+)$'
+        when: "':' in addr"
+        row: {table: bgp_ipv6_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {ebgp_multihop: "{{ n }}"}
+      - id: bgp.peer6.password
+        match: '^peer (?P<addr>[0-9A-Fa-f:]+) password (?P<form>cipher|simple) (?P<pw>\S+)$'
+        when: "':' in addr"
+        row: {table: bgp_ipv6_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+        set: {password: "{{ 'cipher ' if form == 'cipher' else '' }}{{ pw }}"}
+      - id: bgp.peer6.ignore
+        match: '^peer (?P<addr>[0-9A-Fa-f:]+) ignore$'
+        when: "':' in addr"
+        emit:
+          - table: x_bgp_ignore
+            key: {neighbor: "{{ (addr ~ '/128') | ip if ':' in addr else addr }}"}
+            set: {ignore: "true"}
+      - id: bgp.af4
+        match: '^address-family ipv4(?: unicast)?$'
+        children:
+          # The mask is a dotted mask or a length; without one the line
+          # stays unknown (the length it takes then was not looked up).
+          - id: bgp.network
+            match: '^network (?P<ip>\d+\.\d+\.\d+\.\d+) (?:(?P<mask>\d+\.\d+\.\d+\.\d+)|(?P<len>\d+))$'
+            row: {table: bgp_networks, key: {vrf: "", prefix: "{{ ((ip | with_mask(mask)) if mask else (ip ~ '/' ~ len)) | network }}"}}
+          - id: bgp.import
+            match: '^import-route (?P<src>direct|static)(?: med (?P<med>\d+)| route-policy (?P<policy>\S+))*$'
+            row: {table: bgp_redistribute, key: {vrf: "", source: "{{ 'connected' if src == 'direct' else src }}"}}
+            set: {metric: "{{ med }}", filter: "{{ policy }}"}
+          - id: bgp.import.igp
+            match: '^import-route (?P<src>ospf|rip)(?: (?P<pid>\d+))?(?: med (?P<med>\d+)| route-policy (?P<policy>\S+))*$'
+            row: {table: bgp_redistribute, key: {vrf: "", source: "{{ src }}"}}
+            set: {metric: "{{ med }}", filter: "{{ policy }}", process_id: "{{ pid if src == 'ospf' else '' }}"}
+          - id: bgp.peer.enable
+            match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) enable$'
+            emit:
+              - table: x_bgp_active
+                key: {neighbor: "{{ (addr ~ '/128') | ip if ':' in addr else addr }}"}
+                set: {active: "true"}
+          - id: bgp.peer.next_hop_self
+            match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) next-hop-local$'
+            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {next_hop_self: true}
+          - id: bgp.peer.default
+            match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) default-route-advertise$'
+            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {default_originate: true}
+          - id: bgp.peer.keep
+            match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) keep-all-routes$'
+            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {soft_reconfig_in: true}
+          - id: bgp.peer.community
+            match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) advertise-community$'
+            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {send_community: true}
+          - id: bgp.peer.prefix_list
+            match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) prefix-list (?P<list>\S+) (?P<dir>import|export)$'
+            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {"prefix_list_{{ 'in' if dir == 'import' else 'out' }}": "{{ list }}"}
+          - id: bgp.peer.policy
+            match: '^peer (?P<addr>\d+\.\d+\.\d+\.\d+) route-policy (?P<policy>\S+) (?P<dir>import|export)$'
+            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {"filter_{{ 'in' if dir == 'import' else 'out' }}": "{{ policy }}"}
+      - id: bgp.af6
+        match: '^address-family ipv6(?: unicast)?$'
+        children:
+          - id: bgp.network6
+            match: '^network (?P<ip>[0-9A-Fa-f:]+) (?P<len>\d+)$'
+            when: "':' in ip"
+            append: {ipv6_networks: "{{ (ip ~ '/' ~ len) | network }}"}
+          - id: bgp.import6
+            match: '^import-route (?P<src>direct|static|ospfv3)$'
+            append: {ipv6_redistribute: "{{ 'connected' if src == 'direct' else ('ospf' if src == 'ospfv3' else src) }}"}
+          - id: bgp.peer6.enable
+            match: '^peer (?P<addr>[0-9A-Fa-f:]+) enable$'
+            when: "':' in addr"
+            emit:
+              - table: x_bgp_active
+                key: {neighbor: "{{ (addr ~ '/128') | ip if ':' in addr else addr }}"}
+                set: {active: "true"}
+          - id: bgp.peer6.next_hop_self
+            match: '^peer (?P<addr>[0-9A-Fa-f:]+) next-hop-local$'
+            when: "':' in addr"
+            row: {table: bgp_ipv6_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {next_hop_self: true}
+          - id: bgp.peer6.keep
+            match: '^peer (?P<addr>[0-9A-Fa-f:]+) keep-all-routes$'
+            when: "':' in addr"
+            row: {table: bgp_ipv6_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {soft_reconfig_in: true}
+          - id: bgp.peer6.prefix_list
+            match: '^peer (?P<addr>[0-9A-Fa-f:]+) prefix-list (?P<list>\S+) (?P<dir>import|export)$'
+            when: "':' in addr"
+            row: {table: bgp_ipv6_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {"prefix_list_{{ 'in' if dir == 'import' else 'out' }}": "{{ list }}"}
+          - id: bgp.peer6.policy
+            match: '^peer (?P<addr>[0-9A-Fa-f:]+) route-policy (?P<policy>\S+) (?P<dir>import|export)$'
+            when: "':' in addr"
+            row: {table: bgp_ipv6_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+            set: {"filter_{{ 'in' if dir == 'import' else 'out' }}": "{{ policy }}"}
+
+  # ---- OSPFv3 ----
+  - id: ospfv3
+    match: '^ospfv3(?: (?P<pid>\d+))?$'
+    row: {table: ospfv3_processes, key: {process_id: "{{ pid if pid else '1' }}"}}
+    children:
+      - id: ospfv3.router_id
+        match: '^router-id (?P<id>\d+\.\d+\.\d+\.\d+)$'
+        set: {router_id: "{{ id }}"}
+      - id: ospfv3.import
+        match: '^import-route (?P<src>direct|static|bgp4\+|ripng)$'
+        append: {redistribute: "{{ 'connected' if src == 'direct' else ('bgp' if src == 'bgp4+' else ('rip' if src == 'ripng' else src)) }}"}
+      - id: ospfv3.silent.all
+        match: '^silent-interface all$'
+        set: {passive_default: true}
+      - id: ospfv3.silent
+        match: '^silent-interface (?P<ifn>[A-Za-z][A-Za-z-]*\d[\d/.:]*)$'
+        emit:
+          - table: x_ospfv3_passive
+            key: {process_id: "{{ pid if pid else '1' }}", if_name: "{{ ifn | ifname }}"}
+            set: {passive: "true"}
+      - id: ospfv3.area
+        match: '^area (?P<area>\d+(?:\.\d+\.\d+\.\d+)?)$'
+        children:
+          - id: ospfv3.area.stub
+            match: '^stub(?P<nosum> no-summary)?$'
+            row: {table: ospfv3_areas, key: {process_id: "{{ pid if pid else '1' }}", area: "{{ area }}"}}
+            set: {type: "{{ 'totally_stub' if nosum else 'stub' }}"}
+
+derive:
+  # "both" puts the route targets on what the instance sends as well.
+  - id: vrf.rt.both
+    for: x_vrf_rt
+    as: x
+    row: {table: vrfs, key: {name: "{{ x.name }}"}}
+    append: {rt_export: "{{ x.list if x.both else '' }}"}
+  # A track entry of an NQA operation that pings and runs for good.
+  - id: track.nqa.join
+    for: x_track
+    as: x
+    let:
+      q: "lookup('x_nqa', admin=x.admin, tag=x.tag)"
+      s: "lookup('x_nqa_schedule', admin=x.admin, tag=x.tag)"
+    when: "q.entry and q.type == 'icmp' and q.target and q.interval and q.reaction == x.reaction and s.runs"
+    row: {table: tracks, key: {id: "{{ x.id }}"}}
+    set:
+      type: icmp
+      target: "{{ q.target }}"
+      interval: "{{ q.interval }}"
+      timeout: "{{ q.timeout }}"
+      fail_count: "{{ q.fail_count }}"
+      source_ip: "{{ q.source_ip }}"
+      source_if: "{{ q.source_if }}"
+      via_next_hop: "{{ q.via_next_hop }}"
+      vrf: "{{ q.vrf }}"
+  # A peer exchanges routes when "enable" stands in its address family, and
+  # is switched off by "ignore": either way of being off is "not enabled".
+  - id: bgp.peer.state
+    for: bgp_neighbors
+    as: n
+    let:
+      a: "lookup('x_bgp_active', neighbor=n.neighbor)"
+      i: "lookup('x_bgp_ignore', neighbor=n.neighbor)"
+      on: "a.active"
+      off: "i.ignore"
+    when: "off or not on"
+    row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ n.neighbor }}"}}
+    set: {enabled: false}
+  - id: bgp.peer.state.on
+    for: bgp_neighbors
+    as: n
+    let:
+      a: "lookup('x_bgp_active', neighbor=n.neighbor)"
+      i: "lookup('x_bgp_ignore', neighbor=n.neighbor)"
+      on: "a.active"
+      off: "i.ignore"
+    when: "on and not off"
+    row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ n.neighbor }}"}}
+  - id: bgp.peer6.state
+    for: bgp_ipv6_neighbors
+    as: n
+    let:
+      a: "lookup('x_bgp_active', neighbor=n.neighbor)"
+      i: "lookup('x_bgp_ignore', neighbor=n.neighbor)"
+      on: "a.active"
+      off: "i.ignore"
+    when: "off or not on"
+    row: {table: bgp_ipv6_neighbors, key: {vrf: "", neighbor: "{{ n.neighbor }}"}}
+    set: {enabled: false}
+  - id: bgp.peer6.state.on
+    for: bgp_ipv6_neighbors
+    as: n
+    let:
+      a: "lookup('x_bgp_active', neighbor=n.neighbor)"
+      i: "lookup('x_bgp_ignore', neighbor=n.neighbor)"
+      on: "a.active"
+      off: "i.ignore"
+    when: "on and not off"
+    row: {table: bgp_ipv6_neighbors, key: {vrf: "", neighbor: "{{ n.neighbor }}"}}
+  # What an interface says about OSPFv3 joins its row.
+  - id: ospfv3.interface
+    for: ospfv3_interfaces
+    as: o
+    let:
+      x: "lookup('x_ospfv3_if', if_name=o.if_name)"
+      pv: "lookup('x_ospfv3_passive', process_id=o.process_id, if_name=o.if_name)"
+    when: "x.if_name or pv.passive"
+    row: {table: ospfv3_interfaces, key: {process_id: "{{ o.process_id }}", if_name: "{{ o.if_name }}"}}
+    set:
+      cost: "{{ x.cost }}"
+      priority: "{{ x.priority }}"
+      hello: "{{ x.hello }}"
+      dead: "{{ x.dead }}"
+      network_type: "{{ x.network_type }}"
+      passive: "{{ pv.passive }}"

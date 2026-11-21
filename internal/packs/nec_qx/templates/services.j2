@@ -1,0 +1,154 @@
+{# Syslog, SNMP and NTP (README, "コンフィグの書き出し"). The source
+   interface of syslog and of the SNMP traps is one setting of the device:
+   the rows have to agree. #}
+{% set logs = t.syslog_servers %}
+{% if logs %}
+{% for s in logs %}
+{% if s.source_if != logs[0].source_if %}
+{{ fail('ログ転送先の送信元 IF は、QX では機器に 1 つです。全部の行で同じ値にしてください') }}
+{% endif %}
+{% if s.severity != logs[0].severity %}
+{{ fail('ログ転送先の重要度は、QX では機器に 1 つです（info-center source default loghost level）。全部の行で同じ値にしてください') }}
+{% endif %}
+{% if s.facility and s.facility not in ['local0', 'local1', 'local2', 'local3', 'local4', 'local5', 'local6', 'local7'] %}
+{{ fail('ログ転送先 ' ~ s.server ~ ' のファシリティ「' ~ s.facility ~ '」は、QX では書けません（local0〜local7 です）') }}
+{% endif %}
+{% endfor %}
+{% if logs[0].source_if %}
+ info-center loghost source {{ logs[0].source_if }}
+{% endif %}
+{% for s in logs %}
+ info-center loghost {{ 'vpn-instance ' ~ s.vrf ~ ' ' if s.vrf else '' }}{{ s.server }}{{ ' facility ' ~ s.facility if s.facility else '' }}
+{% endfor %}
+{% if logs[0].severity %}
+ info-center source default loghost level {{ logs[0].severity | lex('severity') }}
+{% endif %}
+#
+{% endif %}
+{% set traps = t.snmp_hosts %}
+{% if t.snmp_communities or traps or t.snmp_users or device.snmp_location or device.snmp_contact %}
+ snmp-agent
+{% for c in t.snmp_communities %}
+{# A value with a space is what a device saved: "cipher <value>" (appendix A 3.26). #}
+ snmp-agent community {{ c.access | required('SNMP コミュニティの権限') | lex('snmp_access') }} {{ c.community }}{{ (' acl ' ~ ('' if c.acl is digits else 'name ') ~ c.acl) if c.acl else '' }}
+{% endfor %}
+{% if device.snmp_contact %}
+ snmp-agent sys-info contact {{ device.snmp_contact }}
+{% endif %}
+{% if device.snmp_location %}
+ snmp-agent sys-info location {{ device.snmp_location }}
+{% endif %}
+{% set ver = namespace(v1=false, v3=false, v2=false) %}
+{% if t.snmp_users %}
+{% set ver.v3 = true %}
+{% endif %}
+{% if t.snmp_communities %}
+{% set ver.v2 = true %}
+{% endif %}
+{% for h in traps %}
+{% if h.version != '3' %}
+{% set ver.v2 = true %}
+{% endif %}
+{% endfor %}
+{% for h in traps %}
+{% if h.source_if != traps[0].source_if %}
+{{ fail('SNMP 通知先の送信元 IF は、QX では機器に 1 つです。全部の行で同じ値にしてください') }}
+{% endif %}
+{% if h.version not in ['2c', '3'] %}
+{% set ver.v1 = true %}
+{% endif %}
+{% if h.version == '3' %}
+{% set ver.v3 = true %}
+{% elif h.security_level %}
+{{ fail('SNMP 通知先 ' ~ h.host ~ ': 「セキュリティの段」は、版 3 の行にだけ書けます') }}
+{% endif %}
+{% endfor %}
+{% if ver.v1 or ver.v2 or ver.v3 %}
+ snmp-agent sys-info version {{ 'v1 ' if ver.v1 else '' }}{{ 'v2c' if ver.v2 or ver.v1 else '' }}{{ ' ' if (ver.v2 or ver.v1) and ver.v3 else '' }}{{ 'v3' if ver.v3 else '' }}
+{% endif %}
+{# Version 3: a group once, then its users. The rows of one group agree. #}
+{% set seen = namespace(groups=[]) %}
+{% for u in t.snmp_users %}
+{% set what = 'SNMP ユーザ ' ~ u.name %}
+{% set g = u.group | required(what ~ ' のグループ') %}
+{% for o in t.snmp_users %}
+{% if o.group == u.group and (o.security_level != u.security_level or o.read_view != u.read_view or o.write_view != u.write_view or o.notify_view != u.notify_view or o.group_acl != u.group_acl) %}
+{{ fail(what ~ ': グループ ' ~ u.group ~ ' の行で、段・ビュー・グループの接続元の制限が違います（同じグループの行は同じ値にしてください）') }}
+{% endif %}
+{% endfor %}
+{% if g not in seen.groups %}
+{% set seen.groups = seen.groups + [g] %}
+{% set lvl = u.security_level | required(what ~ ' のセキュリティの段') %}
+ snmp-agent group v3 {{ g }}{{ ' authentication' if lvl == 'auth' else (' privacy' if lvl == 'priv' else '') }}{{ ' read-view ' ~ u.read_view if u.read_view else '' }}{{ ' write-view ' ~ u.write_view if u.write_view else '' }}{{ ' notify-view ' ~ u.notify_view if u.notify_view else '' }}{{ (' acl ' ~ ('' if u.group_acl is digits else 'name ') ~ u.group_acl) if u.group_acl else '' }}
+{% endif %}
+{% endfor %}
+{% for u in t.snmp_users %}
+{% set what = 'SNMP ユーザ ' ~ u.name %}
+{% set tail = namespace(v='') %}
+{% if u.auth %}
+{% set ak = u.auth_key | required(what ~ ' の認証のパスワード') %}
+{% set saved = ak is startingwith('cipher ') %}
+{% set tail.v = (' cipher' if saved else ' simple') ~ ' authentication-mode ' ~ u.auth ~ ' ' ~ (ak | replace('cipher ', '') if saved else ak) %}
+{% if u.priv %}
+{% set pk = u.priv_key | required(what ~ ' の暗号化のパスワード') %}
+{% if (pk is startingwith('cipher ')) != saved %}
+{{ fail(what ~ ': 認証と暗号化のパスワードは、両方とも平文か、両方とも機器が保存した形（cipher）にしてください') }}
+{% endif %}
+{% set tail.v = tail.v ~ ' privacy-mode ' ~ (u.priv | lex('snmp_priv')) ~ ' ' ~ (pk | replace('cipher ', '') if saved else pk) %}
+{% endif %}
+{% elif u.priv or u.auth_key or u.priv_key %}
+{{ fail(what ~ ': 暗号化の方式・パスワードは、認証の方式があるときだけ書けます') }}
+{% endif %}
+ snmp-agent usm-user v3 {{ u.name }} {{ u.group }}{{ tail.v }}{{ (' acl ' ~ ('' if u.acl is digits else 'name ') ~ u.acl) if u.acl else '' }}
+{% endfor %}
+{% for h in traps %}
+{% if h.version == '3' %}
+ snmp-agent target-host trap address udp-domain {{ h.host }} params securityname {{ h.community | required('SNMP 通知先のユーザ名') }} v3{{ ' authentication' if h.security_level == 'auth' else (' privacy' if h.security_level == 'priv' else '') }}
+{% else %}
+ snmp-agent target-host trap address udp-domain {{ h.host }} params securityname {{ h.community | required('SNMP 通知先のコミュニティ') }}{{ ' ' ~ (h.version | lex('snmp_version')) if h.version else '' }}
+{% endif %}
+{% endfor %}
+{% if traps and traps[0].source_if %}
+ snmp-agent trap source {{ traps[0].source_if }}
+{% endif %}
+#
+{% endif %}
+{% set ntps = t.ntp_servers %}
+{% if ntps %}
+{% set one = namespace(source=true) %}
+{% for n in ntps %}
+{% if n.source_if != ntps[0].source_if %}
+{% set one.source = false %}
+{% endif %}
+{% endfor %}
+ ntp-service enable
+{# Keys: each number once. A value with a space is what a device saved. #}
+{% set keys = namespace(ids=[], vals={}) %}
+{% for n in ntps %}
+{% if n.auth_key_id != '' %}
+{% set k = n.auth_key | required('NTP サーバ ' ~ n.server ~ ' の認証の鍵') %}
+{% for o in ntps %}
+{% if o.auth_key_id == n.auth_key_id and o.auth_key != n.auth_key %}
+{{ fail('NTP サーバ ' ~ n.server ~ ': 鍵番号 ' ~ n.auth_key_id ~ ' の鍵が、行によって違います（同じ番号の行は同じ鍵にしてください）') }}
+{% endif %}
+{% endfor %}
+{% if n.auth_key_id not in keys.ids %}
+{% if not keys.ids %}
+ ntp-service authentication enable
+{% endif %}
+{% set keys.ids = keys.ids + [n.auth_key_id] %}
+ ntp-service authentication-keyid {{ n.auth_key_id }} authentication-mode md5 {{ k if k is startingwith('cipher ') else 'simple ' ~ k }}
+ ntp-service reliable authentication-keyid {{ n.auth_key_id }}
+{% endif %}
+{% elif n.auth_key %}
+{{ fail('NTP サーバ ' ~ n.server ~ ': 認証の鍵がありますが、鍵番号がありません') }}
+{% endif %}
+{% endfor %}
+{% if one.source and ntps[0].source_if %}
+ ntp-service source {{ ntps[0].source_if }}
+{% endif %}
+{% for n in ntps %}
+ ntp-service unicast-server {{ n.server }}{{ ' vpn-instance ' ~ n.vrf if n.vrf else '' }}{{ ' priority' if n.prefer == true else '' }}{{ ' source ' ~ n.source_if if n.source_if and not one.source else '' }}{{ ' authentication-keyid ' ~ n.auth_key_id if n.auth_key_id != '' else '' }}
+{% endfor %}
+#
+{% endif %}

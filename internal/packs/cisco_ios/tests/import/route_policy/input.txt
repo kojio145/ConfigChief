@@ -1,0 +1,125 @@
+hostname rt-r01
+!
+vrf definition VRF-SAMPLE-R
+ rd 64496:10
+ route-target export 64496:10
+ route-target import 64496:10
+ route-target import 64496:20
+ address-family ipv4
+  route-target both 64496:30
+ exit-address-family
+!
+interface GigabitEthernet0/0
+ description to rt-r02
+ ip address 203.0.113.1 255.255.255.252
+!
+interface GigabitEthernet0/1
+ description lan sample
+ ip address 198.51.100.1 255.255.255.0
+ ip policy route-map RM-SAMPLE-PBR
+!
+interface GigabitEthernet0/2
+ vrf forwarding VRF-SAMPLE-R
+ ip address 192.0.2.129 255.255.255.128
+!
+interface Loopback0
+ ip address 192.0.2.1 255.255.255.255
+!
+router ospf 1
+ router-id 192.0.2.1
+ redistribute static metric 20 metric-type 1 tag 100 route-map RM-SAMPLE-STATIC subnets
+ redistribute bgp 64496 route-map RM-SAMPLE-B2O subnets
+ network 198.51.100.0 0.0.0.255 area 0
+!
+router ospf 20 vrf VRF-SAMPLE-R
+ network 192.0.2.128 0.0.0.127 area 0
+!
+router bgp 64496
+ bgp router-id 192.0.2.1
+ neighbor 203.0.113.2 remote-as 64497
+ neighbor 203.0.113.2 send-community
+ neighbor 203.0.113.2 route-map RM-SAMPLE-IN in
+ neighbor 203.0.113.2 route-map RM-SAMPLE-OUT out
+ neighbor 192.0.2.2 remote-as 64496
+ neighbor 192.0.2.2 update-source Loopback0
+ neighbor 192.0.2.2 send-community both
+ network 198.51.100.0 mask 255.255.255.0
+ network 192.0.2.0
+ redistribute ospf 1 metric 50 route-map RM-SAMPLE-O2B
+ address-family ipv4 vrf VRF-SAMPLE-R
+  redistribute ospf 20
+ exit-address-family
+!
+ip local policy route-map RM-SAMPLE-LOCAL
+ip route 192.0.2.64 255.255.255.192 198.51.100.254 tag 100
+ip route 192.0.2.32 255.255.255.224 Null0 250 name sample-hold permanent
+ip route 0.0.0.0 0.0.0.0 203.0.113.2 name sample-default tag 200
+!
+ip as-path access-list 10 permit ^64497_
+ip as-path access-list 10 deny .*
+ip as-path access-list 20 permit ^$
+!
+ip community-list 1 permit 64497:100
+ip community-list 5 permit 64497:300
+ip community-list 5 deny 64497:400
+ip community-list standard CL-SAMPLE-PAIR permit 64497:200 no-export
+ip community-list expanded CL-SAMPLE-RE permit 64497:[0-9]+_
+ip community-list 150 deny _64511:.*
+!
+ip access-list extended ACL-SAMPLE-PBR
+ permit ip 198.51.100.0 0.0.0.127 any
+ip access-list standard ACL-SAMPLE-STD
+ permit 192.0.2.64 0.0.0.63
+!
+ip prefix-list PL-SAMPLE-IN seq 5 permit 0.0.0.0/0 le 24
+ip prefix-list PL-SAMPLE-OUT seq 5 permit 198.51.100.0/24
+ip prefix-list PL-SAMPLE-ALT seq 5 permit 192.0.2.0/24 ge 25
+!
+route-map RM-SAMPLE-IN permit 10
+ match as-path 10
+ match community 1
+ set local-preference 200
+ set weight 100
+route-map RM-SAMPLE-IN permit 20
+ match ip address prefix-list PL-SAMPLE-IN PL-SAMPLE-ALT
+ match community CL-SAMPLE-PAIR exact
+ set community 64496:50 no-export additive
+route-map RM-SAMPLE-IN permit 30
+ match community 5
+ continue 40
+route-map RM-SAMPLE-IN deny 40
+ match community CL-SAMPLE-RE
+route-map RM-SAMPLE-OUT permit 10
+ match ip address prefix-list PL-SAMPLE-OUT
+ set metric 50
+ set as-path prepend 64496 64496
+ set origin igp
+ set ip next-hop self
+route-map RM-SAMPLE-OUT permit 20
+ set community none
+ set metric +10
+route-map RM-SAMPLE-STATIC permit 10
+ match tag 100 200
+ match interface GigabitEthernet0/1 Null0
+ set metric-type type-1
+ set tag 300
+route-map RM-SAMPLE-STATIC deny 20
+ match ip address ACL-SAMPLE-STD
+route-map RM-SAMPLE-B2O permit 10
+ match metric 50
+ set metric-type type-2
+route-map RM-SAMPLE-O2B permit 10
+ set metric-type internal
+ set ip next-hop 203.0.113.9 203.0.113.10
+route-map RM-SAMPLE-PBR permit 10
+ match ip address ACL-SAMPLE-PBR
+ set ip next-hop 203.0.113.2
+ set ip default next-hop 198.51.100.254
+route-map RM-SAMPLE-PBR permit 20
+ set interface Null0
+ set default interface GigabitEthernet0/0
+route-map RM-SAMPLE-LOCAL permit 10
+ match ip address ACL-SAMPLE-PBR
+ set ip next-hop 203.0.113.2
+!
+end

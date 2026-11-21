@@ -1,0 +1,37 @@
+version 15.9
+hostname rt-v03
+!
+vlan 10
+ name sample-office
+!
+vlan 30
+ name sample-transit
+!
+vlan 40
+ name sample-camera
+!
+vlan 50
+!
+interface FastEthernet0
+ switchport access vlan 10
+!
+interface FastEthernet1
+ switchport access vlan 10
+!
+interface FastEthernet2
+ description to sw-b01
+ switchport trunk allowed vlan 10,30,40
+ switchport mode trunk
+!
+interface FastEthernet3
+ description to sw-b02
+ switchport trunk allowed vlan 30,40,50
+ switchport mode trunk
+!
+interface GigabitEthernet8
+ ip address 203.0.113.6 255.255.255.252
+!
+interface Vlan10
+ ip address 192.0.2.1 255.255.255.128
+!
+end

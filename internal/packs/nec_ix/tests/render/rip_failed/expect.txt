@@ -1,0 +1,11 @@
+hostname ix-r03
+!
+router bgp 64496
+  router-id 203.0.113.1
+!
+ip router rip
+!
+interface GigaEthernet0.0
+  ip address 192.0.2.1/30
+  ipv6 enable
+  ip rip enable

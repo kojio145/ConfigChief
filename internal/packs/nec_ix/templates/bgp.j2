@@ -1,26 +1,64 @@
 {# BGP. Syntax: cmdref 4.7. What belongs to the session stands under "router
    bgp"; what belongs to the routes under "address-family ipv4 unicast". The
-   AS numbers are 1 to 65535 on this device. BGP inside a VRF is not written
-   (the "vrf <name>" block is not read either). #}
-{% for b in t.bgp_processes %}
-{% if b.vrf %}
-{{ fail('BGP（VRF ' ~ b.vrf ~ '）は、このパックでは書けません（VRF の中の BGP の書き方を確かめていません。追加コンフィグに書いてください）') }}
-{% else %}
-{% if b.asn > 65535 %}
-{{ fail('BGP の AS 番号 ' ~ b.asn ~ ' は書けません（NEC IX の AS 番号は 1〜65535 です）') }}
+   AS numbers are 1 to 65535 on this device. The BGP of a VRF stands in a
+   "vrf <name>" block under the same "router bgp" (CRM 10-66, the layout of
+   FD 2.17.7): the device has one BGP process, so every row of the BGP table
+   carries the same AS number, and the row without a VRF has to be there. #}
+{% set procs = t.bgp_processes %}
+{% set g = namespace(have=false, asn='') %}
+{% for b in procs %}
+{% if not b.vrf %}
+{% set g.have = true %}
+{% set g.asn = b.asn %}
 {% endif %}
-router bgp {{ b.asn }}
+{% endfor %}
+{% if procs and not g.have %}
+{{ fail('BGP の表に、VRF が空の行（AS 番号）が要ります（NEC IX は、VRF の BGP も 1 つの router bgp の下に書きます）') }}
+{% endif %}
+{% if g.have %}
+{% if g.asn > 65535 %}
+{{ fail('BGP の AS 番号 ' ~ g.asn ~ ' は書けません（NEC IX の AS 番号は 1〜65535 です）') }}
+{% endif %}
+router bgp {{ g.asn }}
+{% for b in procs %}
+{% set pad = '  ' if not b.vrf else '    ' %}
+{% set in_vrf = '（VRF ' ~ b.vrf ~ '）' if b.vrf else '' %}
+{% if not b.vrf %}
 {% if b.router_id %}
   router-id {{ b.router_id }}
 {% endif %}
+{% if b.keepalive != '' or b.holdtime != '' %}
+  timers {{ b.keepalive | required('BGP の Keepalive（Hold と組で書きます）') }} {{ b.holdtime | required('BGP の Hold（Keepalive と組で書きます）') }}
+{% endif %}
+{% if b.default_local_preference != '' %}
+  default-local-preference {{ b.default_local_preference }}
+{% endif %}
+{% else %}
+{% if b.keepalive != '' or b.holdtime != '' or b.default_local_preference != '' %}
+{{ fail('BGP' ~ in_vrf ~ ' の Keepalive・Hold・ローカルプリファレンスの既定値は、VRF が空の行にだけ書けます（NEC IX では、機器の BGP 全体の設定です）') }}
+{% endif %}
+{% if b.asn != g.asn %}
+{{ fail('BGP' ~ in_vrf ~ ' の AS 番号が、VRF が空の行と違います（NEC IX の BGP は機器に 1 つです。同じ番号にしてください）') }}
+{% endif %}
+{% if b.router_id %}
+{{ fail('BGP' ~ in_vrf ~ ' のルータ ID は書けません（NEC IX は、VRF ごとのルータ ID を設定できません。セルを空にしてください）') }}
+{% endif %}
+  vrf {{ b.vrf }}
+{% endif %}
 {% for n in t.bgp_neighbors %}
-{% if not n.vrf %}
-{% set nb = '  neighbor ' ~ n.neighbor %}
-{% set what = 'BGP ネイバー ' ~ n.neighbor %}
+{% if n.vrf == b.vrf %}
+{% set nb = pad ~ 'neighbor ' ~ n.neighbor %}
+{% set what = 'BGP ネイバー ' ~ n.neighbor ~ in_vrf %}
 {% if n.remote_as > 65535 %}
 {{ fail(what ~ ' の相手 AS 番号 ' ~ n.remote_as ~ ' は書けません（NEC IX の AS 番号は 1〜65535 です）') }}
 {% endif %}
 {{ nb }} remote-as {{ n.remote_as }}
+{% if n.as_path_filter_in or n.as_path_filter_out %}
+{{ fail(what ~ ' の「受信の AS パスのリスト」「送信の AS パスのリスト」は書けません（NEC IX に、AS パスで経路を見分ける設定はありません。プレフィックスリストかコミュニティで絞る形に書き直して、この列を空にしてください）') }}
+{% endif %}
+{% if n.acl_in or n.acl_out %}
+{{ fail(what ~ ' の「受信フィルタ（ACL）」「送信フィルタ（ACL）」は書けません（NEC IX は、プレフィックスリストで絞ります。同じ宛先を通すプレフィックスリストを作り、「受信フィルタ」「送信フィルタ」に書いてください）') }}
+{% endif %}
 {% if n.update_source %}
 {{ nb }} update-source {{ n.update_source }}
 {% endif %}
@@ -39,35 +77,60 @@ router bgp {{ b.asn }}
 {% if n.enabled == false %}
 {{ nb }} shutdown
 {% endif %}
+{% if n.advertisement_interval != '' %}
+{{ nb }} advertisement-interval {{ n.advertisement_interval }}
+{% endif %}
+{% if n.route_reflector_client == true %}
+{{ nb }} route-reflector-client
+{% endif %}
 {% endif %}
 {% endfor %}
 {# The block is written only when it holds a line. #}
 {% set af = namespace(open=false) %}
 {% for w in t.bgp_networks %}
-{% if not w.vrf %}
+{% if w.vrf == b.vrf %}
 {% if not af.open %}
-  address-family ipv4 unicast
+{{ pad }}address-family ipv4 unicast
 {% set af.open = true %}
 {% endif %}
-    network {{ w.prefix }}
+{{ pad }}  network {{ w.prefix }}
 {% endif %}
 {% endfor %}
-{% for r in t.bgp_redistribute %}
-{% if not r.vrf %}
+{% for a in t.bgp_aggregates %}
+{% if a.vrf == b.vrf %}
 {% if not af.open %}
-  address-family ipv4 unicast
+{{ pad }}address-family ipv4 unicast
 {% set af.open = true %}
 {% endif %}
-    redistribute {{ r.source }}{{ ' metric ' ~ r.metric if r.metric != '' else '' }}{{ ' route-map ' ~ r.filter if r.filter else '' }}
+{{ pad }}  aggregate-address {{ a.prefix }}{{ ' as-set' if a.as_set == true else '' }}{{ ' summary-only' if a.summary_only == true else '' }}
+{% endif %}
+{% endfor %}
+{% if b.distance_ebgp != '' or b.distance_ibgp != '' %}
+{% if not af.open %}
+{{ pad }}address-family ipv4 unicast
+{% set af.open = true %}
+{% endif %}
+{{ pad }}  distance{{ ' ebgp ' ~ b.distance_ebgp if b.distance_ebgp != '' else '' }}{{ ' ibgp ' ~ b.distance_ibgp if b.distance_ibgp != '' else '' }}
+{% endif %}
+{% for r in t.bgp_redistribute %}
+{% if r.vrf == b.vrf %}
+{% if not af.open %}
+{{ pad }}address-family ipv4 unicast
+{% set af.open = true %}
+{% endif %}
+{% if r.process_id != '' and r.source != 'ospf' %}
+{{ fail('BGP 再配布 ' ~ r.source ~ in_vrf ~ ': 「OSPF のプロセス番号」は、再配布の元が ospf の行にだけ書けます') }}
+{% endif %}
+{{ pad }}  redistribute {{ r.source }}{{ ' ' ~ r.process_id if r.process_id != '' else '' }}{{ ' metric ' ~ r.metric if r.metric != '' else '' }}{{ ' route-map ' ~ r.filter if r.filter else '' }}
 {% endif %}
 {% endfor %}
 {% for n in t.bgp_neighbors %}
-{% if not n.vrf and (n.prefix_list_in or n.prefix_list_out or n.filter_in or n.filter_out or n.next_hop_self == true or n.default_originate == true) %}
+{% if n.vrf == b.vrf and (n.prefix_list_in or n.prefix_list_out or n.filter_in or n.filter_out or n.next_hop_self == true or n.default_originate == true) %}
 {% if not af.open %}
-  address-family ipv4 unicast
+{{ pad }}address-family ipv4 unicast
 {% set af.open = true %}
 {% endif %}
-{% set nb = '    neighbor ' ~ n.neighbor %}
+{% set nb = pad ~ '  neighbor ' ~ n.neighbor %}
 {% if n.prefix_list_in %}
 {{ nb }} distribute-list {{ n.prefix_list_in }} in
 {% endif %}
@@ -88,29 +151,51 @@ router bgp {{ b.asn }}
 {% endif %}
 {% endif %}
 {% endfor %}
+{% endfor %}
 !
 {% endif %}
-{% endfor %}
-{# A row of a VRF, or a row without the row of the process, is written
-   nowhere. #}
-{% set global = namespace(v=false) %}
-{% for b in t.bgp_processes %}
-{% if not b.vrf %}
-{% set global.v = true %}
+{# A row that belongs to no process is written nowhere. #}
+{% for n in t.bgp_neighbors %}
+{% set known = namespace(v=false) %}
+{% for b in procs %}
+{% if b.vrf == n.vrf %}
+{% set known.v = true %}
 {% endif %}
 {% endfor %}
-{% for n in t.bgp_neighbors %}
-{% if n.vrf or not global.v %}
-{{ fail('BGP ネイバー ' ~ n.neighbor ~ (' （VRF ' ~ n.vrf ~ '）は、このパックでは書けません（VRF の中の BGP）' if n.vrf else ' は、BGP の表に VRF が空の行（AS 番号）が要ります')) }}
+{% if not known.v %}
+{{ fail('BGP ネイバー ' ~ n.neighbor ~ ' の VRF「' ~ n.vrf ~ '」の行が、BGP の表にありません（AS 番号が要ります）') }}
 {% endif %}
 {% endfor %}
 {% for w in t.bgp_networks %}
-{% if w.vrf or not global.v %}
-{{ fail('BGP 広告経路 ' ~ w.prefix ~ (' （VRF ' ~ w.vrf ~ '）は、このパックでは書けません（VRF の中の BGP）' if w.vrf else ' は、BGP の表に VRF が空の行（AS 番号）が要ります')) }}
+{% set known = namespace(v=false) %}
+{% for b in procs %}
+{% if b.vrf == w.vrf %}
+{% set known.v = true %}
+{% endif %}
+{% endfor %}
+{% if not known.v %}
+{{ fail('BGP 広告経路 ' ~ w.prefix ~ ' の VRF「' ~ w.vrf ~ '」の行が、BGP の表にありません（AS 番号が要ります）') }}
 {% endif %}
 {% endfor %}
 {% for r in t.bgp_redistribute %}
-{% if r.vrf or not global.v %}
-{{ fail('BGP 再配布 ' ~ r.source ~ (' （VRF ' ~ r.vrf ~ '）は、このパックでは書けません（VRF の中の BGP）' if r.vrf else ' は、BGP の表に VRF が空の行（AS 番号）が要ります')) }}
+{% set known = namespace(v=false) %}
+{% for b in procs %}
+{% if b.vrf == r.vrf %}
+{% set known.v = true %}
+{% endif %}
+{% endfor %}
+{% if not known.v %}
+{{ fail('BGP 再配布 ' ~ r.source ~ ' の VRF「' ~ r.vrf ~ '」の行が、BGP の表にありません（AS 番号が要ります）') }}
+{% endif %}
+{% endfor %}
+{% for a in t.bgp_aggregates %}
+{% set known = namespace(v=false) %}
+{% for b in procs %}
+{% if b.vrf == a.vrf %}
+{% set known.v = true %}
+{% endif %}
+{% endfor %}
+{% if not known.v %}
+{{ fail('BGP 集約経路 ' ~ a.prefix ~ ' の VRF「' ~ a.vrf ~ '」の行が、BGP の表にありません（AS 番号が要ります）') }}
 {% endif %}
 {% endfor %}

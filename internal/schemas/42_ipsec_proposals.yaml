@@ -1,0 +1,16 @@
+table: ipsec_proposals
+title: {ja: IPsec 追加の提案, en: IPsec more proposals}
+since: M7
+key: [device, tunnel, phase, seq]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: tunnel, title: {ja: IPsec の名前, en: Tunnel}, type: ref, ref: ipsec_tunnels.name, required: true}
+  - {name: phase, title: {ja: 段, en: Phase}, type: enum, values: [ike, ipsec], required: true, note: {ja: "ike = IKE の提案の候補、ipsec = IPsec（ESP・AH）の提案の候補", en: "ike = a candidate for the proposal of IKE, ipsec = one for the proposal of IPsec (ESP, AH)"}}
+  - {name: seq, title: {ja: 順番, en: Sequence}, type: int, required: true, order_only: true, note: {ja: "IPsec の行に書いた提案の次に、小さい順に出す候補。番号は順番を決めるだけ（取り込みは 20・30… と振る）", en: "Offered after the proposal of the IPsec row, the smallest first. The number only orders the rows (the import counts 20, 30 and so on)"}}
+  - {name: encryption, title: {ja: 暗号, en: Encryption}, type: enum, values: [des, 3des, aes128, aes192, aes256, aes128gcm, aes256gcm, "null"]}
+  - {name: hash, title: {ja: ハッシュ, en: Hash}, type: enum, values: [md5, sha1, sha256, sha384, sha512]}
+  - {name: dh, title: {ja: DH グループ, en: DH group}, type: enum, values: [dh1, dh2, dh5, dh14, dh15, dh16, dh19, dh20, dh21, dh24], note: {ja: "段が ike のとき", en: "Where the phase is ike"}}
+  - {name: prf, title: {ja: PRF, en: PRF}, type: enum, values: [md5, sha1, sha256, sha384, sha512], note: {ja: "段が ike で、IKE の版 2 のとき", en: "Where the phase is ike, with IKE version 2"}}
+  - {name: ah_hash, title: {ja: AH ハッシュ, en: AH hash}, type: enum, values: [md5, sha1, sha256, sha384, sha512], note: {ja: "段が ipsec のとき", en: "Where the phase is ipsec"}}
+  - {name: lifetime, title: {ja: 有効時間（秒）, en: Lifetime (s)}, type: int}
+  - {name: lifetime_kb, title: {ja: 有効量（キロバイト）, en: Lifetime (KB)}, type: int, note: {ja: "段が ipsec のとき", en: "Where the phase is ipsec"}}

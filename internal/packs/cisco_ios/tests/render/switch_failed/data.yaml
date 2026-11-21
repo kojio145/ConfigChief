@@ -1,0 +1,16 @@
+# What the pack refuses to write about VLANs and bridging (made-up values).
+tables:
+  devices:
+    - hostname: rt-s03
+      vendor: cisco_ios
+  vlans:
+    - {vlan_id: 10, name: sample office}                    # two words
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, encap_native: true}   # no VLAN to be native of
+    - {name: GigabitEthernet0/1, enabled: true, vlan_id: 20}   # the interface of a VLAN has the name of the VLAN
+    - {name: GigabitEthernet0/2, enabled: true, bridge_group: 300}   # 1 to 255
+    - {name: Vlan30, enabled: true, vlan_id: 31}            # the name and the number differ
+    - {name: BVI2, enabled: true, bridge_group: 3}          # the number of the BVI is the group
+  switchports:
+    - {if_name: GigabitEthernet0/1, mode: trunk, allowed_vlans: [all, 10]}   # "all" stands alone
+findings: [G-601]

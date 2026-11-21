@@ -1,0 +1,408 @@
+{# IPv6, what stands outside the interfaces (appendix A 3.23): static routes,
+   access lists, prefix lists, OSPFv3, the prefixes of router advertisements
+   and the DHCPv6 profiles. Syntax: CRM chapters 9, 10, 23 and 24 (README).
+   The device forwards IPv6 wherever an interface has it switched on: the
+   switch of the whole device is read and writes no line. #}
+{% if device.ipv6_routing == false %}
+{{ fail('「IPv6 の転送」を無効にする書き方は NEC IX にありません（IPv6 を使う IF があれば転送します。セルを空にしてください）') }}
+{% endif %}
+{% for v in t.ipv6_interfaces %}
+{% set n = namespace(seen=false) %}
+{% for i in t.interfaces %}
+{% if i.name == v.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('IPv6 インタフェースの IF ' ~ v.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{% for p in t.ipv6_ra_prefixes %}
+{% set n = namespace(seen=false) %}
+{% for i in t.interfaces %}
+{% if i.name == p.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('RA のプレフィックス ' ~ p.prefix ~ ' の IF ' ~ p.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{# Static routes: a next hop or an interface. A link-local next hop names
+   its interface behind "%". A route has no name on this device. #}
+{% for r in t.ipv6_routes %}
+{% set what = 'IPv6 の経路 ' ~ r.prefix %}
+{% if r.vrf %}
+{{ fail(what ~ ': VRF の中の IPv6 の経路の書き方を確かめていません（NEC IX）') }}
+{% endif %}
+{% set dst = 'default' if r.prefix == '::/0' else r.prefix %}
+{% if r.next_hop and r.out_if %}
+{% if not (r.next_hop is startingwith('fe80:')) %}
+{{ fail(what ~ ': ネクストホップと出力 IF の両方は書けません（NEC IX ではどちらか片方です。両方を書けるのは、ネクストホップがリンクローカル fe80::… のときだけです）') }}
+{% endif %}
+{% if r.gateway_from %}
+{{ fail(what ~ ': 「ネクストホップの決め方」は、出力 IF だけを書いた経路に書きます') }}
+{% endif %}
+ipv6 route {{ dst }} {{ r.next_hop }}%{{ r.out_if }}{{ ' distance ' ~ r.distance if r.distance != '' else '' }}
+{% elif r.next_hop %}
+{% if r.next_hop is startingwith('fe80:') %}
+{{ fail(what ~ ': リンクローカルのネクストホップ ' ~ r.next_hop ~ ' には、出力 IF が要ります') }}
+{% endif %}
+{% if r.gateway_from %}
+{{ fail(what ~ ': 「ネクストホップの決め方」は、出力 IF だけを書いた経路に書きます') }}
+{% endif %}
+ipv6 route {{ dst }} {{ r.next_hop }}{{ ' distance ' ~ r.distance if r.distance != '' else '' }}
+{% elif r.out_if %}
+ipv6 route {{ dst }} {{ r.out_if }}{{ ' ' ~ r.gateway_from if r.gateway_from else '' }}{{ ' distance ' ~ r.distance if r.distance != '' else '' }}
+{% else %}
+{{ fail(what ~ ' に、ネクストホップも出力 IF もありません') }}
+{% endif %}
+{% endfor %}
+{% if t.ipv6_routes %}
+!
+{% endif %}
+{# Access lists: every entry is one line with "src" and "dest", and the
+   entries count in the order they are written (the numbers are not written:
+   they have to be 10, 20, 30 ...). No remark and no "log". #}
+{% set cur = namespace(name='', i=0) %}
+{% for x in t.ipv6_acl_entries %}
+{% if x.acl != cur.name %}
+{% set cur.name = x.acl %}
+{% set cur.i = 0 %}
+{% if x.acl | length > 15 %}
+{{ fail('IPv6 フィルタ ' ~ x.acl ~ ' の名前が 15 字を超えています（NEC IX のリストの名前は 15 字までです）') }}
+{% endif %}
+{% if x.acl in ['cache', 'dynamic', 'disregard-case'] %}
+{{ fail('IPv6 フィルタの名前「' ~ x.acl ~ '」は、NEC IX ではコマンドの語なので使えません') }}
+{% endif %}
+{% endif %}
+{% set cur.i = cur.i + 1 %}
+{% set what = 'IPv6 フィルタ ' ~ x.acl ~ ' の ' ~ x.seq ~ ' 番' %}
+{% if x.seq != cur.i * 10 %}
+{{ fail(what ~ ': 順番が 10 刻みではありません（NEC IX では番号を書かず、上から順に書きます。順番を 10、20、30… に振り直してください。評価の順は変わりません）') }}
+{% endif %}
+{% if x.action == 'remark' %}
+{{ fail(what ~ ': 注記（remark）の行は書けません（NEC IX のリストに注記の行はありません。行を消してください）') }}
+{% else %}
+{% set proto = x.protocol | required(what ~ 'のプロトコル') %}
+{% if not (proto in ['ip', 'tcp', 'udp', 'icmp'] or proto is digits) %}
+{{ fail(what ~ 'のプロトコル「' ~ proto ~ '」は書けません（ip tcp udp icmp か番号で書きます。esp は 50、ah は 51）') }}
+{% endif %}
+{% set ad = namespace(s='', d='') %}
+{% for side in ['s', 'd'] %}
+{% set v = x.src if side == 's' else x.dst %}
+{% set w = '' %}
+{% if v == 'any' or (v is cidr and ':' in v) %}
+{% set w = v %}
+{% elif v and (v ~ '/128') is cidr %}
+{% set w = v ~ '/128' %}
+{% elif v %}
+{{ fail(what ~ 'のアドレス「' ~ v ~ '」は書けません（any、2001:db8::1、2001:db8:1::/64 の形で書きます）') }}
+{% endif %}
+{% if side == 's' %}
+{% set ad.s = w %}
+{% else %}
+{% set ad.d = w %}
+{% endif %}
+{% endfor %}
+{% set pt = namespace(s='', d='') %}
+{% if proto in ['tcp', 'udp'] %}
+{% for side in ['s', 'd'] %}
+{% set p = x.src_port if side == 's' else x.dst_port %}
+{% set w = '' %}
+{% if p %}
+{% set op = 'eq' %}
+{% if '-' in p %}
+{% set op = 'range' %}
+{% elif '>' in p %}
+{% set op = 'gt' %}
+{% elif '<' in p %}
+{% set op = 'lt' %}
+{% elif '!' in p %}
+{% set op = 'neq' %}
+{% endif %}
+{% set nums = p | replace('>', '') | replace('<', '') | replace('!', '') | split('-') %}
+{% for one in nums %}
+{% if not (one is digits) %}
+{{ fail(what ~ 'のポート「' ~ p ~ '」は書けません（80、1000-2000、>1023、<1024、!80 の形で、番号で書きます）') }}
+{% endif %}
+{% endfor %}
+{% set w = (' sport ' if side == 's' else ' dport ') ~ op ~ ' ' ~ (nums | join(' ')) %}
+{% endif %}
+{% if side == 's' %}
+{% set pt.s = w %}
+{% else %}
+{% set pt.d = w %}
+{% endif %}
+{% endfor %}
+{% elif x.src_port or x.dst_port %}
+{{ fail(what ~ ': ポートは、プロトコルが tcp か udp の行にだけ書けます') }}
+{% endif %}
+{% set head = namespace(v='') %}
+{% if x.icmp_type %}
+{% if proto != 'icmp' %}
+{{ fail(what ~ ': 「ICMPv6 の種類」は、プロトコルが icmp の行にだけ書けます') }}
+{% endif %}
+{% set head.v = (' type ' ~ x.icmp_type ~ (' code ' ~ x.icmp_code if x.icmp_code != '' else '')) if x.icmp_type is digits else (' ' ~ (x.icmp_type | lex('icmp6_type'))) %}
+{% endif %}
+{% set tcpf = namespace(n=0) %}
+{% for f in x.flags %}
+{% if f in ['established', 'ack', 'fin', 'psh', 'rst', 'syn', 'urg'] %}
+{% if proto != 'tcp' %}
+{{ fail(what ~ 'の ' ~ f ~ ' は、プロトコルが tcp の行にだけ書けます') }}
+{% endif %}
+{% set tcpf.n = tcpf.n + 1 %}
+{% set head.v = ' ' ~ f %}
+{% elif f in ['log', 'log_input'] %}
+{{ fail(what ~ 'の付加条件 ' ~ f ~ ' は書けません（NEC IX のリストの行に log はありません。消してください。捨てた記録は機器が自分で残します）') }}
+{% endif %}
+{% endfor %}
+{% if tcpf.n > 1 %}
+{{ fail(what ~ ': TCP のフラグ（established ack fin psh rst syn urg）は、NEC IX では 1 行に 1 つだけ書けます（行を分けてください）') }}
+{% endif %}
+ipv6 access-list {{ x.acl }} {{ x.action }} {{ proto }}{{ head.v }} src {{ ad.s | required(what ~ 'の送信元') }}{{ pt.s }} dest {{ ad.d | required(what ~ 'の宛先') }}{{ pt.d }}{{ ' dscp ' ~ x.dscp if x.dscp != '' else '' }}{{ ' fragments' if 'fragments' in x.flags else '' }}
+{% endif %}
+{% endfor %}
+{% for p in t.ipv6_prefix_lists %}
+{% if p.name != p.name | lower %}
+{{ fail('IPv6 プレフィックスリスト ' ~ p.name ~ ': NEC IX は名前を小文字で保存します。小文字で書いてください') }}
+{% endif %}
+{% if p.prefix == '::/0' and p.le == 128 and p.ge == '' %}
+ipv6 prefix-list {{ p.name }} {{ p.seq }} {{ p.action }} any
+{% else %}
+ipv6 prefix-list {{ p.name }} {{ p.seq }} {{ p.action }} {{ p.prefix }}{{ ' min ' ~ p.ge if p.ge != '' else '' }}{{ ' max ' ~ p.le if p.le != '' else '' }}
+{% endif %}
+{% endfor %}
+{% if t.ipv6_acl_entries or t.ipv6_prefix_lists %}
+!
+{% endif %}
+{# OSPFv3: an interface is put into an area by its name. #}
+{% for p in t.ospfv3_processes %}
+{% set what = 'OSPFv3 ' ~ p.process_id %}
+ipv6 router ospf {{ p.process_id }}
+{% if p.router_id %}
+  router-id {{ p.router_id }}
+{% endif %}
+{% for o in t.ospfv3_interfaces %}
+{% if o.process_id == p.process_id %}
+{% if o.auth_hash or o.auth_spi != '' or o.auth_key %}
+{{ fail(o.if_name ~ ' の OSPFv3 の認証は書けません（NEC IX の OSPFv3 に認証はありません。認証の列を空にしてください）') }}
+{% endif %}
+  network {{ o.if_name }} area {{ o.area | required(o.if_name ~ ' の OSPFv3 のエリア') }}
+{% endif %}
+{% endfor %}
+{% for a in t.ospfv3_areas %}
+{% if a.process_id == p.process_id %}
+{% if a.auth_hash or a.auth_spi != '' or a.auth_key %}
+{{ fail(what ~ ' のエリア ' ~ a.area ~ ' の認証は書けません（NEC IX の OSPFv3 に認証はありません。認証の列を空にしてください）') }}
+{% endif %}
+{% if a.type in ['stub', 'totally_stub'] %}
+  area {{ a.area }} stub{{ ' no-summary' if a.type == 'totally_stub' else '' }}
+{% elif a.type in ['nssa', 'totally_nssa'] %}
+{{ fail(what ~ ' のエリア ' ~ a.area ~ ' の種類 ' ~ a.type ~ ' は書けません（NEC IX の OSPFv3 に NSSA はありません）') }}
+{% endif %}
+{% if a.default_cost != '' %}
+  area {{ a.area }} default-cost {{ a.default_cost }}
+{% endif %}
+{% for g in a.ranges %}
+  area {{ a.area }} range {{ g }} advertise
+{% endfor %}
+{% for g in a.ranges_hidden %}
+  area {{ a.area }} range {{ g }} not-advertise
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% if p.passive_default == true %}
+{{ fail(what ~ ' の「既定を受動にする」は書けません（NEC IX にありません。受動にするインタフェースの行で「受動」を有効にしてください）') }}
+{% endif %}
+{% for o in t.ospfv3_interfaces %}
+{% if o.process_id == p.process_id and o.passive == true %}
+  passive-interface {{ o.if_name }}
+{% endif %}
+{% endfor %}
+{% if p.default_originate == 'when_present' %}
+  originate-default{{ ' metric ' ~ p.default_metric if p.default_metric != '' else '' }}
+{% elif p.default_originate == 'always' %}
+{{ fail(what ~ ' の「デフォルト経路の広告」の always は書けません（NEC IX の OSPFv3 の originate-default に always がありません。when_present に直してください）') }}
+{% elif p.default_metric != '' %}
+{{ fail(what ~ ' の広告のメトリックは、デフォルト経路の広告が when_present のときだけ書けます') }}
+{% endif %}
+{% for s in p.redistribute %}
+{# What the kind is redistributed with: the row of the options. #}
+{% set opt = namespace(v='') %}
+{% for o in t.ospfv3_redistribute %}
+{% if o.process_id == p.process_id and o.source == s %}
+{% set opt.v = (' metric ' ~ o.metric if o.metric != '' else '') ~ (' metric-type ' ~ o.metric_type if o.metric_type else '') ~ (' tag ' ~ o.tag if o.tag != '' else '') ~ (' route-map ' ~ o.filter if o.filter else '') %}
+{% endif %}
+{% endfor %}
+  redistribute {{ s }}{{ opt.v }}
+{% endfor %}
+{% for o in t.ospfv3_redistribute %}
+{% if o.process_id == p.process_id and o.source not in p.redistribute %}
+{{ fail(what ~ ' の再配布の指定（' ~ o.source ~ '）は、OSPFv3 の表の「再配布する経路」に ' ~ o.source ~ ' があるときだけ書けます') }}
+{% endif %}
+{% endfor %}
+!
+{% endfor %}
+{% for o in t.ospfv3_interfaces %}
+{% set n = namespace(proc=false, ifc=false) %}
+{% for p in t.ospfv3_processes %}
+{% if p.process_id == o.process_id %}
+{% set n.proc = true %}
+{% endif %}
+{% endfor %}
+{% for i in t.interfaces %}
+{% if i.name == o.if_name %}
+{% set n.ifc = true %}
+{% endif %}
+{% endfor %}
+{% if not n.proc %}
+{{ fail('OSPFv3 インタフェース ' ~ o.if_name ~ ' のプロセス ' ~ o.process_id ~ ' の行が、OSPFv3 の表にありません') }}
+{% endif %}
+{% if not n.ifc %}
+{{ fail('OSPFv3 インタフェースの IF ' ~ o.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{% for a in t.ospfv3_areas %}
+{% set n = namespace(seen=false) %}
+{% for p in t.ospfv3_processes %}
+{% if p.process_id == a.process_id %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('OSPFv3 エリア ' ~ a.area ~ ' のプロセス ' ~ a.process_id ~ ' の行が、OSPFv3 の表にありません') }}
+{% endif %}
+{% endfor %}
+{# BGP for IPv6: the device has the IPv4 address family only. #}
+{% for n in t.bgp_ipv6_neighbors %}
+{{ fail('BGP IPv6 ネイバー ' ~ n.neighbor ~ ' は NEC IX では書けません（BGP のアドレスファミリは IPv4 だけです。IPv6 の経路は、スタティックか OSPFv3 で運ぶ設計に直してください）') }}
+{% endfor %}
+{% for b in t.bgp_processes %}
+{% if b.ipv6_networks or b.ipv6_redistribute %}
+{{ fail('BGP の「IPv6 の広告経路」「IPv6 の再配布」は NEC IX では書けません（BGP のアドレスファミリは IPv4 だけです）') }}
+{% endif %}
+{% endfor %}
+{# The prefixes of router advertisements: named ra1, ra2, ... by the pack. #}
+{% for p in t.ipv6_ra_prefixes %}
+ipv6 prefix ra{{ loop.index }} {{ p.prefix }} {{ p.valid_lifetime | required('RA のプレフィックス ' ~ p.prefix ~ ' の有効時間') }} {{ p.preferred_lifetime | required('RA のプレフィックス ' ~ p.prefix ~ ' の推奨時間') }}{{ ' on-link' if p.on_link == true else '' }}{{ ' autonomous' if p.autonomous == true else '' }}
+{% endfor %}
+{% if t.ipv6_ra_prefixes %}
+!
+{% endif %}
+{# DHCPv6: a profile for each interface that asks (the client) or hands
+   out (the server). #}
+{% set dh = namespace(server=false) %}
+{% for v in t.ipv6_interfaces %}
+{% if v.dhcp_server %}
+{% set dh.server = true %}
+{% endif %}
+{% endfor %}
+{% if dh.server %}
+ipv6 dhcp enable
+!
+{% endif %}
+{% for v in t.ipv6_interfaces %}
+{% if v.pd_request or v.dhcp_request or v.dhcp_info_only == true %}
+{% set what = v.if_name ~ ' の IPv6' %}
+{% if v.pd_request and v.pd_request != v.pd_request | lower %}
+{{ fail(what ~ ': NEC IX は DHCPv6 のプロファイルの名前を小文字で保存します。「プレフィックスをもらう（DHCPv6-PD）」の名前 ' ~ v.pd_request ~ ' を小文字で書いてください（「もらったプレフィックスから付ける」の側も同じ名前に）') }}
+{% endif %}
+{% if v.pd_request and v.dhcp_info_only == true %}
+{{ fail(what ~ ': 「プレフィックスをもらう（DHCPv6-PD）」と「DHCPv6 で情報だけもらう」は、同じ IF に書けません') }}
+{% endif %}
+{% if v.dhcp_info_only == true and not v.dhcp_request %}
+{{ fail(what ~ ': 「DHCPv6 で情報だけもらう」には、「DHCPv6 でもらう情報」（dns など）が要ります') }}
+{% endif %}
+ipv6 dhcp client-profile {{ v.pd_request if v.pd_request else 'dhcpv6-' ~ loop.index }}
+{% if v.dhcp_info_only == true %}
+  information-request
+{% endif %}
+{% for o in v.dhcp_request %}
+  option-request {{ o | lex('dhcp6_option') }}
+{% endfor %}
+{% if v.pd_request %}
+{% for w in t.ipv6_interfaces %}
+{% if w.pd_from == v.pd_request %}
+  ia-pd subscriber {{ w.if_name }}{{ ' ' ~ w.pd_suffix if w.pd_suffix else '' }}{{ ' eui-64' if w.pd_eui64 == true else '' }}
+{% endif %}
+{% endfor %}
+{# A part of the received prefix a DHCPv6 server of this device delegates
+   on: the pool has the name of that server. #}
+{% for w in t.ipv6_interfaces %}
+{% if w.dhcp_pd_from == v.pd_request and w.dhcp_server and w.dhcp_pd_pool and w.dhcp_pd_length %}
+{% set nla = w.dhcp_pd_length - (w.dhcp_pd_pool | prefixlen | int) %}
+{% if nla >= 0 and nla <= 32 %}
+  ia-pd redistribute pool {{ w.dhcp_server }} {{ w.dhcp_pd_pool | ip }}/{{ w.dhcp_pd_length }}{{ ' nla-length ' ~ nla if nla > 0 else '' }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if v.rapid_commit == true %}
+  rapid-commit
+{% endif %}
+!
+{% endif %}
+{% endfor %}
+{% for v in t.ipv6_interfaces %}
+{% if v.dhcp_server %}
+{% if v.dhcp_server != v.dhcp_server | lower %}
+{{ fail(v.if_name ~ ' の IPv6: NEC IX は DHCPv6 のプロファイルの名前を小文字で保存します。「DHCPv6 サーバ（名前）」' ~ v.dhcp_server ~ ' を小文字で書いてください') }}
+{% endif %}
+{% for w in t.ipv6_interfaces %}
+{% if w.dhcp_server == v.dhcp_server and w.if_name < v.if_name %}
+{{ fail(v.if_name ~ ' の IPv6: DHCPv6 サーバの名前 ' ~ v.dhcp_server ~ ' は ' ~ w.if_name ~ ' でも使っています（NEC IX では、同じプロファイルを 2 つの IF に付けられません。IF ごとに名前を変えてください）') }}
+{% endif %}
+{% endfor %}
+{% set what = v.if_name ~ ' の DHCPv6 サーバ' %}
+{% if v.dhcp_address_prefix %}
+{{ fail(what ~ ': 「端末へ配るアドレスのプレフィックス」は NEC IX では書けません（NEC IX の DHCPv6 サーバは、プレフィックスと DNS・NTP だけを配ります。端末のアドレスは RA で配る形にして、セルを空にしてください）') }}
+{% endif %}
+{% set pd = namespace(nla=-1) %}
+{% if v.dhcp_pd_pool or v.dhcp_pd_length or v.dhcp_pd_from %}
+{% if not v.dhcp_pd_pool or not v.dhcp_pd_length %}
+{{ fail(what ~ ': 「下流へ配るプレフィックスの元」と「下流へ配る長さ」は、組で書きます') }}
+{% else %}
+{% set pd.nla = v.dhcp_pd_length - (v.dhcp_pd_pool | prefixlen | int) %}
+{% if pd.nla < 0 %}
+{{ fail(what ~ ': 「下流へ配る長さ」' ~ v.dhcp_pd_length ~ ' が、「下流へ配るプレフィックスの元」' ~ v.dhcp_pd_pool ~ ' の長さより短くなっています') }}
+{% elif pd.nla > 32 %}
+{{ fail(what ~ ': NEC IX は、配る長さと元の長さの差を 32 ビットまでしか書けません（「下流へ配るプレフィックスの元」' ~ v.dhcp_pd_pool ~ '、「下流へ配る長さ」' ~ v.dhcp_pd_length ~ '。元を細かくするか、配る長さを短くしてください）') }}
+{% endif %}
+{% endif %}
+{% endif %}
+{% if v.dhcp_pd_from %}
+{% set src = namespace(seen=false) %}
+{% for w in t.ipv6_interfaces %}
+{% if w.pd_request == v.dhcp_pd_from %}
+{% set src.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not src.seen %}
+{{ fail(what ~ ': 「上流からもらったプレフィックスから配る」の名前 ' ~ v.dhcp_pd_from ~ ' が、どの IF の「プレフィックスをもらう（DHCPv6-PD）」にもありません') }}
+{% endif %}
+{% if v.dhcp_pd_valid or v.dhcp_pd_valid == 0 or v.dhcp_pd_preferred or v.dhcp_pd_preferred == 0 %}
+{{ fail(what ~ ': 上流からもらったプレフィックスを配り直す行には、有効時間・推奨時間を書けません（上流の値が使われます。セルを空にしてください）') }}
+{% endif %}
+{% endif %}
+ipv6 dhcp server-profile {{ v.dhcp_server }}
+{% for a in v.dhcp_dns %}
+  dns-server {{ a }}
+{% endfor %}
+{% for a in v.dhcp_ntp %}
+  ntp-server {{ a }}
+{% endfor %}
+{% if v.dhcp_pd_from %}
+  ia-pd redistribute-prefix pool {{ v.dhcp_server }}
+{% elif pd.nla >= 0 and pd.nla <= 32 %}
+{% if (v.dhcp_pd_valid or v.dhcp_pd_valid == 0) and (v.dhcp_pd_preferred or v.dhcp_pd_preferred == 0) %}
+  ia-pd prefix {{ v.dhcp_pd_pool | ip }}/{{ v.dhcp_pd_length }} nla-length {{ pd.nla }} life-time {{ 'infinity' if v.dhcp_pd_valid == 'infinite' else v.dhcp_pd_valid }} {{ 'infinity' if v.dhcp_pd_preferred == 'infinite' else v.dhcp_pd_preferred }}
+{% elif v.dhcp_pd_valid or v.dhcp_pd_valid == 0 or v.dhcp_pd_preferred or v.dhcp_pd_preferred == 0 %}
+{{ fail(what ~ ': 「配るプレフィックスの有効時間」と「推奨時間」は、組で書きます') }}
+{% else %}
+  ia-pd prefix {{ v.dhcp_pd_pool | ip }}/{{ v.dhcp_pd_length }} nla-length {{ pd.nla }}
+{% endif %}
+{% endif %}
+!
+{% endif %}
+{% endfor %}

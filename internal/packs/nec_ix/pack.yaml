@@ -44,7 +44,7 @@ interfaces:
     - {name: GigaEthernet, short: [], kind: physical}
     - {name: Loopback, short: [], kind: loopback}
     - {name: Tunnel, short: [], kind: tunnel}
-    - {name: BVI, short: [], kind: other}
+    - {name: BVI, short: [], kind: bvi}
     - {name: "Null", short: [], kind: other}
     - {name: USB-Serial, short: [], kind: other}
   # "GigaEthernet0.0" is the base interface of the port; ".1" and up are

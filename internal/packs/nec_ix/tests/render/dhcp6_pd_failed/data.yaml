@@ -1,0 +1,21 @@
+# What this vendor cannot write of a DHCPv6 server (made-up values):
+# addresses for the hosts; a delegated length more than 32 bits longer than
+# the pool; a name of a received prefix no interface asks for; lifetimes on
+# a prefix that is delegated on.
+tables:
+  devices:
+    - hostname: ix-w03
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true}
+    - {name: GigaEthernet1.0, enabled: true}
+    - {name: GigaEthernet2.0, enabled: true}
+    - {name: GigaEthernet2.1, enabled: true, encap_vlan: 10}
+    - {name: GigaEthernet2.2, enabled: true, encap_vlan: 20}
+  ipv6_interfaces:
+    - {if_name: GigaEthernet0.0, enabled: true, pd_request: pd-sample}
+    - {if_name: GigaEthernet1.0, enabled: true, dhcp_server: lan1, dhcp_address_prefix: ["2001:db8:0:10::/64"]}
+    - {if_name: GigaEthernet2.0, enabled: true, dhcp_server: lan2, dhcp_pd_pool: "2001:db8::/32", dhcp_pd_length: 96}
+    - {if_name: GigaEthernet2.1, enabled: true, dhcp_server: lan3, dhcp_pd_from: pd-other, dhcp_pd_pool: "::/56", dhcp_pd_length: 60}
+    - {if_name: GigaEthernet2.2, enabled: true, dhcp_server: lan4, dhcp_pd_from: pd-sample, dhcp_pd_pool: "::/56", dhcp_pd_length: 60, dhcp_pd_valid: 1200, dhcp_pd_preferred: 600}
+findings: [G-601, G-601, G-601, G-601]

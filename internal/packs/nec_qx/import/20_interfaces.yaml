@@ -1,0 +1,438 @@
+# Interfaces, and the settings written under an interface.
+# Syntax: README, "参照した資料" (Ethernet interface, VLAN, Ethernet link
+# aggregation, spanning tree, IP addressing, ACL, DHCP, VRRP and OSPF commands).
+rules:
+  - id: if
+    match: '^interface (?P<name>[A-Za-z][A-Za-z-]*\d[\d/.:]*)$'
+    row: {table: interfaces, key: {name: "{{ name | ifname }}"}}
+    children:
+      - id: if.description
+        match: '^description (?P<text>.+)$'
+        set: {description: "{{ text }}"}
+      - id: if.shutdown
+        match: '^shutdown$'
+        set: {enabled: false}
+
+      # ---- the VPN instance of the interface (MPLS L3VPN commands) ----
+      - id: if.vrf
+        match: '^ip binding vpn-instance (?P<vrf>\S+)$'
+        set: {vrf: "{{ vrf }}"}
+
+      # ---- IPv6 (IPv6 basics commands) ----
+      # A global address is "<address>/<length>" or "<address> <length>".
+      - id: if.ipv6
+        match: '^ipv6 address (?P<ip>[0-9A-Fa-f:]+)(?:/| )(?P<len>\d+)$'
+        append: {ipv6: "{{ ip }}/{{ len }}"}
+      - id: if.ipv6.eui64
+        match: '^ipv6 address (?P<ip>[0-9A-Fa-f:]+)(?:/| )(?P<len>\d+) eui-64$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        append: {eui64: "{{ (ip ~ '/' ~ len) | network }}"}
+      - id: if.ipv6.anycast
+        match: '^ipv6 address (?P<ip>[0-9A-Fa-f:]+)(?:/| )(?P<len>\d+) anycast$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        append: {anycast: "{{ ip }}/{{ len }}"}
+      - id: if.ipv6.link_local
+        match: '^ipv6 address (?P<ip>[0-9A-Fa-f:]+) link-local$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {link_local: "{{ ip }}"}
+      # "auto link-local" makes the link-local address only: IPv6 runs on
+      # the interface without a global address.
+      - id: if.ipv6.enable
+        match: '^ipv6 address auto link-local$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {enabled: true}
+      - id: if.ipv6.auto
+        match: '^ipv6 address auto$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {autoconfig: true}
+      - id: if.ipv6.mtu
+        match: '^ipv6 mtu (?P<n>\d+)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {mtu: "{{ n }}"}
+      # Router advertisements: the device sends none until "undo ipv6 nd ra
+      # halt" is written.
+      - id: if.ipv6.ra
+        match: '^(?P<no>undo )?ipv6 nd ra halt$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra: "{{ 'send' if no else 'off' }}"}
+      - id: if.ipv6.ra.interval
+        match: '^ipv6 nd ra interval (?P<max>\d+) (?P<min>\d+)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_interval: "{{ max }}", ra_interval_min: "{{ min }}"}
+      - id: if.ipv6.ra.lifetime
+        match: '^ipv6 nd ra router-lifetime (?P<n>\d+)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_lifetime: "{{ n }}"}
+      - id: if.ipv6.ra.managed
+        match: '^ipv6 nd autoconfig managed-address-flag$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_managed: true}
+      - id: if.ipv6.ra.other
+        match: '^ipv6 nd autoconfig other-flag$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_other: true}
+      # A prefix of the advertisements, with both lifetimes and what the
+      # hosts may do with it.
+      - id: if.ipv6.ra.prefix
+        match: '^ipv6 nd ra prefix (?P<ip>[0-9A-Fa-f:]+)(?:/| )(?P<len>\d+) (?P<valid>\d+) (?P<pref>\d+)(?:(?P<noauto> no-autoconfig)|(?P<offlink> off-link))*$'
+        row: {table: ipv6_ra_prefixes, key: {if_name: "{{ parent.name | ifname }}", prefix: "{{ (ip ~ '/' ~ len) | network }}"}}
+        set: {valid_lifetime: "{{ valid }}", preferred_lifetime: "{{ pref }}", on_link: "{{ 'false' if offlink else 'true' }}", autonomous: "{{ 'false' if noauto else 'true' }}"}
+      # An IPv6 list as a packet filter (the first of each direction).
+      - id: if.acl.ipv6
+        match: '^packet-filter ipv6 (?:name )?(?P<acl>\S+) (?P<dir>inbound|outbound)$'
+        when: "acl != 'name'"
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {"acl_{{ 'in' if dir == 'inbound' else 'out' }}": "{{ acl }}"}
+      # OSPFv3 on the interface: the process and the area are said here.
+      - id: if.ospfv3
+        match: '^ospfv3 (?P<pid>\d+) area (?P<area>\d+(?:\.\d+\.\d+\.\d+)?)$'
+        row: {table: ospfv3_interfaces, key: {process_id: "{{ pid }}", if_name: "{{ parent.name | ifname }}"}}
+        set: {area: "{{ area }}"}
+      - id: if.ospfv3.cost
+        match: '^ospfv3 cost (?P<n>\d+)$'
+        emit:
+          - table: x_ospfv3_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {cost: "{{ n }}"}
+      - id: if.ospfv3.priority
+        match: '^ospfv3 dr-priority (?P<n>\d+)$'
+        emit:
+          - table: x_ospfv3_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {priority: "{{ n }}"}
+      - id: if.ospfv3.timer
+        match: '^ospfv3 timer (?P<what>hello|dead) (?P<n>\d+)$'
+        emit:
+          - table: x_ospfv3_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {"{{ what }}": "{{ n }}"}
+      - id: if.ospfv3.network
+        match: '^ospfv3 network-type (?P<type>broadcast|nbma|p2mp|p2p)$'
+        emit:
+          - table: x_ospfv3_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {network_type: "{{ type | unlex('ospf_network') }}"}
+
+      # ---- QoS on the port (QoS policy commands, rate limit commands) ----
+      - id: if.qos
+        match: '^qos apply policy (?P<policy>\S+) (?P<dir>inbound|outbound)$'
+        row: {table: qos_bindings, key: {if_name: "{{ parent.name | ifname }}", direction: "{{ 'input' if dir == 'inbound' else 'output' }}"}}
+        set: {policy: "{{ policy }}"}
+      # The rate of everything the port sends, in kbps on the device and in
+      # bps in the dataset. The limit for what comes in has no column.
+      - id: if.qos.lr
+        match: '^qos lr outbound cir (?P<kbps>\d+)$'
+        row: {table: qos_bindings, key: {if_name: "{{ parent.name | ifname }}", direction: output}}
+        set: {shape_bps: "{{ kbps | int * 1000 }}"}
+
+      # ---- policy-based routing ----
+      - id: if.pbr
+        match: '^ip policy-based-route (?P<name>\S+)$'
+        set: {policy_route: "{{ name }}"}
+
+      # ---- addresses (IP addressing commands) ----
+      # The mask is a dotted mask or a length.
+      - id: if.ipv4
+        match: '^ip address (?P<ip>\d+\.\d+\.\d+\.\d+) (?:(?P<mask>\d+\.\d+\.\d+\.\d+)|(?P<len>\d+))$'
+        set: {ipv4: "{{ (ip | with_mask(mask)) if mask else (ip ~ '/' ~ len) }}"}
+      - id: if.ipv4.sub
+        match: '^ip address (?P<ip>\d+\.\d+\.\d+\.\d+) (?:(?P<mask>\d+\.\d+\.\d+\.\d+)|(?P<len>\d+)) sub$'
+        append: {ipv4_secondary: "{{ (ip | with_mask(mask)) if mask else (ip ~ '/' ~ len) }}"}
+      - id: if.ipv4.dhcp
+        match: '^ip address dhcp-alloc$'
+        set: {ipv4: dhcp}
+
+      # ---- the port itself (Ethernet interface commands) ----
+      # 40000 is not among the speeds of the dataset and stays unknown.
+      - id: if.speed
+        match: '^speed (?P<v>10|100|1000|10000|auto)$'
+        set: {speed: "{{ v }}"}
+      - id: if.duplex
+        match: '^duplex (?P<v>auto|full|half)$'
+        set: {duplex: "{{ v }}"}
+
+      # ---- the port as a switch port (VLAN commands) ----
+      # "bridge" says that the port is a layer-2 port: its row is opened, and
+      # the mode comes from "port link-type" or the default of the device.
+      - id: if.sw.bridge
+        match: '^port link-mode bridge$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+      - id: if.sw.route
+        match: '^port link-mode route$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {mode: routed}
+      - id: if.sw.type
+        match: '^port link-type (?P<mode>access|trunk|hybrid)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {mode: "{{ mode }}"}
+      - id: if.sw.access
+        match: '^port access vlan (?P<vlan>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {access_vlan: "{{ vlan }}"}
+      - id: if.sw.pvid
+        match: '^port trunk pvid vlan (?P<vlan>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {native_vlan: "{{ vlan }}"}
+      # "2 4 50 to 100" becomes 2,4,50-100. Several lines add up.
+      - id: if.sw.permit
+        match: '^port trunk permit vlan (?P<list>all|\d+(?: to \d+)?(?: \d+(?: to \d+)?)*)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        append: {allowed_vlans: "{{ list | replace(' to ', '-') }}"}
+      # A hybrid port: the VLANs it carries with a tag and without, and the
+      # VLAN of untagged frames that come in. Like a trunk, it carries VLAN 1
+      # (without a tag) until "undo port hybrid vlan 1" takes it out.
+      - id: if.sw.hybrid
+        match: '^port hybrid vlan (?P<list>\d+(?: to \d+)?(?: \d+(?: to \d+)?)*) (?P<how>tagged|untagged)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        append: {"hybrid_{{ how }}": "{{ list | replace(' to ', '-') }}"}
+      - id: if.sw.hybrid.pvid
+        match: '^port hybrid pvid vlan (?P<vlan>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {native_vlan: "{{ vlan }}"}
+      - id: if.sw.hybrid.no1
+        match: '^undo port hybrid vlan 1$'
+        emit:
+          - table: x_hybrid_no1
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {out: "true"}
+      # The voice VLAN of the port ("voice vlan" in the generation before
+      # Version 7).
+      - id: if.sw.voice
+        match: '^voice[- ]vlan (?P<vlan>\d+) enable$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {voice_vlan: "{{ vlan }}"}
+      # A trunk carries VLAN 1 until this line takes it out (the derives of
+      # import/70_switch.yaml).
+      - id: if.sw.permit.no1
+        match: '^undo port trunk permit vlan 1$'
+        emit:
+          - table: x_trunk_no1
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {out: "true"}
+
+      # ---- spanning tree on the port (Spanning tree commands) ----
+      # "stp edged-port enable" is the form of the generation before Version 7.
+      - id: if.sw.edge
+        match: '^stp edged-port(?: enable)?$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {stp_edge: "on"}
+      # The same generation: "disable" says what the port does anyway.
+      - id: if.sw.edge.disable
+        match: '^stp edged-port disable$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+      - id: if.sw.stp
+        match: '^(?P<no>undo )?stp enable$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {stp_enabled: "{{ 'false' if no else 'true' }}"}
+      - id: if.sw.guard
+        match: '^stp (?P<what>root|loop)-protection$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {stp_guard: "{{ what }}"}
+      # For the one tree of the device (and the common tree of MSTP). The
+      # forms for an instance or a VLAN stay unknown.
+      - id: if.sw.cost
+        match: '^stp cost (?P<n>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {stp_cost: "{{ n }}"}
+      - id: if.sw.port_priority
+        match: '^stp port priority (?P<n>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {stp_port_priority: "{{ n }}"}
+      - id: if.sw.bpdu
+        match: '^stp port bpdu-protection (?P<how>enable|disable)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {stp_bpdu_guard: "{{ 'true' if how == 'enable' else 'false' }}"}
+
+      # ---- storm suppression (Ethernet interface commands) ----
+      # A share of the bandwidth in whole per cent, or a rate: packets a
+      # second ("500pps") or kbps ("64kbps").
+      - id: if.sw.storm
+        match: '^(?P<what>broadcast|multicast|unicast)-suppression (?:(?P<unit>pps|kbps) )?(?P<ratio>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {"storm_{{ what }}": "{{ ratio }}{{ unit }}"}
+
+      # ---- loop detection, DHCP snooping, port security ----
+      - id: if.sw.loop
+        match: '^loopback-detection enable vlan (?P<list>all|\d+(?: to \d+)?(?: \d+(?: to \d+)?)*)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        append: {loop_detect_vlans: "{{ list | replace(' to ', '-') }}"}
+      - id: if.sw.loop.action
+        match: '^loopback-detection action (?P<how>block|no-learning|shutdown)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {loop_detect_action: "{{ how | replace('-', '_') }}"}
+      - id: if.sw.snooping
+        match: '^dhcp snooping trust$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {dhcp_snooping_trust: true}
+      # Port security in the mode that learns the addresses of the port: what
+      # it learns is kept as secure addresses ("sticky MAC addresses" in the
+      # manual). The other modes (802.1X, MAC authentication) stay unknown.
+      - id: if.sw.psec
+        match: '^port-security port-mode autolearn$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {port_security: true, port_security_sticky: true}
+      - id: if.sw.psec.max
+        match: '^port-security max-mac-count (?P<n>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {port_security_max: "{{ n }}"}
+      # "disableport-temporarily" has no word in the dataset.
+      - id: if.sw.psec.intrusion
+        match: '^port-security intrusion-mode (?P<how>blockmac|disableport)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {port_security_violation: "{{ 'protect' if how == 'blockmac' else 'shutdown' }}"}
+
+      # ---- link aggregation (Ethernet link aggregation commands) ----
+      # The member names its group; static or LACP is said on the aggregate
+      # interface (the derive of import/70_switch.yaml). "force" is a word of
+      # the moment the port joins and is not kept.
+      - id: if.lag
+        match: '^port link-aggregation group (?P<n>\d+)(?: force)?$'
+        row: {table: lags, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {group: "{{ n }}"}
+      - id: if.lag.lacp_short
+        match: '^lacp period short$'
+        emit:
+          - table: x_lacp
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {short: "true"}
+      # The port as a source or as the destination of a mirroring group
+      # (the forms of the interface view).
+      - id: if.mirror.source
+        match: '^mirroring-group (?P<n>\d+) mirroring-port (?P<dir>both|inbound|outbound)$'
+        emit:
+          - table: x_mirror
+            key: {session: "{{ n }}", if_name: "{{ parent.name | ifname }}"}
+            set: {dir: "{{ dir }}"}
+      - id: if.mirror.monitor
+        match: '^mirroring-group (?P<n>\d+) monitor-port$'
+        emit:
+          - table: x_mirror
+            key: {session: "{{ n }}", if_name: "{{ parent.name | ifname }}"}
+            set: {dir: monitor}
+      - id: if.lag.dynamic
+        match: '^link-aggregation mode dynamic$'
+        when: "(parent.name | ifname) is startingwith('Bridge-Aggregation')"
+        emit:
+          - table: x_lag_mode
+            key: {group: "{{ parent.name | ifname | replace('Bridge-Aggregation', '') }}"}
+            set: {dynamic: "true"}
+
+      # ---- packet filter (ACL commands) ----
+      # An IPv4 list by its number or its name. "ipv6", "mac" and
+      # "hardware-count" stay unknown.
+      # The line is kept aside: what a list means as a packet filter is
+      # settled in import/40_policy.yaml.
+      - id: if.acl
+        match: '^packet-filter (?:name )?(?P<acl>\S+) (?P<dir>inbound|outbound)$'
+        when: "acl not in ['ipv6', 'mac', 'name']"
+        emit:
+          - table: x_pf
+            key: {if_name: "{{ parent.name | ifname }}", dir: "{{ 'in' if dir == 'inbound' else 'out' }}"}
+            set: {acl: "{{ acl }}"}
+
+      # ---- DHCP relay (DHCP commands) ----
+      # The servers count only on an interface that works as a relay agent
+      # (the derive of import/50_services.yaml).
+      - id: if.dhcp.select
+        match: '^dhcp select relay$'
+        emit:
+          - table: x_dhcp_select
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {relay: "true"}
+      - id: if.dhcp.relay
+        match: '^dhcp relay server-address (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+        append: {dhcp_relay: "{{ addr }}"}
+
+      # ---- VRRP (VRRP commands) ----
+      # Times are in centiseconds on the device and in seconds in the
+      # dataset: a value that is no whole second stays unknown.
+      - id: if.vrrp.version
+        match: '^vrrp version (?P<v>2|3)$'
+        emit:
+          - table: x_vrrp_version
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {version: "{{ v }}"}
+      - id: if.vrrp.ip
+        match: '^vrrp vrid (?P<g>\d+) virtual-ip (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ g }}"}}
+        set: {protocol: vrrp, virtual_ip: "{{ addr }}"}
+      - id: if.vrrp.priority
+        match: '^vrrp vrid (?P<g>\d+) priority (?P<n>\d+)$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ g }}"}}
+        set: {protocol: vrrp, priority: "{{ n }}"}
+      # "timer delay <seconds>" is the form of the generation before Version 7.
+      - id: if.vrrp.preempt
+        match: '^vrrp vrid (?P<g>\d+) preempt-mode(?: delay (?P<cs>\d+)| timer delay (?P<sec>\d+))?$'
+        when: "not cs or cs | int % 100 == 0"
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ g }}"}}
+        set: {protocol: vrrp, preempt: true, preempt_delay: "{{ (cs | int // 100) if cs else sec }}"}
+      - id: if.vrrp.nopreempt
+        match: '^undo vrrp vrid (?P<g>\d+) preempt-mode$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ g }}"}}
+        set: {protocol: vrrp, preempt: false}
+      # The same line counts in seconds in the generation before Version 7
+      # (the "version" line at the head of the configuration tells which).
+      - id: if.vrrp.timer.v5
+        match: '^vrrp vrid (?P<g>\d+) timer advertise (?P<sec>\d+)$'
+        when: "lookup('devices').os_version is startingwith('5.')"
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ g }}"}}
+        set: {protocol: vrrp, advert_interval: "{{ sec }}"}
+      - id: if.vrrp.timer
+        match: '^vrrp vrid (?P<g>\d+) timer advertise (?P<cs>\d+)$'
+        when: "cs | int % 100 == 0"
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ g }}"}}
+        set: {protocol: vrrp, advert_interval: "{{ cs | int // 100 }}"}
+      # A key in plain text, or as the device saved it ("cipher"): that form
+      # is kept as the device shows it, "cipher <value>" (appendix A 3.26).
+      # The generation before Version 7 leaves "plain" out.
+      # A track entry that lowers the priority while it is negative.
+      - id: if.vrrp.track
+        match: '^vrrp vrid (?P<g>\d+) track (?P<t>\d+) priority reduced (?P<n>\d+)$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ g }}"}}
+        set: {protocol: vrrp, track: "{{ t }}", track_decrement: "{{ n }}"}
+      - id: if.vrrp.auth
+        match: '^vrrp vrid (?P<g>\d+) authentication-mode (?P<how>simple|md5) (?:(?P<form>cipher|plain) )?(?P<key>\S+)$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ g }}"}}
+        set: {protocol: vrrp, auth_type: "{{ how }}", auth_key: "{{ 'cipher ' if form == 'cipher' else '' }}{{ key }}"}
+
+      # ---- OSPF on the interface (OSPF commands) ----
+      # The process is not named here: the lines are kept aside and joined
+      # with the "network" lines of the areas (import/30_routing.yaml).
+      - id: if.ospf.cost
+        match: '^ospf cost (?P<n>\d+)$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {cost: "{{ n }}"}
+      - id: if.ospf.priority
+        match: '^ospf dr-priority (?P<n>\d+)$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {priority: "{{ n }}"}
+      - id: if.ospf.timer
+        match: '^ospf timer (?P<what>hello|dead) (?P<n>\d+)$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {"{{ what }}": "{{ n }}"}
+      # "p2mp unicast" has no word in the dataset and stays unknown.
+      - id: if.ospf.network
+        match: '^ospf network-type (?P<type>broadcast|nbma|p2mp|p2p)$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {network_type: "{{ type | unlex('ospf_network') }}"}
+      # Keys in plain text, or as the device saved them ("cipher <value>").
+      - id: if.ospf.auth.simple
+        match: '^ospf authentication-mode simple (?:(?P<form>cipher|plain) )?(?P<key>\S+)$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {auth_type: simple, auth_key: "{{ 'cipher ' if form == 'cipher' else '' }}{{ key }}"}
+      - id: if.ospf.auth.md5
+        match: '^ospf authentication-mode (?P<how>hmac-md5|md5) (?P<id>\d+) (?:(?P<form>cipher|plain) )?(?P<key>\S+)$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {auth_type: "{{ 'hmac_md5' if how == 'hmac-md5' else 'md5' }}", auth_key_id: "{{ id }}", auth_key: "{{ 'cipher ' if form == 'cipher' else '' }}{{ key }}"}

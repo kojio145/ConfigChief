@@ -1,0 +1,548 @@
+# What this device writes in another way than the dataset says it (appendix
+# B 5.7). Every step tells the user what it did (G-614). The dataset of the
+# book is not changed. Sources: README, "書き換えで置き換えること".
+adapt:
+  # ---- spanning tree ----
+  # The device runs no spanning tree until it is told to ("stp global
+  # enable": "The spanning tree feature is globally disabled"). A dataset
+  # from a vendor that runs it by default has the cell empty.
+  - id: adapt.stp.enable
+    for: devices
+    as: d
+    let:
+      g: "lookup('l2_settings')"
+      ports: "rows('switchports') | rejectattr('mode', 'equalto', 'routed') | list | length"
+    when: "ports > 0 and (not g or g.stp_enabled | string == '')"
+    row: {table: l2_settings, key: {}}
+    set: {stp_enabled: true}
+    note: "「スパニングツリーを使う」が空なので、有効にして書きます（stp global enable。QX は、この行が無いとスパニングツリーが働きません。使わないなら「無効」と書いてください）"
+  # The device's PVST runs RSTP in every VLAN.
+  - id: adapt.stp.mode.pvst
+    for: l2_settings
+    as: g
+    when: "g.stp_mode == 'pvst'"
+    row: {table: l2_settings, key: {}}
+    set: {stp_mode: rapid_pvst}
+    note: "スパニングツリーの方式 pvst を、rapid_pvst として書きます（stp mode pvst。QX の PVST は VLAN ごとに RSTP を動かします。資料では、PVST・Rapid PVST の他社機器と通信できます）"
+  # No default for all access ports: every access port gets its own line.
+  - id: adapt.stp.edge.default
+    for: switchports
+    as: p
+    let:
+      g: "lookup('l2_settings')"
+    when: "g.stp_edge_default | string == 'true' and p.mode in ['access', ''] and not p.stp_edge"
+    row: {table: switchports, key: {if_name: "{{ p.if_name }}"}}
+    set: {stp_edge: "on"}
+    note: "{{ p.if_name }}: 「アクセスポートをすぐ転送にする」（全体の既定）は QX に無いので、このポートに stp edged-port を書きます"
+  - id: adapt.stp.edge.default.clear
+    for: l2_settings
+    as: g
+    when: "g.stp_edge_default | string != ''"
+    clear: [stp_edge_default]
+    note: "{{ '' }}"
+  # "off" only takes a port out of the default above.
+  - id: adapt.stp.edge.off
+    for: switchports
+    as: p
+    when: "p.stp_edge == 'off'"
+    clear: [stp_edge]
+    note: "{{ '' }}"
+  # One kind of edge port, on an access port and on a trunk alike.
+  - id: adapt.stp.edge.trunk
+    for: switchports
+    as: p
+    when: "p.stp_edge == 'trunk'"
+    row: {table: switchports, key: {if_name: "{{ p.if_name }}"}}
+    set: {stp_edge: "on"}
+    note: "{{ p.if_name }}: 「すぐ転送にする」の trunk を、on として書きます（QX の stp edged-port は、トランクでも同じ行です）"
+  - id: adapt.stp.extend
+    for: l2_settings
+    as: g
+    when: "g.stp_extend_system_id | string != ''"
+    clear: [stp_extend_system_id]
+    note: "「拡張システム ID」は書きません（QX のコマンドマニュアルに、当たる行がありません）"
+  # ---- the switch as a whole ----
+  - id: adapt.l2.vtp
+    for: l2_settings
+    as: g
+    when: "g.vtp_mode or g.vtp_domain"
+    clear: [vtp_mode, vtp_domain]
+    note: "VTP の設定（{{ g.vtp_mode }}{{ ' ' ~ g.vtp_domain if g.vtp_domain else '' }}）は書きません（QX のコマンドマニュアルに VTP の行がありません。VLAN は、シート「VLAN」の行だけが作られます。VTP で配っていた VLAN があれば、行を足してください）"
+  - id: adapt.l2.routing
+    for: l2_settings
+    as: g
+    when: "g.ip_routing | string != ''"
+    clear: [ip_routing]
+    note: "「L3 の転送」は書きません（QX のコマンドマニュアルに、転送を入り切りする行がありません）"
+  # A switch that does not route sends its own traffic by a default route.
+  - id: adapt.l2.gateway
+    for: l2_settings
+    as: g
+    let:
+      have: "rows('static_routes', prefix='0.0.0.0/0') | length"
+    when: "g.default_gateway"
+    row: {table: static_routes, key: {vrf: "", prefix: "0.0.0.0/0", next_hop: "{{ g.default_gateway if have == 0 else fail('「デフォルトゲートウェイ」' ~ g.default_gateway ~ ' をデフォルト経路として書きますが、スタティック経路の表に、すでに 0.0.0.0/0 の行があります（どちらかを消してください）') }}", out_if: ""}}
+    clear: [default_gateway]
+    note: "「デフォルトゲートウェイ」{{ g.default_gateway }} を、デフォルト経路として書きます（ip route-static 0.0.0.0 0 {{ g.default_gateway }}。QX に ip default-gateway の行はありません）"
+  # ---- switch ports ----
+  # Every Ethernet port and every aggregate interface is a switch port here,
+  # an access port in VLAN 1 until it is told more.
+  - id: adapt.sw.port
+    for: interfaces
+    as: i
+    let:
+      p: "lookup('switchports', if_name=i.name)"
+    when: "not p and (i.name is startingwith('GigabitEthernet') or i.name is startingwith('Ten-GigabitEthernet') or i.name is startingwith('FortyGigE') or i.name is startingwith('Bridge-Aggregation') or i.name is startingwith('Ethernet'))"
+    row: {table: switchports, key: {if_name: "{{ i.name }}"}}
+    set: {mode: access}
+    note: "{{ i.name }}: スイッチポートの行が無いので、アクセスポートとして書きます（QX のポートは、何も書かなければ VLAN 1 のアクセスポートです）"
+  - id: adapt.sw.mode
+    for: switchports
+    as: p
+    when: "not p.mode"
+    row: {table: switchports, key: {if_name: "{{ p.if_name }}"}}
+    set: {mode: access}
+    note: "{{ p.if_name }}: スイッチポートの「モード」が空なので、access として書きます（QX のポートの既定です。元の機器の既定が違うなら、モードを書いてください）"
+  # A trunk of this device carries VLAN 1 only until it is told more; where
+  # the cell is empty the dataset means "all".
+  - id: adapt.sw.trunk.all
+    for: switchports
+    as: p
+    when: "p.mode == 'trunk' and not p.allowed_vlans"
+    row: {table: switchports, key: {if_name: "{{ p.if_name }}"}}
+    append: {allowed_vlans: all}
+    note: "{{ p.if_name }}: トランクの「許可 VLAN」が空なので、all として書きます（port trunk permit vlan all。QX のトランクは、書かなければ VLAN 1 だけを通します）"
+  # The device does not negotiate the mode of a port, and tags with 802.1Q only.
+  - id: adapt.sw.nonegotiate
+    for: switchports
+    as: p
+    when: "p.nonegotiate | string == 'true'"
+    clear: [nonegotiate]
+    note: "{{ '' }}"
+  - id: adapt.sw.dot1q
+    for: switchports
+    as: p
+    when: "p.trunk_encapsulation == 'dot1q'"
+    clear: [trunk_encapsulation]
+    note: "{{ '' }}"
+  # Storm suppression takes whole per cent.
+  - id: adapt.sw.storm
+    for: switchports
+    as: p
+    each: {k: "['storm_broadcast', 'storm_multicast', 'storm_unicast']"}
+    let:
+      vals: "{'storm_broadcast': p.storm_broadcast, 'storm_multicast': p.storm_multicast, 'storm_unicast': p.storm_unicast}"
+    when: "'.' in vals[k]"
+    row: {table: switchports, key: {if_name: "{{ p.if_name }}"}}
+    set: {"{{ k }}": "{{ (vals[k] | split('.'))[0] if ((vals[k] | split('.'))[1] | replace('0', '')) == '' and (vals[k] | split('.'))[0] is digits else fail(p.if_name ~ ': ストーム制御の値 ' ~ vals[k] ~ ' は、QX では書けません（整数の % です。整数に直してください）') }}"}
+    note: "{{ p.if_name }}: ストーム制御 {{ vals[k] }}% を、{{ (vals[k] | split('.'))[0] }}% として書きます（QX は整数の % です）"
+  # ---- port security, the stack ----
+  # The device learns the addresses of a port for good (they are kept in
+  # the configuration): "sticky" says what it does anyway.
+  - id: adapt.psec.not_sticky
+    for: switchports
+    as: p
+    when: "p.port_security | string == 'true' and p.port_security_sticky | string != 'true'"
+    row: {table: switchports, key: {if_name: "{{ p.if_name }}"}}
+    set: {port_security_sticky: true}
+    note: "{{ p.if_name }}: QX のポートセキュリティ（port-security port-mode autolearn）は、覚えた MAC アドレスを設定に残します（元の機器で「覚えた MAC を設定に残す」が有効でなくても、残ります）"
+  - id: adapt.psec.restrict
+    for: switchports
+    as: p
+    when: "p.port_security_violation == 'restrict'"
+    row: {table: switchports, key: {if_name: "{{ p.if_name }}"}}
+    set: {port_security_violation: protect}
+    note: "{{ p.if_name }}: 違反のときの動作 restrict を、protect として書きます（port-security intrusion-mode blockmac。QX に、止めて記録するだけの動作を選ぶ行はありません）"
+  # Port security has a switch for the whole device here.
+  - id: adapt.psec.enable
+    for: devices
+    as: d
+    let:
+      g: "lookup('l2_settings')"
+      ports: "rows('switchports', port_security=true) | length"
+    when: "ports > 0 and g.port_security | string != 'true'"
+    row: {table: l2_settings, key: {}}
+    set: {port_security: true}
+    note: "ポートセキュリティを使うポートがあるので、port-security enable を書きます（QX は、機器全体で有効にします）"
+  - id: adapt.stack.provision
+    for: stack_members
+    as: m
+    when: "m.provision"
+    clear: [provision]
+    note: "スタックのメンバー {{ m.member }} の「機種の種別」（{{ m.provision }}）は書きません（QX の IRF に、メンバーの機種を前もって書く行はありません）"
+  # ---- LAG ----
+  # The group has an interface of its own, which says static or LACP.
+  - id: adapt.lag.interface
+    for: lags
+    as: l
+    let:
+      agg: "lookup('interfaces', name='Bridge-Aggregation' ~ l.group)"
+      first: "rows('lags', group=l.group) | first"
+    when: "not agg and first.if_name == l.if_name"
+    row: {table: interfaces, key: {name: "Bridge-Aggregation{{ l.group }}"}}
+    set: {enabled: true}
+    note: "LAG {{ l.group }} の IF の行が無いので、interface Bridge-Aggregation{{ l.group }} を足して書きます（QX は、LAG の IF を作ってからポートを入れます）"
+  # The aggregate interface carries the VLANs of its members: a new one
+  # takes what the first member says.
+  - id: adapt.lag.interface.port
+    for: lags
+    as: l
+    let:
+      agg: "lookup('switchports', if_name='Bridge-Aggregation' ~ l.group)"
+      first: "rows('lags', group=l.group) | first"
+      m: "lookup('switchports', if_name=l.if_name)"
+    when: "not agg and first.if_name == l.if_name"
+    row: {table: switchports, key: {if_name: "Bridge-Aggregation{{ l.group }}"}}
+    set: {mode: "{{ m.mode if m.mode else 'access' }}", access_vlan: "{{ m.access_vlan }}", native_vlan: "{{ m.native_vlan }}"}
+    append: {allowed_vlans: "{{ m.allowed_vlans | join(' ') }}"}
+    note: "{{ '' }}"
+  # LACP has one way to run here; PAgP is not spoken.
+  - id: adapt.lag.passive
+    for: lags
+    as: l
+    when: "l.mode == 'passive'"
+    row: {table: lags, key: {if_name: "{{ l.if_name }}"}}
+    set: {mode: active}
+    note: "{{ l.if_name }}: LAG の束ね方 passive を、active として書きます（QX の LACP の行は link-aggregation mode dynamic の 1 つで、passive を選ぶ行はコマンドマニュアルにありません）"
+  - id: adapt.lag.pagp
+    for: lags
+    as: l
+    when: "l.mode in ['auto', 'desirable']"
+    row: {table: lags, key: {if_name: "{{ l.if_name }}"}}
+    set: {mode: active}
+    note: "{{ l.if_name }}: LAG の束ね方 {{ l.mode }}（PAgP）を、active（LACP）として書きます（QX は PAgP を話しません。相手の機器も LACP に変えてください）"
+  - id: adapt.lag.empty
+    for: lags
+    as: l
+    when: "not l.mode"
+    row: {table: lags, key: {if_name: "{{ l.if_name }}"}}
+    set: {mode: "on"}
+    note: "{{ '' }}"
+  # ---- users and remote login ----
+  # A user logs in only by what the user is allowed to use.
+  - id: adapt.user.services
+    for: users
+    as: u
+    when: "not u.services"
+    row: {table: users, key: {name: "{{ u.name }}"}}
+    append: {services: "terminal ssh telnet"}
+    note: "ユーザ {{ u.name }}: 「使える接続方式」が空なので、terminal・ssh・telnet で書きます（QX のユーザは、service-type の行が無いとログインできません）"
+  # The numbered levels are roles named level-0 to level-15.
+  - id: adapt.user.level
+    for: users
+    as: u
+    when: "u.privilege is digits and u.privilege | int <= 15"
+    row: {table: users, key: {name: "{{ u.name }}"}}
+    set: {privilege: "level-{{ u.privilege }}"}
+    note: "ユーザ {{ u.name }}: 権限 {{ u.privilege }} を、ロール level-{{ u.privilege }} として書きます（QX のロールの名前です。できることの範囲は、元の機器の同じ番号と同じとは限りません）"
+  - id: adapt.ra.ssh2
+    for: remote_access
+    as: r
+    when: "r.ssh_version | string == '2'"
+    clear: [ssh_version]
+    note: "{{ '' }}"
+  # ---- the numbers of access lists (appendix A 3.24) ----
+  # A list with a number of another vendor gets a number of this device:
+  # standard 1-99 -> 2001-2099, standard 1300-1999 -> 2100-2799, extended
+  # 100-199 -> 3000-3099, extended 2000-2699 -> 3100-3799. The list, its
+  # entries and what names it are written with the new number.
+  - id: adapt.acl.number
+    for: acls
+    as: a
+    let:
+      new: "((2000 + (a.name | int)) if (a.type == 'standard' and (a.name | int) >= 1 and (a.name | int) <= 99) else (((a.name | int) + 800) if (a.type == 'standard' and (a.name | int) >= 1300 and (a.name | int) <= 1999) else (((a.name | int) + 2900) if (a.type == 'extended' and (a.name | int) >= 100 and (a.name | int) <= 199) else (((a.name | int) + 1100) if (a.type == 'extended' and (a.name | int) >= 2000 and (a.name | int) <= 2699) else '')))) if a.name is digits else ''"
+      taken: "lookup('acls', name=(((2000 + (a.name | int)) if (a.type == 'standard' and (a.name | int) >= 1 and (a.name | int) <= 99) else (((a.name | int) + 800) if (a.type == 'standard' and (a.name | int) >= 1300 and (a.name | int) <= 1999) else (((a.name | int) + 2900) if (a.type == 'extended' and (a.name | int) >= 100 and (a.name | int) <= 199) else (((a.name | int) + 1100) if (a.type == 'extended' and (a.name | int) >= 2000 and (a.name | int) <= 2699) else '')))) | string)) if a.name is digits else ''"
+    when: "new | string != ''"
+    row: {table: acls, key: {name: "{{ new if not taken else fail('ACL ' ~ a.name ~ ' を QX の番号 ' ~ new ~ ' に付け替えますが、その番号の ACL がすでにあります（どちらかの番号を変えてください）') }}"}}
+    set: {type: "{{ a.type }}", description: "{{ a.description }}"}
+    note: "ACL {{ a.name }}: 番号を QX の番号 {{ new }} に付け替えて書きます（QX の番号は、標準 = basic が 2000〜2999、拡張 = advanced が 3000〜3999 です。この ACL を指す列も、同じ番号に読み替えて書きます）"
+  - id: adapt.acl.number.entries
+    for: acl_entries
+    as: e
+    let:
+      a: "lookup('acls', name=e.acl)"
+      new: "((2000 + (e.acl | int)) if (a.type == 'standard' and (e.acl | int) >= 1 and (e.acl | int) <= 99) else (((e.acl | int) + 800) if (a.type == 'standard' and (e.acl | int) >= 1300 and (e.acl | int) <= 1999) else (((e.acl | int) + 2900) if (a.type == 'extended' and (e.acl | int) >= 100 and (e.acl | int) <= 199) else (((e.acl | int) + 1100) if (a.type == 'extended' and (e.acl | int) >= 2000 and (e.acl | int) <= 2699) else '')))) if (e.acl is digits and a.type) else ''"
+    when: "new | string != ''"
+    row: {table: acl_entries, key: {acl: "{{ new }}", seq: "{{ e.seq }}"}}
+    set: {action: "{{ e.action }}", protocol: "{{ e.protocol }}", src: "{{ e.src }}", src_port: "{{ e.src_port }}", dst: "{{ e.dst }}", dst_port: "{{ e.dst_port }}", icmp_type: "{{ e.icmp_type }}", icmp_code: "{{ e.icmp_code }}", remark: "{{ e.remark }}", dscp: "{{ e.dscp }}", precedence: "{{ e.precedence }}", tos: "{{ e.tos }}", time_range: "{{ e.time_range }}", comment: "{{ e.comment }}"}
+    append: {flags: "{{ e.flags | join(' ') }}"}
+    note: "{{ '' }}"
+  - id: adapt.acl.number.interfaces.acl_in
+    for: interfaces
+    as: x
+    let:
+      a: "lookup('acls', name=x.acl_in)"
+      new: "((2000 + (x.acl_in | int)) if (a.type == 'standard' and (x.acl_in | int) >= 1 and (x.acl_in | int) <= 99) else (((x.acl_in | int) + 800) if (a.type == 'standard' and (x.acl_in | int) >= 1300 and (x.acl_in | int) <= 1999) else (((x.acl_in | int) + 2900) if (a.type == 'extended' and (x.acl_in | int) >= 100 and (x.acl_in | int) <= 199) else (((x.acl_in | int) + 1100) if (a.type == 'extended' and (x.acl_in | int) >= 2000 and (x.acl_in | int) <= 2699) else '')))) if (x.acl_in is digits and a.type) else ''"
+    when: "new | string != ''"
+    row: {table: interfaces, key: {name: "{{ x.name }}"}}
+    set: {acl_in: "{{ new }}"}
+    note: "{{ '' }}"
+  - id: adapt.acl.number.interfaces.acl_out
+    for: interfaces
+    as: x
+    let:
+      a: "lookup('acls', name=x.acl_out)"
+      new: "((2000 + (x.acl_out | int)) if (a.type == 'standard' and (x.acl_out | int) >= 1 and (x.acl_out | int) <= 99) else (((x.acl_out | int) + 800) if (a.type == 'standard' and (x.acl_out | int) >= 1300 and (x.acl_out | int) <= 1999) else (((x.acl_out | int) + 2900) if (a.type == 'extended' and (x.acl_out | int) >= 100 and (x.acl_out | int) <= 199) else (((x.acl_out | int) + 1100) if (a.type == 'extended' and (x.acl_out | int) >= 2000 and (x.acl_out | int) <= 2699) else '')))) if (x.acl_out is digits and a.type) else ''"
+    when: "new | string != ''"
+    row: {table: interfaces, key: {name: "{{ x.name }}"}}
+    set: {acl_out: "{{ new }}"}
+    note: "{{ '' }}"
+  - id: adapt.acl.number.remote_access.acl
+    for: remote_access
+    as: x
+    let:
+      a: "lookup('acls', name=x.acl)"
+      new: "((2000 + (x.acl | int)) if (a.type == 'standard' and (x.acl | int) >= 1 and (x.acl | int) <= 99) else (((x.acl | int) + 800) if (a.type == 'standard' and (x.acl | int) >= 1300 and (x.acl | int) <= 1999) else (((x.acl | int) + 2900) if (a.type == 'extended' and (x.acl | int) >= 100 and (x.acl | int) <= 199) else (((x.acl | int) + 1100) if (a.type == 'extended' and (x.acl | int) >= 2000 and (x.acl | int) <= 2699) else '')))) if (x.acl is digits and a.type) else ''"
+    when: "new | string != ''"
+    row: {table: remote_access, key: {}}
+    set: {acl: "{{ new }}"}
+    note: "{{ '' }}"
+  - id: adapt.acl.number.remote_access.acl_ssh
+    for: remote_access
+    as: x
+    let:
+      a: "lookup('acls', name=x.acl_ssh)"
+      new: "((2000 + (x.acl_ssh | int)) if (a.type == 'standard' and (x.acl_ssh | int) >= 1 and (x.acl_ssh | int) <= 99) else (((x.acl_ssh | int) + 800) if (a.type == 'standard' and (x.acl_ssh | int) >= 1300 and (x.acl_ssh | int) <= 1999) else (((x.acl_ssh | int) + 2900) if (a.type == 'extended' and (x.acl_ssh | int) >= 100 and (x.acl_ssh | int) <= 199) else (((x.acl_ssh | int) + 1100) if (a.type == 'extended' and (x.acl_ssh | int) >= 2000 and (x.acl_ssh | int) <= 2699) else '')))) if (x.acl_ssh is digits and a.type) else ''"
+    when: "new | string != ''"
+    row: {table: remote_access, key: {}}
+    set: {acl_ssh: "{{ new }}"}
+    note: "{{ '' }}"
+  - id: adapt.acl.number.remote_access.acl_telnet
+    for: remote_access
+    as: x
+    let:
+      a: "lookup('acls', name=x.acl_telnet)"
+      new: "((2000 + (x.acl_telnet | int)) if (a.type == 'standard' and (x.acl_telnet | int) >= 1 and (x.acl_telnet | int) <= 99) else (((x.acl_telnet | int) + 800) if (a.type == 'standard' and (x.acl_telnet | int) >= 1300 and (x.acl_telnet | int) <= 1999) else (((x.acl_telnet | int) + 2900) if (a.type == 'extended' and (x.acl_telnet | int) >= 100 and (x.acl_telnet | int) <= 199) else (((x.acl_telnet | int) + 1100) if (a.type == 'extended' and (x.acl_telnet | int) >= 2000 and (x.acl_telnet | int) <= 2699) else '')))) if (x.acl_telnet is digits and a.type) else ''"
+    when: "new | string != ''"
+    row: {table: remote_access, key: {}}
+    set: {acl_telnet: "{{ new }}"}
+    note: "{{ '' }}"
+  - id: adapt.acl.number.snmp_communities.acl
+    for: snmp_communities
+    as: x
+    let:
+      a: "lookup('acls', name=x.acl)"
+      new: "((2000 + (x.acl | int)) if (a.type == 'standard' and (x.acl | int) >= 1 and (x.acl | int) <= 99) else (((x.acl | int) + 800) if (a.type == 'standard' and (x.acl | int) >= 1300 and (x.acl | int) <= 1999) else (((x.acl | int) + 2900) if (a.type == 'extended' and (x.acl | int) >= 100 and (x.acl | int) <= 199) else (((x.acl | int) + 1100) if (a.type == 'extended' and (x.acl | int) >= 2000 and (x.acl | int) <= 2699) else '')))) if (x.acl is digits and a.type) else ''"
+    when: "new | string != ''"
+    row: {table: snmp_communities, key: {community: "{{ x.community }}"}}
+    set: {acl: "{{ new }}"}
+    note: "{{ '' }}"
+  - id: adapt.acl.number.snmp_users.acl
+    for: snmp_users
+    as: x
+    let:
+      a: "lookup('acls', name=x.acl)"
+      new: "((2000 + (x.acl | int)) if (a.type == 'standard' and (x.acl | int) >= 1 and (x.acl | int) <= 99) else (((x.acl | int) + 800) if (a.type == 'standard' and (x.acl | int) >= 1300 and (x.acl | int) <= 1999) else (((x.acl | int) + 2900) if (a.type == 'extended' and (x.acl | int) >= 100 and (x.acl | int) <= 199) else (((x.acl | int) + 1100) if (a.type == 'extended' and (x.acl | int) >= 2000 and (x.acl | int) <= 2699) else '')))) if (x.acl is digits and a.type) else ''"
+    when: "new | string != ''"
+    row: {table: snmp_users, key: {name: "{{ x.name }}"}}
+    set: {acl: "{{ new }}"}
+    note: "{{ '' }}"
+  - id: adapt.acl.number.snmp_users.group_acl
+    for: snmp_users
+    as: x
+    let:
+      a: "lookup('acls', name=x.group_acl)"
+      new: "((2000 + (x.group_acl | int)) if (a.type == 'standard' and (x.group_acl | int) >= 1 and (x.group_acl | int) <= 99) else (((x.group_acl | int) + 800) if (a.type == 'standard' and (x.group_acl | int) >= 1300 and (x.group_acl | int) <= 1999) else (((x.group_acl | int) + 2900) if (a.type == 'extended' and (x.group_acl | int) >= 100 and (x.group_acl | int) <= 199) else (((x.group_acl | int) + 1100) if (a.type == 'extended' and (x.group_acl | int) >= 2000 and (x.group_acl | int) <= 2699) else '')))) if (x.group_acl is digits and a.type) else ''"
+    when: "new | string != ''"
+    row: {table: snmp_users, key: {name: "{{ x.name }}"}}
+    set: {group_acl: "{{ new }}"}
+    note: "{{ '' }}"
+  - id: adapt.acl.number.qos_class_matches.acl
+    for: qos_class_matches
+    as: x
+    let:
+      a: "lookup('acls', name=x.acl)"
+      new: "((2000 + (x.acl | int)) if (a.type == 'standard' and (x.acl | int) >= 1 and (x.acl | int) <= 99) else (((x.acl | int) + 800) if (a.type == 'standard' and (x.acl | int) >= 1300 and (x.acl | int) <= 1999) else (((x.acl | int) + 2900) if (a.type == 'extended' and (x.acl | int) >= 100 and (x.acl | int) <= 199) else (((x.acl | int) + 1100) if (a.type == 'extended' and (x.acl | int) >= 2000 and (x.acl | int) <= 2699) else '')))) if (x.acl is digits and a.type) else ''"
+    when: "new | string != ''"
+    row: {table: qos_class_matches, key: {class: "{{ x.class }}", seq: "{{ x.seq }}"}}
+    set: {acl: "{{ new }}"}
+    note: "{{ '' }}"
+  # A routing policy keeps its lists in one cell: the pack does not rewrite
+  # that cell.
+  - id: adapt.acl.number.entries.old
+    for: acl_entries
+    as: e
+    let:
+      a: "lookup('acls', name=e.acl)"
+      new: "((2000 + (e.acl | int)) if (a.type == 'standard' and (e.acl | int) >= 1 and (e.acl | int) <= 99) else (((e.acl | int) + 800) if (a.type == 'standard' and (e.acl | int) >= 1300 and (e.acl | int) <= 1999) else (((e.acl | int) + 2900) if (a.type == 'extended' and (e.acl | int) >= 100 and (e.acl | int) <= 199) else (((e.acl | int) + 1100) if (a.type == 'extended' and (e.acl | int) >= 2000 and (e.acl | int) <= 2699) else '')))) if (e.acl is digits and a.type) else ''"
+    when: "new | string != ''"
+    remove: true
+    note: "{{ '' }}"
+  - id: adapt.acl.number.old
+    for: acls
+    as: a
+    let:
+      new: "((2000 + (a.name | int)) if (a.type == 'standard' and (a.name | int) >= 1 and (a.name | int) <= 99) else (((a.name | int) + 800) if (a.type == 'standard' and (a.name | int) >= 1300 and (a.name | int) <= 1999) else (((a.name | int) + 2900) if (a.type == 'extended' and (a.name | int) >= 100 and (a.name | int) <= 199) else (((a.name | int) + 1100) if (a.type == 'extended' and (a.name | int) >= 2000 and (a.name | int) <= 2699) else '')))) if a.name is digits else ''"
+    when: "new | string != ''"
+    remove: true
+    note: "{{ '' }}"
+  # A routing policy keeps its lists in one cell, which the pack does not
+  # rewrite: a policy that names a renamed list stops the run.
+  - id: adapt.acl.number.policy
+    for: route_policies
+    as: r
+    let:
+      names: "rows('acls') | map(attribute='name') | list"
+      gone: "r.match_acl | reject('in', rows('acls') | map(attribute='name') | list) | list"
+    when: "gone | length > 0 and (gone | join('')) is digits"
+    note: "{{ fail('経路制御の方針 ' ~ r.name ~ ' の ' ~ r.seq ~ ' 番が指す番号の ACL（' ~ (gone | join('・')) ~ '）は、QX の番号（標準 2000〜2999、拡張 3000〜3999）に付け替えて書いています。「条件: ACL」を、付け替えた後の番号に直してください（方針が指す ACL は、パックが読み替えません）') }}"
+  # ---- access lists ----
+  # A remark is no entry here: the device ties a comment to a rule. The
+  # remark becomes the comment of the next rule of the list (the last remark
+  # before a rule wins); a remark with no rule behind it is left out.
+  - id: adapt.acl.remark.move
+    for: acl_entries
+    as: e
+    let:
+      later: "rows('acl_entries', acl=e.acl) | rejectattr('action', 'equalto', 'remark') | map(attribute='seq') | map('int') | select('gt', e.seq | int) | list"
+    when: "e.action == 'remark' and later"
+    row: {table: acl_entries, key: {acl: "{{ e.acl }}", seq: "{{ later | min }}"}}
+    set: {comment: "{{ e.remark }}"}
+    note: "ACL {{ e.acl }} の {{ e.seq }} 番: 注記の行を、次の行（{{ later | min }} 番）の注記として書きます（rule {{ later | min }} comment。QX の注記は rule に付きます）"
+  - id: adapt.acl.remark.last
+    for: acl_entries
+    as: e
+    let:
+      later: "rows('acl_entries', acl=e.acl) | rejectattr('action', 'equalto', 'remark') | map(attribute='seq') | map('int') | select('gt', e.seq | int) | list"
+    when: "e.action == 'remark' and not later"
+    note: "ACL {{ e.acl }} の {{ e.seq }} 番: 注記の行は書きません（後ろに行が無いので、付ける rule がありません）"
+  - id: adapt.acl.remark
+    for: acl_entries
+    as: e
+    when: "e.action == 'remark'"
+    remove: true
+    note: "{{ '' }}"
+  # A packet filter of this device lets a packet through that no rule
+  # matches (README, "IF に当てた ACL"); in the dataset such a packet is
+  # dropped (appendix A 3.25). A list on an interface that does not end with
+  # a rule for everything gets one that drops the rest.
+  - id: adapt.acl.unmatched
+    for: acls
+    as: a
+    let:
+      used: "(rows('interfaces', acl_in=a.name) | length) + (rows('interfaces', acl_out=a.name) | length)"
+      n: "rows('acl_entries', acl=a.name) | length"
+      top: "rows('acl_entries', acl=a.name) | map(attribute='seq') | map('int') | max"
+      last: "lookup('acl_entries', acl=a.name, seq=(rows('acl_entries', acl=a.name) | map(attribute='seq') | map('int') | max))"
+      whole: "last.action in ['permit', 'deny'] and last.protocol in ['', 'ip'] and last.src in ['', 'any'] and last.dst in ['', 'any'] and last.dscp | string == '' and last.precedence | string == '' and last.tos | string == '' and not last.flags and not last.time_range"
+    when: "used > 0 and not (n > 0 and whole)"
+    row: {table: acl_entries, key: {acl: "{{ a.name }}", seq: "{{ (top + 5) if n > 0 else 0 }}"}}
+    set: {action: deny, protocol: "{{ 'ip' if a.type == 'extended' else '' }}", src: any, dst: "{{ 'any' if a.type == 'extended' else '' }}"}
+    note: "ACL {{ a.name }}: IF に当てていますが、最後の行が「すべての通信」の行ではありません。QX のパケットフィルタは、どの行にも当たらない通信を通すので、最後に「残りをすべて止める」行（rule {{ (top + 5) if n > 0 else 0 }} deny）を足して書きます（表の決まり＝どの行にも当たらない通信は捨てる、と同じ動きになります）"
+
+  # ---- secrets in the form a device saved (appendix A 3.26) ----
+  # A secret with a space is "<kind> <value>" as a device saved it. This
+  # device writes back its own forms ("cipher <value>", and "hash <value>"
+  # for the password of a line); the form of another vendor cannot be
+  # carried over.
+  - id: secret.form.snmp
+    for: snmp_communities
+    as: x
+    when: "' ' in x.community and not x.community is startingwith('cipher ')"
+    note: "{{ fail('SNMP コミュニティに、別メーカーの機器が暗号化した形の値があります（引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.snmp_host
+    for: snmp_hosts
+    as: x
+    when: "' ' in x.community"
+    note: "{{ fail('SNMP 通知先 ' ~ x.host ~ ' のコミュニティは、機器が暗号化した形です（QX の通知先は、名前をそのまま書きます。平文を入れ直してください）') }}"
+  - id: secret.form.snmp_user
+    for: snmp_users
+    as: x
+    when: "(' ' in x.auth_key and not x.auth_key is startingwith('cipher ')) or (' ' in x.priv_key and not x.priv_key is startingwith('cipher '))"
+    note: "{{ fail('SNMP ユーザ ' ~ x.name ~ ' のパスワードは、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.line
+    for: remote_access
+    as: x
+    when: "' ' in x.line_password and not x.line_password is startingwith('hash ')"
+    note: "{{ fail('遠隔ログインの回線パスワードは、別メーカーの機器（か、Version 7 より前の世代の QX）が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.vrrp
+    for: fhrp
+    as: x
+    when: "' ' in x.auth_key and not x.auth_key is startingwith('cipher ')"
+    note: "{{ fail(x.if_name ~ ' のグループ ' ~ x.group ~ ' の認証の鍵は、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.ospf
+    for: ospf_interfaces
+    as: x
+    when: "' ' in x.auth_key and not x.auth_key is startingwith('cipher ')"
+    note: "{{ fail(x.if_name ~ ' の OSPF の鍵は、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.ntp
+    for: ntp_servers
+    as: x
+    when: "' ' in x.auth_key and not x.auth_key is startingwith('cipher ')"
+    note: "{{ fail('NTP サーバ ' ~ x.server ~ ' の認証の鍵は、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+
+  # ---- the device as a whole (appendix A 3.26) ----
+  - id: adapt.sys.password_encryption
+    for: devices
+    as: d
+    when: "d.password_encryption | string != ''"
+    clear: [password_encryption]
+    note: "「パスワードを暗号化して保存」（{{ '有効' if d.password_encryption | string == 'true' else '無効' }}）は書きません（QX に当たる行はありません。QX は、パスワードと鍵をいつも暗号化・ハッシュして保存します）"
+  - id: adapt.sys.log_options
+    for: devices
+    as: d
+    when: "d.log_timestamp_options or d.debug_timestamp or d.debug_timestamp_options"
+    clear: [log_timestamp_options, debug_timestamp, debug_timestamp_options]
+    note: "「ログの時刻に足すもの」「デバッグの時刻の付け方」は書きません（QX の info-center timestamp は、ログの時刻を boot か date で選ぶだけです）"
+  - id: adapt.sys.log_time
+    for: devices
+    as: d
+    when: "d.log_timestamp == 'time'"
+    row: {table: devices, key: {}}
+    set: {log_timestamp: datetime}
+    note: "ログの時刻の付け方 time を、datetime として書きます（info-center timestamp date。QX に時刻だけの形はありません）"
+  - id: adapt.sys.log_buffer
+    for: devices
+    as: d
+    when: "d.log_buffer_size | string != '' or d.log_buffer_mode"
+    clear: [log_buffer_size, log_buffer_mode]
+    note: "「機器内ログの大きさ（バイト）」「機器内ログがいっぱいのとき」は書きません（QX の機器内ログの大きさは件数で決めます。info-center logbuffer size <件数> を、要るなら追加コンフィグに書いてください）"
+  - id: adapt.sys.ntp_serve
+    for: devices
+    as: d
+    when: "d.ntp_serve | string != '' or d.forward_cache | string != '' or d.forward_cache_ipv6 | string != ''"
+    clear: [ntp_serve, forward_cache, forward_cache_ipv6]
+    note: "「NTP サーバとして動く」「転送のキャッシュ」は書きません（QX のコマンドマニュアルに、当たる行がありません）"
+
+  # ---- routing policy, track, users (what only another vendor says) ----
+  # A community written into the node itself needs a list here: the pack
+  # makes one ("CL-<policy>-<node>") and names it.
+  - id: adapt.policy.community.list
+    for: route_policies
+    as: r
+    when: "r.match_community and not r.match_community_list"
+    row: {table: community_lists, key: {name: "CL-{{ r.name }}-{{ r.seq }}", seq: 10}}
+    set: {action: permit, type: standard}
+    append: {communities: "{{ r.match_community | join(' ') }}"}
+    note: "経路制御の方針 {{ r.name }} の {{ r.seq }} 番: じかに書いたコミュニティの条件（{{ r.match_community | join(' ') }}）を、コミュニティのリスト CL-{{ r.name }}-{{ r.seq }} にして書きます（QX の if-match community は、リストを指します）"
+  - id: adapt.policy.community
+    for: route_policies
+    as: r
+    when: "r.match_community and not r.match_community_list"
+    row: {table: route_policies, key: {name: "{{ r.name }}", seq: "{{ r.seq }}"}}
+    set: {match_community_list: "CL-{{ r.name }}-{{ r.seq }}"}
+    clear: [match_community]
+    note: "{{ '' }}"
+  # A watch that pings needs to be told after how many lost answers it is
+  # negative; a row without the number means the first one.
+  - id: adapt.track.fail_count
+    for: tracks
+    as: k
+    when: "k.type == 'icmp' and k.fail_count | string == ''"
+    row: {table: tracks, key: {id: "{{ k.id }}"}}
+    set: {fail_count: 1}
+    note: "回線監視 {{ k.id }}: 「断と判断する回数」が空なので、1 回として書きます（reaction 1 … threshold-type consecutive 1。QX は、回数を書かないと監視の結果を使えません）"
+  - id: adapt.user.reversible
+    for: users
+    as: u
+    when: "u.reversible | string != ''"
+    clear: [reversible]
+    note: "ユーザ {{ u.name }}: 「元に戻せる形で持つ」は書きません（QX の機器管理のユーザは、パスワードをいつもハッシュで保存します）"
+  # "none" for the guard of a port switches off a default of the whole
+  # device (another vendor): this device has no such default.
+  - id: adapt.sw.stp.guard.none
+    for: switchports
+    as: p
+    when: "p.stp_guard == 'none'"
+    clear: [stp_guard]
+    note: "{{ '' }}"

@@ -1,0 +1,55 @@
+hostname ix-g02
+!
+logging buffered 65536
+logging subsystem all warn
+logging timestamp datetime
+service password-encryption
+!
+username admin password plain dummy-admin-secret-1 administrator
+!
+class-map match-any cm-g-voice
+  match cos 5
+  match qos-group 10
+!
+policy-map pm-g-in
+  class cm-g-voice
+    set qos-group 10
+  class class-local
+  class class-default
+policy-map pm-g-out
+  class cm-g-voice
+    priority percent 20
+  class class-local
+  class class-default
+!
+ip route default GigaEthernet0.1
+!
+ssh-server ip enable
+terminal timeout 10
+!
+ppp profile Dialer1
+  authentication myname example-user@example.net
+  authentication password example-user@example.net dummy-ppp-password
+  authentication request chap
+  authentication accept chap
+!
+interface GigaEthernet0.0
+  description sample wan
+  no shutdown
+!
+interface GigaEthernet0.1
+  description sample pppoe
+  ip address ipcp
+  ip mtu 1454
+  ip tcp adjust-mss 1414
+  ppp binding Dialer1
+  no shutdown
+!
+interface GigaEthernet1.0
+  description sample lan
+  ip address 198.51.100.1/24
+  service-policy input pm-g-in
+  service-policy enable
+  service-policy output pm-g-out
+  no shutdown
+!

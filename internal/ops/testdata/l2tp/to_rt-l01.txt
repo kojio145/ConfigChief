@@ -1,0 +1,75 @@
+hostname rt-l01
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+ lifetime 28800
+crypto isakmp key dummy-psk-sample-ra address 0.0.0.0 0.0.0.0
+!
+crypto ipsec transform-set TS-CMAP-GigabitEthernet0-0-10 esp-aes 256 esp-sha-hmac
+ mode transport
+!
+crypto dynamic-map DYN-CMAP-GigabitEthernet0-0-10 10
+ set transform-set TS-CMAP-GigabitEthernet0-0-10
+ set security-association lifetime seconds 3600
+!
+crypto map CMAP-GigabitEthernet0-0 10 ipsec-isakmp dynamic DYN-CMAP-GigabitEthernet0-0-10
+!
+vpdn enable
+!
+bba-group pppoe lac-sample
+ virtual-template 2
+!
+vpdn-group lac-sample
+ request-dialin
+  protocol l2tp
+  domain example.com
+ initiate-to ip 198.51.100.1
+ l2tp tunnel password dummy-l2tp-secret-c
+!
+vpdn-group lns-sample
+ accept-dialin
+  protocol l2tp
+  virtual-template 1
+ no l2tp tunnel authentication
+!
+ip local pool l2tp-lns-sample 192.0.2.131 192.0.2.190
+!
+username example-user password 0 dummy-l2tp-user-secret-1
+username sample-user password 0 dummy-l2tp-user-secret-2
+!
+interface GigabitEthernet0/0
+ description sample-wan
+ ip address 203.0.113.9 255.255.255.252
+ crypto map CMAP-GigabitEthernet0-0
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description sample-access
+ ip address 198.51.100.129 255.255.255.128
+ no shutdown
+!
+interface GigabitEthernet0/1.1
+ ip unnumbered GigabitEthernet0/1
+ pppoe enable group lac-sample
+ no shutdown
+!
+interface Loopback0
+ ip address 192.0.2.129 255.255.255.128
+ no shutdown
+!
+interface Virtual-Template1
+ ip unnumbered Loopback0
+ peer default ip address pool l2tp-lns-sample
+ ppp authentication chap
+ ppp ipcp dns 192.0.2.53 192.0.2.54
+ no shutdown
+!
+interface Virtual-Template2
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.10 1
+!
+end

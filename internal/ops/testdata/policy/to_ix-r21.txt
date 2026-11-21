@@ -1,0 +1,65 @@
+hostname ix-r21
+!
+ip access-list ACL-R-PBR permit ip src 198.51.100.0/25 dest any
+ip prefix-list pl-r-in 5 permit 0.0.0.0/0 max 24
+ip prefix-list pl-r-out 5 permit 198.51.100.0/24
+!
+route-map RM-R-IN permit 10
+  match ip address prefix-list pl-r-in
+  match community 64497:100 no-export-subconfed
+  set local-preference 200
+!
+route-map RM-R-IN permit 20
+  match ip address prefix-list pl-r-in
+!
+route-map RM-R-O2B permit 10
+  set metric 100
+!
+route-map RM-R-OUT permit 10
+  match ip address prefix-list pl-r-out
+  set as-path prepend 64496 64496
+  set community 64496:50 additive
+  set metric 50
+!
+route-map RM-R-PBR permit 10
+  match ip address access-list ACL-R-PBR
+  set ip next-hop 203.0.113.2
+!
+route-map RM-R-STATIC permit 10
+  match tag 100
+  set metric-type type-1
+!
+ip route 192.0.2.64/26 198.51.100.254 tag 100
+ip route 192.0.2.128/26 198.51.100.253
+!
+ip router ospf 1
+  router-id 192.0.2.1
+  redistribute static metric 20 metric-type 1 tag 100 route-map RM-R-STATIC
+  network GigaEthernet1.0 area 0
+!
+router bgp 64496
+  router-id 192.0.2.1
+  neighbor 203.0.113.2 remote-as 64497
+  address-family ipv4 unicast
+    network 198.51.100.0/24
+    redistribute ospf 1 route-map RM-R-O2B
+    neighbor 203.0.113.2 route-map RM-R-IN in
+    neighbor 203.0.113.2 route-map RM-R-OUT out
+!
+interface GigaEthernet0.0
+  description to sample upstream
+  ip address 203.0.113.1/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  description sample lan
+  ip address 198.51.100.1/24
+  ip policy route-map RM-R-PBR
+  ip ospf hello-interval 10
+  ip ospf dead-interval 40
+  no shutdown
+!
+interface Loopback0.0
+  description sample id
+  ip address 192.0.2.1/32
+!

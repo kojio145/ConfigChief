@@ -1,0 +1,8 @@
+# The next hop of an IPv6 route as a condition (made-up values).
+tables:
+  devices:
+    - {hostname: ix-v06, vendor: nec_ix}
+  ipv6_prefix_lists:
+    - {name: pl6-sample-nh, seq: 10, action: permit, prefix: "2001:db8:0:1::/64", le: 128}
+  route_policies:
+    - {name: rm6-sample-nh, seq: 10, action: permit, match_ipv6_next_hop_prefix_list: pl6-sample-nh}

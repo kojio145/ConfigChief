@@ -1,0 +1,9 @@
+hostname ix-f03
+!
+bridge irb enable
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.61/30
+  no shutdown
+!
+interface Tunnel0.0

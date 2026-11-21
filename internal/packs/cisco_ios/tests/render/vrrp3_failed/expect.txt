@@ -1,0 +1,11 @@
+hostname rt-w04
+!
+fhrp version vrrp v3
+!
+interface GigabitEthernet0/1
+ ip address 192.0.2.5 255.255.255.0
+ ipv6 address 2001:db8:0:1::5/64
+ vrrp 1 address-family ipv4
+  address 192.0.2.1 primary
+  priority 100
+end

@@ -1,0 +1,46 @@
+hostname ix-b01
+!
+ip access-list acl-b-any permit ip src any dest any
+ip prefix-list pl-b-in 10 permit 198.51.100.0/24 max 28
+!
+route-map rm-b-out permit 10
+!
+router bgp 64496
+  router-id 192.0.2.1
+  timers 20 60
+  default-local-preference 150
+  neighbor 203.0.113.2 remote-as 64497
+  neighbor 203.0.113.2 advertisement-interval 15
+  neighbor 192.0.2.4 remote-as 64496
+  neighbor 192.0.2.4 route-reflector-client
+  peer-group pg-b-in remote-as 64496
+    neighbor 192.0.2.2
+    neighbor 192.0.2.3 remote-as 64498
+    timers 10 30
+    update-source Loopback0.0
+    password dummy-pg-secret
+    ebgp-multihop 5
+    advertisement-interval 20
+    route-reflector-client
+    address-family ipv4 distribute-list pl-b-in in
+    address-family ipv4 route-map rm-b-out out
+    address-family ipv4 next-hop-self
+    address-family ipv4 send-default
+  peer-group pg-b-range remote-as 64499
+    listen range 198.51.100.0/24 alternate-as 64500
+  neighbor 192.0.2.3 timers 5 15
+  address-family ipv4 unicast
+    network 198.51.100.0/24
+    aggregate-address 198.51.100.0/23 summary-only
+    aggregate-address 192.0.2.0/24 as-set summary-only
+    distance ebgp 30 ibgp 190
+    originate-default
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.1/29
+  no shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.1/32
+  no shutdown
+!

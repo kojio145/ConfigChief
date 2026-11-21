@@ -11,6 +11,12 @@ tables:
       snmp_location: sample-site-a rack 1
       snmp_contact: netops@example.com
       banner: "sample banner: authorized access only"
+      log_timestamp: datetime
+      log_timestamp_options: [msec]
+      debug_timestamp: datetime
+      debug_timestamp_options: [msec]
+      password_encryption: false
+      console_timeout: 5
   interfaces:
     - {name: Loopback0, kind: loopback, ipv4: 192.0.2.1/32, enabled: true}
     - {name: Tunnel1, kind: tunnel, ipv4: 198.18.0.1/30, ip_mtu: 1400, tcp_mss: 1360}
@@ -36,7 +42,7 @@ tables:
     - {vrf: VRF-SAMPLE-A, prefix: 198.18.10.0/24, next_hop: 192.0.2.194}
   users:
     - {name: admin, privilege: admin, secret_form: hashed}
-    - {name: backup, secret: dummy-backup-password, secret_form: plain}
+    - {name: backup, secret: dummy-backup-password, secret_form: plain, reversible: true}
   remote_access:
     - {protocols: [ssh], ssh_version: 2, acl: 10, idle_timeout: 10, auth: local}
   ntp_servers:
@@ -179,7 +185,10 @@ tables:
       esp_hash: sha1
       pfs: dh14
       ipsec_lifetime: 3600
-      dpd_interval: ""
+      ipsec_mode: tunnel
+      dpd_interval: 30
+      dpd_retry_interval: 5
+      dpd_mode: on_demand
     - name: CMAP-SAMPLE/10
       style: policy
       tunnel_if: ""
@@ -216,17 +225,4 @@ tables:
 
 # Each of these has a reason in README.md ("取り込まない行").
 unknown:
-  - "service timestamps debug datetime msec"
-  - "service timestamps log datetime msec"
-  - "no service password-encryption"
-  - "crypto isakmp keepalive 30 5"
-  - "mode tunnel"
-  - "dialer-group 1"
-  - "log-adjacency-changes"
-  - "neighbor 192.0.2.2 activate"
-  - "neighbor 203.0.113.2 activate"
-  - "neighbor 203.0.113.30 activate"
-  - "dialer-list 1 protocol ip permit"
-  - "line con 0"
-  - "exec-timeout 5 0"
 ignored_min: 5

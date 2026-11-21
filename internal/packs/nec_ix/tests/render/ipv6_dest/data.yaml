@@ -1,0 +1,19 @@
+# IPv6 destinations (appendix A 3.23, made-up values): the name server,
+# SNMP (its own switch and community), NTP and syslog over IPv6, and the two
+# IPv6 watches with their output interface.
+tables:
+  devices:
+    - {hostname: ix-v02, vendor: nec_ix, name_servers: [192.0.2.53, "2001:db8:0:53::1"]}
+  interfaces:
+    - {name: GigaEthernet1.0, enabled: true, ipv6: ["2001:db8:0:2::1/64"]}
+  snmp_communities:
+    - {community: example-ro, access: ro}
+  snmp_hosts:
+    - {host: "2001:db8:0:162::1", version: 2c, community: example-ro, source_if: GigaEthernet1.0}
+  ntp_servers:
+    - {server: "2001:db8:0:123::1"}
+  syslog_servers:
+    - {server: "2001:db8:0:50::1", source_if: GigaEthernet1.0}
+  tracks:
+    - {id: wg-v6-host, type: icmp, target: "2001:db8:ff::10", via_if: GigaEthernet1.0, source_ip: "2001:db8:0:2::1", interval: 10, fail_count: 6}
+    - {id: wg-v6-route, type: route, target: "2001:db8:100::/48", via_if: GigaEthernet1.0}

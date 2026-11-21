@@ -1,0 +1,150 @@
+#
+ sysname sw-q02
+#
+ clock timezone JST add 9
+#
+ dns domain example.com
+ dns server 192.0.2.53
+ dns server 192.0.2.54
+#
+ super password role network-admin simple Example-Super-1
+#
+local-user admin class manage
+ password simple Example-Secret-1
+ service-type ssh telnet terminal
+ authorization-attribute user-role network-admin
+#
+local-user monitor class manage
+ password hash $h$6$sampleSampleSample$dummyDummyDummyDummyDummyDummyDummyDummy==
+ service-type telnet
+ authorization-attribute user-role network-operator
+#
+local-user operator class manage
+ password simple Example-Secret-2
+ service-type ftp
+ service-type terminal
+ authorization-attribute user-role level-3
+#
+ stp global enable
+ stp mode pvst
+ stp bpdu-protection
+ stp vlan 10 20 priority 4096
+ stp vlan 30 to 32 priority 8192
+ stp vlan 30 to 32 timer hello 200
+ stp vlan 30 to 32 timer forward-delay 1500
+ stp vlan 30 to 32 timer max-age 2000
+#
+vlan 10
+ name sample-office
+ description sample office floor
+#
+vlan 20
+ name sample-voice
+#
+vlan 30
+#
+acl basic 2000
+ description sample management hosts
+ rule 0 permit source 192.0.2.0 0.0.0.127
+ rule 5 permit source 198.51.100.10 0
+ rule 10 deny
+#
+interface Bridge-Aggregation1
+ description to sw-q01
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20 30 to 32
+ port trunk pvid vlan 99
+ link-aggregation mode dynamic
+#
+interface Bridge-Aggregation2
+ port link-type trunk
+ port trunk permit vlan all
+#
+interface GigabitEthernet1/0/1
+ description office desk
+ port link-type access
+ port access vlan 10
+ stp edged-port
+ stp port bpdu-protection enable
+ broadcast-suppression 5
+ multicast-suppression 10
+ unicast-suppression 20
+#
+interface GigabitEthernet1/0/2
+ shutdown
+ speed 100
+ duplex full
+ port link-type access
+ port access vlan 20
+ stp port bpdu-protection disable
+#
+interface GigabitEthernet1/0/3
+ port link-type access
+#
+interface GigabitEthernet1/0/5
+ port link-type trunk
+ port trunk permit vlan 1 10 20
+#
+interface GigabitEthernet1/0/6
+ port link-type trunk
+ undo port trunk permit vlan 1
+#
+interface GigabitEthernet1/0/23
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20 30 to 32
+ port trunk pvid vlan 99
+ port link-aggregation group 1
+#
+interface GigabitEthernet1/0/24
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20 30 to 32
+ port trunk pvid vlan 99
+ port link-aggregation group 1
+#
+interface Ten-GigabitEthernet1/0/25
+ port link-type trunk
+ port trunk permit vlan all
+ port link-aggregation group 2
+#
+interface Ten-GigabitEthernet1/0/26
+ port link-mode route
+ ip address 198.51.100.1 255.255.255.252
+#
+interface Vlan-interface10
+ description sample office
+ ip address 192.0.2.1 255.255.255.128
+ ip address 192.0.2.129 255.255.255.128 sub
+#
+ ip route-static 0.0.0.0 0 192.0.2.126
+#
+ info-center loghost source Vlan-interface10
+ info-center loghost 192.0.2.20 facility local7
+ info-center loghost 192.0.2.21 facility local5
+#
+ snmp-agent
+ snmp-agent community read example-ro acl 2000
+ snmp-agent sys-info contact netops@example.com
+ snmp-agent sys-info location sample room 2
+ snmp-agent sys-info version v2c
+ snmp-agent target-host trap address udp-domain 192.0.2.30 params securityname example-trap v2c
+ snmp-agent trap source Vlan-interface10
+#
+ ntp-service enable
+ ntp-service source Vlan-interface10
+ ntp-service unicast-server 192.0.2.10 priority
+ ntp-service unicast-server 192.0.2.11
+#
+ header login %sample banner: authorized use only%
+#
+ ssh server enable
+ ssh server acl 2000
+#
+line vty 0 63
+ authentication-mode scheme
+ protocol inbound ssh
+ idle-timeout 15
+#
+return

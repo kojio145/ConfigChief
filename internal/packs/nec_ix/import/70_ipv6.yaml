@@ -1,0 +1,325 @@
+# IPv6: static routes, access lists, prefix lists, OSPFv3, the prefixes of
+# router advertisements and DHCPv6 (appendix A 3.23). The lines under an
+# interface are in 20_interfaces.yaml. Syntax: CRM chapters 9, 10, 23 and 24
+# (README, "参照した資料").
+rules:
+  # ---- static routes (CRM p.9-17) ----
+  # A next hop or an interface. A link-local next hop names its interface
+  # behind "%". "metric" and "tag" have no column: such a line stays unknown.
+  - id: route6.static
+    match: '^ipv6 route (?P<dst>default|[0-9A-Fa-f:]+/\d+)(?: (?P<nh>[0-9A-Fa-f]*:[0-9A-Fa-f:]*)(?:%(?P<llif>[A-Za-z][A-Za-z-]*\d+(?::\d+)?\.\d+))?)?(?: (?P<ifn>[A-Za-z][A-Za-z-]*\d+(?::\d+)?\.\d+|BVI\d+)(?: (?P<from>dhcp|ra))?)?(?: distance (?P<dist>\d+))?$'
+    when: "(nh or ifn) and not (nh and ifn)"
+    row:
+      table: ipv6_routes
+      key:
+        vrf: ""
+        prefix: "{{ '::/0' if dst == 'default' else (dst | network) }}"
+        next_hop: "{{ nh }}"
+        out_if: "{{ (llif if llif else ifn) | ifname }}"
+    set: {gateway_from: "{{ from }}", distance: "{{ dist }}"}
+
+  # ---- access lists (CRM p.24-11 and on) ----
+  # One entry on a line; the list has no line of its own. Without numbers
+  # the entries are numbered 10, 20, ... in the order of the lines. "sport
+  # any" and "dport any" say nothing and are read without a value. A domain
+  # name, a wildcard, "linkmgr", "tc", "precedence", the single TCP flags and
+  # an ICMP code stay unknown.
+  - id: acl6.l4
+    match: '^ipv6 access-list (?P<acl>\S+)(?: (?P<seq>\d+))? (?P<action>permit|deny) (?P<proto>tcp|udp)(?: (?P<flag>established|ack|fin|psh|rst|syn|urg))? src (?P<src>any|[0-9A-Fa-f:]+/\d+)(?: sport any| sport (?P<sop>eq|lt|gt|neq) (?P<sp>\d+)| sport range (?P<sp1>\d+) (?P<sp2>\d+))? dest (?P<dst>any|[0-9A-Fa-f:]+/\d+)(?: dport any| dport (?P<dop>eq|lt|gt|neq) (?P<dp>\d+)| dport range (?P<dp1>\d+) (?P<dp2>\d+))?(?: dscp (?P<dscp>\d+))?(?P<frag> fragments)?$'
+    when: "acl not in ['cache', 'dynamic', 'disregard-case'] and (not flag or proto == 'tcp')"
+    row:
+      table: ipv6_acl_entries
+      key:
+        acl: "{{ acl }}"
+        seq: "{{ seq if seq else (rows('ipv6_acl_entries', acl=acl) | length + 1) * 10 }}"
+    set:
+      action: "{{ action }}"
+      protocol: "{{ proto }}"
+      src: "{{ 'any' if src == 'any' else (src | network | replace('/128', '')) }}"
+      src_port: "{{ (sop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ sp }}{{ (sp1 ~ '-' ~ sp2) if sp1 else '' }}"
+      dst: "{{ 'any' if dst == 'any' else (dst | network | replace('/128', '')) }}"
+      dst_port: "{{ (dop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ dp }}{{ (dp1 ~ '-' ~ dp2) if dp1 else '' }}"
+      dscp: "{{ dscp }}"
+    append: {flags: "{{ flag }} {{ 'fragments' if frag else '' }}"}
+  # The kind of message stands before "src": a number behind "type", or one
+  # of the names of the device.
+  - id: acl6.icmp
+    match: '^ipv6 access-list (?P<acl>\S+)(?: (?P<seq>\d+))? (?P<action>permit|deny) icmp(?: type (?P<type>\d+)(?: code (?P<code>\d+))?| (?P<msg>echo|echo-reply|unreachable|packet-too-big|time-exceeded|parameter-problem|router-solicitation|router-advertisement|neighbor-solicitation|neighbor-advertisement|port-unreachable|no-route))? src (?P<src>any|[0-9A-Fa-f:]+/\d+) dest (?P<dst>any|[0-9A-Fa-f:]+/\d+)(?: dscp (?P<dscp>\d+))?(?P<frag> fragments)?$'
+    when: "acl not in ['cache', 'dynamic', 'disregard-case']"
+    row:
+      table: ipv6_acl_entries
+      key:
+        acl: "{{ acl }}"
+        seq: "{{ seq if seq else (rows('ipv6_acl_entries', acl=acl) | length + 1) * 10 }}"
+    set:
+      action: "{{ action }}"
+      protocol: icmp
+      src: "{{ 'any' if src == 'any' else (src | network | replace('/128', '')) }}"
+      dst: "{{ 'any' if dst == 'any' else (dst | network | replace('/128', '')) }}"
+      icmp_type: "{{ type if type else ((msg | unlex('icmp6_type')) if msg else '') }}"
+      icmp_code: "{{ code }}"
+      dscp: "{{ dscp }}"
+    append: {flags: "{{ 'fragments' if frag else '' }}"}
+  # "ip" is every protocol; another protocol is a number.
+  - id: acl6.ip
+    match: '^ipv6 access-list (?P<acl>\S+)(?: (?P<seq>\d+))? (?P<action>permit|deny) (?P<proto>ip|\d+) src (?P<src>any|[0-9A-Fa-f:]+/\d+) dest (?P<dst>any|[0-9A-Fa-f:]+/\d+)(?: dscp (?P<dscp>\d+))?(?P<frag> fragments)?$'
+    when: "acl not in ['cache', 'dynamic', 'disregard-case']"
+    row:
+      table: ipv6_acl_entries
+      key:
+        acl: "{{ acl }}"
+        seq: "{{ seq if seq else (rows('ipv6_acl_entries', acl=acl) | length + 1) * 10 }}"
+    set:
+      action: "{{ action }}"
+      protocol: "{{ proto }}"
+      src: "{{ 'any' if src == 'any' else (src | network | replace('/128', '')) }}"
+      dst: "{{ 'any' if dst == 'any' else (dst | network | replace('/128', '')) }}"
+      dscp: "{{ dscp }}"
+    append: {flags: "{{ 'fragments' if frag else '' }}"}
+
+  # ---- prefix lists (CRM p.23-15) ----
+  # "any" is every prefix: ::/0 with the longest length 128.
+  - id: prefix_list6
+    match: '^ipv6 prefix-list (?P<name>\S+) (?P<seq>\d+) (?P<action>permit|deny) (?:(?P<any>any)|(?P<prefix>[0-9A-Fa-f:]+/\d+)(?: min (?P<ge>\d+))?(?: max (?P<le>\d+))?)$'
+    row: {table: ipv6_prefix_lists, key: {name: "{{ name }}", seq: "{{ seq }}"}}
+    set:
+      action: "{{ action }}"
+      prefix: "{{ '::/0' if any else (prefix | network) }}"
+      ge: "{{ ge }}"
+      le: "{{ '128' if any else le }}"
+
+  # ---- OSPFv3 (CRM chapter 10) ----
+  - id: ospf3
+    match: '^ipv6 router ospf (?P<pid>\d+)$'
+    row: {table: ospfv3_processes, key: {process_id: "{{ pid }}"}}
+    children:
+      - id: ospf3.router_id
+        match: '^router-id (?P<id>\d+\.\d+\.\d+\.\d+)$'
+        set: {router_id: "{{ id }}"}
+      # An interface is put into an area by its name.
+      - id: ospf3.network
+        match: '^network (?P<ifn>[A-Za-z]\S*) area (?P<area>\S+)$'
+        emit:
+          - table: x_ospf3_if
+            key: {if_name: "{{ ifn | ifname }}"}
+            set: {process_id: "{{ pid }}", area: "{{ area }}"}
+      - id: ospf3.area.type
+        match: '^area (?P<area>\S+) stub(?P<nosum> no-summary)?$'
+        row: {table: ospfv3_areas, key: {process_id: "{{ pid }}", area: "{{ area }}"}}
+        set: {type: "{{ 'totally_stub' if nosum else 'stub' }}"}
+      - id: ospf3.area.default_cost
+        match: '^area (?P<area>\S+) default-cost (?P<n>\d+)$'
+        row: {table: ospfv3_areas, key: {process_id: "{{ pid }}", area: "{{ area }}"}}
+        set: {default_cost: "{{ n }}"}
+      - id: ospf3.area.range
+        match: '^area (?P<area>\S+) range (?P<p>[0-9A-Fa-f:]+/\d+) (?P<adv>advertise|not-advertise)$'
+        row: {table: ospfv3_areas, key: {process_id: "{{ pid }}", area: "{{ area }}"}}
+        append: {"{{ 'ranges_hidden' if adv == 'not-advertise' else 'ranges' }}": "{{ p | network }}"}
+      # An area with nothing set on it: the same as no row.
+      - id: ospf3.area
+        match: '^area (?P<area>\S+)$'
+      - id: ospf3.passive
+        match: '^passive-interface (?P<ifn>[A-Za-z]\S*)$'
+        emit:
+          - table: x_ospf3_passive
+            key: {process_id: "{{ pid }}", if_name: "{{ ifn | ifname }}"}
+            set: {passive: "true"}
+      # The line has no "always" here (README); "metric-type", "route-map"
+      # and "tag" have no column.
+      - id: ospf3.default_originate
+        match: '^originate-default(?: metric (?P<metric>\d+))?$'
+        set: {default_originate: when_present, default_metric: "{{ metric }}"}
+      # The kind goes into the list of the process; a metric, a tag or a
+      # route map into the table of the options (CRM 10-46).
+      - id: ospf3.redistribute
+        match: '^redistribute (?P<src>connected|static|bgp|rip)$'
+        append: {redistribute: "{{ src }}"}
+      - id: ospf3.redistribute.options
+        match: '^redistribute (?P<src>connected|static|bgp|rip)(?: metric (?P<metric>\d+))?(?: metric-type (?P<mtype>1|2))?(?: tag (?P<tag>\d+))?(?: route-map (?P<map>\S+))?$'
+        append: {redistribute: "{{ src }}"}
+        emit:
+          - table: ospfv3_redistribute
+            key: {process_id: "{{ pid }}", source: "{{ src }}"}
+            set: {metric: "{{ metric }}", metric_type: "{{ mtype }}", tag: "{{ tag }}", filter: "{{ map }}"}
+
+  # ---- the prefixes of router advertisements (CRM p.9-16) ----
+  # A prefix has a name here, and an interface advertises it by the name;
+  # the dataset keeps no name. "infinity" has no form in the dataset.
+  - id: ra.prefix
+    match: '^ipv6 prefix (?P<name>\S+) (?P<p>[0-9A-Fa-f:]+/\d+)(?: (?P<valid>\d+) (?P<pref>\d+))?(?P<onlink> on-link)?(?P<auto> autonomous)?$'
+    emit:
+      - table: x_prefix
+        key: {name: "{{ name }}"}
+        set: {prefix: "{{ p | network }}", valid: "{{ valid }}", pref: "{{ pref }}", onlink: "{{ 'true' if onlink else 'false' }}", auto: "{{ 'true' if auto else 'false' }}"}
+
+  # ---- DHCPv6 (CRM chapter 9): a profile is bound to an interface by its
+  # name. The line of a profile only holds its settings. ----
+  # The switch of the server: the pack writes it wherever an interface runs
+  # a DHCPv6 server.
+  - id: dhcp6.enable
+    match: '^ipv6 dhcp enable$'
+    ignore: パックが書く行（DHCPv6 サーバを使う機器で書く。別紙 A 3.23）
+  - id: dhcp6.client
+    match: '^ipv6 dhcp client-profile (?P<name>\S+)$'
+    children:
+      - id: dhcp6.client.option
+        match: '^option-request (?P<opt>dns-servers|domain-search-list|ntp-servers)$'
+        emit:
+          - table: x_dhcp6c_opt
+            key: {profile: "{{ name }}", opt: "{{ opt | unlex('dhcp6_option') }}"}
+      - id: dhcp6.client.subscriber
+        match: '^ia-pd subscriber (?P<ifn>[A-Za-z]\S*)(?: (?P<sfx>[0-9A-Fa-f:]+/\d+))?(?P<eui> eui-64)?$'
+        emit:
+          - table: x_dhcp6c_sub
+            key: {profile: "{{ name }}", if_name: "{{ ifn | ifname }}"}
+            set: {suffix: "{{ sfx }}", eui: "{{ 'true' if eui else '' }}"}
+      # A part of the received prefix, kept for the server profile that
+      # delegates it on by the name of this pool (CRM p.9-35, FD 2.21.5).
+      - id: dhcp6.client.redistribute
+        match: '^ia-pd redistribute pool (?P<pool>\S+) (?P<p>[0-9A-Fa-f:]+/\d+)(?: nla-length (?P<nla>\d+))?$'
+        emit:
+          - table: x_dhcp6c_redist
+            key: {pool: "{{ pool }}"}
+            set: {profile: "{{ name }}", prefix: "{{ p }}", nla: "{{ nla if nla else '0' }}"}
+      - id: dhcp6.client.inform
+        match: '^information-request$'
+        emit:
+          - table: x_dhcp6c
+            key: {name: "{{ name }}"}
+            set: {only: "true"}
+      - id: dhcp6.client.rapid
+        match: '^rapid-commit$'
+        emit:
+          - table: x_dhcp6c
+            key: {name: "{{ name }}"}
+            set: {rapid: "true"}
+  - id: dhcp6.server
+    match: '^ipv6 dhcp server-profile (?P<name>\S+)$'
+    children:
+      - id: dhcp6.server.dns
+        match: '^dns-server (?P<a>dhcp|[0-9A-Fa-f]*:[0-9A-Fa-f:]+)$'
+        emit:
+          - table: x_dhcp6s_dns
+            key: {profile: "{{ name }}", addr: "{{ a if a == 'dhcp' else (a | ip) }}"}
+      - id: dhcp6.server.ntp
+        match: '^ntp-server (?P<a>dhcp|[0-9A-Fa-f]*:[0-9A-Fa-f:]+)$'
+        emit:
+          - table: x_dhcp6s_ntp
+            key: {profile: "{{ name }}", addr: "{{ a if a == 'dhcp' else (a | ip) }}"}
+      # The prefix one router gets, with the bits the device fills in set
+      # to 0, and how many those bits are (CRM p.9-35, FD 2.21.3).
+      - id: dhcp6.server.pd
+        match: '^ia-pd prefix (?P<p>[0-9A-Fa-f:]+/\d+) nla-length (?P<nla>\d+)(?: life-time (?P<valid>\d+|infinity) (?P<pref>\d+|infinity))?$'
+        emit:
+          - table: x_dhcp6s_pd
+            key: {profile: "{{ name }}"}
+            set: {prefix: "{{ p }}", nla: "{{ nla }}", valid: "{{ 'infinite' if valid == 'infinity' else valid }}", pref: "{{ 'infinite' if pref == 'infinity' else pref }}"}
+      - id: dhcp6.server.redistribute
+        match: '^ia-pd redistribute-prefix pool (?P<pool>\S+)$'
+        emit:
+          - table: x_dhcp6s_redist
+            key: {profile: "{{ name }}"}
+            set: {pool: "{{ pool }}"}
+
+derive:
+  # An interface runs OSPFv3 when a "network" line of a process names it.
+  - id: ospf3.interface
+    for: x_ospf3_if
+    as: o
+    let:
+      pv: "lookup('x_ospf3_passive', process_id=o.process_id, if_name=o.if_name)"
+    when: "o.process_id and o.area"
+    row: {table: ospfv3_interfaces, key: {process_id: "{{ o.process_id }}", if_name: "{{ o.if_name }}"}}
+    set:
+      area: "{{ o.area }}"
+      cost: "{{ o.cost }}"
+      priority: "{{ o.priority }}"
+      hello: "{{ o.hello }}"
+      dead: "{{ o.dead }}"
+      passive: "{{ pv.passive }}"
+
+  # A prefix an interface advertises.
+  - id: ra.prefix.join
+    for: x_ra_adv
+    as: a
+    let:
+      p: "lookup('x_prefix', name=a.name)"
+    when: "p.prefix"
+    row: {table: ipv6_ra_prefixes, key: {if_name: "{{ a.if_name }}", prefix: "{{ p.prefix }}"}}
+    set: {valid_lifetime: "{{ p.valid }}", preferred_lifetime: "{{ p.pref }}", on_link: "{{ p.onlink }}", autonomous: "{{ p.auto }}"}
+
+  # The DHCPv6 client of an interface. A profile that only asks for
+  # information delegates no prefix: its name is not kept.
+  - id: dhcp6.client.join
+    for: x_dhcp6c_bind
+    as: b
+    let:
+      p: "lookup('x_dhcp6c', name=b.profile)"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ b.if_name }}"}}
+    set:
+      pd_request: "{{ '' if p.only else b.profile }}"
+      dhcp_info_only: "{{ 'true' if p.only else '' }}"
+      rapid_commit: "{{ p.rapid }}"
+  - id: dhcp6.client.option.join
+    for: x_dhcp6c_opt
+    as: o
+    let:
+      b: "lookup('x_dhcp6c_bind', profile=o.profile)"
+    when: "b.if_name"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ b.if_name }}"}}
+    append: {dhcp_request: "{{ o.opt }}"}
+  # The interface that gets an address from the delegated prefix.
+  - id: dhcp6.client.subscriber.join
+    for: x_dhcp6c_sub
+    as: s
+    let:
+      b: "lookup('x_dhcp6c_bind', profile=s.profile)"
+    when: "b.if_name"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ s.if_name }}"}}
+    set: {pd_from: "{{ s.profile }}", pd_suffix: "{{ s.suffix }}", pd_eui64: "{{ s.eui }}"}
+
+  # The DHCPv6 server of an interface, with what its profile hands out.
+  - id: dhcp6.server.join
+    for: x_dhcp6s_bind
+    as: b
+    row: {table: ipv6_interfaces, key: {if_name: "{{ b.if_name }}"}}
+    set: {dhcp_server: "{{ b.profile }}"}
+  - id: dhcp6.server.dns.join
+    for: x_dhcp6s_dns
+    as: d
+    let:
+      b: "lookup('x_dhcp6s_bind', profile=d.profile)"
+    when: "b.if_name"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ b.if_name }}"}}
+    append: {dhcp_dns: "{{ d.addr }}"}
+  - id: dhcp6.server.ntp.join
+    for: x_dhcp6s_ntp
+    as: d
+    let:
+      b: "lookup('x_dhcp6s_bind', profile=d.profile)"
+    when: "b.if_name"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ b.if_name }}"}}
+    append: {dhcp_ntp: "{{ d.addr }}"}
+  # The prefixes it delegates. The line gives one delegated prefix with the
+  # bits the device fills in set to 0: the pool is shorter by those bits.
+  # A line whose bits are not 0 is not read (the pool cannot be told).
+  - id: dhcp6.server.pd.join
+    for: x_dhcp6s_pd
+    as: d
+    let:
+      b: "lookup('x_dhcp6s_bind', profile=d.profile)"
+      pool: "((d.prefix | ip) ~ '/' ~ ((d.prefix | prefixlen | int) - (d.nla | int))) | network"
+    when: "b.if_name and (d.prefix | prefixlen | int) >= (d.nla | int) and (pool | ip) == (d.prefix | network | ip)"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ b.if_name }}"}}
+    set: {dhcp_pd_pool: "{{ pool }}", dhcp_pd_length: "{{ d.prefix | prefixlen }}", dhcp_pd_valid: "{{ d.valid }}", dhcp_pd_preferred: "{{ d.pref }}"}
+  # A part of the prefix the client profile received, delegated on.
+  - id: dhcp6.server.redistribute.join
+    for: x_dhcp6s_redist
+    as: d
+    let:
+      b: "lookup('x_dhcp6s_bind', profile=d.profile)"
+      c: "lookup('x_dhcp6c_redist', pool=d.pool)"
+      pool: "((c.prefix | ip) ~ '/' ~ ((c.prefix | prefixlen | int) - (c.nla | int))) | network if c.prefix else ''"
+    when: "b.if_name and c.profile and (c.prefix | prefixlen | int) >= (c.nla | int) and (pool | ip) == (c.prefix | network | ip)"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ b.if_name }}"}}
+    set: {dhcp_pd_from: "{{ c.profile }}", dhcp_pd_pool: "{{ pool }}", dhcp_pd_length: "{{ c.prefix | prefixlen }}"}

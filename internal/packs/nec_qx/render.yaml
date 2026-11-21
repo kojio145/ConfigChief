@@ -1,0 +1,17 @@
+# The order of the configuration (appendix B 5.1): what a line names stands
+# before the line.
+sections:
+  - {id: system,     template: system.j2}
+  - {id: vrfs,       template: vrfs.j2}         # the VPN instances, before what names them
+  - {id: switch,     template: switch.j2}       # spanning tree and the VLANs, before the ports
+  - {id: policy,     template: policy.j2}       # the access lists, before the interfaces that name them
+  - {id: track,      template: track.j2}        # NQA operations and track entries
+  - {id: qos,        template: qos.j2}
+  - {id: dhcp,       template: dhcp.j2}
+  - {id: interfaces, template: interfaces.j2}   # the aggregate interfaces first
+  - {id: mirror,     template: mirror.j2}       # the mirroring groups name ports
+  - {id: routing,    template: routing.j2}      # static routes and OSPF
+  - {id: services,   template: services.j2}
+  - {id: extra,      slot: extra}
+  - {id: lines,      template: lines.j2}
+  - {id: footer,     template: footer.j2}

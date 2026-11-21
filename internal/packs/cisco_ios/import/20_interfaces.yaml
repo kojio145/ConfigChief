@@ -28,6 +28,218 @@ rules:
       - id: if.ipv6
         match: '^ipv6 address (?P<addr>[0-9A-Fa-f:]+/\d+)$'
         append: {ipv6: "{{ addr | lower }}"}
+      # ---- IPv6 (appendix A 3.23). A fixed address stays in the row of the
+      # interface (above); how IPv6 works on the interface has a table of its
+      # own. Syntax: Cisco IOS IPv6 Command Reference. ----
+      - id: if.ipv6.enable
+        match: '^ipv6 enable$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {enabled: true}
+      - id: if.ipv6.link_local
+        match: '^ipv6 address (?P<addr>[0-9A-Fa-f:]+) link-local$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {link_local: "{{ addr }}"}
+      - id: if.ipv6.eui64
+        match: '^ipv6 address (?P<p>[0-9A-Fa-f:]+/\d+) eui-64$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        append: {eui64: "{{ p | network }}"}
+      - id: if.ipv6.anycast
+        match: '^ipv6 address (?P<addr>[0-9A-Fa-f:]+/\d+) anycast$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        append: {anycast: "{{ addr }}"}
+      - id: if.ipv6.autoconfig
+        match: '^ipv6 address autoconfig(?P<def> default)?$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {autoconfig: true, autoconfig_default: "{{ 'true' if def else '' }}"}
+      - id: if.ipv6.dhcp
+        match: '^ipv6 address dhcp(?P<rc> rapid-commit)?$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {dhcp_address: true, rapid_commit: "{{ 'true' if rc else '' }}"}
+      # An address made from a prefix that has a name (a delegated prefix).
+      - id: if.ipv6.pd.address
+        match: '^ipv6 address (?P<pn>[A-Za-z][\w.-]*) (?P<sfx>[0-9A-Fa-f:]+/\d+)$'
+        when: "pn not in ['autoconfig', 'dhcp']"
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {pd_from: "{{ pn }}", pd_suffix: "{{ sfx }}"}
+      # With "hint" the line stays unknown.
+      - id: if.ipv6.pd.request
+        match: '^ipv6 dhcp client pd (?P<pn>[^\s/:]+)(?P<rc> rapid-commit)?$'
+        when: "pn != 'hint'"
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {pd_request: "{{ pn }}", rapid_commit: "{{ 'true' if rc else '' }}"}
+      - id: if.ipv6.mtu
+        match: '^ipv6 mtu (?P<n>\d+)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {mtu: "{{ n }}"}
+      # IP Application Services Command Reference, "ipv6 tcp adjust-mss".
+      - id: if.ipv6.tcp_mss
+        match: '^ipv6 tcp adjust-mss (?P<n>\d+)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {tcp_mss: "{{ n }}"}
+      - id: if.ipv6.policy_route
+        match: '^ipv6 policy route-map (?P<map>\S+)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {policy_route: "{{ map }}"}
+      - id: if.ipv6.filter
+        match: '^ipv6 traffic-filter (?P<acl>\S+) (?P<dir>in|out)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {"acl_{{ dir }}": "{{ acl }}"}
+      # Router advertisements: sent unless the line stops them. "no ipv6 nd
+      # ra suppress" is what the template writes for "send".
+      - id: if.ipv6.ra.suppress
+        match: '^ipv6 nd ra suppress(?P<all> all)?$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra: "{{ 'off' if all else 'reply_only' }}"}
+      - id: if.ipv6.ra.send
+        match: '^no ipv6 nd ra suppress$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra: send}
+      # The form in milliseconds stays unknown.
+      - id: if.ipv6.ra.interval
+        match: '^ipv6 nd ra interval (?P<max>\d+)(?: (?P<min>\d+))?$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_interval: "{{ max }}", ra_interval_min: "{{ min }}"}
+      - id: if.ipv6.ra.lifetime
+        match: '^ipv6 nd ra lifetime (?P<n>\d+)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_lifetime: "{{ n }}"}
+      - id: if.ipv6.ra.managed
+        match: '^ipv6 nd managed-config-flag$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_managed: true}
+      - id: if.ipv6.ra.other
+        match: '^ipv6 nd other-config-flag$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_other: true}
+      - id: if.ipv6.ra.dns
+        match: '^ipv6 nd ra dns server (?P<a>[0-9A-Fa-f:]+)(?: (?P<sec>\d+))?$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_dns_lifetime: "{{ sec }}"}
+        append: {ra_dns: "{{ a }}"}
+      # One flag at most stands behind the two lifetimes. "default",
+      # "no-advertise", "off-link", "no-rtr-address" and the form with dates
+      # have no column.
+      - id: if.ipv6.ra.prefix
+        match: '^ipv6 nd prefix (?P<p>[0-9A-Fa-f:]+/\d+)(?: (?P<valid>\d+) (?P<pref>\d+)(?: (?P<flag>no-autoconfig|no-onlink))?)?$'
+        row: {table: ipv6_ra_prefixes, key: {if_name: "{{ parent.name | ifname }}", prefix: "{{ p | network }}"}}
+        set:
+          valid_lifetime: "{{ valid }}"
+          preferred_lifetime: "{{ pref }}"
+          on_link: "{{ 'false' if flag == 'no-onlink' else 'true' }}"
+          autonomous: "{{ 'false' if flag == 'no-autoconfig' else 'true' }}"
+      # The pool is joined in 70_ipv6.yaml. With "automatic" or an option
+      # the line stays unknown.
+      - id: if.ipv6.dhcp.server
+        match: '^ipv6 dhcp server (?P<pool>\S+)$'
+        when: "pool != 'automatic'"
+        emit:
+          - table: x_dhcp6_bind
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {pool: "{{ pool }}"}
+      # ---- RIP and RIPng (appendix A 3.27): put together in 72_rip.yaml ----
+      # RIP runs on the interfaces a "network" line of the process covers:
+      # what the interface says of it is kept aside until then.
+      - id: if.rip.version
+        match: '^ip rip (?P<dir>send|receive) version(?P<v1> 1)?(?P<v2> 2)?$'
+        when: "v1 or v2"
+        emit:
+          - table: x_rip_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {"{{ dir }}_version": "{{ '1' if v1 else '' }} {{ '2' if v2 else '' }}"}
+      - id: if.rip.v2_broadcast
+        match: '^ip rip v2-broadcast$'
+        emit:
+          - table: x_rip_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {v2_broadcast: "true"}
+      - id: if.rip.auth.mode
+        match: '^ip rip authentication mode (?P<mode>text|md5)$'
+        emit:
+          - table: x_rip_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {auth_mode: "{{ mode }}"}
+      - id: if.rip.auth.chain
+        match: '^ip rip authentication key-chain (?P<chain>\S+)$'
+        emit:
+          - table: x_rip_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {key_chain: "{{ chain }}"}
+      - id: if.rip.summary
+        match: '^ip summary-address rip (?P<a>\d+\.\d+\.\d+\.\d+) (?P<m>\d+\.\d+\.\d+\.\d+)$'
+        emit:
+          - table: x_rip_if_summary
+            key: {if_name: "{{ parent.name | ifname }}", prefix: "{{ a | with_mask(m) | network }}"}
+      - id: if.rip.split
+        match: '^(?P<no>no )?ip split-horizon$'
+        emit:
+          - table: x_rip_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {split_horizon: "{{ 'none' if no else 'split_horizon' }}"}
+      # RIPng: the interface names the process. Only the lines of the first
+      # name seen on the device are read (the dataset has one RIPng).
+      - id: if.ripng.enable
+        match: '^ipv6 rip (?P<rn>\S+) enable$'
+        when: "rows('x_ripng') | length == 0 or rows('x_ripng', name=rn) | length > 0"
+        row: {table: rip_interfaces, key: {family: ipv6, if_name: "{{ parent.name | ifname }}"}}
+        emit:
+          - table: x_ripng
+            key: {name: "{{ rn }}"}
+      - id: if.ripng.default
+        match: '^ipv6 rip (?P<rn>\S+) default-information originate(?: metric (?P<metric>\d+))?$'
+        when: "rows('x_ripng', name=rn) | length > 0 and rows('rip_interfaces', family='ipv6', if_name=(parent.name | ifname)) | length > 0"
+        row: {table: rip_interfaces, key: {family: ipv6, if_name: "{{ parent.name | ifname }}"}}
+        set: {default_originate: true, default_originate_metric: "{{ metric }}"}
+      - id: if.ripng.offset
+        match: '^ipv6 rip (?P<rn>\S+) metric-offset (?P<n>\d+)$'
+        when: "rows('x_ripng', name=rn) | length > 0 and rows('rip_interfaces', family='ipv6', if_name=(parent.name | ifname)) | length > 0"
+        row: {table: rip_interfaces, key: {family: ipv6, if_name: "{{ parent.name | ifname }}"}}
+        set: {metric_offset: "{{ n }}"}
+      - id: if.ripng.summary
+        match: '^ipv6 rip (?P<rn>\S+) summary-address (?P<p>[0-9A-Fa-f:]+/\d+)$'
+        when: "rows('x_ripng', name=rn) | length > 0 and rows('rip_interfaces', family='ipv6', if_name=(parent.name | ifname)) | length > 0"
+        row: {table: rip_interfaces, key: {family: ipv6, if_name: "{{ parent.name | ifname }}"}}
+        append: {summary: "{{ p | network }}"}
+      # OSPFv3 on the interface: kept aside, put together in 70_ipv6.yaml.
+      # The second line is the newer form of the first.
+      - id: if.ospf3.area
+        match: '^ipv6 ospf (?P<pid>\d+) area (?P<area>\S+)$'
+        emit:
+          - table: x_ospf3_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {process_id: "{{ pid }}", area: "{{ area }}"}
+      - id: if.ospf3.area.new
+        match: '^ospfv3 (?P<pid>\d+) ipv6 area (?P<area>\S+)$'
+        emit:
+          - table: x_ospf3_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {process_id: "{{ pid }}", area: "{{ area }}"}
+      - id: if.ospf3.number
+        match: '^ipv6 ospf (?P<what>cost|priority|hello-interval|dead-interval) (?P<n>\d+)$'
+        emit:
+          - table: x_ospf3_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {"{{ what | replace('-interval', '') }}": "{{ n }}"}
+      # Authentication by IPsec AH (OSPF Configuration Guide, "OSPFv3
+      # Authentication Support with IPsec"): "0 <key>" is the key itself,
+      # "7 <key>" stays in the form the device saved.
+      - id: if.ospf3.auth
+        match: '^ipv6 ospf authentication ipsec spi (?P<spi>\d+) (?P<hash>md5|sha1) (?:0 )?(?P<key>7 \S+|[0-9A-Fa-f]+)$'
+        emit:
+          - table: x_ospf3_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {auth_hash: "{{ hash }}", auth_spi: "{{ spi }}", auth_key: "{{ key }}"}
+      - id: if.ospf3.auth.null
+        match: '^ipv6 ospf authentication null$'
+        emit:
+          - table: x_ospf3_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {auth_hash: none}
+      - id: if.ospf3.network
+        match: '^ipv6 ospf network (?P<type>broadcast|non-broadcast|point-to-multipoint|point-to-point)$'
+        emit:
+          - table: x_ospf3_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {network_type: "{{ type | unlex('ospf_network') }}"}
 
       - id: if.shutdown
         match: '^shutdown$'
@@ -56,7 +268,7 @@ rules:
         match: '^bandwidth (?P<n>\d+)$'
         set: {bandwidth: "{{ n }}"}
       - id: if.speed
-        match: '^speed (?P<v>10|100|1000|auto)$'
+        match: '^speed (?P<v>10|100|1000|2500|5000|10000|auto)$'
         set: {speed: "{{ v }}"}
       - id: if.duplex
         match: '^duplex (?P<v>full|half|auto)$'
@@ -76,6 +288,10 @@ rules:
       - id: if.proxy_arp.on
         match: '^ip proxy-arp$'
         set: {proxy_arp: true}
+      # Policy routing: the route policy for what comes in here (A 3.19).
+      - id: if.policy_route
+        match: '^ip policy route-map (?P<map>\S+)$'
+        set: {policy_route: "{{ map }}"}
 
       # ---- OSPF on the interface: kept aside, put together in 90_derive ----
       - id: if.ospf.area
@@ -103,14 +319,30 @@ rules:
             key: {if_name: "{{ parent.name | ifname }}"}
             set: {auth_type: "{{ 'md5' if kind == 'message-digest' else ('none' if kind == 'null' else 'simple') }}"}
       # A key written in the type-7 form ("7 <text>") has two words and is not read.
+      # The encrypted form is kept as the device shows it: "7 <value>"
+      # (appendix A 3.26).
+      - id: if.ospf.key.md5.encrypted
+        match: '^ip ospf message-digest-key (?P<id>\d+) md5 7 (?P<key>\S+)$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {auth_key_id: "{{ id }}", auth_key: "7 {{ key }}"}
+      - id: if.ospf.key.simple.encrypted
+        match: '^ip ospf authentication-key 7 (?P<key>\S+)$'
+        emit:
+          - table: x_ospf_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {auth_key: "7 {{ key }}"}
       - id: if.ospf.key.md5
-        match: '^ip ospf message-digest-key (?P<id>\d+) md5 (?P<key>\S+)$'
+        match: '^ip ospf message-digest-key (?P<id>\d+) md5 (?:0 )?(?P<key>\S+)$'
+        when: "key != '7'"
         emit:
           - table: x_ospf_if
             key: {if_name: "{{ parent.name | ifname }}"}
             set: {auth_key_id: "{{ id }}", auth_key: "{{ key }}"}
       - id: if.ospf.key.simple
         match: '^ip ospf authentication-key (?:0 )?(?P<key>\S+)$'
+        when: "key != '7'"
         emit:
           - table: x_ospf_if
             key: {if_name: "{{ parent.name | ifname }}"}
@@ -180,6 +412,77 @@ rules:
         row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
         set: {protocol: vrrp, track: "{{ obj }}", track_decrement: "{{ dec }}"}
 
+      # ---- VRRP version 3 (appendix A 3.23, "IPv6 の VRRP"): the group
+      # stands in a mode of its own under the interface (Network Services
+      # Configuration Guide, "VRRPv3 Protocol Support"; First Hop Redundancy
+      # Protocols Command Reference, "fhrp version vrrp v3", "track (VRRP)").
+      # The interval is in milliseconds: an IPv4 group keeps seconds, so only
+      # whole seconds are read there. ----
+      - id: if.vrrp3.ipv4
+        match: '^vrrp (?P<group>\d+) address-family ipv4$'
+        row: {table: fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        set: {protocol: vrrp}
+        children:
+          - id: if.vrrp3.ipv4.address
+            match: '^address (?P<ip>\d+\.\d+\.\d+\.\d+) primary$'
+            set: {virtual_ip: "{{ ip }}"}
+          - id: if.vrrp3.ipv4.timers
+            match: '^timers advertise (?P<ms>\d+)$'
+            when: "(ms | int) % 1000 == 0"
+            set: {advert_interval: "{{ (ms | int) // 1000 }}"}
+          - id: if.vrrp3.ipv4.vrrpv2
+            match: '^vrrpv2$'
+            set: {vrrpv2: true}
+          - id: if.vrrp3.priority
+            match: '^priority (?P<n>\d+)$'
+            set: {priority: "{{ n }}"}
+          - id: if.vrrp3.preempt.delay
+            match: '^preempt delay minimum (?P<delay>\d+)$'
+            set: {preempt: true, preempt_delay: "{{ delay }}"}
+          - id: if.vrrp3.preempt.off
+            match: '^no preempt$'
+            set: {preempt: false}
+          - id: if.vrrp3.track
+            match: '^track (?P<obj>\d+)(?: decrement (?P<dec>\d+))?$'
+            set: {track: "{{ obj }}", track_decrement: "{{ dec }}"}
+          - id: if.vrrp3.end
+            match: '^exit-vrrp$'
+            ignore: 終わりの印
+      # The first address is the link-local one (it has to be there); the
+      # global ones carry the length of their prefix, which the row does not
+      # keep (the template takes it from the addresses of the interface).
+      - id: if.vrrp3.ipv6
+        match: '^vrrp (?P<group>\d+) address-family ipv6$'
+        row: {table: ipv6_fhrp, key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}}
+        children:
+          - id: if.vrrp3.ipv6.link_local
+            match: '^address (?P<ip>[Ff][Ee]80:[0-9A-Fa-f:]*) primary$'
+            set: {link_local: "{{ ip }}"}
+          - id: if.vrrp3.ipv6.address
+            match: '^address (?P<ip>[0-9A-Fa-f]*:[0-9A-Fa-f:]+)/(?P<len>\d+)$'
+            when: "not (ip | in_net('fe80::/10'))"
+            append: {addresses: "{{ ip }}"}
+          - id: if.vrrp3.ipv6.timers
+            match: '^timers advertise (?P<ms>\d+)$'
+            set: {advert_interval: "{{ ms }}"}
+          # The same lines as in an IPv4 group (the rules of that group set
+          # columns this table does not have, so they are not borrowed).
+          - id: if.vrrp3.ipv6.priority
+            match: '^priority (?P<n>\d+)$'
+            set: {priority: "{{ n }}"}
+          - id: if.vrrp3.ipv6.preempt.delay
+            match: '^preempt delay minimum (?P<delay>\d+)$'
+            set: {preempt: true, preempt_delay: "{{ delay }}"}
+          - id: if.vrrp3.ipv6.preempt.off
+            match: '^no preempt$'
+            set: {preempt: false}
+          - id: if.vrrp3.ipv6.track
+            match: '^track (?P<obj>\d+)(?: decrement (?P<dec>\d+))?$'
+            set: {track: "{{ obj }}", track_decrement: "{{ dec }}"}
+          - id: if.vrrp3.ipv6.end
+            match: '^exit-vrrp$'
+            ignore: 終わりの印
+
       # ---- tunnels ----
       - id: if.tunnel.source
         match: '^tunnel source (?P<src>\S+)$'
@@ -198,6 +501,20 @@ rules:
         match: '^tunnel mode (?P<mode>ipip|ipsec ipv4)$'
         row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
         set: {type: "{{ mode | unlex('tunnel_mode') }}"}
+      # IPv4 carried over IPv6 and IPv6 carried over IPv4 (appendix A 3.23).
+      - id: if.tunnel.destination.v6
+        match: '^tunnel destination (?P<dst>[0-9A-Fa-f]*:[0-9A-Fa-f:]+)$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {destination_v6: "{{ dst }}"}
+      # A name with a dot in it (the device looks the address up).
+      - id: if.tunnel.destination.name
+        match: '^tunnel destination (?P<dst>[A-Za-z][\w-]*(?:\.[A-Za-z][\w-]*)+)$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {destination_fqdn: "{{ dst }}"}
+      - id: if.tunnel.mode.v6
+        match: '^tunnel mode (?P<mode>ipv6|ipv6ip)$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {type: "{{ mode | unlex('tunnel_mode') }}"}
       - id: if.tunnel.keepalive
         match: '^keepalive (?P<period>\d+) (?P<retries>\d+)$'
         when: "parent.name is startingwith('Tunnel')"
@@ -209,21 +526,62 @@ rules:
           - table: x_crypto_map_if
             key: {if_name: "{{ parent.name | ifname }}"}
             set: {map: "{{ map }}"}
-      - id: if.tunnel.protection
-        match: '^tunnel protection ipsec profile (?P<profile>\S+)$'
+      # The VRF the tunnel sends its outer packets in (Interface and Hardware
+      # Component Command Reference, "tunnel vrf"): the outer VRF of the row
+      # of IPsec (appendix A 3.20). On a tunnel without IPsec the line stays
+      # unknown.
+      - id: if.tunnel.vrf
+        match: '^tunnel vrf (?P<fv>\S+)$'
         emit:
           - table: x_tunnel_protection
             key: {if_name: "{{ parent.name | ifname }}"}
-            set: {profile: "{{ profile }}"}
+            set: {vrf: "{{ fv }}"}
+      # The profile of IKE may stand on this line, in place of "set
+      # isakmp-profile" / "set ikev2-profile" in the IPsec profile (Security
+      # Command Reference S to Z, "tunnel protection"). "shared" (for two
+      # multipoint GRE tunnels with one source) stays unknown.
+      - id: if.tunnel.protection
+        match: '^tunnel protection ipsec profile (?P<profile>\S+)(?: (?P<kind>isakmp-profile|ikev2-profile) (?P<pn>\S+))?$'
+        emit:
+          - table: x_tunnel_protection
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {profile: "{{ profile }}", isakmp_profile: "{{ pn if kind == 'isakmp-profile' else '' }}", ikev2: "{{ pn if kind == 'ikev2-profile' else '' }}"}
+      # The traffic the tunnel tells the peer that it protects, in place of
+      # "any any" (an access list on a tunnel interface of IPsec; Security
+      # Command Reference S to Z, "tunnel protection ipsec policy"). IPv6
+      # stays unknown.
+      - id: if.tunnel.protection.policy
+        match: '^tunnel protection ipsec policy ipv4 (?P<acl>\S+)$'
+        emit:
+          - table: x_tunnel_protection
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {policy_acl: "{{ acl }}"}
 
       # ---- PPPoE: the physical side and the Dialer side meet in 90_derive ----
       # The service name is the last word of the same line (cmdref 7.12).
+      # The words after the pool number, in the order of the command
+      # reference (appendix A 3.26); another order stays unknown. A service
+      # name in quotation marks is read without them.
       - id: if.pppoe.client
-        match: '^pppoe-client dial-pool-number (?P<pool>\d+)(?: service-name (?P<svc>[^\s"]+))?$'
+        match: '^pppoe-client dial-pool-number (?P<pool>\d+)(?: (?P<dod>dial-on-demand))?(?: restart (?P<rs>\d+))?(?: service-name (?:"(?P<svcq>[^"]+)"|(?P<svc>[^\s"]+)))?(?: (?P<mac>mac-override))?$'
         emit:
           - table: x_pppoe_client
             key: {pool: "{{ pool }}"}
-            set: {physical_if: "{{ parent.name | ifname }}", service_name: "{{ svc }}"}
+            set:
+              physical_if: "{{ parent.name | ifname }}"
+              service_name: "{{ svcq if svcq else svc }}"
+              on_demand: "{{ 'true' if dod else '' }}"
+              restart_delay: "{{ rs }}"
+              mac_override: "{{ 'true' if mac else '' }}"
+      # A port that takes PPPoE for a group (a PPPoE server; appendix A
+      # 3.26). "global" is the mark of a client port (below).
+      - id: if.pppoe.enable.group
+        match: '^pppoe enable group (?P<grp>\S+)$'
+        when: "grp != 'global'"
+        emit:
+          - table: x_bba_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {group: "{{ grp }}"}
       # The switch of PPPoE on the port: the design data has no column for
       # it, and the template always writes it.
       - id: if.pppoe.enable
@@ -255,8 +613,31 @@ rules:
           - table: x_dialer
             key: {if_name: "{{ parent.name | ifname }}"}
             set: {username: "{{ user }}"}
+      # What starts the call: the list is a line of the whole device
+      # ("dialer-list", import/50_services.yaml).
+      - id: if.dialer.group
+        match: '^dialer-group (?P<n>\d+)$'
+        emit:
+          - table: x_dialer
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {group: "{{ n }}"}
+      # The encrypted form is kept as the device shows it: "7 <value>"
+      # (appendix A 3.26).
+      - id: if.dialer.chap.password.encrypted
+        match: '^ppp chap password 7 (?P<pw>\S+)$'
+        emit:
+          - table: x_dialer
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {password: "7 {{ pw }}"}
+      - id: if.dialer.pap.encrypted
+        match: '^ppp pap sent-username (?P<user>\S+) password 7 (?P<pw>\S+)$'
+        emit:
+          - table: x_dialer
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {pap_username: "{{ user }}", pap_password: "7 {{ pw }}"}
       - id: if.dialer.chap.password
         match: '^ppp chap password (?:0 )?(?P<pw>\S+)$'
+        when: "pw != '7'"
         emit:
           - table: x_dialer
             key: {if_name: "{{ parent.name | ifname }}"}
@@ -265,6 +646,7 @@ rules:
       # new; other values go to columns of their own, and the row is not made.
       - id: if.dialer.pap
         match: '^ppp pap sent-username (?P<user>\S+) password (?:0 )?(?P<pw>\S+)$'
+        when: "pw != '7'"
         emit:
           - table: x_dialer
             key: {if_name: "{{ parent.name | ifname }}"}
@@ -337,3 +719,290 @@ rules:
           - table: x_cq_bind
             key: {if_name: "{{ parent.name | ifname }}"}
             set: {list: "{{ n }}"}
+
+      # ---- L2TP (appendix A 3.21): joined in import/70_l2tp.yaml ----
+      # An attachment circuit of L2TPv3. The lines of a session set by hand
+      # stand under the "xconnect" line. "sequencing" on the line itself and
+      # the MPLS forms stay unknown.
+      - id: if.xconnect
+        match: '^xconnect (?P<peer>\d+\.\d+\.\d+\.\d+) (?P<vc>\d+) (?:encapsulation l2tpv3 (?P<manual>manual )?)?pw-class (?P<pw>\S+)$'
+        emit:
+          - table: x_xconnect
+            key: {if_name: "{{ name | ifname }}"}
+            set: {peer: "{{ peer }}", vc_id: "{{ vc }}", pw: "{{ pw }}", manual: "{{ 'true' if manual else '' }}"}
+        children:
+          - id: if.xconnect.id
+            match: '^l2tp id (?P<lid>\d+) (?P<rid>\d+)$'
+            emit:
+              - table: x_xconnect
+                key: {if_name: "{{ name | ifname }}"}
+                set: {local_session_id: "{{ lid }}", remote_session_id: "{{ rid }}"}
+          # The size, then the value in one or two parts.
+          - id: if.xconnect.cookie
+            match: '^l2tp cookie (?P<side>local|remote) (?P<cookie>[48] \d+(?: \d+)?)$'
+            emit:
+              - table: x_xconnect
+                key: {if_name: "{{ name | ifname }}"}
+                set: {"{{ side }}_cookie": "{{ cookie }}"}
+          - id: if.xconnect.hello
+            match: '^l2tp hello (?P<cls>\S+)$'
+            emit:
+              - table: x_xconnect
+                key: {if_name: "{{ name | ifname }}"}
+                set: {hello_class: "{{ cls }}"}
+      # The Virtual-Template of an LNS: the pool by its name, what a caller
+      # is asked for (without "callin" and the other options), the DNS
+      # servers a caller is told.
+      - id: if.vt.pool
+        match: '^peer default ip address pool (?P<pool>\S+)$'
+        emit:
+          - table: x_vt
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {pool: "{{ pool }}"}
+      - id: if.vt.auth
+        match: '^ppp authentication (?P<how>chap|pap|chap pap|ms-chap-v2)$'
+        emit:
+          - table: x_vt
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {auth: "{{ how | unlex('ppp_auth') }}"}
+      - id: if.vt.dns
+        match: '^ppp ipcp dns (?P<list>\d+\.\d+\.\d+\.\d+(?: \d+\.\d+\.\d+\.\d+)?)$'
+        emit:
+          - table: x_vt
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {dns: "{{ list }}"}
+      # ---- VLANs, switch ports and LAGs (README, "VLAN とスイッチ") ----
+      - id: if.encap.vlan.native
+        match: '^encapsulation dot1[qQ] (?P<vlan>\d+) native$'
+        set: {encap_vlan: "{{ vlan }}", encap_native: true}
+      - id: if.bridge_group
+        match: '^bridge-group (?P<g>\d+)$'
+        set: {bridge_group: "{{ g }}"}
+      # The port is a switch port, with nothing more said: the row is made.
+      - id: if.sw
+        match: '^switchport$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+      - id: if.sw.routed
+        match: '^no switchport$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {mode: routed}
+      - id: if.sw.mode
+        match: '^switchport mode (?P<mode>access|trunk|dynamic auto|dynamic desirable)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {mode: "{{ mode | replace(' ', '_') }}"}
+      - id: if.sw.access
+        match: '^switchport access vlan (?P<vlan>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {access_vlan: "{{ vlan }}"}
+      - id: if.sw.native
+        match: '^switchport trunk native vlan (?P<vlan>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {native_vlan: "{{ vlan }}"}
+      # "add" continues the list of the line before. "remove" and "except"
+      # stay unknown.
+      - id: if.sw.allowed
+        match: '^switchport trunk allowed vlan (?:add )?(?P<list>all|none|\d[\d,-]*)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        append: {allowed_vlans: "{{ list }}"}
+      - id: if.sw.encap
+        match: '^switchport trunk encapsulation (?P<how>dot1q|isl|negotiate)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {trunk_encapsulation: "{{ how }}"}
+      - id: if.sw.nonegotiate
+        match: '^switchport nonegotiate$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {nonegotiate: true}
+      - id: if.sw.voice
+        match: '^switchport voice vlan (?P<vlan>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {voice_vlan: "{{ vlan }}"}
+      # With and without the word "edge" (README).
+      - id: if.sw.edge
+        match: '^spanning-tree portfast(?: edge)?(?: (?P<how>trunk|disable))?$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {stp_edge: "{{ 'trunk' if how == 'trunk' else ('off' if how == 'disable' else 'on') }}"}
+      - id: if.sw.bpduguard
+        match: '^spanning-tree bpduguard (?P<how>enable|disable)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {stp_bpdu_guard: "{{ 'true' if how == 'enable' else 'false' }}"}
+      # One level, as a share of the bandwidth; bps, pps and a second level
+      # stay unknown.
+      - id: if.sw.storm
+        match: '^storm-control (?P<what>broadcast|multicast|unicast) level (?P<level>\d+(?:\.\d+)?)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {"storm_{{ what }}": "{{ level }}"}
+      - id: if.sw.storm.action
+        match: '^storm-control action (?P<how>shutdown|trap)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {storm_action: "{{ how }}"}
+      - id: if.sw.psec
+        match: '^switchport port-security$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {port_security: true}
+      - id: if.sw.psec.max
+        match: '^switchport port-security maximum (?P<n>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {port_security_max: "{{ n }}"}
+      - id: if.sw.psec.violation
+        match: '^switchport port-security violation (?P<how>protect|restrict|shutdown)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {port_security_violation: "{{ how }}"}
+      # The addresses the port has learnt ("… sticky <MAC>") stay unknown.
+      - id: if.sw.psec.sticky
+        match: '^switchport port-security mac-address sticky$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {port_security_sticky: true}
+      # A router may show the line without a mode.
+      - id: if.lag
+        match: '^channel-group (?P<n>\d+)(?: mode (?P<mode>active|passive|on|auto|desirable)(?P<loud> non-silent)?)?$'
+        when: "not loud or mode in ['auto', 'desirable']"
+        row: {table: lags, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {group: "{{ n }}", mode: "{{ mode }}", non_silent: "{{ 'true' if loud else '' }}"}
+      # ==== the rest of VLANs and switches (appendix A 3.22, 2026-11-21) ====
+      # A double tag: the outer VLAN, then the inner ones.
+      - id: if.encap.qinq
+        match: '^encapsulation dot1[qQ] (?P<vlan>\d+) second-dot1q (?P<inner>any|\d[\d,-]*)$'
+        set: {encap_vlan: "{{ vlan }}"}
+        append: {encap_inner_vlans: "{{ inner }}"}
+      - id: if.speed.auto
+        match: '^speed auto (?P<list>(?:10|100|1000|2500|5000)(?: (?:10|100|1000|2500|5000))*)$'
+        set: {speed: auto}
+        append: {speed_advertise: "{{ list }}"}
+      - id: if.speed.nonegotiate
+        match: '^speed nonegotiate$'
+        set: {speed_nonegotiate: true}
+      - id: if.cdp
+        match: '^(?P<no>no )?cdp enable$'
+        set: {cdp: "{{ 'false' if no else 'true' }}"}
+      - id: if.lldp
+        match: '^(?P<no>no )?lldp (?P<way>transmit|receive)$'
+        set: {"lldp_{{ way }}": "{{ 'false' if no else 'true' }}"}
+      - id: if.sw.voice.mode
+        match: '^switchport voice vlan (?P<how>dot1p|none|untagged)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {voice_vlan_mode: "{{ how }}"}
+      # A rising and a falling level; as a rate, with the unit before the
+      # number ("bps 100m").
+      - id: if.sw.storm.low
+        match: '^storm-control (?P<what>broadcast|multicast|unicast) level (?P<level>\d+(?:\.\d+)?) (?P<low>\d+(?:\.\d+)?)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {"storm_{{ what }}": "{{ level }}", "storm_{{ what }}_low": "{{ low }}"}
+      # A rate: packets a second ("500pps") or bits a second ("64kbps", or
+      # "1500bps" where it is no whole kbps). The device takes k, m and g
+      # after a whole number; a number with a decimal stays unknown.
+      - id: if.sw.storm.pps
+        match: '^storm-control (?P<what>broadcast|multicast|unicast) level pps (?P<n>\d+)(?P<u>[kmg]?)(?: (?P<ln>\d+)(?P<lu>[kmg]?))?$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set:
+          "storm_{{ what }}": "{{ n | int * {'': 1, 'k': 1000, 'm': 1000000, 'g': 1000000000}[u] }}pps"
+          "storm_{{ what }}_low": "{{ (ln | int * {'': 1, 'k': 1000, 'm': 1000000, 'g': 1000000000}[lu]) ~ 'pps' if ln else '' }}"
+      - id: if.sw.storm.bps
+        match: '^storm-control (?P<what>broadcast|multicast|unicast) level bps (?P<n>\d+)(?P<u>[kmg]?)(?: (?P<ln>\d+)(?P<lu>[kmg]?))?$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set:
+          "storm_{{ what }}": "{{ (n | int * {'k': 1, 'm': 1000, 'g': 1000000}[u]) ~ 'kbps' if u else ((n | int // 1000) ~ 'kbps' if n | int % 1000 == 0 and n | int > 0 else n ~ 'bps') }}"
+          "storm_{{ what }}_low": "{{ ((ln | int * {'k': 1, 'm': 1000, 'g': 1000000}[lu]) ~ 'kbps' if lu else ((ln | int // 1000) ~ 'kbps' if ln | int % 1000 == 0 and ln | int > 0 else ln ~ 'bps')) if ln else '' }}"
+      - id: if.sw.psec.mac
+        match: '^switchport port-security mac-address (?P<mac>[0-9a-fA-F]{4}\.[0-9a-fA-F]{4}\.[0-9a-fA-F]{4})(?: vlan (?P<v>\d+|access|voice))?$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        append: {port_security_macs: "{{ mac | lower }}{{ '/' ~ v if v else '' }}"}
+      - id: if.sw.psec.mac.sticky
+        match: '^switchport port-security mac-address sticky (?P<mac>[0-9a-fA-F]{4}\.[0-9a-fA-F]{4}\.[0-9a-fA-F]{4})(?: vlan (?P<v>\d+|access|voice))?$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        append: {port_security_sticky_macs: "{{ mac | lower }}{{ '/' ~ v if v else '' }}"}
+      - id: if.sw.psec.aging.time
+        match: '^switchport port-security aging time (?P<n>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {port_security_aging_time: "{{ n }}"}
+      - id: if.sw.psec.aging.type
+        match: '^switchport port-security aging type (?P<how>absolute|inactivity)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {port_security_aging_type: "{{ how }}"}
+      - id: if.sw.psec.aging.static
+        match: '^switchport port-security aging static$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {port_security_aging_static: true}
+      - id: if.sw.protected
+        match: '^switchport protected$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {protected: true}
+      - id: if.sw.guard
+        match: '^spanning-tree guard (?P<how>root|loop|none)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {stp_guard: "{{ how }}"}
+      - id: if.sw.bpdufilter
+        match: '^spanning-tree bpdufilter (?P<how>enable|disable)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {stp_bpdu_filter: "{{ 'true' if how == 'enable' else 'false' }}"}
+      - id: if.sw.cost
+        match: '^spanning-tree cost (?P<n>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {stp_cost: "{{ n }}"}
+      - id: if.sw.port_priority
+        match: '^spanning-tree port-priority (?P<n>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {stp_port_priority: "{{ n }}"}
+      - id: if.sw.link_type
+        match: '^spanning-tree link-type (?P<how>point-to-point|shared)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {stp_link_type: "{{ how | replace('-', '_') }}"}
+      - id: if.sw.pvlan.mode
+        match: '^switchport mode private-vlan (?P<how>host|promiscuous)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {mode: "pvlan_{{ how }}"}
+      - id: if.sw.pvlan.host
+        match: '^switchport private-vlan host-association (?P<p>\d+) (?P<s>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {pvlan_primary: "{{ p }}"}
+        append: {pvlan_secondaries: "{{ s }}"}
+      - id: if.sw.pvlan.mapping
+        match: '^switchport private-vlan mapping (?P<p>\d+) (?P<list>\d[\d,-]*)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {pvlan_primary: "{{ p }}"}
+        append: {pvlan_secondaries: "{{ list }}"}
+      - id: if.sw.udld
+        match: '^udld port(?: (?P<how>aggressive|disable))?$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {udld: "{{ how if how else 'enable' }}"}
+      - id: if.sw.snooping.trust
+        match: '^ip dhcp snooping trust$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {dhcp_snooping_trust: true}
+      - id: if.sw.snooping.rate
+        match: '^ip dhcp snooping limit rate (?P<n>\d+)$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {dhcp_snooping_rate: "{{ n }}"}
+      - id: if.sw.arp.trust
+        match: '^ip arp inspection trust$'
+        row: {table: switchports, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {arp_inspection_trust: true}
+      - id: if.lag.protocol
+        match: '^channel-protocol (?P<how>lacp|pagp)$'
+        row: {table: lags, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {protocol: "{{ how }}"}
+      - id: if.lag.lacp.priority
+        match: '^lacp port-priority (?P<n>\d+)$'
+        row: {table: lags, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {lacp_port_priority: "{{ n }}"}
+      - id: if.lag.lacp.rate
+        match: '^lacp rate (?P<how>normal|fast)$'
+        row: {table: lags, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {lacp_short: "{{ 'true' if how == 'fast' else 'false' }}"}
+
+  # A virtual template of the type "tunnel": the device makes an interface
+  # from it for each peer that connects (a dynamic virtual tunnel interface;
+  # Security Command Reference D to L, "interface virtual-template"). The
+  # lines below it are those of an interface; the row of IPsec is made in
+  # 50_services.yaml, with the peer "any" (appendix A 3.20).
+  - id: if.vt_tunnel
+    match: '^interface (?P<name>Virtual-Template\d+) type tunnel$'
+    row: {table: interfaces, key: {name: "{{ name | ifname }}"}}
+    children_from: if
+
+  # The whole device on VRRP version 3 (appendix A 3.23, "IPv6 の VRRP";
+  # First Hop Redundancy Protocols Command Reference, "fhrp version vrrp
+  # v3": "When VRRPv3 is in use, VRRPv2 is unavailable").
+  - id: fhrp.vrrp3
+    match: '^fhrp version vrrp v3$'
+    row: {table: devices, key: {}}
+    set: {vrrp_version: "3"}

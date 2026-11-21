@@ -1,0 +1,36 @@
+hostname rt-c05
+!
+username example-user secret 0 dummy-user-secret-1
+!
+interface GigabitEthernet0/1
+ xconnect 203.0.113.2 101 encapsulation l2tpv3 manual pw-class PW-SAMPLE-A
+  l2tp id
+ no shutdown
+!
+interface GigabitEthernet0/2
+ xconnect 203.0.113.2 102 pw-class PW-SAMPLE-B
+ no shutdown
+!
+interface GigabitEthernet0/3
+ pppoe enable group lac-sample-b
+ xconnect 203.0.113.2 103 pw-class PW-SAMPLE-B
+ no shutdown
+!
+interface Loopback0
+ ip address 203.0.113.1 255.255.255.255
+ no shutdown
+!
+interface Virtual-Template1
+ ip unnumbered Loopback0
+ ppp authentication chap
+ no shutdown
+!
+interface Virtual-Template2
+ ip unnumbered Loopback0
+ ppp authentication chap
+ no shutdown
+!
+interface Virtual-Template3
+ no shutdown
+!
+end

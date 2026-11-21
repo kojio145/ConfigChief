@@ -1,0 +1,12 @@
+table: rip_redistribute
+title: {ja: RIP 再配布, en: RIP redistribution}
+since: M7
+key: [device, family, source]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: family, title: {ja: 種類, en: Family}, type: enum, values: [ipv4, ipv6], required: true, note: {ja: "ipv4 = RIP、ipv6 = RIPng", en: "ipv4 = RIP, ipv6 = RIPng"}}
+  - {name: source, title: {ja: 再配布する経路, en: Source}, type: enum, values: [connected, static, ospf, bgp], required: true, note: {ja: "ipv6 の行の ospf は OSPFv3", en: "ospf on an ipv6 row is OSPFv3"}}
+  - {name: process_id, title: {ja: OSPF のプロセス番号, en: OSPF process ID}, type: int, note: {ja: "再配布する経路が ospf のとき。空なら、機器に 1 つだけあるプロセス", en: "For ospf. Empty = the one process of the device"}}
+  - {name: metric, title: {ja: メトリック, en: Metric}, type: int, min: 1, max: 16}
+  - {name: tag, title: {ja: タグ, en: Tag}, type: int, min: 0, max: 65535, note: {ja: "NEC IX だけ", en: "NEC IX only"}}
+  - {name: filter, title: {ja: 経路制御の条件, en: Route policy}, type: string, note: {ja: "経路制御の方針の名前", en: "The name of a route policy"}}

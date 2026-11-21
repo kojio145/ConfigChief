@@ -18,3 +18,4 @@ columns:
   - {name: auth_key, title: {ja: 鍵, en: Key}, type: secret}
   - {name: track, title: {ja: 回線監視, en: Track}, type: ref, ref: tracks.id}
   - {name: track_decrement, title: {ja: 監視断のときの減点, en: Track decrement}, type: int}
+  - {name: vrrpv2, title: {ja: 版 2 の相手とも話す, en: Talk to VRRPv2}, type: bool, note: {ja: "VRRP の版（IPv4）が 3 の機器の IPv4 のグループを、版 2 だけの機器ともつなぐ（Cisco の vrrpv2）", en: "Lets an IPv4 group of a device on VRRP version 3 work with devices of version 2 only (Cisco vrrpv2)"}}

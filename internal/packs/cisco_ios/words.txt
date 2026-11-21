@@ -3,15 +3,14 @@
 # leaves a site keeps the words of the pack's files and these, and hides every
 # other word (spec 8.6). One word or more on a line; "#" starts a note.
 # Made by a script of the maintainers from the public command references; words added by hand are kept.
-adaptive added addressname addrname advertisement agent aggregate algorithm alias already asnotation
-assignable assignment autokey based bba bdi been boot bri bridge buffered cache cautiously code comp
-compatibility compatible concentrator configured connect continue cos counter csec deleted dest
-directed discovery dport ecdsa effect eigrp encrypt estimation event extendable fecn fhp fixed force
-forced gcm generate gigaethernet gigaethernetn gmac hairpinning http iap ibgp idname igmp info
-invoke ipaddr ipcp ipicmpecho irb iri keyring lac lcp license linenum lns lzs master mbps mnemonic
-mru myname napt native need ngn nsap occupied option path payload peak persistent pir platform poll
-poor portfast precendence previous probe provide pvc random ratio receive recoveries redirects
-reload request resequence reserved reset restart restoration restorer rfc ring rtp rtr seal
-secondaries segment send should sig software sport stability startup stateful strength sub subnet
-subsystem suppress sync take timer timestamp tos tpid translate traversal tunneln ufs unicast
-unreach usb variance very violate vpnv warn you yyyy
+accesslist acfc adaptive addressname addrname agent already asnotation assignable assignment
+attempts autokey autoselect bdi been boot border bri cautiously comp compatibility compatible
+compression concentrator configured counter csec dad deleted dest directed discovery dport ecdsa
+effect eigrp encrypt estimation ether evaluate event fecn fhp forced generate gigaethernet
+gigaethernetn gmac hairpinning history hoplimit https iap identifier idname igmp invoke ipaddr
+ipicmpecho iri isatap lcp license linenum linkmtu llt lzs master mbps mld mnemonic mru myname napt
+nla nsap occupied offload outgoing parameters payload persistent pfc platform poll poor precendence
+previous provide pvc ratio reachable reconfigure records recoveries redirects refresh reload
+resequence reserved reset restoration restorer retrans rfc ring seal segment setup should sport
+stability stateful strength sub subconfed subnet subsystem sync tpid translate tunneln ufs unreach
+usb variance very vpnv vrid you yyyy

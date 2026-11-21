@@ -9,4 +9,15 @@ columns:
   - {name: acl, title: {ja: ACL, en: ACL}, type: ref, ref: acls.name, note: {ja: "ACL・DSCP・precedence は 1 行に 1 つだけ。3 つとも空 = すべての通信", en: "One of ACL, DSCP and precedence per row. All three empty = every packet"}}
   - {name: dscp, title: {ja: DSCP, en: DSCP}, type: "list<int>", min: 0, max: 63, note: {ja: "数で書く（ef = 46、af41 = 34）。複数はカンマで区切る", en: "Numbers (ef = 46, af41 = 34). Separate with commas"}}
   - {name: precedence, title: {ja: precedence, en: Precedence}, type: "list<int>", min: 0, max: 7, note: {ja: "数で書く。複数はカンマで区切る", en: "Numbers. Separate with commas"}}
-  - {name: queue, title: {ja: キュー, en: Queue}, type: enum, values: [high, medium, normal, low], note: {ja: "この条件に合った通信を入れる優先度のキュー", en: "The priority queue for the packets of this condition"}}
+  - {name: queue, title: {ja: キュー, en: Queue}, type: enum, values: [high, medium, normal, low, sub_a, sub_b, sub_c, sub_d], note: {ja: "この条件に合った通信を入れる優先度のキュー", en: "The priority queue for the packets of this condition"}}
+  - {name: input_if, title: {ja: 受信 IF, en: Input interface}, type: ifname}
+  - {name: cos, title: {ja: CoS, en: CoS}, type: "list<int>", min: 0, max: 7, note: {ja: "VLAN タグの優先度。複数はカンマで区切る", en: "The priority of the VLAN tag. Separate with commas"}}
+  - {name: qos_group, title: {ja: QoS グループ, en: QoS group}, type: int, min: 0, max: 65535, note: {ja: "受信側で付けた機器の中だけの印", en: "The mark set on the input side, inside the device only"}}
+  - {name: protocol, title: {ja: プロトコル, en: Protocol}, type: string, note: {ja: "機器が見分けるプロトコルの名前", en: "The name of a protocol the device recognizes"}}
+  - {name: negate, title: {ja: 条件を逆にする, en: Negate}, type: bool, note: {ja: "この行の条件に合わない通信", en: "The packets that do not match the condition of the row"}}
+  - {name: class_ref, title: {ja: ほかのクラス, en: Other class}, type: ref, ref: qos_classes.name, note: {ja: "ほかのクラスに合う通信", en: "The packets of another class"}}
+  - {name: ipv6_acl, title: {ja: IPv6 の ACL, en: IPv6 ACL}, type: string}
+  - {name: local_generated, title: {ja: 機器自身が出す通信, en: Locally generated}, type: bool}
+  - {name: rtp_port_start, title: {ja: RTP のポートの先頭, en: RTP port start}, type: int, min: 1, max: 65535}
+  - {name: rtp_port_range, title: {ja: RTP のポートの幅, en: RTP port range}, type: int, min: 0, max: 65535}
+  - {name: ngn_if, title: {ja: NGN のトンネル IF, en: NGN tunnel interface}, type: ifname}

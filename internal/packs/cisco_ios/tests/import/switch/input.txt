@@ -1,0 +1,93 @@
+Building configuration...
+
+Current configuration : 2304 bytes
+!
+version 17.9
+!
+hostname sw-a01
+!
+switch 1 provision sample-48p
+switch 2 provision sample-48p
+!
+ip routing
+!
+vtp domain sample-domain
+vtp mode transparent
+!
+spanning-tree mode rapid-pvst
+spanning-tree portfast default
+spanning-tree portfast edge bpduguard default
+spanning-tree extend system-id
+spanning-tree vlan 10,20 priority 4096
+spanning-tree vlan 30 priority 8192
+spanning-tree vlan 30 hello-time 2
+!
+vlan 10
+ name sample-office
+!
+vlan 20
+ name sample-voice
+!
+vlan 30,40
+!
+interface Port-channel1
+ description to sw-b01
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,20,30
+ switchport mode trunk
+!
+interface GigabitEthernet1/0/1
+ description office desk
+ switchport access vlan 10
+ switchport mode access
+ switchport voice vlan 20
+ switchport port-security maximum 3
+ switchport port-security violation restrict
+ switchport port-security mac-address sticky
+ switchport port-security mac-address sticky 0000.5e00.5301
+ switchport port-security
+ storm-control broadcast level 5.00
+ storm-control multicast level 10
+ storm-control action shutdown
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+!
+interface GigabitEthernet1/0/2
+ switchport access vlan 20
+ switchport mode access
+ storm-control broadcast level pps 500
+ spanning-tree portfast disable
+ spanning-tree bpduguard disable
+ spanning-tree guard root
+!
+interface GigabitEthernet1/0/3
+ no switchport
+ ip address 198.51.100.1 255.255.255.252
+!
+interface GigabitEthernet1/0/47
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,20,30
+ switchport mode trunk
+ channel-group 1 mode active
+ spanning-tree portfast edge trunk
+!
+interface GigabitEthernet2/0/47
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,20,30
+ switchport mode trunk
+ channel-group 1 mode active
+!
+interface GigabitEthernet2/0/48
+ switchport mode dynamic desirable
+ channel-group 2 mode desirable non-silent
+!
+interface Vlan1
+ no ip address
+ shutdown
+!
+interface Vlan10
+ ip address 192.0.2.1 255.255.255.128
+!
+ip default-gateway 192.0.2.126
+!
+end

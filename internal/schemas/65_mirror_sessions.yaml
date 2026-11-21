@@ -1,0 +1,11 @@
+table: mirror_sessions
+title: {ja: ポートミラー, en: Port mirroring}
+since: M7
+key: [device, session]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: session, title: {ja: 番号, en: Session}, type: int, min: 1, required: true}
+  - {name: destination_if, title: {ja: 写す先の IF, en: Destination interface}, type: ifname, note: {ja: "写した通信を出すポート（測定器をつなぐ）", en: "The port that sends out the copies (where the analyser is)"}}
+  - {name: sources_both, title: {ja: 写す元（両方向）, en: Sources (both directions)}, type: "list<ifname>"}
+  - {name: sources_rx, title: {ja: 写す元（受信）, en: Sources (received)}, type: "list<ifname>"}
+  - {name: sources_tx, title: {ja: 写す元（送信）, en: Sources (sent)}, type: "list<ifname>"}

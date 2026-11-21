@@ -1,0 +1,48 @@
+# What the device saved in its own forms, SNMPv3, NTP keys, logging, banners, the console, time ranges and the finer parts of access lists (made-up values).
+tables:
+  acl_entries:
+    - {acl: "2000", seq: "0", action: "permit", src: "192.0.2.0/25"}
+    - {acl: "2001", seq: "0", action: "permit", src: "192.0.2.128/25", time_range: "sample-year"}
+    - {acl: "3000", seq: "0", action: "permit", dst: "any", dst_port: "22", flags: ["syn"], protocol: "tcp", src: "192.0.2.0/25"}
+    - {acl: "3000", seq: "5", action: "permit", comment: "sample time servers", dscp: "46", dst: "any", dst_port: "123", protocol: "udp", src: "any", time_range: "sample-hours"}
+    - {acl: "3000", seq: "10", action: "permit", dst: "any", flags: ["log"], icmp_code: "4", icmp_type: "3", protocol: "icmp", src: "any"}
+    - {acl: "3000", seq: "15", action: "permit", dst: "any", flags: ["established"], precedence: "5", protocol: "tcp", src: "any", tos: "4"}
+    - {acl: "3000", seq: "25", action: "permit", dst: "any", protocol: "ospf", src: "any"}
+    - {acl: "3000", seq: "30", action: "permit", dst: "any", protocol: "ip", src: "any"}
+  acls:
+    - {name: "2000", type: "standard"}
+    - {name: "2001", type: "standard"}
+    - {name: "3000", description: "sample filter", type: "extended"}
+  devices:
+    - {hostname: "sw-q08", banner_exec: "sample shell banner", banner_motd: "sample notice: maintenance window on weekends", console_timeout: "5", console_timeout_sec: "30", enable_secret: "$h$6$sampleSampleSampleSampleSample", log_severity: "warnings", log_timestamp: "uptime", name_servers: ["192.0.2.53"], secret_form: "hashed", timezone: "JST +9", vendor: "nec_qx"}
+  fhrp:
+    - {if_name: "Vlan-interface10", group: "1", advert_interval: "1", auth_key: "cipher $c$3$sampleSampleSampleSampleSample", auth_type: "md5", preempt: "true", priority: "100", protocol: "vrrp", version: "3", virtual_ip: "192.0.2.126"}
+  interfaces:
+    - {name: "Vlan-interface10", acl_in: "3000", enabled: "true", ipv4: "192.0.2.1/25", kind: "vlan", vlan_id: "10"}
+    - {name: "Vlan-interface20", enabled: "true", ipv4: "192.0.2.129/25", kind: "vlan", vlan_id: "20"}
+  log_subsystems:
+    - {subsystem: "OSPF", severity: "debugging"}
+  ntp_servers:
+    - {server: "192.0.2.10", auth_key: "cipher $c$3$sampleSampleSampleSampleSample", auth_key_id: "10", prefer: "true"}
+    - {server: "192.0.2.11"}
+  ospf_interfaces:
+    - {process_id: "1", if_name: "Vlan-interface10", area: "0.0.0.0", auth_key: "cipher $c$3$dummyDummyDummyDummyDummyDummy", auth_key_id: "1", auth_type: "hmac_md5"}
+  ospf_processes:
+    - {process_id: "1", router_id: "198.51.100.6"}
+  remote_access:
+    - {acl_ssh: "2000", acl_telnet: "2001", auth: "local", idle_timeout: "10", idle_timeout_sec: "30", line_password: "hash $h$6$dummyDummyDummyDummyDummyDummyDummy", protocols: ["ssh", "telnet"]}
+  snmp_communities:
+    - {community: "cipher $c$3$sampleSampleSampleSampleSampleSampleSample", access: "ro", acl: "2000"}
+  snmp_hosts:
+    - {host: "192.0.2.30", community: "monitor", security_level: "priv", version: "3"}
+  snmp_users:
+    - {name: "monitor", acl: "2001", auth: "sha", auth_key: "cipher $c$3$sampleSampleSampleSampleSample", group: "sample-group", group_acl: "2000", priv: "aes128", priv_key: "cipher $c$3$dummyDummyDummyDummyDummyDummy", read_view: "ViewDefault", security_level: "priv", write_view: "ViewDefault"}
+    - {name: "backup", auth: "md5", auth_key: "Example-Auth-1", group: "sample-group", group_acl: "2000", priv: "des", priv_key: "Example-Priv-1", read_view: "ViewDefault", security_level: "priv", write_view: "ViewDefault"}
+  syslog_servers:
+    - {server: "192.0.2.20", facility: "local5", severity: "notifications", source_if: "Vlan-interface10"}
+  time_ranges:
+    - {name: "sample-hours", seq: "10", days: ["weekdays"], end_time: "18:00", kind: "periodic", start_time: "8:00"}
+    - {name: "sample-hours", seq: "20", days: ["saturday", "sunday"], end_time: "12:00", kind: "periodic", start_time: "9:00"}
+    - {name: "sample-year", seq: "10", end_date: "2026-12-31", end_time: "24:00", kind: "absolute", start_date: "2026-01-01", start_time: "0:00"}
+  users:
+    - {name: "admin", privilege: "admin", secret: "$h$6$sampleSampleSampleSampleSampleSampleSample", secret_form: "hashed", services: ["ssh", "terminal"]}

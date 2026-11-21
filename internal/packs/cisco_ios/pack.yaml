@@ -54,6 +54,7 @@ interfaces:
     - {name: Dialer, short: [Di], kind: dialer}
     - {name: Vlan, short: [Vl], kind: vlan}
     - {name: Port-channel, short: [Po], kind: lag}
-    - {name: BVI, short: [], kind: other}
+    - {name: BVI, short: [], kind: bvi}
+    - {name: Virtual-Template, short: [], kind: other}
     - {name: "Null", short: [Nu], kind: other}
   subif: '^(?P<parent>.+)\.(?P<n>\d+)$'

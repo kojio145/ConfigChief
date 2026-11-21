@@ -1,0 +1,23 @@
+# A design as another vendor has it: the interfaces are marked inside and
+# outside of NAT, a static NAT names no interface outside, and an AS path
+# list is left that no policy looks at. The pack writes the rules under the
+# interface outside, leaves the marks and the list out, and tells (G-614).
+# Made-up values.
+tables:
+  devices:
+    - hostname: ix-n06
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.45/30, nat_role: outside}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 192.0.2.129/25, nat_role: inside}
+  acls:
+    - {name: acl-n-nat, type: extended}
+  acl_entries:
+    - {acl: acl-n-nat, seq: 10, action: permit, protocol: ip, src: 192.0.2.128/25, dst: any}
+  nat_rules:
+    - {name: nat1, type: pat_interface, match_acl: acl-n-nat, outside_if: GigaEthernet0.0}
+    - {name: nat2, type: static, local_ip: 192.0.2.130, global_ip: 198.51.100.130}
+  as_path_lists:
+    - {name: "10", seq: 10, action: permit, regex: "^64497_"}
+    - {name: "10", seq: 20, action: deny, regex: ".*"}
+findings: [G-614]

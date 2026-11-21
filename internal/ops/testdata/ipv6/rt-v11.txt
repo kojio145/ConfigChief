@@ -1,0 +1,57 @@
+!
+hostname rt-v11
+!
+ipv6 unicast-routing
+!
+ipv6 dhcp pool dhcpv6-sample-lan
+ dns-server 2001:db8::53
+ import dns-server
+!
+interface Loopback0
+ ip address 198.51.100.254 255.255.255.255
+ ipv6 address 2001:db8::1/128
+ ipv6 ospf 1 area 0
+!
+interface GigabitEthernet0/0
+ description IPoE sample
+ no ip address
+ ipv6 address fe80::11 link-local
+ ipv6 address autoconfig default
+ ipv6 enable
+ ipv6 dhcp client pd pd-sample
+ ipv6 traffic-filter v6-sample-in in
+!
+interface GigabitEthernet0/1
+ description LAN sample
+ ip address 192.0.2.1 255.255.255.0
+ ipv6 address pd-sample ::1/64
+ ipv6 nd other-config-flag
+ ipv6 nd ra dns server 2001:db8::53 1800
+ ipv6 dhcp server dhcpv6-sample-lan
+ ipv6 ospf 1 area 0
+!
+interface Tunnel1
+ description DS-Lite sample
+ ip unnumbered GigabitEthernet0/1
+ tunnel source GigabitEthernet0/0
+ tunnel mode ipv6
+ tunnel destination aftr.example.jp
+!
+ip route 0.0.0.0 0.0.0.0 Tunnel1
+!
+ipv6 route 2001:db8:100::/48 GigabitEthernet0/0 fe80::2 name to-sample
+!
+ipv6 router ospf 1
+ router-id 198.51.100.254
+ passive-interface GigabitEthernet0/1
+ redistribute static
+!
+ipv6 prefix-list pl6-sample seq 5 permit 2001:db8::/32 le 64
+!
+ipv6 access-list v6-sample-in
+ permit icmp any any
+ permit udp any eq 547 any eq 546
+ permit tcp any any established
+ deny ipv6 any any
+!
+end

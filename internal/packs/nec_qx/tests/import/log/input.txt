@@ -1,0 +1,51 @@
+<sw-q05>display clock
+12:34:56 JST Mon 01/05/2026
+<sw-q05>system-view
+System View: return to User View with Ctrl+Z.
+[sw-q05]display this
+#
+ sysname sw-q05
+#
+return
+[sw-q05]interface Vlan-interface 10
+[sw-q05-Vlan-interface10]quit
+[sw-q05]quit
+<sw-q05>display current-configuration
+#
+ version 7.1.070, Release 1201
+#
+ sysname sw-q05
+#
+ stp global enable
+#
+vlan 1
+#
+vlan 10
+ name sample-office
+#
+interface Vlan-interface10
+ ip address 192.0.2.5 255.255.255.128
+  ---- More ----
+#
+interface GigabitEthernet1/0/1
+ port link-mode bridge
+  ---- More ----                 port access vlan 10
+ stp edged-port
+#
+interface GigabitEthernet1/0/2
+ port link-mode bridge
+ shutdown
+#
+  ---- More ----                interface GigabitEthernet1/0/3
+ port link-mode bridge
+ port link-type trunk
+ port trunk permit vlan 1 10
+#
+ ip route-static 0.0.0.0 0 192.0.2.126
+#
+ undo info-center enable
+#
+return
+<sw-q05>display vlan brief
+Brief information about all VLANs:
+<sw-q05>quit

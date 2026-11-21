@@ -1,0 +1,175 @@
+{# Spanning tree for the device as a whole, and the VLANs (README, "VLAN と
+   スイッチ"). The lines of a port stand under its interface. What this
+   device has no line for was put another way by adapt.yaml before. #}
+{% set any = namespace(line=false) %}
+{% for g in t.l2_settings %}
+{% if g.stp_enabled == true %}
+ stp global enable
+{% set any.line = true %}
+{% elif g.stp_enabled == false %}
+ undo stp global enable
+{% set any.line = true %}
+{% endif %}
+{% if g.stp_mode %}
+{% if g.stp_mode == 'pvst' %}
+{{ fail('スパニングツリーの方式 pvst は、このパックでは書けません（QX の PVST は rapid_pvst です。rapid_pvst と書いてください）') }}
+{% endif %}
+ stp mode {{ g.stp_mode | lex('stp_mode') }}
+{% set any.line = true %}
+{% endif %}
+{% if g.stp_bpdu_guard_default == true %}
+ stp bpdu-protection
+{% set any.line = true %}
+{% elif g.stp_bpdu_guard_default == false %}
+{{ fail('「エッジポートの BPDU ガード」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if g.stp_priority != '' %}
+{% if g.stp_priority % 4096 != 0 or g.stp_priority > 61440 %}
+{{ fail('スパニングツリーの優先度 ' ~ g.stp_priority ~ ' は書けません（QX では 0〜61440 の 4096 の倍数です）') }}
+{% endif %}
+ stp priority {{ g.stp_priority }}
+{% set any.line = true %}
+{% endif %}
+{% if g.stp_root %}
+ stp root {{ g.stp_root }}
+{% set any.line = true %}
+{% endif %}
+{% for tm in [['hello', g.stp_hello], ['forward-delay', g.stp_forward], ['max-age', g.stp_max_age]] %}
+{% if tm[1] != '' %}
+ stp timer {{ tm[0] }} {{ tm[1] * 100 }}
+{% set any.line = true %}
+{% endif %}
+{% endfor %}
+{% if g.stp_edge_default == true %}
+{{ fail('「アクセスポートをすぐ転送にする」（全体の既定）は、QX に当たる行がありません（ポートごとの「すぐ転送にする」に書いてください）') }}
+{% endif %}
+{% endfor %}
+{% for s in t.stp_vlans %}
+{% set list = s.vlans | replace(',', ' ') | replace('-', ' to ') %}
+{% if s.priority != '' %}
+{% if s.priority % 4096 != 0 or s.priority > 61440 %}
+{{ fail('VLAN ' ~ s.vlans ~ ' のスパニングツリーの優先度 ' ~ s.priority ~ ' は書けません（QX では 0〜61440 の 4096 の倍数です）') }}
+{% endif %}
+ stp vlan {{ list }} priority {{ s.priority }}
+{% endif %}
+{% if s.hello_time != '' %}
+ stp vlan {{ list }} timer hello {{ s.hello_time * 100 }}
+{% endif %}
+{% if s.forward_time != '' %}
+ stp vlan {{ list }} timer forward-delay {{ s.forward_time * 100 }}
+{% endif %}
+{% if s.max_age != '' %}
+ stp vlan {{ list }} timer max-age {{ s.max_age * 100 }}
+{% endif %}
+{% set any.line = true %}
+{% endfor %}
+{% for x in t.stp_vlans %}
+{% set list = x.vlans | replace(',', ' ') | replace('-', ' to ') %}
+{% if x.root %}
+ stp vlan {{ list }} root {{ x.root }}
+{% endif %}
+{% if x.enabled == true %}
+ stp vlan {{ list }} enable
+{% elif x.enabled == false %}
+ undo stp vlan {{ list }} enable
+{% endif %}
+{% endfor %}
+{% for x in t.stp_instances %}
+{% if x.priority != '' %}
+{% if x.priority % 4096 != 0 or x.priority > 61440 %}
+{{ fail('MSTP のインスタンス ' ~ x.instance ~ ' の優先度 ' ~ x.priority ~ ' は書けません（QX では 0〜61440 の 4096 の倍数です）') }}
+{% endif %}
+ stp instance {{ x.instance }} priority {{ x.priority }}
+{% set any.line = true %}
+{% endif %}
+{% if x.root %}
+ stp instance {{ x.instance }} root {{ x.root }}
+{% set any.line = true %}
+{% endif %}
+{% endfor %}
+{% for g in t.l2_settings %}
+{% for part in g.loop_detect_vlans | batch(10) %}
+ loopback-detection global enable vlan {{ part | join(' ') | replace('-', ' to ') }}
+{% set any.line = true %}
+{% endfor %}
+{% if g.loop_detect_action %}
+ loopback-detection global action {{ g.loop_detect_action }}
+{% set any.line = true %}
+{% endif %}
+{% if g.loop_detect_interval != '' %}
+ loopback-detection interval-time {{ g.loop_detect_interval }}
+{% set any.line = true %}
+{% endif %}
+{% if g.dhcp_snooping == true %}
+ dhcp snooping enable
+{% set any.line = true %}
+{% elif g.dhcp_snooping == false %}
+{{ fail('「DHCP スヌーピング」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if g.port_security == true %}
+ port-security enable
+{% set any.line = true %}
+{% elif g.port_security == false %}
+{{ fail('「ポートセキュリティを使う」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if g.lacp_system_priority != '' %}
+ lacp system-priority {{ g.lacp_system_priority }}
+{% set any.line = true %}
+{% endif %}
+{% endfor %}
+{% for m in t.stack_members %}
+{% if m.priority != '' %}
+ irf member {{ m.member }} priority {{ m.priority }}
+{% set any.line = true %}
+{% endif %}
+{% if m.description %}
+ irf member {{ m.member }} description {{ m.description }}
+{% set any.line = true %}
+{% endif %}
+{% endfor %}
+{% if any.line %}
+#
+{% endif %}
+{# The MST region: its name, its revision and the VLANs of each instance. #}
+{% set mst = namespace(any=false, name='', rev='') %}
+{% for g in t.l2_settings %}
+{% set mst.name = g.mst_name %}
+{% set mst.rev = g.mst_revision %}
+{% if g.mst_name or g.mst_revision != '' %}
+{% set mst.any = true %}
+{% endif %}
+{% endfor %}
+{% for x in t.stp_instances %}
+{% if x.vlans %}
+{% set mst.any = true %}
+{% endif %}
+{% endfor %}
+{% if mst.any %}
+stp region-configuration
+{% if mst.name %}
+ region-name {{ mst.name }}
+{% endif %}
+{% if mst.rev != '' %}
+ revision-level {{ mst.rev }}
+{% endif %}
+{% for x in t.stp_instances %}
+{% if x.vlans and x.instance == 0 %}
+{{ fail('MSTP のインスタンス 0（共通の木）には、VLAN を割り当てられません（割り当てていない VLAN が、インスタンス 0 に入ります）') }}
+{% endif %}
+{% for part in x.vlans | batch(10) %}
+ instance {{ x.instance }} vlan {{ part | join(' ') | replace('-', ' to ') }}
+{% endfor %}
+{% endfor %}
+ active region-configuration
+#
+{% endif %}
+{% for v in t.vlans %}
+vlan {{ v.vlan_id }}
+{% if v.name %}
+ name {{ v.name }}
+{% endif %}
+{% if v.description %}
+ description {{ v.description }}
+{% endif %}
+#
+{% endfor %}

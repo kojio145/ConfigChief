@@ -1,0 +1,14 @@
+# IPsec, the third round (made-up values; appendix A 3.20 and 3.26): keys
+# the device saved encrypted ("6 <value>": kept as they stand), "set peer
+# ... default" with a backup peer, "set nat demux" of a dynamic map, "nat
+# force-encap" of an IKEv2 profile, and the lifetime of the device for the
+# entries that have none of their own; and what the device does as a whole
+# (the table ipsec_settings).
+tables:
+  ipsec_settings:
+    - {anti_replay: "", replay_window: 128, df_bit: clear, idle_time: 600, aggressive_mode: false, invalid_spi_recovery: true}
+  ipsec_tunnels:
+    - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: 203.0.113.30, ike_version: 2, psk: "6 DUMMYENCSAMPLEBBBB", psk_remote: "6 DUMMYENCSAMPLECCCC", nat_force: true, ipsec_lifetime: 3600, ipsec_lifetime_kb: 2000000}
+    - {name: CMAP-SAMPLE/10, style: policy, local_if: GigabitEthernet0/0, peer_address: 203.0.113.20, peer_backup: [203.0.113.21], peer_default: true, ike_version: 1, psk: "6 DUMMYENCSAMPLEAAAA", ipsec_lifetime: 7200, ipsec_lifetime_kb: 2000000, nat_demux: ""}
+    - {name: CMAP-SAMPLE/20, style: policy, local_if: GigabitEthernet0/0, peer_address: any, ike_version: 1, psk: dummy-psk-sample-any, ipsec_mode: transport, nat_demux: true, peer_default: "", ipsec_lifetime: 7200}
+unknown: []

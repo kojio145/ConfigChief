@@ -1,0 +1,112 @@
+hostname rt-f02
+!
+vrf definition VRF-SAMPLE-F
+ address-family ipv4
+ exit-address-family
+!
+interface GigabitEthernet0/0
+ ip address dhcp
+ ip access-group ACL-SAMPLE-WAN in
+ ip nat outside
+ no shutdown
+!
+interface GigabitEthernet0/1
+ ip address 198.51.100.1 255.255.255.0
+ ip access-group 101 in
+ ip nat inside
+ no shutdown
+!
+interface GigabitEthernet0/2
+ vrf forwarding VRF-SAMPLE-F
+ ip address 192.0.2.129 255.255.255.128
+ no shutdown
+!
+ip sla 1
+ icmp-echo 203.0.113.2 source-ip 198.51.100.1
+ threshold 1000
+ timeout 2000
+ frequency 5
+ip sla schedule 1 life forever start-time now
+track 1 ip sla 1 state
+!
+ip sla 2
+ icmp-echo 203.0.113.3 source-interface GigabitEthernet0/0
+ threshold 2000
+ timeout 2000
+ frequency 10
+ip sla schedule 2 life forever start-time now
+track 2 ip sla 2 reachability
+!
+track 5 ip route 203.0.113.0/24 reachability
+ delay down 10
+!
+track 10 list boolean and
+ object 1
+ object 2
+ delay up 30
+!
+track 11 list boolean or
+ object 1
+ object 5
+!
+ip route 0.0.0.0 0.0.0.0 dhcp
+ip route 192.0.2.64 255.255.255.192 GigabitEthernet0/0 dhcp 200
+ip route 203.0.113.128 255.255.255.192 198.51.100.253 multicast
+ip route 203.0.113.192 255.255.255.192 198.51.100.252 track 10
+ip route vrf VRF-SAMPLE-F 203.0.113.64 255.255.255.192 198.51.100.254 global
+!
+router ospf 1
+ router-id 192.0.2.1
+ log-adjacency-changes detail
+!
+router ospf 2
+ router-id 192.0.2.2
+ no log-adjacency-changes
+!
+time-range TR-SAMPLE-WORK
+ periodic weekdays 8:00 to 18:00
+ periodic monday 8:00 to friday 20:00
+!
+time-range TR-SAMPLE-YEAR
+ absolute start 8:00 1 January 2026 end 18:00 31 December 2026
+!
+ip access-list standard 10
+ permit 198.51.100.0 0.0.0.255
+!
+ip access-list extended 101
+ permit tcp 198.51.100.0 0.0.0.255 any eq 80
+ deny ip any any log
+!
+ip access-list extended ACL-SAMPLE-WAN
+ permit tcp any any established
+ permit tcp any host 203.0.113.10 eq 443 syn
+ permit tcp any gt 1023 host 203.0.113.10 eq 25 time-range TR-SAMPLE-WORK
+ permit udp any eq 53 any range 67 68
+ permit udp any any eq 123 dscp 48
+ permit icmp any any echo-reply
+ permit icmp any any 3 4
+ deny tcp any any eq 23 tos 8 log-input
+ deny udp any any precedence 5 fragments
+ deny ip any any tos 4 log
+!
+ip nat pool nat1 203.0.113.17 203.0.113.22 prefix-length 29
+ip nat inside source list 10 pool nat1 overload
+ip nat inside source static 198.51.100.10 203.0.113.10 extendable
+ip nat inside source static tcp 198.51.100.11 8080 203.0.113.10 80 extendable
+ip nat inside source static network 198.51.100.64 203.0.113.64 /26
+!
+ip dhcp pool POOL-SAMPLE-B
+ network 192.0.2.128 255.255.255.128
+ default-router 192.0.2.129
+ lease infinite
+!
+ip dhcp pool POOL-SAMPLE-C
+ network 203.0.113.0 255.255.255.128
+ lease 1 12
+!
+ip dhcp pool POOL-SAMPLE-LAN
+ network 198.51.100.0 255.255.255.0
+ default-router 198.51.100.1 198.51.100.2 198.51.100.3
+ lease 0 1 30
+!
+end

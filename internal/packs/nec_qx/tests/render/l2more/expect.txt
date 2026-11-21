@@ -1,0 +1,110 @@
+#
+ sysname sw-q10
+#
+ stp global enable
+ stp mode mstp
+ stp root primary
+ stp timer hello 200
+ stp timer forward-delay 1500
+ stp timer max-age 2000
+ stp instance 1 root primary
+ stp instance 2 priority 8192
+ loopback-detection global enable vlan 10 20 30 to 32
+ loopback-detection global action shutdown
+ loopback-detection interval-time 10
+ dhcp snooping enable
+ port-security enable
+ lacp system-priority 4096
+ irf member 1 priority 32
+ irf member 1 description sample upper unit
+ irf member 2 priority 16
+#
+stp region-configuration
+ region-name sample-region
+ revision-level 3
+ instance 1 vlan 10 20
+ instance 2 vlan 30 to 32
+ active region-configuration
+#
+vlan 1
+#
+vlan 10
+#
+vlan 20
+#
+vlan 30
+#
+vlan 31
+#
+vlan 32
+#
+vlan 99
+#
+vlan 100
+ name sample-voice
+#
+interface Bridge-Aggregation1
+ port link-type trunk
+ port trunk permit vlan all
+ loopback-detection enable vlan all
+ loopback-detection action shutdown
+ link-aggregation mode dynamic
+#
+interface FortyGigE1/0/53
+ port link-type access
+#
+interface GigabitEthernet1/0/1
+ port link-type hybrid
+ undo port hybrid vlan 1
+ port hybrid vlan 30 to 32 tagged
+ port hybrid vlan 10 20 untagged
+ port hybrid pvid vlan 10
+ voice-vlan 100 enable
+ stp root-protection
+ stp cost 20000
+ stp port priority 64
+ broadcast-suppression kbps 64
+ unicast-suppression pps 1000
+#
+interface GigabitEthernet1/0/2
+ port link-type access
+ port access vlan 10
+ stp loop-protection
+ loopback-detection enable vlan 10
+ loopback-detection action no-learning
+ port-security max-mac-count 2
+ port-security port-mode autolearn
+ port-security intrusion-mode blockmac
+#
+interface GigabitEthernet1/0/3
+ port link-type access
+ port access vlan 20
+ port-security max-mac-count 1
+ port-security port-mode autolearn
+#
+interface GigabitEthernet1/0/4
+ port link-type access
+ port access vlan 20
+#
+interface GigabitEthernet1/0/23
+ port link-type trunk
+ port trunk permit vlan all
+ dhcp snooping trust
+ port link-aggregation group 1
+ lacp period short
+#
+interface GigabitEthernet1/0/24
+ port link-type trunk
+ port trunk permit vlan all
+ dhcp snooping trust
+ port link-aggregation group 1
+#
+ mirroring-group 1 local
+ mirroring-group 1 mirroring-port GigabitEthernet1/0/1 both
+ mirroring-group 1 mirroring-port GigabitEthernet1/0/2 outbound
+ mirroring-group 1 monitor-port GigabitEthernet1/0/5
+ mirroring-group 2 local
+ mirroring-group 2 mirroring-port GigabitEthernet1/0/3 inbound
+ mirroring-group 2 monitor-port GigabitEthernet1/0/4
+#
+return

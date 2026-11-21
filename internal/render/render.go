@@ -472,7 +472,7 @@ func (r *Renderer) vars(w *whole, data *model.Dataset, project map[string]any) m
 		"device":  tmpl.Prepare(dev),
 		"t":       tmpl.Prepare(mine),
 		"all":     w.all,
-		"model":   tmpl.Prepare(map[string]any{}),
+		"model":   tmpl.Prepare(modelVars(r.p, data)),
 		"pack":    tmpl.Prepare(map[string]any{"id": r.p.ID, "version": r.p.Version, "indent": r.p.Output.Indent}),
 		"project": tmpl.Prepare(project),
 	}
@@ -829,3 +829,27 @@ func (o *Output) cover(line int, with func(secret string) string) string {
 
 // Masked stands for a secret value in a line that is shown.
 const Masked = "＊＊＊"
+
+// modelVars is what a template reads of the model of the device (appendix B
+// 6.1): all empty where the device names no model the pack defines.
+func modelVars(p *pack.Pack, data *model.Dataset) map[string]any {
+	out := map[string]any{"id": "", "family": "", "ports": []any{}, "limits": map[string]any{}}
+	tab := data.Tables["devices"]
+	if tab == nil || len(tab.Rows) == 0 {
+		return out
+	}
+	m := p.Model(tab.Rows[0].Get("model"))
+	if m == nil {
+		return out
+	}
+	ports := []any{}
+	for _, pt := range m.Ports {
+		ports = append(ports, pt.Name)
+	}
+	limits := map[string]any{}
+	for k, v := range m.Limits {
+		limits[k] = v
+	}
+	out["id"], out["family"], out["ports"], out["limits"] = m.ID, m.Family, ports, limits
+	return out
+}

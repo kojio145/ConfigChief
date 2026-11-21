@@ -1,0 +1,51 @@
+# The rest of VLANs and switches (appendix A 3.22, 2026-11-21; made-up
+# values).
+tables:
+  devices:
+    - hostname: sw-m02
+      vendor: cisco_ios
+  l2_settings:
+    - {vtp_domain: sample-domain, vtp_mode: transparent, vtp_version: 2, vtp_password: Example-Vtp-1, vtp_pruning: true, udld: aggressive, udld_message_time: 10, cdp: false, cdp_timer: 20, cdp_holdtime: 60, lldp: true, lldp_timer: 30, lldp_holdtime: 120, lldp_reinit: 2, dhcp_snooping: true, dhcp_snooping_vlans: [10, 20], dhcp_snooping_option82: false, arp_inspection_vlans: [10], errdisable_recovery_causes: [bpduguard, psecure-violation], errdisable_recovery_interval: 600, lag_load_balance: src-dst-ip, lacp_system_priority: 100, mac_aging_time: 600, vlan_internal_allocation: ascending, system_mtu: 1600, stp_mode: mst, stp_loopguard_default: true, stp_bpdu_filter_default: true, stp_pathcost_method: long, stp_backbonefast: true, stp_uplinkfast: true, mst_name: sample-region, mst_revision: 3, stp_hello: 2, stp_forward: 15, stp_max_age: 20}
+  bridge_groups:
+    - {group: 1, protocol: ieee, priority: 4096}
+  stp_vlans:
+    - {vlans: "10,20", root: primary, root_diameter: 4}
+    - {vlans: "30", root: secondary}
+    - {vlans: "99", enabled: false}
+  stp_instances:
+    - {instance: 0, priority: 4096}
+    - {instance: 1, vlans: [10, 20], priority: 4096}
+    - {instance: 2, vlans: [30-40], root: secondary}
+  vlans:
+    - {vlan_id: 10, name: sample-office, state: suspend}
+    - {vlan_id: 20}
+    - {vlan_id: 21}
+    - {vlan_id: 22}
+    - {vlan_id: 30}
+    - {vlan_id: 99, shutdown: true}
+    - {vlan_id: 500, private_vlan: primary, private_vlan_secondaries: [501-502]}
+    - {vlan_id: 501, private_vlan: isolated}
+    - {vlan_id: 900, remote_span: true}
+  interfaces:
+    - {name: GigabitEthernet1/0/1, enabled: true, speed: auto, speed_advertise: [10, 100], cdp: false, lldp_transmit: false, lldp_receive: false}
+    - {name: GigabitEthernet1/0/2, enabled: true, speed: 2500}
+    - {name: GigabitEthernet1/0/3, enabled: true}
+    - {name: GigabitEthernet1/0/47, enabled: true}
+    - {name: GigabitEthernet1/0/48, enabled: true, speed_nonegotiate: true}
+    - {name: Port-channel1, enabled: true}
+    - {name: TenGigabitEthernet1/1/1, enabled: true, speed: 10000}
+    - {name: TenGigabitEthernet1/1/1.100, enabled: true, encap_vlan: 100, encap_inner_vlans: [200, 300-310], ipv4: 198.51.100.1/30, cdp: true, lldp_transmit: true, lldp_receive: true}
+  switchports:
+    - {if_name: GigabitEthernet1/0/1, mode: access, access_vlan: 10, voice_vlan_mode: dot1p, port_security: true, port_security_max: 3, port_security_macs: [0000.5e00.5310], port_security_sticky_macs: [0000.5e00.5311, 0000.5e00.5312/access], port_security_aging_time: 120, port_security_aging_type: inactivity, port_security_aging_static: true, protected: true, storm_broadcast: "87", storm_broadcast_low: "65", storm_multicast: "2000pps", storm_multicast_low: "1000pps", storm_unicast: "100000kbps", stp_guard: root, stp_bpdu_filter: true, stp_cost: 19, stp_port_priority: 64, stp_link_type: point_to_point, dhcp_snooping_rate: 150}
+    - {if_name: GigabitEthernet1/0/2, mode: pvlan_host, pvlan_primary: 500, pvlan_secondaries: [501], stp_guard: loop, stp_bpdu_filter: false, udld: disable}
+    - {if_name: GigabitEthernet1/0/3, mode: pvlan_promiscuous, pvlan_primary: 500, pvlan_secondaries: [501-502]}
+    - {if_name: GigabitEthernet1/0/47, mode: trunk, udld: aggressive, dhcp_snooping_trust: true, arp_inspection_trust: true}
+    - {if_name: GigabitEthernet1/0/48, mode: trunk, udld: enable}
+    - {if_name: Port-channel1, mode: trunk}
+    - {if_name: TenGigabitEthernet1/1/1, mode: routed}
+  lags:
+    - {if_name: GigabitEthernet1/0/47, group: 1, mode: desirable, non_silent: true, protocol: pagp}
+    - {if_name: GigabitEthernet1/0/48, group: 2, mode: active, lacp_port_priority: 100, lacp_short: true}
+  mirror_sessions:
+    - {session: 1, sources_both: [GigabitEthernet1/0/1], sources_rx: [GigabitEthernet1/0/2], destination_if: GigabitEthernet1/0/3}
+findings: []

@@ -1,0 +1,24 @@
+# The rest of BGP (appendix A 3.19, the part added on 2026-11-21): the timers
+# and distances of the process, aggregates, and what a neighbor has more.
+# The distance of the local routes has no line on this device: the default
+# of the other vendor (200) is left out without a word. Whether the changes
+# of the neighbors are logged has no line either: that is told (G-614).
+# Made-up values.
+tables:
+  devices:
+    - hostname: ix-b02
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.1/29}
+    - {name: Loopback0.0, enabled: true, ipv4: 192.0.2.1/32}
+  bgp_processes:
+    - {vrf: "", asn: 64496, router_id: 192.0.2.1, keepalive: 20, holdtime: 60, default_local_preference: 150, distance_ebgp: 30, distance_ibgp: 190, distance_local: 200, log_neighbor_changes: true}
+  bgp_neighbors:
+    - {neighbor: 203.0.113.2, remote_as: 64497, advertisement_interval: 15}
+    - {neighbor: 192.0.2.2, remote_as: 64496, update_source: Loopback0.0, keepalive: 10, holdtime: 30, route_reflector_client: true, next_hop_self: true}
+  bgp_networks:
+    - {vrf: "", prefix: 198.51.100.0/24}
+  bgp_aggregates:
+    - {vrf: "", prefix: 198.51.100.0/23, summary_only: true}
+    - {vrf: "", prefix: 192.0.2.0/24, summary_only: true, as_set: true}
+findings: [G-614]

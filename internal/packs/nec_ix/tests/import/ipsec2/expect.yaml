@@ -1,0 +1,116 @@
+# The rest of IPsec (appendix A 3.20, made-up values). IKE version 1: a peer
+# by name with a key in hexadecimal, the identities of both sides, NAT
+# traversal for one policy with its options, AH and a lifetime in kilobytes;
+# a peer "any" with a dynamic map. IKE version 2: the default profile, a
+# profile that a tunnel is bound to, and lines on the tunnel itself.
+tables:
+  ipsec_tunnels:
+    - name: Tunnel0.0
+      style: tunnel_if
+      tunnel_if: Tunnel0.0
+      peer_address: ix-c02.example.com
+      ike_version: 1
+      ike_mode: aggressive
+      local_id: fqdn:ix-c01.example.com
+      remote_id: email:netops@example.com
+      psk: 64756d6d792d6b65792d61
+      psk_form: hex
+      ike_encryption: aes256
+      ike_hash: sha256
+      ike_dh: dh14
+      ike_lifetime: 28800
+      esp_encryption: aes256
+      esp_hash: sha512
+      ah_hash: sha256
+      ipsec_mode: tunnel
+      pfs: dh14
+      ipsec_lifetime: 3600
+      ipsec_lifetime_kb: 100000
+      dpd_interval: 30
+      dpd_retry: 5
+      dpd_mode: on_demand
+      nat_traversal: true
+      nat_keepalive: 30
+      nat_force: true
+    - name: Tunnel1.0
+      style: tunnel_if
+      peer_address: any
+      ike_version: 1
+      ike_mode: aggressive
+      local_id: ""
+      remote_id: keyid:sample-site-b
+      psk: dummy-psk-v1-b
+      psk_form: ""
+      esp_encryption: aes128
+      esp_hash: sha1
+      ah_hash: ""
+      pfs: ""
+      ipsec_lifetime: 7200
+      nat_traversal: ""
+    - name: Tunnel2.0
+      style: tunnel_if
+      peer_address: 203.0.113.30
+      ike_version: 2
+      local_id: keyid:sample-site-a
+      remote_id: keyid:sample-site-c
+      psk: dummy-psk-v2-a
+      psk_remote: dummy-psk-v2-c
+      ike_encryption: aes256
+      ike_hash: sha256
+      ike_dh: dh14
+      ike_prf: sha384
+      ike_lifetime: 86400
+      esp_encryption: aes256
+      esp_hash: sha256
+      ipsec_mode: tunnel
+      pfs: dh14
+      ipsec_lifetime: 28800
+      always_on: true
+      dpd_interval: 20
+      dpd_retry: 5
+      dpd_retry_interval: 10
+      dpd_mode: periodic
+    - name: Tunnel3.0
+      style: tunnel_if
+      peer_address: 203.0.113.40
+      ike_version: 2
+      local_id: ""
+      remote_id: ""
+      psk: dummy-psk-v2-d
+      psk_remote: ""
+      ike_encryption: aes256gcm
+      ike_hash: sha256
+      ike_dh: dh14
+      ike_prf: sha384
+      ike_lifetime: 43200
+      esp_encryption: aes256
+      esp_hash: sha256
+      ipsec_mode: transport
+      pfs: none
+      ipsec_lifetime: 7200
+      always_on: ""
+      dpd_interval: ""
+      dpd_mode: ""
+      nat_traversal: true
+      nat_keepalive: 30
+      nat_force: true
+    - name: Tunnel4.0
+      style: tunnel_if
+      peer_address: ix-c05.example.com
+      ike_version: 2
+      local_id: email:netops@example.com
+      remote_id: ""
+      psk: 64756d6d792d6b65792d61
+      psk_remote: 64756d6d792d6b65792d62
+      psk_form: hex
+      always_on: false
+      dpd_interval: 60
+      dpd_retry: ""
+      nat_traversal: false
+  tunnels:
+    - {if_name: Tunnel0.0, type: ipsec, source: "", destination: ""}
+    - {if_name: Tunnel2.0, type: ipsec, source: "", destination: 203.0.113.30}
+    - {if_name: Tunnel3.0, type: ipsec, source: GigaEthernet0.0, destination: 203.0.113.40}
+    - {if_name: Tunnel4.0, type: ipsec, destination: ""}
+  acls: []
+unknown: []

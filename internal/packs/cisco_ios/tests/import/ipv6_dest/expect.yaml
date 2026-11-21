@@ -1,0 +1,19 @@
+# IPv6 destinations of the management and of the line monitoring (appendix
+# A 3.23, made-up values): a name server, syslog, SNMP and NTP over IPv6, a
+# watch by ping of an IPv6 address and a watch of an IPv6 route. The device
+# shows IPv6 addresses in capitals; they are read in small letters.
+tables:
+  devices:
+    - hostname: rt-v01
+      name_servers: [192.0.2.53, "2001:db8:0:53::1"]
+  syslog_servers:
+    - {server: 192.0.2.50}
+    - {server: "2001:db8:0:50::1"}
+  snmp_hosts:
+    - {host: "2001:db8:0:162::1", version: 2c, community: example-ro}
+  ntp_servers:
+    - {server: "2001:db8:0:123::1", prefer: true}
+    - {server: 192.0.2.123}
+  tracks:
+    - {id: 10, type: icmp, target: "2001:db8:ff::10", source_if: GigabitEthernet0/1, interval: 10}
+    - {id: 20, type: route, target: "2001:db8:100::/48"}

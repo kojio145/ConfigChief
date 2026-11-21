@@ -1,0 +1,32 @@
+# The rest of BGP (appendix A 3.19, the part added on 2026-11-21): the
+# timers and distances of the process, peer groups (every member takes what
+# its group sets and it does not set itself; the dataset has no groups),
+# what a neighbor is sent and what is taken from it, aggregates, a network
+# without a mask, and a password as the device saved it. Made-up values.
+tables:
+  bgp_processes:
+    - {vrf: "", asn: 64496, router_id: 192.0.2.1, log_neighbor_changes: false, default_local_preference: 150, keepalive: 20, holdtime: 60, distance_ebgp: 30, distance_ibgp: 190, distance_local: 190}
+  bgp_neighbors:
+    - {neighbor: 192.0.2.2, remote_as: 64496, update_source: Loopback0, password: "7 00SAMPLE00DUMMY00", keepalive: 10, holdtime: 30, next_hop_self: true, send_community: true, send_ext_community: true, route_reflector_client: true, description: ""}
+    - {neighbor: 192.0.2.3, remote_as: 64496, update_source: Loopback0, password: "7 00SAMPLE00DUMMY00", keepalive: 5, holdtime: 15, next_hop_self: true, send_community: true, send_ext_community: true, route_reflector_client: true, description: sample-reflected}
+    - {neighbor: 203.0.113.2, remote_as: 64497, password: "7 11DUMMY11SAMPLE11", keepalive: 30, holdtime: 90, default_originate: true, default_originate_filter: "", as_path_filter_in: "10", as_path_filter_out: "20", max_prefix: 1000, max_prefix_threshold: 80, max_prefix_restart: 30, max_prefix_action: "", weight: 200, advertisement_interval: 15}
+    - {neighbor: 203.0.113.3, remote_as: 64498, default_originate: true, default_originate_filter: RM-SAMPLE-DEF, acl_in: ACL-SAMPLE-BGP, max_prefix: 500, max_prefix_action: warning_only, send_community: "", send_ext_community: true}
+    - {neighbor: 203.0.113.4, remote_as: 64499, max_prefix: 200, max_prefix_action: discard_extra, keepalive: ""}
+  bgp_ipv6_neighbors:
+    - {neighbor: "3fff:a:b::2", remote_as: 64497, password: "7 22SAMPLE22DUMMY22", send_community: true, send_ext_community: true}
+  bgp_networks:
+    - {vrf: "", prefix: 198.51.100.0/24}
+    - {vrf: "", prefix: 192.0.2.128/25}
+  bgp_aggregates:
+    - {vrf: "", prefix: 198.51.100.0/23, summary_only: true, as_set: ""}
+    - {vrf: "", prefix: 192.0.2.0/24, summary_only: true, as_set: true}
+unknown:
+  # Not on the boundary of its class: no prefix without a mask.
+  - "network 192.0.2.64"
+  # A group without a member belongs to no row.
+  - "neighbor PG-SAMPLE-NONE peer-group"
+  - "neighbor PG-SAMPLE-NONE remote-as 64500"
+  # No column: the smallest hold time taken from a neighbor, a suppress map.
+  - "neighbor 203.0.113.4 timers 30 90 20"
+  - "timers bgp 20 60 10"
+  - "aggregate-address 203.0.113.0 255.255.255.0 suppress-map RM-SAMPLE-SUP"

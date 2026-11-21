@@ -38,7 +38,9 @@ type Session struct {
 
 	mu      sync.Mutex
 	recent  []Recent
-	name    string // the name the last approval was given with
+	name    string              // the name the last approval was given with
+	grid    map[string]GridPref // how the table of each sheet is seen (spec 14.6)
+	edit    ops.EditCache       // the sheets of the book the table read last
 	env     *ops.Env
 	imports map[string]*ops.ImportOutcome // the last import of "old" and of "new"
 	shown   *ops.GenerateOutcome          // the result the screen shows (nil = none)
@@ -76,6 +78,9 @@ type Recent struct {
 type settingsFile struct {
 	Recent []Recent `json:"recent"`
 	Name   string   `json:"name,omitempty"` // who approves (spec 11.4, 14.2)
+	// Grid: sheet → the hidden columns and the widths of the table over the
+	// book (spec 14.6).
+	Grid map[string]GridPref `json:"grid,omitempty"`
 }
 
 func (s *Session) load() {
@@ -91,6 +96,12 @@ func (s *Session) load() {
 		return // a broken file is as good as none: it is written anew
 	}
 	s.name = strings.TrimSpace(f.Name)
+	s.grid = map[string]GridPref{}
+	for k, p := range f.Grid {
+		if p = p.clean(); k != "" && len(p.Hidden)+len(p.Widths) > 0 {
+			s.grid[k] = p
+		}
+	}
 	for _, r := range f.Recent {
 		if r.Dir != "" && len(s.recent) < maxRecent {
 			s.recent = append(s.recent, Recent{Dir: r.Dir, Name: r.Name})
@@ -104,7 +115,7 @@ func (s *Session) save() {
 	if s.settings == "" {
 		return
 	}
-	f := settingsFile{Recent: []Recent{}, Name: s.name}
+	f := settingsFile{Recent: []Recent{}, Name: s.name, Grid: s.grid}
 	for _, r := range s.recent {
 		f.Recent = append(f.Recent, Recent{Dir: r.Dir, Name: r.Name})
 	}
@@ -237,6 +248,7 @@ func (s *Session) forget() {
 func (s *Session) use(e *ops.Env) {
 	e.Version = s.version
 	e.Tick = s.tick
+	e.Edit = &s.edit
 	s.env = e
 }
 
@@ -314,6 +326,9 @@ type Home struct {
 	LastGen  string     `json:"lastGen"`  // when the configurations were generated last ("" = never)
 	Packs    []PackInfo `json:"packs"`
 	Problems []string   `json:"problems"` // packs of the case folder that are not used
+	// Draft is the number of changes made in the tables of the screen that
+	// are not in the parameter book yet (spec 14.6).
+	Draft int `json:"draft"`
 }
 
 // Home tells where the case stands.
@@ -328,7 +343,7 @@ func (s *Session) Home() (*Home, error) {
 }
 
 func (s *Session) home(e *ops.Env) (*Home, error) {
-	h := &Home{Case: *caseOf(e), Packs: []PackInfo{}, Problems: strs(e.PackProblems), LastGen: e.LastGeneration()}
+	h := &Home{Case: *caseOf(e), Packs: []PackInfo{}, Problems: strs(e.PackProblems), LastGen: e.LastGeneration(), Draft: e.DraftCount()}
 	old, err := e.Proj.Inputs("old")
 	if err != nil {
 		return nil, err

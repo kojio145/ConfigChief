@@ -1,0 +1,452 @@
+{# Access lists (README, "コンフィグの書き出し"). A list whose name is a
+   number is written by the number ("acl basic 2000"), any other by its name
+   ("acl advanced name <name>"). Every rule carries its number. #}
+{# Time ranges: one line for each statement. #}
+{% for r in t.time_ranges %}
+{% set what = '時間帯 ' ~ r.name ~ ' の ' ~ r.seq ~ ' 番' %}
+{% if not r.name[0] | lower in 'abcdefghijklmnopqrstuvwxyz' or r.name | lower == 'all' %}
+{{ fail(what ~ ': 時間帯の名前は、QX では英字で始めます（all は使えません）') }}
+{% endif %}
+{% if r.kind == 'periodic' %}
+{% if r.end_days %}
+{{ fail(what ~ ': 開始と違う曜日に終わる区切りは、QX では書けません（曜日ごとの行に分けてください）') }}
+{% endif %}
+{% set st = r.start_time | required(what ~ ' の開始の時刻') | split(':') %}
+{% set et = r.end_time | required(what ~ ' の終了の時刻') | split(':') %}
+{% if st | length != 2 or et | length != 2 or not r.days %}
+{{ fail(what ~ ': 時刻は 8:00 の形で書き、曜日を 1 つ以上書きます') }}
+{% endif %}
+{% set days = namespace(v='') %}
+{% for d in r.days %}
+{% set days.v = days.v ~ ' ' ~ (d | lex('weekday')) %}
+{% endfor %}
+ time-range {{ r.name }} {{ ('0' if st[0] | length == 1 else '') ~ st[0] }}:{{ st[1] }} to {{ ('0' if et[0] | length == 1 else '') ~ et[0] }}:{{ et[1] }}{{ days.v }}
+{% else %}
+{% set line = namespace(v='') %}
+{% for side in ['from', 'to'] %}
+{% set tm = r.start_time if side == 'from' else r.end_time %}
+{% set dt = r.start_date if side == 'from' else r.end_date %}
+{% if tm or dt %}
+{% set tp = tm | required(what ~ ' の時刻（日と組で書きます）') | split(':') %}
+{% set dp = dt | required(what ~ ' の日（時刻と組で書きます）') | split('-') %}
+{% if tp | length != 2 or dp | length != 3 %}
+{{ fail(what ~ ': 時刻は 8:00、日は 2026-01-31 の形で書きます') }}
+{% endif %}
+{% set line.v = line.v ~ ' ' ~ side ~ ' ' ~ ('0' if tp[0] | length == 1 else '') ~ tp[0] ~ ':' ~ tp[1] ~ ' ' ~ (dp[1] | int) ~ '/' ~ (dp[2] | int) ~ '/' ~ dp[0] %}
+{% endif %}
+{% endfor %}
+{% if not line.v %}
+{{ fail(what ~ ': 開始か終了の日時が要ります') }}
+{% endif %}
+ time-range {{ r.name }}{{ line.v }}
+{% endif %}
+{% endfor %}
+{% if t.time_ranges %}
+#
+{% endif %}
+{% for a in t.acls %}
+{% set kind = a.type | required('ACL ' ~ a.name ~ ' の種類') | lex('acl_type') %}
+{% if a.name is digits %}
+{% set n = a.name | int %}
+{% if (kind == 'basic' and (n < 2000 or n > 2999)) or (kind == 'advanced' and (n < 3000 or n > 3999)) %}
+{{ fail('ACL ' ~ a.name ~ ' の番号は、QX では書けません（標準 = basic は 2000〜2999、拡張 = advanced は 3000〜3999 です。番号を直すか、英字で始まる名前に変えてください。この ACL を使っている列の値も一緒に直します）') }}
+{% endif %}
+acl {{ kind }} {{ a.name }}
+{% else %}
+{% if not a.name[0] | lower in 'abcdefghijklmnopqrstuvwxyz' %}
+{{ fail('ACL の名前「' ~ a.name ~ '」は、QX では書けません（名前は英字で始めます）') }}
+{% endif %}
+acl {{ kind }} name {{ a.name }}
+{% endif %}
+{% if a.description %}
+ description {{ a.description }}
+{% endif %}
+{% for x in t.acl_entries %}
+{% if x.acl == a.name %}
+{% set what = 'ACL ' ~ a.name ~ ' の ' ~ x.seq ~ ' 番' %}
+{% if x.action == 'remark' %}
+{{ fail(what ~ ': 注記の行は、このパックでは書けません（QX の注記は rule に付けます。行を消すか、追加コンフィグに書いてください）') }}
+{% endif %}
+{% if x.seq | int > 65534 %}
+{{ fail(what ~ ': 順番は、QX では 0〜65534 です') }}
+{% endif %}
+{# An address: any, a host (wildcard 0), or a network with its wildcard. #}
+{% set ad = namespace(s='', d='') %}
+{% for side in ['s', 'd'] %}
+{% set v = x.src if side == 's' else x.dst %}
+{% set w = '' %}
+{% if v == 'any' or v == '' %}
+{% set w = '' %}
+{% elif v is cidr %}
+{% set w = (v | ip) ~ ' ' ~ (v | wildcard) %}
+{% elif (v ~ '/32') is cidr %}
+{% set w = v ~ ' 0' %}
+{% else %}
+{{ fail(what ~ 'のアドレス「' ~ v ~ '」は書けません（any、192.0.2.1、192.0.2.0/24 の形で書きます）') }}
+{% endif %}
+{% if side == 's' %}
+{% set ad.s = (' source ' ~ w) if w else '' %}
+{% else %}
+{% set ad.d = (' destination ' ~ w) if w else '' %}
+{% endif %}
+{% endfor %}
+{% set tail = namespace(v='') %}
+{% for f in x.flags %}
+{% if f == 'established' %}
+{% set tail.v = tail.v ~ ' established' %}
+{% elif f in ['ack', 'fin', 'psh', 'rst', 'syn', 'urg'] %}
+{% set tail.v = tail.v ~ ' ' ~ f ~ ' 1' %}
+{% elif f == 'log_input' %}
+{{ fail(what ~ 'の付加条件 log_input は、QX では書けません（log にしてください）') }}
+{% endif %}
+{% endfor %}
+{% if x.time_range %}
+{% set tail.v = tail.v ~ ' time-range ' ~ x.time_range %}
+{% endif %}
+{% if 'fragments' in x.flags %}
+{% set tail.v = tail.v ~ ' fragment' %}
+{% endif %}
+{% if 'log' in x.flags %}
+{% set tail.v = tail.v ~ ' logging' %}
+{% endif %}
+{% if kind == 'basic' %}
+{% if 'established' in x.flags or 'ack' in x.flags or 'fin' in x.flags or 'psh' in x.flags or 'rst' in x.flags or 'syn' in x.flags or 'urg' in x.flags %}
+{{ fail(what ~ 'の付加条件（established・TCP のフラグ）は、標準 ACL には書けません') }}
+{% endif %}
+{% if x.dscp != '' or x.precedence != '' or x.tos != '' or x.icmp_type or x.dst not in ['', 'any'] or x.src_port or x.dst_port or x.protocol not in ['', 'ip'] %}
+{{ fail(what ~ ': 標準 ACL（basic）に書けるのは送信元だけです（種類を extended にしてください）') }}
+{% endif %}
+ rule {{ x.seq }} {{ x.action }}{{ ad.s }}{{ tail.v }}
+{% if x.comment %}
+ rule {{ x.seq }} comment {{ x.comment }}
+{% endif %}
+{% else %}
+{% set proto = x.protocol | required(what ~ 'のプロトコル') %}
+{% if proto in ['ip', 'tcp', 'udp', 'icmp', 'gre', 'ospf', 'esp', 'ah'] %}
+{% set proto = proto | lex('acl_protocol') %}
+{% elif proto is not digits %}
+{{ fail(what ~ 'のプロトコル「' ~ x.protocol ~ '」は書けません（ip tcp udp icmp esp ah gre ospf か番号で書きます）') }}
+{% endif %}
+{# Ports: 80, 1000-2000, >1023, <1024, !80. #}
+{% set pt = namespace(s='', d='') %}
+{% for side in ['s', 'd'] %}
+{% set v = x.src_port if side == 's' else x.dst_port %}
+{% set w = '' %}
+{% if v %}
+{% if proto not in ['tcp', 'udp'] %}
+{{ fail(what ~ ': ポートは、プロトコルが tcp か udp の行にだけ書けます') }}
+{% endif %}
+{% if v is digits %}
+{% set w = 'eq ' ~ v %}
+{% elif v is startingwith('>') and (v | replace('>', '')) is digits %}
+{% set w = 'gt ' ~ (v | replace('>', '')) %}
+{% elif v is startingwith('<') and (v | replace('<', '')) is digits %}
+{% set w = 'lt ' ~ (v | replace('<', '')) %}
+{% elif v is startingwith('!') and (v | replace('!', '')) is digits %}
+{% set w = 'neq ' ~ (v | replace('!', '')) %}
+{% elif (v | split('-') | length) == 2 and (v | replace('-', '')) is digits %}
+{% set w = 'range ' ~ (v | replace('-', ' ')) %}
+{% else %}
+{{ fail(what ~ 'のポート「' ~ v ~ '」は書けません（80、1000-2000、>1023、<1024、!80 の形で書きます）') }}
+{% endif %}
+{% endif %}
+{% if side == 's' %}
+{% set pt.s = (' source-port ' ~ w) if w else '' %}
+{% else %}
+{% set pt.d = (' destination-port ' ~ w) if w else '' %}
+{% endif %}
+{% endfor %}
+{% if proto != 'tcp' and ('established' in x.flags or 'ack' in x.flags or 'fin' in x.flags or 'psh' in x.flags or 'rst' in x.flags or 'syn' in x.flags or 'urg' in x.flags) %}
+{{ fail(what ~ 'の付加条件（established・TCP のフラグ）は、プロトコルが tcp の行にだけ書けます') }}
+{% endif %}
+{% set mid = namespace(v='') %}
+{% if x.icmp_type %}
+{% if proto != 'icmp' %}
+{{ fail(what ~ ': ICMP の種類は、プロトコルが icmp の行にだけ書けます') }}
+{% endif %}
+{% if not (x.icmp_type is digits or x.icmp_type in ['echo', 'echo-reply', 'fragmentneed-DFset', 'host-redirect', 'host-tos-redirect', 'host-unreachable', 'information-reply', 'information-request', 'net-redirect', 'net-tos-redirect', 'net-unreachable', 'parameter-problem', 'port-unreachable', 'protocol-unreachable', 'reassembly-timeout']) %}
+{{ fail(what ~ 'の ICMP の種類「' ~ x.icmp_type ~ '」は、このパックでは書けません（番号か、echo・echo-reply・host-unreachable・net-unreachable・port-unreachable などコマンドマニュアルで確かめた名前で書きます）') }}
+{% endif %}
+{% set mid.v = ' icmp-type ' ~ x.icmp_type %}
+{% if x.icmp_code != '' %}
+{% if x.icmp_type is not digits %}
+{{ fail(what ~ ': ICMP のコードは、種類が番号のときだけ書けます') }}
+{% endif %}
+{% set mid.v = mid.v ~ ' ' ~ x.icmp_code %}
+{% endif %}
+{% elif x.icmp_code != '' %}
+{{ fail(what ~ ': ICMP のコードは、種類（番号）と組で書きます') }}
+{% endif %}
+{% if x.dscp != '' and (x.precedence != '' or x.tos != '') %}
+{{ fail(what ~ ': DSCP と、precedence・ToS は同時には書けません') }}
+{% endif %}
+{% if x.dscp != '' %}
+{% set mid.v = mid.v ~ ' dscp ' ~ x.dscp %}
+{% endif %}
+{% if x.precedence != '' %}
+{% set mid.v = mid.v ~ ' precedence ' ~ x.precedence %}
+{% endif %}
+{% if x.tos != '' %}
+{% set mid.v = mid.v ~ ' tos ' ~ x.tos %}
+{% endif %}
+ rule {{ x.seq }} {{ x.action }} {{ proto }}{{ ad.s }}{{ pt.s }}{{ ad.d }}{{ pt.d }}{{ mid.v }}{{ tail.v }}
+{% if x.comment %}
+ rule {{ x.seq }} comment {{ x.comment }}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+#
+{% endfor %}
+{# IPv6 lists: basic when the number says so (2000-2999), or when a named
+   list has rules with a source only; else advanced. #}
+{% set six = namespace(names=[]) %}
+{% for x in t.ipv6_acl_entries %}
+{% if x.acl not in six.names %}
+{% set six.names = six.names + [x.acl] %}
+{% endif %}
+{% endfor %}
+{% for name in six.names %}
+{% set shape = namespace(basic=true) %}
+{% for x in t.ipv6_acl_entries %}
+{% if x.acl == name and (x.protocol or x.dst not in ['', 'any'] or x.src_port or x.dst_port or x.icmp_type or x.dscp != '') %}
+{% set shape.basic = false %}
+{% endif %}
+{% endfor %}
+{% if name is digits %}
+{% set n = name | int %}
+{% if n < 2000 or n > 3999 or (n < 3000 and not shape.basic) %}
+{{ fail('IPv6 フィルタ ' ~ name ~ ' の番号は、QX では書けません（送信元だけを見るリスト = basic は 2000〜2999、ほか = advanced は 3000〜3999 です。番号を直すか、英字で始まる名前に変えてください）') }}
+{% endif %}
+{% set shape.basic = n < 3000 %}
+acl ipv6 {{ 'basic' if shape.basic else 'advanced' }} {{ name }}
+{% else %}
+{% if not name[0] | lower in 'abcdefghijklmnopqrstuvwxyz' %}
+{{ fail('IPv6 フィルタの名前「' ~ name ~ '」は、QX では書けません（名前は英字で始めます）') }}
+{% endif %}
+acl ipv6 {{ 'basic' if shape.basic else 'advanced' }} name {{ name }}
+{% endif %}
+{% for x in t.ipv6_acl_entries %}
+{% if x.acl == name %}
+{% set what = 'IPv6 フィルタ ' ~ name ~ ' の ' ~ x.seq ~ ' 番' %}
+{% if x.action == 'remark' %}
+{{ fail(what ~ ': 注記の行は、このパックでは書けません（行を消してください）') }}
+{% endif %}
+{% set ad = namespace(s='', d='') %}
+{% for side in ['s', 'd'] %}
+{% set v = x.src if side == 's' else x.dst %}
+{% set w = '' %}
+{% if v == 'any' or v == '' %}
+{% set w = '' %}
+{% elif '/' in v %}
+{% set w = (v | ip) ~ ' ' ~ (v | prefixlen) %}
+{% else %}
+{% set w = v ~ ' 128' %}
+{% endif %}
+{% if side == 's' %}
+{% set ad.s = (' source ' ~ w) if w else '' %}
+{% else %}
+{% set ad.d = (' destination ' ~ w) if w else '' %}
+{% endif %}
+{% endfor %}
+{% set tail = namespace(v='') %}
+{% for f in x.flags %}
+{% if f == 'established' %}
+{% set tail.v = tail.v ~ ' established' %}
+{% elif f in ['ack', 'fin', 'psh', 'rst', 'syn', 'urg'] %}
+{% set tail.v = tail.v ~ ' ' ~ f ~ ' 1' %}
+{% elif f == 'log_input' %}
+{{ fail(what ~ 'の付加条件 log_input は、QX では書けません（log にしてください）') }}
+{% endif %}
+{% endfor %}
+{% if 'fragments' in x.flags %}
+{% set tail.v = tail.v ~ ' fragment' %}
+{% endif %}
+{% if 'log' in x.flags %}
+{% set tail.v = tail.v ~ ' logging' %}
+{% endif %}
+{% if shape.basic %}
+ rule {{ x.seq }} {{ x.action }}{{ ad.s }}{{ tail.v }}
+{% else %}
+{% set proto = x.protocol if x.protocol else 'ip' %}
+{% if proto == 'ip' %}
+{% set proto = 'ipv6' %}
+{% elif proto == 'icmp' %}
+{% set proto = 'icmpv6' %}
+{% elif proto not in ['tcp', 'udp', 'gre', 'ospf'] and proto is not digits %}
+{{ fail(what ~ 'のプロトコル「' ~ x.protocol ~ '」は書けません（ip tcp udp icmp gre ospf か番号で書きます）') }}
+{% endif %}
+{% set pt = namespace(s='', d='') %}
+{% for side in ['s', 'd'] %}
+{% set v = x.src_port if side == 's' else x.dst_port %}
+{% set w = '' %}
+{% if v %}
+{% if proto not in ['tcp', 'udp'] %}
+{{ fail(what ~ ': ポートは、プロトコルが tcp か udp の行にだけ書けます') }}
+{% endif %}
+{% if v is digits %}
+{% set w = 'eq ' ~ v %}
+{% elif v is startingwith('>') and (v | replace('>', '')) is digits %}
+{% set w = 'gt ' ~ (v | replace('>', '')) %}
+{% elif v is startingwith('<') and (v | replace('<', '')) is digits %}
+{% set w = 'lt ' ~ (v | replace('<', '')) %}
+{% elif v is startingwith('!') and (v | replace('!', '')) is digits %}
+{% set w = 'neq ' ~ (v | replace('!', '')) %}
+{% elif (v | split('-') | length) == 2 and (v | replace('-', '')) is digits %}
+{% set w = 'range ' ~ (v | replace('-', ' ')) %}
+{% else %}
+{{ fail(what ~ 'のポート「' ~ v ~ '」は書けません（80、1000-2000、>1023、<1024、!80 の形で書きます）') }}
+{% endif %}
+{% endif %}
+{% if side == 's' %}
+{% set pt.s = (' source-port ' ~ w) if w else '' %}
+{% else %}
+{% set pt.d = (' destination-port ' ~ w) if w else '' %}
+{% endif %}
+{% endfor %}
+{% set mid = namespace(v='') %}
+{% if x.icmp_type %}
+{% if proto != 'icmpv6' or x.icmp_type is not digits or x.icmp_code == '' %}
+{{ fail(what ~ ': ICMPv6 の種類は、プロトコルが icmp の行に、番号とコードの組で書きます（このパックは、名前の種類を書きません）') }}
+{% endif %}
+{% set mid.v = ' icmp6-type ' ~ x.icmp_type ~ ' ' ~ x.icmp_code %}
+{% elif x.icmp_code != '' %}
+{{ fail(what ~ ': ICMPv6 のコードは、種類（番号）と組で書きます') }}
+{% endif %}
+{% if x.dscp != '' %}
+{% set mid.v = mid.v ~ ' dscp ' ~ x.dscp %}
+{% endif %}
+ rule {{ x.seq }} {{ x.action }} {{ proto }}{{ ad.s }}{{ pt.s }}{{ ad.d }}{{ pt.d }}{{ mid.v }}{{ tail.v }}
+{% endif %}
+{% endif %}
+{% endfor %}
+#
+{% endfor %}
+{# Prefix lists, AS path lists and community lists. #}
+{% set any = namespace(line=false) %}
+{% for x in t.prefix_lists %}
+ ip prefix-list {{ x.name }} index {{ x.seq }} {{ x.action | required('プレフィックスリスト ' ~ x.name ~ ' の動作') }} {{ x.prefix | ip }} {{ x.prefix | prefixlen }}{{ ' greater-equal ' ~ x.ge if x.ge != '' else '' }}{{ ' less-equal ' ~ x.le if x.le != '' else '' }}
+{% set any.line = true %}
+{% endfor %}
+{% for x in t.ipv6_prefix_lists %}
+ ipv6 prefix-list {{ x.name }} index {{ x.seq }} {{ x.action | required('IPv6 プレフィックスリスト ' ~ x.name ~ ' の動作') }} {{ x.prefix | ip }} {{ x.prefix | prefixlen }}{{ ' greater-equal ' ~ x.ge if x.ge != '' else '' }}{{ ' less-equal ' ~ x.le if x.le != '' else '' }}
+{% set any.line = true %}
+{% endfor %}
+{% for x in t.as_path_lists | sort(attribute='seq') %}
+{% if x.name is not digits %}
+{{ fail('AS パスのリスト「' ~ x.name ~ '」: QX では番号で書きます') }}
+{% endif %}
+ ip as-path {{ x.name }} {{ x.action }} {{ x.regex | required('AS パスのリスト ' ~ x.name ~ ' の正規表現') }}
+{% set any.line = true %}
+{% endfor %}
+{% for x in t.community_lists | sort(attribute='seq') %}
+{% if x.type == 'expanded' %}
+ ip community-list {{ x.name if x.name is digits else 'advanced ' ~ x.name }} {{ x.action }} {{ x.regex | required('コミュニティのリスト ' ~ x.name ~ ' の正規表現') }}
+{% else %}
+{% if not x.communities %}
+{{ fail('コミュニティのリスト ' ~ x.name ~ ' の ' ~ x.seq ~ ' 番: コミュニティが要ります') }}
+{% endif %}
+ ip community-list {{ x.name if x.name is digits else 'basic ' ~ x.name }} {{ x.action }} {{ x.communities | join(' ') }}
+{% endif %}
+{% set any.line = true %}
+{% endfor %}
+{% if any.line %}
+#
+{% endif %}
+{# Routing policies. A policy that an interface (or the device, for its own
+   packets) names for policy-based routing is written as one of that kind. #}
+{% set pbr = namespace(names=[]) %}
+{% if device.local_policy_route %}
+{% set pbr.names = pbr.names + [device.local_policy_route] %}
+{% endif %}
+{% for i in t.interfaces %}
+{% if i.policy_route and i.policy_route not in pbr.names %}
+{% set pbr.names = pbr.names + [i.policy_route] %}
+{% endif %}
+{% endfor %}
+{% for r in t.route_policies %}
+{% set what = '経路制御の方針 ' ~ r.name ~ ' の ' ~ r.seq ~ ' 番' %}
+{% if r.name in pbr.names %}
+policy-based-route {{ r.name }} {{ r.action | required(what ~ ' の動作') }} node {{ r.seq }}
+{% if r.match_prefix_list or r.match_next_hop_prefix_list or r.match_as_path or r.match_community or r.match_community_list or r.match_interface or r.match_metric != '' or r.match_tag or r.set_local_preference != '' or r.set_metric or r.set_metric_type or r.set_as_path_prepend or r.set_community or r.set_weight != '' or r.set_origin or r.set_tag != '' or r.set_default_next_hop or r.set_interface or r.set_default_interface %}
+{{ fail(what ~ ': ポリシールーティングに使う方針で書けるのは、条件の ACL と、付ける値のネクストホップだけです（QX の policy-based-route）') }}
+{% endif %}
+{% if r.match_acl | length > 1 or r.set_next_hop | length > 2 %}
+{{ fail(what ~ ': ポリシールーティングの条件の ACL は 1 つ、ネクストホップは 2 つまでです') }}
+{% endif %}
+{% for a in r.match_acl %}
+ if-match acl {{ '' if a is digits else 'name ' }}{{ a }}
+{% endfor %}
+{% if r.set_next_hop %}
+ apply next-hop {{ r.set_next_hop | join(' ') }}
+{% endif %}
+{% else %}
+route-policy {{ r.name }} {{ r.action | required(what ~ ' の動作') }} node {{ r.seq }}
+{% if r.match_prefix_list | length > 1 or r.match_acl | length > 1 or r.match_tag | length > 1 or r.set_next_hop | length > 1 %}
+{{ fail(what ~ ': プレフィックスリスト・ACL・タグの条件と、付けるネクストホップは、QX では 1 つずつです（QX は、同じ種類の条件を並べると「すべてに合う」の意味になります。項目を分けてください）') }}
+{% endif %}
+{% if r.match_community or r.set_default_next_hop or r.set_interface or r.set_default_interface %}
+{{ fail(what ~ ': じかに書いたコミュニティの条件と、ポリシールーティング用の値（経路が無いときのネクストホップ・出力 IF）は、QX の route-policy には書けません（コミュニティはリストにして、「条件: コミュニティのリスト」で指してください）') }}
+{% endif %}
+{% for x in r.match_prefix_list %}
+ if-match ip address prefix-list {{ x }}
+{% endfor %}
+{% for x in r.match_acl %}
+ if-match ip address acl {{ x }}
+{% endfor %}
+{% if r.match_next_hop_prefix_list %}
+ if-match ip next-hop prefix-list {{ r.match_next_hop_prefix_list }}
+{% endif %}
+{% if r.match_as_path %}
+ if-match as-path {{ r.match_as_path }}
+{% endif %}
+{% if r.match_community_list %}
+ if-match community {{ '' if r.match_community_list is digits else 'name ' }}{{ r.match_community_list }}{{ ' whole-match' if r.match_community_exact == true else '' }}
+{% elif r.match_community_exact != '' %}
+{{ fail(what ~ ': 「条件: コミュニティが完全に同じ」は、コミュニティのリストの条件があるときだけ書けます') }}
+{% endif %}
+{% if r.match_interface %}
+ if-match interface {{ r.match_interface | join(' ') }}
+{% endif %}
+{% if r.match_metric != '' %}
+ if-match cost {{ r.match_metric }}
+{% endif %}
+{% for x in r.match_tag %}
+ if-match tag {{ x }}
+{% endfor %}
+{% if r.set_local_preference != '' %}
+ apply local-preference {{ r.set_local_preference }}
+{% endif %}
+{% if r.set_metric %}
+ apply cost {{ (r.set_metric[0] ~ ' ' ~ (r.set_metric | replace('+', '') | replace('-', ''))) if r.set_metric[0] in '+-' else r.set_metric }}
+{% endif %}
+{% if r.set_metric_type %}
+ apply cost-type {{ 'internal' if r.set_metric_type == 'internal' else 'type-' ~ r.set_metric_type }}
+{% endif %}
+{% if r.set_as_path_prepend %}
+ apply as-path {{ r.set_as_path_prepend | join(' ') }}
+{% endif %}
+{% if r.set_community %}
+ apply community {{ r.set_community | join(' ') }}{{ ' additive' if r.set_community_additive == true and 'none' not in r.set_community else '' }}
+{% elif r.set_community_additive != '' %}
+{{ fail(what ~ ': 「コミュニティを足す」は、付けるコミュニティがあるときだけ書けます') }}
+{% endif %}
+{% if r.set_weight != '' %}
+ apply preferred-value {{ r.set_weight }}
+{% endif %}
+{% if r.set_origin %}
+ apply origin {{ r.set_origin }}
+{% endif %}
+{% if r.set_tag != '' %}
+ apply tag {{ r.set_tag }}
+{% endif %}
+{% for x in r.set_next_hop %}
+ apply ip-address next-hop {{ x }}
+{% endfor %}
+{% endif %}
+#
+{% endfor %}
+{% if device.local_policy_route %}
+ ip local policy-based-route {{ device.local_policy_route }}
+#
+{% endif %}

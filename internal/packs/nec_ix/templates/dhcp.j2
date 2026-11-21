@@ -57,15 +57,24 @@ ip dhcp profile {{ p.name }}
 {% if p.domain %}
   domain-name {{ p.domain }}
 {% endif %}
-{# Seconds: "2d" is 172800, "12h" 43200. #}
-{% if p.lease %}
+{# Seconds: "2d" is 172800, "12h" 43200, "90m" 5400, "100s" 100. #}
+{% if p.lease == 'infinite' %}
+  lease-time infinite
+{% elif p.lease %}
 {% set n = p.lease[:-1] %}
-{% if not (n is digits) or p.lease[-1:] not in ['d', 'h'] or (n | int) == 0 %}
-{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は書けません（2d、12h の形で書きます）') }}
-{% elif p.lease[-1:] == 'h' and (n | int) % 24 == 0 %}
-{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は、日の形（' ~ ((n | int) // 24) ~ 'd）で書いてください') }}
+{% set unit = {'d': 86400, 'h': 3600, 'm': 60, 's': 1} %}
+{% if not (n is digits) or p.lease[-1:] not in ['d', 'h', 'm', 's'] or (n | int) == 0 %}
+{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は書けません（2d、12h、90m、100s の形か、infinite と書きます）') }}
 {% else %}
-  lease-time {{ (n | int) * (86400 if p.lease[-1:] == 'd' else 3600) }}
+{% set sec = (n | int) * unit[p.lease[-1:]] %}
+{% set best = ((sec // 86400) ~ 'd') if sec % 86400 == 0 else (((sec // 3600) ~ 'h') if sec % 3600 == 0 else (((sec // 60) ~ 'm') if sec % 60 == 0 else (sec ~ 's'))) %}
+{% if best != p.lease %}
+{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は、割り切れるいちばん大きい単位（' ~ best ~ '）で書いてください') }}
+{% elif sec > 63072000 %}
+{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は長すぎます（NEC IX は 63072000 秒までです）') }}
+{% else %}
+  lease-time {{ sec }}
+{% endif %}
 {% endif %}
 {% endif %}
 !

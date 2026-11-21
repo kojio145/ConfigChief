@@ -1,0 +1,18 @@
+# The rest of the built-in switch and of bridging (appendix A 3.22,
+# 2026-11-21; made-up values): MDI, port mirroring, the priority of a port,
+# the options of a bridge group, loop detection, the numbers of interfaces.
+tables:
+  l2_settings:
+    - {bridge_irb: true, bvi_count: 16, loop_detect_interval: 60, loop_detect_threshold: 100, loop_detect_window: 5}
+  bridge_groups:
+    - {group: 1, aging_time: 100, table_size: 5000, bridge_ipv6: false}
+    - {group: 2, table_size: unlimited, bridge_only_pppoe: true}
+  interfaces:
+    - {name: GigaEthernet0.0, speed: 2500, mdi: mdix, max_subinterfaces: 64}
+    - {name: GigaEthernet0.1, encap_vlan: 10, dot1q_min_frame: 64, bridge_group: 1, bridge_protected: true, bridge_table_size: 2}
+    - {name: GigaEthernet2.0, switch_qos_scheduler: wfq, switch_router_priority: 7}
+    - {name: "GigaEthernet2:1.0", bridge_group: 1, loop_detect: true, loop_detect_action: none, loop_detect_restore: 100}
+    - {name: "GigaEthernet2:port1", mdi: mdi, qos_default_priority: 4}
+  mirror_sessions:
+    - {session: 4, sources_both: ["GigaEthernet2:port1"], sources_tx: ["GigaEthernet2:port2"], destination_if: "GigaEthernet2:port4"}
+unknown: []

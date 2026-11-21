@@ -1,0 +1,42 @@
+hostname rt-g01
+!
+interface GigabitEthernet0/0
+ description sample wan
+ ip address 203.0.113.1 255.255.255.224
+ ip nat outside
+ ip access-group ACL-G-WAN in
+!
+interface GigabitEthernet0/1
+ description sample lan
+ ip address 198.51.100.1 255.255.255.0
+ ip nat inside
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.2 track 1
+ip route 0.0.0.0 0.0.0.0 203.0.113.3 200
+!
+ip nat inside source list ACL-G-NAT interface GigabitEthernet0/0 overload
+ip nat inside source static tcp 198.51.100.10 8080 interface GigabitEthernet0/0 80
+!
+ip access-list extended ACL-G-NAT
+ permit ip 198.51.100.0 0.0.0.255 any
+!
+ip access-list extended ACL-G-WAN
+ permit tcp any any established
+ permit tcp any host 203.0.113.1 eq www
+ permit udp any eq domain any range 1024 65535
+ permit icmp any any echo-reply
+ permit icmp any any 3 4
+ deny ip any any
+!
+ip sla 1
+ icmp-echo 203.0.113.2 source-ip 203.0.113.1
+ frequency 10
+ip sla schedule 1 life forever start-time now
+track 1 ip sla 1 reachability
+!
+ip dhcp pool POOL-G-LAN
+ network 198.51.100.0 255.255.255.0
+ default-router 198.51.100.1
+ lease 0 1 30
+!
+end

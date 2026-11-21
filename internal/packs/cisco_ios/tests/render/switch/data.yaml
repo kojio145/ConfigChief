@@ -1,0 +1,39 @@
+# A Catalyst-type switch (made-up values): VLANs, spanning tree, a stack,
+# access and trunk ports, a routed port, port security, storm control and a
+# LAG.
+tables:
+  devices:
+    - hostname: sw-a02
+      vendor: cisco_ios
+  stack_members:
+    - {member: 1, provision: sample-48p}
+    - {member: 2, provision: sample-48p}
+  l2_settings:
+    - {ip_routing: true, default_gateway: 192.0.2.126, vtp_domain: sample-domain, vtp_mode: transparent, stp_mode: rapid_pvst, stp_edge_default: true, stp_bpdu_guard_default: true, stp_extend_system_id: true}
+  stp_vlans:
+    - {vlans: "10,20", priority: 4096}
+    - {vlans: "30", priority: 8192, hello_time: 2, forward_time: 15, max_age: 20}
+  vlans:
+    - {vlan_id: 10, name: sample-office}
+    - {vlan_id: 20, name: sample-voice}
+    - {vlan_id: 30}
+  interfaces:
+    - {name: GigabitEthernet1/0/1, enabled: true, description: office desk}
+    - {name: GigabitEthernet1/0/2, enabled: false}
+    - {name: GigabitEthernet1/0/3, enabled: true, ipv4: 198.51.100.1/30}
+    - {name: GigabitEthernet1/0/4, enabled: true}
+    - {name: GigabitEthernet1/0/47, enabled: true}
+    - {name: GigabitEthernet2/0/47, enabled: true}
+    - {name: Port-channel1, enabled: true, description: to sw-b02}
+    - {name: Vlan10, enabled: true, ipv4: 192.0.2.1/25, vlan_id: 10}
+  switchports:
+    - {if_name: GigabitEthernet1/0/1, mode: access, access_vlan: 10, voice_vlan: 20, port_security: true, port_security_max: 3, port_security_violation: restrict, port_security_sticky: true, storm_broadcast: "5.00", storm_multicast: "10", storm_unicast: "20.5", storm_action: shutdown, stp_edge: "on", stp_bpdu_guard: true}
+    - {if_name: GigabitEthernet1/0/2, mode: access, access_vlan: 20, stp_edge: "off", stp_bpdu_guard: false}
+    - {if_name: GigabitEthernet1/0/3, mode: routed}
+    - {if_name: GigabitEthernet1/0/4}
+    - {if_name: GigabitEthernet1/0/47, mode: trunk, native_vlan: 99, allowed_vlans: [10, 20, 30-32], trunk_encapsulation: dot1q, nonegotiate: true, stp_edge: trunk}
+    - {if_name: GigabitEthernet2/0/47, mode: trunk, native_vlan: 99, allowed_vlans: [10, 20, 30-32]}
+    - {if_name: Port-channel1, mode: trunk, native_vlan: 99, allowed_vlans: [10, 20, 30-32]}
+  lags:
+    - {if_name: GigabitEthernet1/0/47, group: 1, mode: active}
+    - {if_name: GigabitEthernet2/0/47, group: 1, mode: active}

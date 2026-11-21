@@ -1,0 +1,75 @@
+!
+hostname rt-r01
+!
+ipv6 unicast-routing
+!
+key chain RIP-SAMPLE
+ key 1
+  key-string Example-Rip-1
+!
+key chain RIP-SAMPLE-MD5
+ key 5
+  key-string Example-Rip-5
+!
+interface Loopback0
+ ip address 203.0.113.1 255.255.255.255
+!
+interface GigabitEthernet0/0
+ description sample RIP link
+ ip address 192.0.2.1 255.255.255.252
+ ip rip send version 1 2
+ ip rip receive version 2
+ ip rip authentication key-chain RIP-SAMPLE
+ ip summary-address rip 198.51.100.0 255.255.255.0
+ no ip split-horizon
+ ipv6 address 2001:DB8:0:1::1/64
+ ipv6 rip sample enable
+ ipv6 rip sample default-information originate metric 3
+ ipv6 rip sample metric-offset 2
+ ipv6 rip sample summary-address 2001:DB8:10::/48
+ ipv6 rip other enable
+!
+interface GigabitEthernet0/1
+ description sample RIP lan
+ ip address 192.0.2.129 255.255.255.128
+ ip rip v2-broadcast
+ ip rip authentication mode md5
+ ip rip authentication key-chain RIP-SAMPLE-MD5
+ ipv6 address 2001:DB8:0:2::1/64
+ ipv6 rip sample enable
+ ipv6 rip sample default-information only
+!
+interface GigabitEthernet0/2
+ description sample other lan
+ ip address 198.51.100.1 255.255.255.0
+ ip rip send version 2
+!
+router rip
+ version 2
+ timers basic 10 60 60 80
+ distance 130 0.0.0.0 255.255.255.255
+ distance 140
+ default-metric 3
+ redistribute static metric 2 route-map RM-SAMPLE-RIP
+ redistribute ospf 1
+ redistribute bgp 64496 metric 5
+ passive-interface default
+ no passive-interface GigabitEthernet0/0
+ network 192.0.2.0
+ neighbor 192.0.2.2
+ distribute-list prefix PL-SAMPLE-IN in
+ distribute-list prefix PL-SAMPLE-OUT out GigabitEthernet0/0
+ offset-list 10 in 2 GigabitEthernet0/0
+ default-information originate route-map RM-SAMPLE-DEF
+ no auto-summary
+!
+ipv6 router rip sample
+ timers 10 60 0 40
+ distance 130
+ redistribute static metric 2
+ redistribute ospf 1 route-map RM-SAMPLE-RIP
+ distribute-list prefix-list PL6-SAMPLE-IN in
+ distribute-list prefix-list PL6-SAMPLE-OUT out GigabitEthernet0/1
+ poison-reverse
+!
+end

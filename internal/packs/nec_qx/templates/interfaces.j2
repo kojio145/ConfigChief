@@ -1,0 +1,306 @@
+{# Interfaces (README, "コンフィグの書き出し"). The aggregate interfaces
+   come first: a port can only join a group that exists. #}
+{% for pass in [1, 2] %}
+{% for i in t.interfaces | natural(attribute='name') %}
+{% if (pass == 1) == (i.name is startingwith('Bridge-Aggregation')) %}
+{% set port = i.name is startingwith('GigabitEthernet') or i.name is startingwith('Ten-GigabitEthernet') or i.name is startingwith('FortyGigE') or i.name is startingwith('Ethernet') %}
+{% set agg = i.name is startingwith('Bridge-Aggregation') %}
+{% set svi = i.name is startingwith('Vlan-interface') %}
+{% if not (port or agg or svi or i.name is startingwith('LoopBack') or i.name is startingwith('M-GigabitEthernet') or i.name is startingwith('NULL')) %}
+{{ fail('IF 名「' ~ i.name ~ '」は、このパックでは書けません（GigabitEthernet1/0/1・Ten-GigabitEthernet1/0/25・Bridge-Aggregation1・Vlan-interface10・LoopBack0・M-GigabitEthernet0/0/0 の形で書きます。別メーカーから書き換えたときは、IF 対応で名前を決めてください）') }}
+{% endif %}
+{% if '.' in i.name %}
+{{ fail('IF 名「' ~ i.name ~ '」: サブ IF は、このパックでは書けません') }}
+{% endif %}
+{% if svi %}
+{% set n = i.name | replace('Vlan-interface', '') %}
+{% if i.vlan_id != '' and i.vlan_id | string != n %}
+{{ fail(i.name ~ ' の「VLAN 番号（VLAN の IF）」' ~ i.vlan_id ~ ' が、IF 名の番号と違います（QX では、VLAN ' ~ i.vlan_id ~ ' の IF は Vlan-interface' ~ i.vlan_id ~ ' です。IF 対応で IF 名を直してください）') }}
+{% endif %}
+{% elif i.vlan_id != '' %}
+{{ fail(i.name ~ ' に「VLAN 番号（VLAN の IF）」' ~ i.vlan_id ~ ' があります（QX では、VLAN の IF は Vlan-interface' ~ i.vlan_id ~ ' です。IF 対応で IF 名を直してください）') }}
+{% endif %}
+{% set has = namespace(sp=false, routed=false, lag=false) %}
+{% for s in t.switchports %}
+{% if s.if_name == i.name %}
+{% set has.sp = true %}
+{% set has.routed = s.mode == 'routed' %}
+{% endif %}
+{% endfor %}
+{% for l in t.lags %}
+{% if l.if_name == i.name %}
+{% set has.lag = true %}
+{% endif %}
+{% endfor %}
+{% if (has.sp or has.lag) and not (port or agg) %}
+{{ fail(i.name ~ ' は、スイッチポート・LAG の行を持てません（ポートか Bridge-Aggregation の IF だけです）') }}
+{% endif %}
+interface {{ i.name }}
+{% if has.routed %}
+{% if agg %}
+{{ fail(i.name ~ ': L3 の LAG（モード routed）は、このパックでは書けません') }}
+{% endif %}
+ port link-mode route
+{% endif %}
+{% if i.description %}
+ description {{ i.description }}
+{% endif %}
+{% if i.vrf %}
+ ip binding vpn-instance {{ i.vrf }}
+{% endif %}
+{% if i.enabled == false %}
+ shutdown
+{% endif %}
+{% if i.speed %}
+ speed {{ i.speed }}
+{% endif %}
+{% if i.duplex %}
+ duplex {{ i.duplex }}
+{% endif %}
+{% for s in t.switchports %}
+{% if s.if_name == i.name and not has.routed %}
+{% include 'switchport.j2' %}
+{% endif %}
+{% endfor %}
+{% if agg %}
+{% set g = i.name | replace('Bridge-Aggregation', '') %}
+{% set m = namespace(dynamic=false, fixed=false) %}
+{% for l in t.lags %}
+{% if l.group | string == g %}
+{% if l.mode == 'active' %}
+{% set m.dynamic = true %}
+{% else %}
+{% set m.fixed = true %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if m.dynamic and m.fixed %}
+{{ fail('LAG ' ~ g ~ ' のメンバーで、束ね方（on と active）が混ざっています（QX では LAG ごとに 1 つです）') }}
+{% endif %}
+{% if m.dynamic %}
+ link-aggregation mode dynamic
+{% endif %}
+{% endif %}
+{% for lag in t.lags %}
+{% if lag.if_name == i.name %}
+{% if not port %}
+{{ fail(i.name ~ ' は LAG のメンバーにできません（束ねられるのはポートだけです）') }}
+{% endif %}
+{% if lag.mode not in ['on', 'active', ''] %}
+{{ fail(i.name ~ ': LAG の束ね方「' ~ lag.mode ~ '」は、QX では書けません（on = 固定、active = LACP）') }}
+{% endif %}
+{% set found = namespace(agg=false) %}
+{% for j in t.interfaces %}
+{% if j.name == 'Bridge-Aggregation' ~ lag.group %}
+{% set found.agg = true %}
+{% endif %}
+{% endfor %}
+{% if not found.agg %}
+{{ fail(i.name ~ ': LAG ' ~ lag.group ~ ' の IF（Bridge-Aggregation' ~ lag.group ~ '）が、インタフェースの表にありません') }}
+{% endif %}
+ port link-aggregation group {{ lag.group }}
+{% if lag.lacp_short == true %}
+ lacp period short
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if i.ipv4 is cidr %}
+{% if (port or agg) and not has.routed %}
+{{ fail(i.name ~ ': L2 のポートに IP アドレスは書けません（スイッチポートのモードを routed にするか、VLAN の IF に書いてください）') }}
+{% endif %}
+ ip address {{ i.ipv4 | ip }} {{ i.ipv4 | mask }}
+{% elif i.ipv4 == 'dhcp' %}
+ ip address dhcp-alloc
+{% elif i.ipv4 %}
+{{ fail(i.name ~ ' の IPv4 アドレス「' ~ i.ipv4 ~ '」は、このパックでは書けません（アドレス/長さ か dhcp で書きます）') }}
+{% endif %}
+{% for a in i.ipv4_secondary %}
+ ip address {{ a | ip }} {{ a | mask }} sub
+{% endfor %}
+{% for a in i.ipv6 %}
+ ipv6 address {{ a }}
+{% endfor %}
+{% for v in t.ipv6_interfaces %}
+{% if v.if_name == i.name %}
+{% set what = i.name ~ ' の IPv6' %}
+{% for a in v.eui64 %}
+ ipv6 address {{ a }} eui-64
+{% endfor %}
+{% for a in v.anycast %}
+ ipv6 address {{ a }} anycast
+{% endfor %}
+{% if v.link_local %}
+ ipv6 address {{ v.link_local }} link-local
+{% endif %}
+{% if v.enabled == true %}
+ ipv6 address auto link-local
+{% elif v.enabled == false %}
+{{ fail(what ~ ': 「IPv6 を使う」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if v.autoconfig == true %}
+ ipv6 address auto
+{% elif v.autoconfig == false %}
+{{ fail(what ~ ': 「自動設定」の「無効」は書けません（セルを空にしてください）') }}
+{% endif %}
+{% if v.mtu != '' %}
+ ipv6 mtu {{ v.mtu }}
+{% endif %}
+{% if v.ra == 'send' %}
+ undo ipv6 nd ra halt
+{% elif v.ra == 'off' %}
+ ipv6 nd ra halt
+{% elif v.ra %}
+{{ fail(what ~ ': 「RA を送る」の ' ~ v.ra ~ ' は、QX では書けません（send か off です）') }}
+{% endif %}
+{% if v.ra_interval != '' or v.ra_interval_min != '' %}
+ ipv6 nd ra interval {{ v.ra_interval | required(what ~ ' の RA の間隔・最大') }} {{ v.ra_interval_min | required(what ~ ' の RA の間隔・最小（QX は、最大と最小を組で書きます）') }}
+{% endif %}
+{% if v.ra_lifetime != '' %}
+ ipv6 nd ra router-lifetime {{ v.ra_lifetime }}
+{% endif %}
+{% if v.ra_managed == true %}
+ ipv6 nd autoconfig managed-address-flag
+{% endif %}
+{% if v.ra_other == true %}
+ ipv6 nd autoconfig other-flag
+{% endif %}
+{% if v.ra_managed == false or v.ra_other == false %}
+{{ fail(what ~ ': RA の M フラグ・O フラグの「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% for x in t.ipv6_ra_prefixes %}
+{% if x.if_name == i.name %}
+ ipv6 nd ra prefix {{ x.prefix }} {{ x.valid_lifetime | required(what ~ ' の RA のプレフィックス ' ~ x.prefix ~ ' の有効時間') }} {{ x.preferred_lifetime | required(what ~ ' の RA のプレフィックス ' ~ x.prefix ~ ' の推奨時間') }}{{ ' no-autoconfig' if x.autonomous == false else '' }}{{ ' off-link' if x.on_link == false else '' }}
+{% endif %}
+{% endfor %}
+{% for d6 in ['in', 'out'] %}
+{% set a6 = v.acl_in if d6 == 'in' else v.acl_out %}
+{% if a6 %}
+ packet-filter ipv6 {{ '' if a6 is digits else 'name ' }}{{ a6 }} {{ 'inbound' if d6 == 'in' else 'outbound' }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% for o in t.ospfv3_interfaces %}
+{% if o.if_name == i.name %}
+ ospfv3 {{ o.process_id }} area {{ o.area | required(i.name ~ ' の OSPFv3 のエリア') }}
+{% if o.cost != '' %}
+ ospfv3 cost {{ o.cost }}
+{% endif %}
+{% if o.priority != '' %}
+ ospfv3 dr-priority {{ o.priority }}
+{% endif %}
+{% if o.hello != '' %}
+ ospfv3 timer hello {{ o.hello }}
+{% endif %}
+{% if o.dead != '' %}
+ ospfv3 timer dead {{ o.dead }}
+{% endif %}
+{% if o.network_type %}
+ ospfv3 network-type {{ o.network_type | lex('ospf_network') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if i.policy_route %}
+ ip policy-based-route {{ i.policy_route }}
+{% endif %}
+{% for b in t.qos_bindings %}
+{% if b.if_name == i.name %}
+{% if b.policy %}
+ qos apply policy {{ b.policy }} {{ 'inbound' if b.direction == 'input' else 'outbound' }}
+{% endif %}
+{% if b.shape_bps != '' %}
+{% if b.direction != 'output' or b.shape_bps % 1000 != 0 %}
+{{ fail(i.name ~ ': 「IF 全体を絞る速さ」は、QX では出力の向きだけで、1000 の倍数の bps で書きます（qos lr outbound cir <kbps>）') }}
+{% endif %}
+ qos lr outbound cir {{ b.shape_bps // 1000 }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for dir in ['in', 'out'] %}
+{% set acl = i.acl_in if dir == 'in' else i.acl_out %}
+{% if acl %}
+ packet-filter {{ '' if acl is digits else 'name ' }}{{ acl }} {{ 'inbound' if dir == 'in' else 'outbound' }}
+{% endif %}
+{% endfor %}
+{% if i.dhcp_relay %}
+ dhcp select relay
+{% for a in i.dhcp_relay %}
+ dhcp relay server-address {{ a }}
+{% endfor %}
+{% endif %}
+{% set vr = namespace(version='', seen=false) %}
+{% for f in t.fhrp %}
+{% if f.if_name == i.name %}
+{% if f.protocol != 'vrrp' %}
+{{ fail(i.name ~ ' のグループ ' ~ f.group ~ ': 冗長化の方式 ' ~ f.protocol ~ ' は、QX では書けません（vrrp にしてください）') }}
+{% endif %}
+{% if vr.seen and f.version | string != vr.version %}
+{{ fail(i.name ~ ': VRRP の版は、QX では IF に 1 つです。同じ IF のグループで同じ値にしてください') }}
+{% endif %}
+{% set vr.version = f.version | string %}
+{% set vr.seen = true %}
+{% endif %}
+{% endfor %}
+{% if vr.version %}
+{% if vr.version == '1' %}
+{{ fail(i.name ~ ': VRRP の版 1 は書けません（QX は 2 か 3 です）') }}
+{% endif %}
+ vrrp version {{ vr.version }}
+{% endif %}
+{% for f in t.fhrp %}
+{% if f.if_name == i.name %}
+ vrrp vrid {{ f.group }} virtual-ip {{ f.virtual_ip | required('仮想 IP') }}
+{% if f.priority != '' %}
+ vrrp vrid {{ f.group }} priority {{ f.priority }}
+{% endif %}
+{% if f.preempt == true %}
+ vrrp vrid {{ f.group }} preempt-mode{{ (' delay ' ~ (f.preempt_delay | int * 100)) if f.preempt_delay != '' else '' }}
+{% elif f.preempt == false %}
+ undo vrrp vrid {{ f.group }} preempt-mode
+{% endif %}
+{% if f.advert_interval != '' %}
+ vrrp vrid {{ f.group }} timer advertise {{ f.advert_interval | int * 100 }}
+{% endif %}
+{% if f.track %}
+ vrrp vrid {{ f.group }} track {{ f.track }} priority reduced {{ f.track_decrement | required(i.name ~ ' のグループ ' ~ f.group ~ ' の「監視断のときの減点」') }}
+{% elif f.track_decrement != '' %}
+{{ fail(i.name ~ ' のグループ ' ~ f.group ~ ': 「監視断のときの減点」は、回線監視があるときだけ書けます') }}
+{% endif %}
+{% if f.auth_type in ['simple', 'md5'] %}
+{% set k = f.auth_key | required('VRRP の認証の鍵') %}
+ vrrp vrid {{ f.group }} authentication-mode {{ f.auth_type }} {{ k if k is startingwith('cipher ') else 'plain ' ~ k }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for o in t.ospf_interfaces %}
+{% if o.if_name == i.name %}
+{% if o.cost != '' %}
+ ospf cost {{ o.cost }}
+{% endif %}
+{% if o.priority != '' %}
+ ospf dr-priority {{ o.priority }}
+{% endif %}
+{% if o.hello != '' %}
+ ospf timer hello {{ o.hello }}
+{% endif %}
+{% if o.dead != '' %}
+ ospf timer dead {{ o.dead }}
+{% endif %}
+{% if o.network_type %}
+ ospf network-type {{ o.network_type | lex('ospf_network') }}
+{% endif %}
+{% if o.auth_type in ['simple', 'md5', 'hmac_md5'] %}
+{% set k = o.auth_key | required('OSPF の認証の鍵') %}
+{% set k = k if k is startingwith('cipher ') else 'plain ' ~ k %}
+{% if o.auth_type == 'simple' %}
+ ospf authentication-mode simple {{ k }}
+{% else %}
+ ospf authentication-mode {{ 'hmac-md5' if o.auth_type == 'hmac_md5' else 'md5' }} {{ o.auth_key_id | required('OSPF の認証の鍵番号') }} {{ k }}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+#
+{% endif %}
+{% endfor %}
+{% endfor %}

@@ -1,0 +1,42 @@
+# The rest of BGP (appendix A 3.19, the part added on 2026-11-21): the timers
+# and distances of the process, what a neighbor is sent and what is taken
+# from it, aggregates, and a password as the device saved it ("7 <value>").
+# The distances stand on one line: the empty one is written as the default
+# of the device. Made-up values.
+tables:
+  devices:
+    - hostname: rt-b02
+      vendor: cisco_ios
+      ipv6_routing: true
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.1/29}
+    - {name: Loopback0, enabled: true, ipv4: 192.0.2.1/32}
+  vrfs:
+    - {name: VRF-SAMPLE-B, rd: "64496:20"}
+  bgp_processes:
+    - {vrf: "", asn: 64496, router_id: 192.0.2.1, log_neighbor_changes: false, default_local_preference: 150, keepalive: 20, holdtime: 60, distance_ebgp: 30, distance_ibgp: 190}
+    - {vrf: VRF-SAMPLE-B, asn: 64496, distance_ebgp: 40, distance_ibgp: 180, distance_local: 180}
+  bgp_neighbors:
+    - {neighbor: 192.0.2.2, remote_as: 64496, update_source: Loopback0, password: "7 00SAMPLE00DUMMY00", keepalive: 10, holdtime: 30, next_hop_self: true, send_community: true, send_ext_community: true, route_reflector_client: true}
+    - {neighbor: 203.0.113.2, remote_as: 64497, keepalive: 30, holdtime: 90, default_originate: true, as_path_filter_in: "10", as_path_filter_out: "20", max_prefix: 1000, max_prefix_threshold: 80, max_prefix_restart: 30, weight: 200, advertisement_interval: 15}
+    - {neighbor: 203.0.113.3, remote_as: 64498, default_originate: true, default_originate_filter: RM-SAMPLE-DEF, acl_in: ACL-SAMPLE-BGP, max_prefix: 500, max_prefix_action: warning_only, send_ext_community: true}
+    - {neighbor: 203.0.113.4, remote_as: 64499, max_prefix: 200, max_prefix_action: discard_extra}
+    - {vrf: VRF-SAMPLE-B, neighbor: 198.51.100.2, remote_as: 64500, acl_out: ACL-SAMPLE-BGP}
+  bgp_ipv6_neighbors:
+    - {neighbor: "3fff:a:b::2", remote_as: 64497, password: "7 22SAMPLE22DUMMY22", send_community: true, send_ext_community: true}
+    - {neighbor: "3fff:a:b::3", remote_as: 64498, send_ext_community: true}
+  bgp_networks:
+    - {vrf: "", prefix: 198.51.100.0/24}
+  bgp_aggregates:
+    - {vrf: "", prefix: 198.51.100.0/23, summary_only: true}
+    - {vrf: "", prefix: 192.0.2.0/24, summary_only: true, as_set: true}
+    - {vrf: VRF-SAMPLE-B, prefix: 203.0.113.128/25}
+  acls:
+    - {name: ACL-SAMPLE-BGP, type: standard}
+  acl_entries:
+    - {acl: ACL-SAMPLE-BGP, seq: 10, action: permit, src: 198.51.100.0/24}
+  as_path_lists:
+    - {name: "10", seq: 10, action: permit, regex: "^64497_"}
+    - {name: "20", seq: 10, action: permit, regex: "^$"}
+  route_policies:
+    - {name: RM-SAMPLE-DEF, seq: 10, action: permit}

@@ -1,0 +1,35 @@
+# The device as a whole, appendix A 3.26 (made-up values): the log the
+# device keeps, the severity per subsystem, the time stamp, the switches of
+# the device, the name servers of a VRF, the source of syslog by its
+# address, the description of a port, the MSS taken from the MTU.
+tables:
+  devices:
+    - hostname: ix-d01
+      log_buffer: true
+      log_buffer_size: 100000
+      log_buffer_mode: one_time
+      log_severity: notifications
+      log_timestamp: time
+      password_encryption: true
+      forward_cache: true
+      ntp_serve: true
+      name_servers: [192.0.2.53, 192.0.2.54]
+      name_servers_vrf: vrf-sample-m
+  log_subsystems:
+    - {subsystem: ppp, severity: debugging}
+    - {subsystem: ike, severity: informational}
+  users:
+    - {name: admin, privilege: admin, secret: dummy-admin-secret-sample, secret_form: plain}
+    - {name: operator, privilege: operator, secret: dummy-operator-secret-sample, secret_form: plain}
+  syslog_servers:
+    - {server: 192.0.2.50, source_if: Loopback0.0}
+    - {server: 198.51.100.50, vrf: vrf-sample-m, source_if: GigaEthernet1.0}
+  interfaces:
+    - {name: GigaEthernet0.0, tcp_mss: auto, port_description: sample uplink port}
+    - {name: GigaEthernet1.0, speed: 1000, port_description: sample lan port}
+# The messages of a subsystem by their numbers, and a server outside the VRF
+# of the others.
+unknown:
+  - "logging subsystem bgp include 1 2 3"
+  - "ip name-server 192.0.2.55"
+ignored_min: 0

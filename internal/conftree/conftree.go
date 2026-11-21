@@ -42,6 +42,11 @@ type Block struct {
 type Options struct {
 	CommentPrefixes []string
 	Blocks          []Block
+	// CommentCloses: a comment line ends every open line, so the line after
+	// it is a child of the root whatever its indentation. For a vendor that
+	// closes each part of the configuration with a mark ("#") and indents
+	// the single lines of the device as a whole by one space.
+	CommentCloses bool
 }
 
 // Split gives the lines of a text without their line ends. The empty piece
@@ -75,7 +80,26 @@ func Parse(kind, text string, opt Options) (*Tree, error) {
 	for i := 0; i < len(lines); i++ {
 		raw := lines[i]
 		body := strings.TrimLeft(raw, " \t")
-		if strings.TrimSpace(body) == "" || isComment(body, opt.CommentPrefixes) {
+		if strings.TrimSpace(body) == "" {
+			continue
+		}
+		if isComment(body, opt.CommentPrefixes) {
+			if opt.CommentCloses {
+				// A mark at the left edge ends everything. An indented one
+				// (" #" between the parts of a block, as under "bgp") ends
+				// what stands as deep as the mark or deeper, and the block
+				// itself stays open.
+				ind := 0
+				if kind == "indent" {
+					ind = width(raw[:len(raw)-len(body)])
+				}
+				if ind == 0 {
+					stack = stack[:1]
+				}
+				for len(stack) > 1 && stack[len(stack)-1].indent >= ind {
+					stack = stack[:len(stack)-1]
+				}
+			}
 			continue
 		}
 		indent := 0

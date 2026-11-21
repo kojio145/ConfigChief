@@ -1,0 +1,26 @@
+hostname ix-b02
+!
+router bgp 64496
+  router-id 192.0.2.1
+  timers 20 60
+  default-local-preference 150
+  neighbor 192.0.2.2 remote-as 64496
+  neighbor 192.0.2.2 update-source Loopback0.0
+  neighbor 192.0.2.2 timers 10 30
+  neighbor 192.0.2.2 route-reflector-client
+  neighbor 203.0.113.2 remote-as 64497
+  neighbor 203.0.113.2 advertisement-interval 15
+  address-family ipv4 unicast
+    network 198.51.100.0/24
+    aggregate-address 192.0.2.0/24 as-set summary-only
+    aggregate-address 198.51.100.0/23 summary-only
+    distance ebgp 30 ibgp 190
+    neighbor 192.0.2.2 next-hop-self
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.1/29
+  no shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.1/32
+!

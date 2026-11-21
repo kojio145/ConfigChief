@@ -1,0 +1,53 @@
+# RIP and RIPng (appendix A 3.27; made-up values). The pack names the key
+# chain after the interface and the RIPng process "ripng"; it takes the
+# network lines from the addresses of the interfaces that have a row.
+tables:
+  devices:
+    - hostname: rt-r02
+      vendor: cisco_ios
+      ipv6_routing: true
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 192.0.2.1/30, ipv6: ["2001:db8:0:1::1/64"]}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 192.0.2.129/25, ipv6: ["2001:db8:0:2::1/64"]}
+    - {name: GigabitEthernet0/2, enabled: true, ipv4: 198.51.100.1/24}
+    - {name: Loopback0, enabled: true, ipv4: 203.0.113.1/32}
+  bgp_processes:
+    - {vrf: "", asn: 64496, router_id: 203.0.113.1}
+  ospf_processes:
+    - {process_id: 1, router_id: 203.0.113.1}
+  ospfv3_processes:
+    - {process_id: 1, router_id: 203.0.113.1}
+  rip_processes:
+    - family: ipv4
+      version: 2
+      auto_summary: false
+      passive_default: true
+      default_originate: true
+      default_originate_filter: RM-SAMPLE-DEF
+      default_metric: 3
+      distance: 130
+      timer_update: 10
+      timer_invalid: 60
+      timer_flush: 80
+      prefix_list_in: PL-SAMPLE-IN
+    - {family: ipv6, distance: 130, timer_update: 10, timer_invalid: 60, timer_flush: 100, prefix_list_in: PL6-SAMPLE-IN}
+  rip_interfaces:
+    - family: ipv4
+      if_name: GigabitEthernet0/0
+      send: true
+      send_version: ["1", "2"]
+      receive_version: ["2"]
+      auth_mode: text
+      auth_key: Example-Rip-1
+      summary: ["198.51.100.0/24"]
+      split_horizon: none
+      prefix_list_out: PL-SAMPLE-OUT
+    - {family: ipv4, if_name: GigabitEthernet0/1, v2_broadcast: true, auth_mode: md5, auth_key: Example-Rip-5, auth_key_id: 5}
+    - {family: ipv6, if_name: GigabitEthernet0/0, default_originate: true, default_originate_metric: 3, metric_offset: 2, summary: ["2001:db8:10::/48"], split_horizon: poisoned_reverse}
+    - {family: ipv6, if_name: GigabitEthernet0/1, split_horizon: poisoned_reverse, prefix_list_out: PL6-SAMPLE-OUT}
+  rip_redistribute:
+    - {family: ipv4, source: static, metric: 2, filter: RM-SAMPLE-RIP}
+    - {family: ipv4, source: ospf}
+    - {family: ipv4, source: bgp, metric: 5}
+    - {family: ipv6, source: static, metric: 2}
+    - {family: ipv6, source: ospf, process_id: 1, filter: RM-SAMPLE-RIP}

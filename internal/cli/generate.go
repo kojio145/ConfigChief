@@ -184,7 +184,7 @@ func cmdApprove(args []string, out, errOut io.Writer) int {
 		next = "次の取り込み・比較から効きます"
 	}
 	if a.Source {
-		next = "次にお客様の一覧を読んだとき（customer）から効きます"
+		next = "次に外部一覧を読んだとき（customer）から効きます"
 	}
 	fmt.Fprintf(out, "承認 %s を足しました（当たった指摘 %d 件）。%s\n", a.Approval.ID, a.Hits, next)
 	return 0

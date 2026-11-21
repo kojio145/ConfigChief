@@ -1,0 +1,112 @@
+{# RIP and RIPng (appendix A 3.27). The lines under an interface are in
+   rip_if.j2. Syntax: CRM chapter 10 (README). #}
+{% for r in t.rip_interfaces %}
+{% set n = namespace(proc=false, seen=false) %}
+{% for p in t.rip_processes %}
+{% if p.family == r.family %}
+{% set n.proc = true %}
+{% endif %}
+{% endfor %}
+{% for i in t.interfaces %}
+{% if i.name == r.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.proc %}
+{{ fail('RIP インタフェース ' ~ r.if_name ~ '（' ~ r.family ~ '）: シート「RIP」に、種類が ' ~ r.family ~ ' の行がありません（行を足してください）') }}
+{% endif %}
+{% if not n.seen %}
+{{ fail('RIP インタフェースの IF ' ~ r.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{% for d in t.rip_redistribute %}
+{% set n = namespace(proc=false) %}
+{% for p in t.rip_processes %}
+{% if p.family == d.family %}
+{% set n.proc = true %}
+{% endif %}
+{% endfor %}
+{% if not n.proc %}
+{{ fail('RIP 再配布 ' ~ d.source ~ '（' ~ d.family ~ '）: シート「RIP」に、種類が ' ~ d.family ~ ' の行がありません（行を足してください）') }}
+{% endif %}
+{% endfor %}
+{% for p in t.rip_processes %}
+{% set v6 = p.family == 'ipv6' %}
+{% set what = 'RIPng' if v6 else 'RIP' %}
+{% if p.version %}
+{{ fail(what ~ ': 「版」は RIP（ipv4）だけの設定です（セルを空にしてください）') }}
+{% endif %}
+{% if v6 and (p.auto_summary == true or p.default_metric or p.timer_update or p.timer_invalid or p.timer_flush) %}
+{{ fail(what ~ ': 「クラスの境目で集約する」「再配布のメトリックの既定」とタイマは、NEC IX の RIPng にありません（セルを空にしてください）') }}
+{% endif %}
+{{ 'ipv6 router rip' if v6 else 'ip router rip' }}
+{% if not v6 %}
+{% if p.auto_summary == true %}
+  auto-summary
+{% endif %}
+{% if p.default_metric %}
+  default-metric {{ p.default_metric }}
+{% endif %}
+{% endif %}
+{% if p.distance %}
+  distance {{ p.distance }}
+{% endif %}
+{% if p.prefix_list_in %}
+  distribute-list prefix {{ p.prefix_list_in }} in
+{% endif %}
+{% if p.prefix_list_out %}
+  distribute-list prefix {{ p.prefix_list_out }} out
+{% endif %}
+{% if p.default_originate == true %}
+  originate-default{{ ' ' ~ p.default_originate_metric if p.default_originate_metric else '' }}
+{% elif p.default_originate_metric %}
+{{ fail(what ~ ': 「広告するデフォルト経路のメトリック」は、「デフォルト経路を広告する」が有効な行にだけ書けます') }}
+{% endif %}
+{% for d in t.rip_redistribute %}
+{% if d.family == p.family %}
+{% set src = d.source %}
+{% if d.source == 'ospf' %}
+{% set o = namespace(pid=d.process_id, n=0) %}
+{% if not o.pid %}
+{% for x in (t.ospfv3_processes if v6 else t.ospf_processes) %}
+{% set o.pid = x.process_id %}
+{% set o.n = o.n + 1 %}
+{% endfor %}
+{% if o.n != 1 %}
+{{ fail(what ~ ' の再配布の元 ospf: 「OSPF のプロセス番号」が空で、プロセスが ' ~ o.n ~ ' つあります（番号を書いてください）') }}
+{% endif %}
+{% endif %}
+{% set src = 'ospf ' ~ o.pid %}
+{% elif d.source == 'bgp' %}
+{% if v6 %}
+{{ fail(what ~ ' の再配布の元 bgp は、NEC IX の RIPng では書けません（再配布できるのは static・connected・ospf です）') }}
+{% endif %}
+{% set b = namespace(asn='') %}
+{% for x in t.bgp_processes %}
+{% if not b.asn or x.vrf == '' %}
+{% set b.asn = x.asn %}
+{% endif %}
+{% endfor %}
+{% if not b.asn %}
+{{ fail(what ~ ' の再配布の元 bgp は、BGP の表に行（AS 番号）が要ります') }}
+{% endif %}
+{% set src = 'bgp ' ~ b.asn %}
+{% endif %}
+{% if v6 %}
+  redistribute {{ src }}{{ ' metric ' ~ d.metric if d.metric else '' }}{{ ' route-map ' ~ d.filter if d.filter else '' }}{{ ' tag ' ~ d.tag if d.tag != '' else '' }}
+{% else %}
+  redistribute {{ src }}{{ ' metric ' ~ d.metric if d.metric else '' }}{{ ' tag ' ~ d.tag if d.tag != '' else '' }}{{ ' route-map ' ~ d.filter if d.filter else '' }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if not v6 and (p.timer_update or p.timer_invalid or p.timer_flush) %}
+{% if not (p.timer_update and p.timer_invalid and p.timer_flush) %}
+{{ fail(what ~ ': タイマは、「更新を送る間隔」「経路を無効とみなすまで」「経路を消すまで」の 3 つを組で書きます') }}
+{% elif p.timer_flush <= p.timer_invalid %}
+{{ fail(what ~ ': 「経路を消すまで」（' ~ p.timer_flush ~ '）は、「経路を無効とみなすまで」（' ~ p.timer_invalid ~ '）より長くします') }}
+{% else %}
+  timers {{ p.timer_update }} {{ p.timer_invalid }} {{ p.timer_flush - p.timer_invalid }}
+{% endif %}
+{% endif %}
+!
+{% endfor %}

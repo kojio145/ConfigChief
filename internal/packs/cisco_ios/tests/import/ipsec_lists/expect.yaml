@@ -1,0 +1,22 @@
+# The candidates of IPsec (made-up values; appendix A 3.20): an IKEv2
+# proposal with several values on a line (the first value on the row, the
+# others in its "(more)" columns), a second proposal of the IKEv2 policy,
+# five IKE policies of version 1 and six transform sets on one profile (the
+# second and the later ones are rows of ipsec_proposals, 20, 30 and so on).
+tables:
+  ipsec_tunnels:
+    - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: 203.0.113.20, ike_version: 2, psk: dummy-psk-sample-a, ike_encryption: aes256, ike_encryption_more: [aes128], ike_hash: sha512, ike_hash_more: [sha256], ike_dh: dh19, ike_dh_more: [dh14], ike_prf: sha512, ike_prf_more: [sha256], esp_encryption: aes256, esp_hash: sha1}
+    - {name: Tunnel2, style: tunnel_if, tunnel_if: Tunnel2, peer_address: 203.0.113.30, ike_version: 1, psk: dummy-psk-sample-b, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, esp_encryption: aes256, esp_hash: sha1}
+  ipsec_proposals:
+    - {tunnel: Tunnel1, phase: ike, seq: 20, encryption: aes128, hash: sha1, dh: dh14}
+    - {tunnel: Tunnel1, phase: ipsec, seq: 20, encryption: aes128, hash: sha1}
+    - {tunnel: Tunnel2, phase: ike, seq: 20, encryption: aes256, hash: sha1, dh: dh14}
+    - {tunnel: Tunnel2, phase: ike, seq: 30, encryption: aes128, hash: sha256, dh: dh14}
+    - {tunnel: Tunnel2, phase: ike, seq: 40, encryption: aes128, hash: sha1, dh: dh14}
+    - {tunnel: Tunnel2, phase: ike, seq: 50, encryption: 3des, hash: sha1, dh: dh5}
+    - {tunnel: Tunnel2, phase: ipsec, seq: 20, encryption: aes192, hash: sha1}
+    - {tunnel: Tunnel2, phase: ipsec, seq: 30, encryption: aes128, hash: sha1}
+    - {tunnel: Tunnel2, phase: ipsec, seq: 40, encryption: 3des, hash: sha1}
+    - {tunnel: Tunnel2, phase: ipsec, seq: 50, encryption: aes256, hash: sha256}
+    - {tunnel: Tunnel2, phase: ipsec, seq: 60, encryption: aes128, hash: sha256}
+unknown: []

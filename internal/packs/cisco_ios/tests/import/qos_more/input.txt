@@ -1,0 +1,53 @@
+!
+hostname rt-q21
+!
+class-map match-any cm-m-voice
+ match cos 5
+ match qos-group 10
+ match protocol rtp
+class-map match-all cm-m-video
+ match input-interface GigabitEthernet0/1
+ match not cos 0 1
+class-map match-any cm-m-both
+ match class-map cm-m-voice
+ match class-map cm-m-video
+ match not access-group name ACL-SAMPLE-Q
+class-map match-all cm-m-web
+ match protocol http url sample
+!
+policy-map pm-m-in
+ class cm-m-voice
+  set qos-group 10
+  set cos 5
+ class class-default
+  police cir percent 20 conform-action transmit exceed-action set-dscp-transmit af11 violate-action drop
+policy-map pm-m-out
+ class cm-m-voice
+  priority percent 20
+ class cm-m-video
+  bandwidth remaining percent 40
+  shape peak 4000000
+  random-detect dscp-based
+  random-detect dscp 34 24 40
+ class cm-m-both
+  shape average percent 30
+  queue-limit 64000 bytes
+ class class-default
+  police cir 2000000 bc 8000 pir 4000000 be 16000
+   conform-action transmit
+   exceed-action transmit
+   violate-action drop
+  random-detect
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.25 255.255.255.252
+ service-policy output pm-m-out
+!
+interface GigabitEthernet0/1
+ ip address 198.51.100.1 255.255.255.0
+ service-policy input pm-m-in
+!
+ip access-list extended ACL-SAMPLE-Q
+ permit udp any any eq 5060
+!
+end

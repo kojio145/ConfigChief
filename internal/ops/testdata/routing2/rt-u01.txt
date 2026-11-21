@@ -1,0 +1,52 @@
+hostname rt-u01
+!
+interface Loopback0
+ ip address 192.0.2.1 255.255.255.255
+!
+interface GigabitEthernet0/0
+ description to sample upstream
+ ip address 203.0.113.1 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description sample lan
+ ip address 198.51.100.1 255.255.255.0
+ ip ospf 1 area 0
+ no shutdown
+!
+router ospf 1
+ router-id 192.0.2.1
+ distance 115
+ distribute-list prefix pl-u-ospf in
+ area 1 virtual-link 192.0.2.9 hello-interval 5 dead-interval 20
+ default-information originate always metric 50 metric-type 1
+!
+router bgp 64496
+ bgp router-id 192.0.2.1
+ timers bgp 20 60
+ distance bgp 30 190 200
+ neighbor PG-U-RR peer-group
+ neighbor PG-U-RR remote-as 64496
+ neighbor PG-U-RR update-source Loopback0
+ neighbor PG-U-RR timers 10 30
+ neighbor PG-U-RR route-reflector-client
+ neighbor PG-U-RR next-hop-self
+ neighbor 192.0.2.2 peer-group PG-U-RR
+ neighbor 192.0.2.3 peer-group PG-U-RR
+ neighbor 203.0.113.2 remote-as 64497
+ neighbor 203.0.113.2 default-originate
+ neighbor 203.0.113.2 advertisement-interval 15
+ neighbor 203.0.113.2 maximum-prefix 1000 80
+ neighbor 203.0.113.2 route-map rm-u-out out
+ network 198.51.100.0
+ aggregate-address 198.51.100.0 255.255.254.0 summary-only
+!
+ip prefix-list pl-u-ospf seq 5 permit 198.51.100.0/24 le 28
+!
+ip community-list standard CL-U-DEL permit 64497:100
+ip community-list standard CL-U-DEL permit 64497:200
+!
+route-map rm-u-out permit 10
+ set comm-list CL-U-DEL delete
+!
+end

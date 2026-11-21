@@ -5,6 +5,49 @@
    numbers, as a device that does not keep the numbers shows them. Any other
    numbering is written out on every line, the remarks too (a remark with a
    number is for IOS XE 16.12 and later: README). #}
+{# Time ranges (an entry names one). A date is "day month year". #}
+{% set tr = namespace(seen=[]) %}
+{% for r in t.time_ranges %}
+{% if r.name not in tr.seen %}
+{% set tr.seen = tr.seen + [r.name] %}
+{% if ' ' in r.name %}
+{{ fail('時間帯 ' ~ r.name ~ ' の名前に空白があります') }}
+{% endif %}
+time-range {{ r.name }}
+{% set abs = namespace(n=0) %}
+{% for k in t.time_ranges %}
+{% if k.name == r.name %}
+{% set what = '時間帯 ' ~ k.name ~ ' の ' ~ k.seq ~ ' 番' %}
+{% if k.kind == 'absolute' %}
+{% set abs.n = abs.n + 1 %}
+{% if abs.n > 1 %}
+{{ fail(what ~ ': 種類が absolute の行は、1 つの時間帯に 1 行までです') }}
+{% endif %}
+{% set line = namespace(v='') %}
+{% for side in ['start', 'end'] %}
+{% set d = k.start_date if side == 'start' else k.end_date %}
+{% set tm = k.start_time if side == 'start' else k.end_time %}
+{% if d %}
+{% set parts = d | split('-') %}
+{% if parts | length != 3 or not (parts[0] is digits) or not (parts[2] is digits) %}
+{{ fail(what ~ ' の日「' ~ d ~ '」は書けません（2026-01-31 の形で書きます）') }}
+{% else %}
+{% set line.v = line.v ~ ' ' ~ side ~ ' ' ~ (tm | required(what ~ ' の時刻（日と組で書きます）')) ~ ' ' ~ (parts[2] | int) ~ ' ' ~ (parts[1] | lex('month')) ~ ' ' ~ parts[0] %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if not line.v %}
+{{ fail(what ~ ': 種類が absolute の行には、開始の日か終了の日が要ります') }}
+{% endif %}
+ absolute{{ line.v }}
+{% else %}
+ periodic {{ k.days | join(' ') | required(what ~ ' の曜日') }} {{ k.start_time | required(what ~ ' の開始の時刻') }} to{{ ' ' ~ (k.end_days | join(' ')) if k.end_days else '' }} {{ k.end_time | required(what ~ ' の終了の時刻') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+!
+{% endif %}
+{% endfor %}
 {% for a in t.acls %}
 {% set kind = a.type | required('ACL ' ~ a.name ~ ' の種類') %}
 ip access-list {{ kind }} {{ a.name }}
@@ -50,8 +93,8 @@ ip access-list {{ kind }} {{ a.name }}
 {{ fail(what ~ 'の付加条件「' ~ f ~ '」は、標準 ACL には書けません（書けるのは log だけです）') }}
 {% endif %}
 {% endfor %}
-{% if x.dscp != '' or x.precedence != '' %}
-{{ fail(what ~ ': DSCP・precedence は、標準 ACL には書けません（種類を extended にしてください）') }}
+{% if x.dscp != '' or x.precedence != '' or x.tos != '' or x.time_range or x.icmp_type or x.icmp_code != '' %}
+{{ fail(what ~ ': DSCP・precedence・ToS・時間帯・ICMP の種類は、標準 ACL には書けません（種類を extended にしてください）') }}
 {% endif %}
  {{ no }}{{ x.action }} {{ ad.s | required(what ~ 'の送信元') }}{{ ' log' if 'log' in x.flags else '' }}
 {% else %}
@@ -94,9 +137,35 @@ ip access-list {{ kind }} {{ a.name }}
 {% endif %}
 {% endfor %}
 {% endif %}
-{% set tail = namespace(v='') %}
-{% if proto == 'icmp' and x.icmp_type %}
+{# After the addresses: the ICMP type, the TCP flags, the marks of the
+   packet, the time range, "fragments", and "log" last (nothing may follow
+   it: command reference, "permit (IP)"). #}
+{% set tail = namespace(v='', tcp=0) %}
+{% if x.icmp_type %}
+{% if proto != 'icmp' %}
+{{ fail(what ~ 'の ICMP の種類は、プロトコルが icmp の行にだけ書けます') }}
+{% endif %}
 {% set tail.v = ' ' ~ x.icmp_type %}
+{% endif %}
+{% if x.icmp_code != '' %}
+{% if not (x.icmp_type is digits) %}
+{{ fail(what ~ 'の ICMP のコードは、ICMP の種類を番号で書いた行にだけ書けます') }}
+{% endif %}
+{% set tail.v = tail.v ~ ' ' ~ x.icmp_code %}
+{% endif %}
+{% for f in ['established', 'ack', 'fin', 'psh', 'rst', 'syn', 'urg'] %}
+{% if f in x.flags %}
+{% if proto != 'tcp' %}
+{{ fail(what ~ 'の ' ~ f ~ ' は、プロトコルが tcp の行にだけ書けます') }}
+{% endif %}
+{% if f != 'established' %}
+{% set tail.tcp = tail.tcp + 1 %}
+{% endif %}
+{% set tail.v = tail.v ~ ' ' ~ f %}
+{% endif %}
+{% endfor %}
+{% if tail.tcp > 1 %}
+{{ fail(what ~ ': TCP のフラグ（ack fin psh rst syn urg）は、1 行に 1 つだけ書けます（複数を並べたときの意味を、資料で確かめられていません。行を分けてください）') }}
 {% endif %}
 {% if x.dscp != '' and x.precedence != '' %}
 {{ fail(what ~ ': DSCP と precedence は、どちらか 1 つだけ書きます') }}
@@ -105,17 +174,25 @@ ip access-list {{ kind }} {{ a.name }}
 {% elif x.precedence != '' %}
 {% set tail.v = tail.v ~ ' precedence ' ~ x.precedence %}
 {% endif %}
-{% if tail.v and (x.dscp != '' or x.precedence != '') and proto in ['tcp', 'udp', 'icmp'] %}
-{{ fail(what ~ ': DSCP・precedence は、プロトコルが ip などポートの無い行にだけ書けます（tcp・udp・icmp の行は、取り込み直しで読めません）') }}
+{% if x.tos != '' %}
+{% if x.dscp != '' %}
+{{ fail(what ~ ': DSCP と ToS は、どちらか 1 つだけ書きます') }}
 {% endif %}
-{% for f in ['established', 'fragments', 'log'] %}
-{% if f in x.flags %}
-{% if f == 'established' and proto != 'tcp' %}
-{{ fail(what ~ 'の established は、プロトコルが tcp の行にだけ書けます') }}
+{% set tail.v = tail.v ~ ' tos ' ~ x.tos %}
 {% endif %}
-{% set tail.v = tail.v ~ ' ' ~ f %}
+{% if x.time_range %}
+{% set tail.v = tail.v ~ ' time-range ' ~ x.time_range %}
 {% endif %}
-{% endfor %}
+{% if 'fragments' in x.flags %}
+{% set tail.v = tail.v ~ ' fragments' %}
+{% endif %}
+{% if 'log' in x.flags and 'log_input' in x.flags %}
+{{ fail(what ~ ': log と log_input は、どちらか 1 つだけ書きます') }}
+{% elif 'log_input' in x.flags %}
+{% set tail.v = tail.v ~ ' log-input' %}
+{% elif 'log' in x.flags %}
+{% set tail.v = tail.v ~ ' log' %}
+{% endif %}
  {{ no }}{{ x.action }} {{ proto }} {{ ad.s | required(what ~ 'の送信元') }}{{ pt.s }} {{ ad.d | required(what ~ 'の宛先') }}{{ pt.d }}{{ tail.v }}
 {% endif %}
 {% endif %}

@@ -305,7 +305,7 @@ const MigrationApprovalNote = "移行のチェックの承認です。当たっ�
 
 // SourceApprovalNote is what the results of the generation say about an
 // approval of a check of the customer's lists.
-const SourceApprovalNote = "資料のチェックの承認です。当たった件数は、お客様の一覧のレポートの「承認」に出ます"
+const SourceApprovalNote = "資料のチェックの承認です。当たった件数は、外部一覧のレポートの「承認」に出ます"
 
 // SourceApproval tells whether an approval is for a check of the customer's
 // lists.
@@ -508,7 +508,7 @@ func (e *Env) checkDoc(o *GenerateOutcome, now time.Time) *report.Doc {
 
 	// The findings.
 	found := report.Sheet{Name: "指摘", Lead: "指摘の一覧です。承認は、指紋に結び付きます（根拠の値が変わると外れます）。",
-		Header: []string{"ID", "重大度", "機器", "表", "行", "列", "ブックのセル", "コンフィグの行", "文面", "内容", "根拠", "承認", "指紋"}, Code: []int{8}}
+		Header: []string{"ID", "重大度", "機器", "表", "行", "列", "ブックのセル", "コンフィグの行", "文面", "内容", "根拠", "承認", "指紋", "直し方"}, Code: []int{8}}
 	for _, f := range o.Items {
 		var ev []string
 		for _, kv := range f.Evidence {
@@ -543,7 +543,7 @@ func (e *Env) checkDoc(o *GenerateOutcome, now time.Time) *report.Doc {
 			mark = report.MarkWarn
 		}
 		found.Rows = append(found.Rows, []string{f.RuleID, check.SeverityTitle(f.Severity), f.Device, table,
-			e.keyLabel(f.Ref.Table, f.Ref.Key), col, f.At, line, text, f.Message, strings.Join(ev, "; "), state, f.Key})
+			e.keyLabel(f.Ref.Table, f.Ref.Key), col, f.At, line, text, f.Message, strings.Join(ev, "; "), state, f.Key, check.Fix(f.RuleID)})
 		found.Marks = append(found.Marks, mark)
 	}
 

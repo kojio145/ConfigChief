@@ -1,0 +1,9 @@
+hostname rt-r03
+!
+ipv6 unicast-routing
+!
+interface GigabitEthernet0/0
+ ip address 192.0.2.1 255.255.255.252
+ ipv6 address 2001:db8:0:1::1/64
+router rip
+end

@@ -1,0 +1,203 @@
+hostname rt-v01
+!
+ip domain name example.com
+!
+vrf definition cust-a
+ address-family ipv4
+ exit-address-family
+!
+vrf definition cust-b
+ address-family ipv4
+ exit-address-family
+!
+vrf definition wan-a
+ address-family ipv4
+ exit-address-family
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+ lifetime 86400
+crypto isakmp key dummy-psk-sample-name hostname rt-v09.example.com
+!
+crypto keyring KR-CMAP-SAMPLE-10 vrf wan-a
+ pre-shared-key address 203.0.113.60 key dummy-psk-sample-map
+crypto isakmp profile ISAKMP-CMAP-SAMPLE-10
+ vrf cust-b
+ keyring KR-CMAP-SAMPLE-10
+ match identity address 203.0.113.60 255.255.255.255 wan-a
+!
+crypto keyring KR-Tunnel2 vrf wan-a
+ pre-shared-key address 203.0.113.50 key dummy-psk-sample-wan
+crypto isakmp profile ISAKMP-Tunnel2
+ keyring KR-Tunnel2
+ match identity address 203.0.113.50 255.255.255.255 wan-a
+!
+crypto keyring KR-Virtual-Template1
+ pre-shared-key address 0.0.0.0 0.0.0.0 key dummy-psk-sample-vt
+crypto isakmp profile ISAKMP-Virtual-Template1
+ keyring KR-Virtual-Template1
+ match identity address 0.0.0.0
+ virtual-template 1
+!
+crypto ikev2 proposal IKEV2-PROP
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+!
+crypto ikev2 policy IKEV2-POL
+ match fvrf any
+ proposal IKEV2-PROP
+!
+crypto ikev2 keyring IKEV2-KEYS
+ peer CMAP-SAMPLE-20
+  address 203.0.113.61
+  pre-shared-key dummy-psk-sample-map2
+ peer Tunnel3
+  address 203.0.113.70
+  pre-shared-key dummy-psk-sample-v2wan
+ peer ANY
+  address 0.0.0.0 0.0.0.0
+  pre-shared-key dummy-psk-sample-v2any
+!
+crypto ikev2 profile IKEV2-CMAP-SAMPLE-20
+ match fvrf wan-a
+ match identity remote address 203.0.113.61 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS
+ lifetime 86400
+ ivrf cust-b
+!
+crypto ikev2 profile IKEV2-Tunnel3
+ match fvrf wan-a
+ match identity remote address 203.0.113.70 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS
+ lifetime 86400
+!
+crypto ikev2 profile IKEV2-Virtual-Template2
+ match identity remote fqdn rt-v08.example.com
+ identity local fqdn rt-v01.example.com
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS
+ lifetime 86400
+ virtual-template 2
+!
+crypto ipsec transform-set TS-CMAP-SAMPLE-10 esp-aes 256 esp-sha256-hmac
+!
+crypto ipsec transform-set TS-CMAP-SAMPLE-20 esp-aes 256 esp-sha256-hmac
+!
+crypto ipsec transform-set TS-Tunnel1 esp-aes 256 esp-sha256-hmac
+!
+crypto ipsec transform-set TS-Tunnel2 esp-aes 256 esp-sha256-hmac
+!
+crypto ipsec transform-set TS-Tunnel3 esp-aes 256 esp-sha256-hmac
+!
+crypto ipsec transform-set TS-Virtual-Template1 esp-aes 256 esp-sha256-hmac
+!
+crypto ipsec transform-set TS-Virtual-Template2 esp-aes 256 esp-sha256-hmac
+!
+crypto ipsec profile PROF-Tunnel1
+ set transform-set TS-Tunnel1
+ set security-association lifetime seconds 3600
+!
+crypto ipsec profile PROF-Tunnel2
+ set transform-set TS-Tunnel2
+ set security-association lifetime seconds 3600
+ set isakmp-profile ISAKMP-Tunnel2
+!
+crypto ipsec profile PROF-Tunnel3
+ set transform-set TS-Tunnel3
+ set security-association lifetime seconds 3600
+ set ikev2-profile IKEV2-Tunnel3
+!
+crypto ipsec profile PROF-Virtual-Template1
+ set transform-set TS-Virtual-Template1
+ set security-association lifetime seconds 3600
+!
+crypto ipsec profile PROF-Virtual-Template2
+ set transform-set TS-Virtual-Template2
+ set security-association lifetime seconds 3600
+ set ikev2-profile IKEV2-Virtual-Template2
+!
+ip access-list extended ACL-CMAP-SAMPLE-10
+ 10 permit ip 192.0.2.128 0.0.0.127 198.51.100.128 0.0.0.127
+!
+crypto map CMAP-SAMPLE 10 ipsec-isakmp
+ set peer 203.0.113.60
+ set transform-set TS-CMAP-SAMPLE-10
+ set security-association lifetime seconds 3600
+ set isakmp-profile ISAKMP-CMAP-SAMPLE-10
+ match address ACL-CMAP-SAMPLE-10
+!
+ip access-list extended ACL-CMAP-SAMPLE-20
+ 10 permit ip 192.0.2.128 0.0.0.127 198.51.100.0 0.0.0.127
+!
+crypto map CMAP-SAMPLE 20 ipsec-isakmp
+ set peer 203.0.113.61
+ set transform-set TS-CMAP-SAMPLE-20
+ set security-association lifetime seconds 3600
+ set ikev2-profile IKEV2-CMAP-SAMPLE-20
+ match address ACL-CMAP-SAMPLE-20
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.9 255.255.255.248
+ no shutdown
+!
+interface GigabitEthernet0/1
+ vrf forwarding wan-a
+ ip address 203.0.113.17 255.255.255.248
+ crypto map CMAP-SAMPLE
+ no shutdown
+!
+interface Loopback0
+ ip address 192.0.2.1 255.255.255.255
+ no shutdown
+!
+interface Tunnel1
+ ip address 198.51.100.1 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination rt-v09.example.com
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-Tunnel1
+ no shutdown
+!
+interface Tunnel2
+ vrf forwarding cust-a
+ ip address 198.51.100.5 255.255.255.252
+ tunnel source GigabitEthernet0/1
+ tunnel destination 203.0.113.50
+ tunnel mode ipsec ipv4
+ tunnel vrf wan-a
+ tunnel protection ipsec profile PROF-Tunnel2
+ no shutdown
+!
+interface Tunnel3
+ vrf forwarding cust-a
+ ip address 198.51.100.9 255.255.255.252
+ tunnel source GigabitEthernet0/1
+ tunnel destination 203.0.113.70
+ tunnel mode ipsec ipv4
+ tunnel vrf wan-a
+ tunnel protection ipsec profile PROF-Tunnel3
+ no shutdown
+!
+interface Virtual-Template1 type tunnel
+ ip unnumbered Loopback0
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-Virtual-Template1
+ no shutdown
+!
+interface Virtual-Template2 type tunnel
+ ip unnumbered Loopback0
+ tunnel source GigabitEthernet0/0
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-Virtual-Template2
+ no shutdown
+!
+end

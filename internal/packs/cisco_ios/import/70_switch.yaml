@@ -1,0 +1,328 @@
+# VLANs, the switch as a whole, spanning tree, stacks and bridging (the lines
+# outside the interfaces; the lines of a switch port stand in
+# import/20_interfaces.yaml). Syntax: README, "VLAN とスイッチ".
+rules:
+  # ---- VLANs ----
+  # One number on the line; a list ("vlan 10,20") takes no name and stays
+  # unknown.
+  - id: vlan
+    match: '^vlan (?P<id>\d+)$'
+    row: {table: vlans, key: {vlan_id: "{{ id }}"}}
+    children:
+      - id: vlan.name
+        match: '^name (?P<text>\S+)$'
+        set: {name: "{{ text }}"}
+      - id: vlan.state
+        match: '^state (?P<how>active|suspend)$'
+        set: {state: "{{ how }}"}
+      - id: vlan.shutdown
+        match: '^shutdown$'
+        set: {shutdown: true}
+      - id: vlan.remote_span
+        match: '^remote-span$'
+        set: {remote_span: true}
+      - id: vlan.private
+        match: '^private-vlan (?P<how>primary|isolated|community)$'
+        set: {private_vlan: "{{ how }}"}
+      - id: vlan.private.association
+        match: '^private-vlan association (?P<list>\d[\d,-]*)$'
+        append: {private_vlan_secondaries: "{{ list }}"}
+
+  # ---- spanning tree ----
+  - id: stp.mode
+    match: '^spanning-tree mode (?P<mode>pvst|rapid-pvst|mst)$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_mode: "{{ mode | replace('-', '_') }}"}
+  - id: stp.extend
+    match: '^spanning-tree extend system-id$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_extend_system_id: true}
+  # With and without the word "edge" (README).
+  - id: stp.edge.default
+    match: '^spanning-tree portfast (?:edge )?default$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_edge_default: true}
+  - id: stp.bpduguard.default
+    match: '^spanning-tree portfast (?:edge )?bpduguard default$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_bpdu_guard_default: true}
+  - id: stp.vlan
+    match: '^spanning-tree vlan (?P<vlans>\d[\d,-]*) (?P<what>priority|hello-time|forward-time|max-age) (?P<n>\d+)$'
+    row: {table: stp_vlans, key: {vlans: "{{ vlans }}"}}
+    set: {"{{ what | replace('-', '_') }}": "{{ n }}"}
+
+  # ---- the switch as a whole ----
+  - id: l2.gateway
+    match: '^ip default-gateway (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {default_gateway: "{{ addr }}"}
+  - id: l2.routing
+    match: '^(?P<no>no )?ip routing$'
+    row: {table: l2_settings, key: {}}
+    set: {ip_routing: "{{ 'false' if no else 'true' }}"}
+  - id: vtp.mode
+    match: '^vtp mode (?P<mode>server|client|transparent|off)$'
+    row: {table: l2_settings, key: {}}
+    set: {vtp_mode: "{{ mode }}"}
+  - id: vtp.domain
+    match: '^vtp domain (?P<name>\S+)$'
+    row: {table: l2_settings, key: {}}
+    set: {vtp_domain: "{{ name }}"}
+  - id: stack.provision
+    match: '^switch (?P<n>\d+) provision (?P<type>\S+)$'
+    row: {table: stack_members, key: {member: "{{ n }}"}}
+    set: {provision: "{{ type }}"}
+
+  # ---- bridging (the classic form) ----
+  - id: bridge.irb
+    match: '^bridge irb$'
+    row: {table: l2_settings, key: {}}
+    set: {bridge_irb: true}
+  # The BVI of a group routes IP only with this line: it is what makes the
+  # BVI the layer-3 interface of the group (the derive below).
+  - id: bridge.route
+    match: '^bridge (?P<g>\d+) route ip$'
+    emit:
+      - table: x_bridge_route
+        key: {group: "{{ g }}"}
+        set: {ip: "true"}
+
+  # ==== the rest of VLANs and switches (appendix A 3.22, 2026-11-21) ====
+  # Several VLANs on one line ("vlan 30,40", "vlan 2-4"): a row for each
+  # number (the derive below). Such a line has no lines under it.
+  - id: vlan.list
+    match: '^vlan (?P<list>\d+(?:-\d+)?(?:,\d+(?:-\d+)?)+|\d+-\d+)$'
+    emit:
+      - table: x_vlan_list
+        key: {list: "{{ list }}"}
+
+  # ---- spanning tree, the rest ----
+  - id: stp.vlan.root
+    match: '^spanning-tree vlan (?P<vlans>\d[\d,-]*) root (?P<how>primary|secondary)(?: diameter (?P<d>\d+))?$'
+    row: {table: stp_vlans, key: {vlans: "{{ vlans }}"}}
+    set: {root: "{{ how }}", root_diameter: "{{ d }}"}
+  - id: stp.vlan.off
+    match: '^no spanning-tree vlan (?P<vlans>\d[\d,-]*)$'
+    row: {table: stp_vlans, key: {vlans: "{{ vlans }}"}}
+    set: {enabled: false}
+  - id: stp.loopguard.default
+    match: '^spanning-tree loopguard default$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_loopguard_default: true}
+  - id: stp.bpdufilter.default
+    match: '^spanning-tree portfast (?:edge )?bpdufilter default$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_bpdu_filter_default: true}
+  - id: stp.pathcost
+    match: '^spanning-tree pathcost method (?P<how>long|short)$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_pathcost_method: "{{ how }}"}
+  - id: stp.backbonefast
+    match: '^spanning-tree backbonefast$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_backbonefast: true}
+  - id: stp.uplinkfast
+    match: '^spanning-tree uplinkfast$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_uplinkfast: true}
+  # MST: the region, and the VLANs of the instances. The command reference
+  # writes "instance <n> vlans <list>", the configuration guide "instance <n>
+  # vlan <list>": both are read.
+  - id: mst
+    match: '^spanning-tree mst configuration$'
+    children:
+      - id: mst.name
+        match: '^name (?P<text>\S+)$'
+        row: {table: l2_settings, key: {}}
+        set: {mst_name: "{{ text }}"}
+      - id: mst.revision
+        match: '^revision (?P<n>\d+)$'
+        row: {table: l2_settings, key: {}}
+        set: {mst_revision: "{{ n }}"}
+      - id: mst.instance
+        match: '^instance (?P<i>\d+) vlans? (?P<list>\d[\d, -]*)$'
+        row: {table: stp_instances, key: {instance: "{{ i }}"}}
+        append: {vlans: "{{ list | replace(' ', '') }}"}
+  # "spanning-tree mst 0-3,5 priority 4096": a row for each instance (the
+  # derives below).
+  - id: mst.priority
+    match: '^spanning-tree mst (?P<i>\d[\d,-]*) priority (?P<n>\d+)$'
+    emit:
+      - table: x_mst_priority
+        key: {list: "{{ i }}"}
+        set: {priority: "{{ n }}"}
+  - id: mst.root
+    match: '^spanning-tree mst (?P<i>\d[\d,-]*) root (?P<how>primary|secondary)$'
+    emit:
+      - table: x_mst_root
+        key: {list: "{{ i }}"}
+        set: {root: "{{ how }}"}
+  # The timers of the one tree of the device (the common tree of MST).
+  - id: mst.timer
+    match: '^spanning-tree mst (?P<what>hello-time|forward-time|max-age) (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {"stp_{{ {'hello-time': 'hello', 'forward-time': 'forward', 'max-age': 'max_age'}[what] }}": "{{ n }}"}
+
+  # ---- LAGs, VTP ----
+  - id: lag.balance
+    match: '^port-channel load-balance (?P<how>dst-ip|dst-mac|dst-mixed-ip-port|dst-port|src-dst-ip|src-dst-mac|src-dst-mixed-ip-port|src-dst-port|src-ip|src-mac|src-mixed-ip-port|src-port)$'
+    row: {table: l2_settings, key: {}}
+    set: {lag_load_balance: "{{ how }}"}
+  - id: lag.lacp.system
+    match: '^lacp system-priority (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {lacp_system_priority: "{{ n }}"}
+  - id: vtp.version
+    match: '^vtp version (?P<n>[123])$'
+    row: {table: l2_settings, key: {}}
+    set: {vtp_version: "{{ n }}"}
+  - id: vtp.password
+    match: '^vtp password (?P<text>\S+)$'
+    row: {table: l2_settings, key: {}}
+    set: {vtp_password: "{{ text }}"}
+  - id: vtp.pruning
+    match: '^vtp pruning$'
+    row: {table: l2_settings, key: {}}
+    set: {vtp_pruning: true}
+
+  # ---- the watch over the ports ----
+  - id: errdisable.cause
+    match: '^errdisable recovery cause (?P<cause>[a-z0-9-]+)$'
+    row: {table: l2_settings, key: {}}
+    append: {errdisable_recovery_causes: "{{ cause }}"}
+  - id: errdisable.interval
+    match: '^errdisable recovery interval (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {errdisable_recovery_interval: "{{ n }}"}
+  - id: udld
+    match: '^udld (?P<how>enable|aggressive)$'
+    row: {table: l2_settings, key: {}}
+    set: {udld: "{{ how }}"}
+  - id: udld.time
+    match: '^udld message time (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {udld_message_time: "{{ n }}"}
+  - id: cdp.run
+    match: '^(?P<no>no )?cdp run$'
+    row: {table: l2_settings, key: {}}
+    set: {cdp: "{{ 'false' if no else 'true' }}"}
+  - id: cdp.timer
+    match: '^cdp timer (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {cdp_timer: "{{ n }}"}
+  - id: cdp.holdtime
+    match: '^cdp holdtime (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {cdp_holdtime: "{{ n }}"}
+  - id: lldp.run
+    match: '^(?P<no>no )?lldp run$'
+    row: {table: l2_settings, key: {}}
+    set: {lldp: "{{ 'false' if no else 'true' }}"}
+  - id: lldp.timer
+    match: '^lldp timer (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {lldp_timer: "{{ n }}"}
+  - id: lldp.holdtime
+    match: '^lldp holdtime (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {lldp_holdtime: "{{ n }}"}
+  - id: lldp.reinit
+    match: '^lldp reinit (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {lldp_reinit: "{{ n }}"}
+  - id: snooping
+    match: '^ip dhcp snooping$'
+    row: {table: l2_settings, key: {}}
+    set: {dhcp_snooping: true}
+  - id: snooping.vlan
+    match: '^ip dhcp snooping vlan (?P<list>\d[\d,-]*)$'
+    row: {table: l2_settings, key: {}}
+    append: {dhcp_snooping_vlans: "{{ list }}"}
+  - id: snooping.option
+    match: '^(?P<no>no )?ip dhcp snooping information option$'
+    row: {table: l2_settings, key: {}}
+    set: {dhcp_snooping_option82: "{{ 'false' if no else 'true' }}"}
+  - id: arp_inspection.vlan
+    match: '^ip arp inspection vlan (?P<list>\d[\d,-]*)$'
+    row: {table: l2_settings, key: {}}
+    append: {arp_inspection_vlans: "{{ list }}"}
+  # The older software writes "mac-address-table".
+  - id: mac.aging
+    match: '^mac[ -]address-table aging-time (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {mac_aging_time: "{{ n }}"}
+  - id: vlan.allocation
+    match: '^vlan internal allocation policy (?P<how>ascending|descending)$'
+    row: {table: l2_settings, key: {}}
+    set: {vlan_internal_allocation: "{{ how }}"}
+  - id: system.mtu
+    match: '^system mtu (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {system_mtu: "{{ n }}"}
+
+  # ---- port mirroring: one source on a line ----
+  - id: mirror.source
+    match: '^monitor session (?P<s>\d+) source interface (?P<port>[A-Za-z][A-Za-z-]*\d[\d/.]*)(?: both)?$'
+    row: {table: mirror_sessions, key: {session: "{{ s }}"}}
+    append: {sources_both: "{{ port | ifname }}"}
+  - id: mirror.source.rx
+    match: '^monitor session (?P<s>\d+) source interface (?P<port>[A-Za-z][A-Za-z-]*\d[\d/.]*) rx$'
+    row: {table: mirror_sessions, key: {session: "{{ s }}"}}
+    append: {sources_rx: "{{ port | ifname }}"}
+  - id: mirror.source.tx
+    match: '^monitor session (?P<s>\d+) source interface (?P<port>[A-Za-z][A-Za-z-]*\d[\d/.]*) tx$'
+    row: {table: mirror_sessions, key: {session: "{{ s }}"}}
+    append: {sources_tx: "{{ port | ifname }}"}
+  - id: mirror.destination
+    match: '^monitor session (?P<s>\d+) destination interface (?P<port>[A-Za-z][A-Za-z-]*\d[\d/.]*)$'
+    row: {table: mirror_sessions, key: {session: "{{ s }}"}}
+    set: {destination_if: "{{ port | ifname }}"}
+
+  # ---- the spanning tree of a bridge group (the classic form) ----
+  - id: bridge.protocol
+    match: '^bridge (?P<g>\d+) protocol (?P<how>ieee|dec|vlan-bridge|ibm)$'
+    row: {table: bridge_groups, key: {group: "{{ g }}"}}
+    set: {protocol: "{{ how }}"}
+  - id: bridge.priority
+    match: '^bridge (?P<g>\d+) priority (?P<n>\d+)$'
+    row: {table: bridge_groups, key: {group: "{{ g }}"}}
+    set: {priority: "{{ n }}"}
+
+derive:
+  # "interface Vlan10" is the layer-3 interface of VLAN 10: the number is
+  # kept in a column, for a vendor whose interface has another name.
+  - id: vlan.interface
+    for: interfaces
+    as: i
+    let:
+      n: "i.name | replace('Vlan', '')"
+    when: "i.name is startingwith('Vlan') and n is digits and n | int >= 1 and n | int <= 4094"
+    row: {table: interfaces, key: {name: "{{ i.name }}"}}
+    set: {vlan_id: "{{ n }}"}
+  # "interface BVI1" stands for bridge group 1.
+  - id: bridge.bvi
+    for: x_bridge_route
+    as: b
+    let:
+      i: "lookup('interfaces', name='BVI' ~ b.group)"
+    when: "b.ip and i.name"
+    row: {table: interfaces, key: {name: "BVI{{ b.group }}"}}
+    set: {bridge_group: "{{ b.group }}"}
+  # "vlan 30,40": a row for each number.
+  - id: vlan.list.each
+    for: x_vlan_list
+    as: l
+    each: {v: "l.list | ranges"}
+    row: {table: vlans, key: {vlan_id: "{{ v }}"}}
+  - id: mst.priority.each
+    for: x_mst_priority
+    as: m
+    each: {v: "m.list | ranges"}
+    row: {table: stp_instances, key: {instance: "{{ v }}"}}
+    set: {priority: "{{ m.priority }}"}
+  - id: mst.root.each
+    for: x_mst_root
+    as: m
+    each: {v: "m.list | ranges"}
+    row: {table: stp_instances, key: {instance: "{{ v }}"}}
+    set: {root: "{{ m.root }}"}

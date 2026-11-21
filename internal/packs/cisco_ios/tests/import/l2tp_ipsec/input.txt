@@ -1,0 +1,61 @@
+hostname rt-h01
+!
+username example-user password 0 dummy-l2tp-user-secret-1
+username sample-user password 0 dummy-l2tp-user-secret-2
+!
+vpdn enable
+!
+vpdn-group RA-SAMPLE
+ accept-dialin
+  protocol l2tp
+  virtual-template 1
+ no l2tp tunnel authentication
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp key dummy-psk-sample-ra address 0.0.0.0 0.0.0.0
+crypto isakmp key dummy-psk-sample-c address 203.0.113.30
+crypto isakmp key dummy-psk-sample-c address 203.0.113.31
+!
+crypto ipsec transform-set TS-SAMPLE-RA esp-aes 256 esp-sha-hmac
+ mode transport
+!
+crypto dynamic-map DYN-SAMPLE 10
+ set transform-set TS-SAMPLE-RA
+ match address ACL-SAMPLE-L2TP
+!
+crypto map CMAP-SAMPLE 10 ipsec-isakmp dynamic DYN-SAMPLE
+crypto map CMAP-SAMPLE 20 ipsec-isakmp
+ set peer 203.0.113.30
+ set peer 203.0.113.31
+ set transform-set TS-SAMPLE-RA
+ match address ACL-SAMPLE-HOST
+!
+ip local pool POOL-SAMPLE 192.0.2.131 192.0.2.190
+!
+interface Loopback0
+ ip address 192.0.2.129 255.255.255.128
+!
+interface GigabitEthernet0/0
+ description sample-wan
+ ip address 203.0.113.9 255.255.255.252
+ crypto map CMAP-SAMPLE
+!
+interface Virtual-Template1
+ ip unnumbered Loopback0
+ peer default ip address pool POOL-SAMPLE
+ ppp authentication chap
+ ppp ipcp dns 192.0.2.53 192.0.2.54
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.10
+!
+ip access-list extended ACL-SAMPLE-L2TP
+ permit udp host 203.0.113.9 eq 1701 any
+ip access-list extended ACL-SAMPLE-HOST
+ permit udp host 203.0.113.9 eq 1701 host 203.0.113.30 eq 1701
+ permit tcp host 203.0.113.9 host 203.0.113.30 eq 179
+!
+end

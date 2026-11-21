@@ -1,0 +1,19 @@
+# IPsec rows written in another way than the design data has them
+# (adapt.yaml, made-up values). "Always on" has no line on this device: a
+# tunnel interface keeps trying by itself (nothing is told), and one that
+# is to wait for traffic cannot be written (G-614).
+tables:
+  devices:
+    - hostname: rt-c03
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.9/29}
+    - {name: Tunnel1, enabled: true, ipv4: 192.0.2.209/30}
+    - {name: Tunnel2, enabled: true, ipv4: 192.0.2.213/30}
+  tunnels:
+    - {if_name: Tunnel1, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.20}
+    - {if_name: Tunnel2, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.21}
+  ipsec_tunnels:
+    - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: 203.0.113.20, psk: dummy-psk-sample-a, ike_version: 2, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600, always_on: true}
+    - {name: Tunnel2, style: tunnel_if, tunnel_if: Tunnel2, peer_address: 203.0.113.21, psk: dummy-psk-sample-b, ike_version: 2, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600, always_on: false}
+findings: [G-614]

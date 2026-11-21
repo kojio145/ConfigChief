@@ -65,7 +65,7 @@ func TestReview(t *testing.T) {
 	}
 	// A line below a line that was read: the line above is the path.
 	g := j.Groups[0]
-	if g.PathText() != "interface GigabitEthernet<n>" || g.Key.Shape != "no cdp enable" || g.Key.Pack != "cisco_ios" || len(g.ID) != 8 {
+	if g.PathText() != "interface GigabitEthernet<n>" || g.Key.Shape != "no mop enabled" || g.Key.Pack != "cisco_ios" || len(g.ID) != 8 {
 		t.Errorf("group 0 = %+v", g)
 	}
 	if heads, below := g.Count(); len(g.Devices) != 2 || heads != 3 || below != 0 {

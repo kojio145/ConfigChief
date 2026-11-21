@@ -1,0 +1,257 @@
+#
+ version 7.1.070, Release 1201
+#
+ sysname l3-q03
+#
+ip vpn-instance sample-vpn
+ route-distinguisher 64496:10
+ description sample tenant
+ vpn-target 64496:10 import-extcommunity
+ vpn-target 64496:10 64496:11 export-extcommunity
+#
+ip vpn-instance sample-both
+ route-distinguisher 64496:20
+ vpn-target 64496:20 both
+ vpn-target 64496:21
+#
+ dns server 192.0.2.53 vpn-instance sample-vpn
+#
+ dhcp enable
+#
+ time-range sample-hours 08:00 to 18:00 working-day
+#
+acl advanced 3000
+ rule 0 permit ip source 192.0.2.0 0.0.0.127
+#
+acl advanced 3001
+ rule 0 permit tcp destination-port eq 5060
+#
+acl ipv6 basic 2000
+ rule 0 permit source 2001:DB8:10::/64
+ rule 5 deny source any logging
+#
+acl ipv6 advanced name sample-v6
+ rule 0 permit tcp source 2001:DB8:10:: 64 destination 2001:DB8:20::1 128 destination-port eq 443
+ rule 5 permit icmpv6 icmp6-type 128 0
+ rule 10 permit udp destination-port range 1000 2000 dscp 46
+ rule 15 permit icmpv6 icmp6-type echo-reply
+ rule 20 deny ipv6
+#
+ ip prefix-list sample-in index 10 permit 192.0.2.0 24 greater-equal 25 less-equal 28
+ ip prefix-list sample-in index 20 deny 0.0.0.0 0 less-equal 32
+ ipv6 prefix-list sample-in6 index 10 permit 2001:DB8:: 32 less-equal 64
+ ip as-path 10 permit ^64497_
+ ip community-list 1 permit 64496:100 no-export
+ ip community-list basic sample-comm permit 64496:200
+ ip community-list 100 permit ^64496:1..$
+#
+route-policy sample-policy permit node 10
+ if-match ip address prefix-list sample-in
+ if-match tag 20
+ apply cost 100
+ apply cost-type type-1
+ apply tag 30
+#
+route-policy sample-policy deny node 20
+#
+route-policy sample-bgp-in permit node 10
+ if-match as-path 10
+ if-match community 1 whole-match
+ if-match ip next-hop prefix-list sample-in
+ apply local-preference 200
+ apply preferred-value 100
+ apply community 64496:300 no-export additive
+ apply as-path 64496 64496
+ apply origin igp
+ apply extcommunity rt 64496:1
+#
+route-policy sample-bgp-out permit node 10
+ if-match ip address prefix-list sample-in
+ if-match ip address prefix-list sample-other
+ if-match interface Vlan-interface10 Vlan-interface20
+ if-match cost 50
+ apply cost + 10
+ apply ip-address next-hop 192.0.2.254
+ apply community none
+#
+policy-based-route sample-pbr permit node 10
+ if-match acl 3000
+ apply next-hop 198.51.100.2 198.51.100.6
+#
+policy-based-route sample-pbr deny node 20
+ if-match acl 3001
+#
+nqa entry admin sample
+ type icmp-echo
+  destination ip 198.51.100.2
+  frequency 5000
+  next-hop ip 198.51.100.2
+  probe timeout 1000
+  reaction 1 checked-element probe-fail threshold-type consecutive 3 action-type trigger-only
+  source interface LoopBack0
+  vpn-instance sample-vpn
+#
+nqa entry admin sample-tcp
+ type tcp
+  destination ip 198.51.100.2
+#
+ nqa schedule admin sample start-time now lifetime forever
+#
+traffic classifier sample-voice operator and
+ if-match dscp ef
+ if-match acl 3001
+#
+traffic classifier sample-data operator or
+ if-match dscp 10 12 14
+ if-match service-dot1p 3
+ if-match acl name sample-list
+ if-match customer-vlan-id 100
+#
+traffic classifier sample-rest
+ if-match any
+#
+traffic behavior sample-mark
+ remark dscp ef
+ remark dot1p 5
+#
+traffic behavior sample-limit
+ car cir 2000 cbs 125000 ebs 0 green pass red remark-dscp-pass 0
+ accounting packet
+#
+traffic behavior sample-drop
+ car cir 64
+#
+qos policy sample-in
+ classifier sample-voice behavior sample-mark
+ classifier sample-data behavior sample-limit
+ classifier sample-rest behavior sample-drop
+#
+interface LoopBack0
+ ip address 198.51.100.253 255.255.255.255
+ ipv6 address 2001:DB8::253/128
+#
+interface Vlan-interface10
+ ip binding vpn-instance sample-vpn
+ ip address 192.0.2.1 255.255.255.128
+ ipv6 address 2001:DB8:10::1/64
+ ipv6 address 2001:DB8:11::/64 eui-64
+ ipv6 address 2001:DB8:12::1/64 anycast
+ ipv6 address FE80::1 link-local
+ ipv6 mtu 1400
+ undo ipv6 nd ra halt
+ ipv6 nd ra interval 600 200
+ ipv6 nd ra router-lifetime 1800
+ ipv6 nd autoconfig other-flag
+ ipv6 nd ra prefix 2001:DB8:10::/64 86400 3600 no-autoconfig
+ ipv6 nd ra prefix 2001:DB8:11::/64 86400 3600
+ packet-filter ipv6 2000 inbound
+ packet-filter ipv6 name sample-v6 outbound
+ ospfv3 1 area 0.0.0.0
+ ospfv3 cost 20
+ ospfv3 dr-priority 0
+ ospfv3 timer hello 5
+ ospfv3 network-type p2p
+ ip policy-based-route sample-pbr
+ vrrp vrid 1 virtual-ip 192.0.2.126
+ vrrp vrid 1 track 1 priority reduced 30
+ vrrp vrid 1 track 2 switchover
+#
+interface Vlan-interface20
+ ip address 192.0.2.129 255.255.255.128
+ ipv6 address auto link-local
+ ospfv3 1 area 0.0.0.1
+#
+interface Vlan-interface30
+ ipv6 address auto
+#
+interface GigabitEthernet1/0/1
+ port link-mode bridge
+ qos apply policy sample-in inbound
+ qos lr outbound cir 50000
+ qos lr inbound cir 50000
+#
+bgp 64496
+ router-id 198.51.100.253
+ timer keepalive 30 hold 90
+ peer 198.51.100.2 as-number 64497
+ peer 198.51.100.2 description to rt-b01
+ peer 198.51.100.2 connect-interface LoopBack0
+ peer 198.51.100.2 ebgp-max-hop 2
+ peer 198.51.100.2 password cipher $c$3$sampleSampleSampleSampleSample
+ peer 198.51.100.2 timer keepalive 10 hold 30
+ peer 198.51.100.6 as-number 64496
+ peer 198.51.100.10 as-number 64498
+ peer 198.51.100.10 ignore
+ peer 2001:DB8::2 as-number 64497
+ peer 2001:DB8::2 description to rt-b01 by v6
+ group sample-group internal
+ #
+ address-family ipv4 unicast
+  network 192.0.2.0 255.255.255.0
+  network 203.0.113.0 25
+  import-route direct
+  import-route static med 50 route-policy sample-policy
+  import-route ospf 1
+  peer 198.51.100.2 enable
+  peer 198.51.100.2 next-hop-local
+  peer 198.51.100.2 default-route-advertise
+  peer 198.51.100.2 keep-all-routes
+  peer 198.51.100.2 advertise-community
+  peer 198.51.100.2 prefix-list sample-in import
+  peer 198.51.100.2 route-policy sample-bgp-in import
+  peer 198.51.100.2 route-policy sample-bgp-out export
+  peer 198.51.100.10 enable
+ #
+ address-family ipv6 unicast
+  network 2001:DB8:10:: 64
+  import-route direct
+  peer 2001:DB8::2 enable
+  peer 2001:DB8::2 prefix-list sample-in6 export
+#
+ospf 1 router-id 198.51.100.253
+ import-route direct route-policy sample-policy
+ area 0.0.0.0
+  network 192.0.2.128 0.0.0.127
+#
+ospf 2 vpn-instance sample-vpn router-id 198.51.100.252
+ area 0.0.0.0
+  network 192.0.2.0 0.0.0.127
+#
+ospfv3 1
+ router-id 198.51.100.253
+ import-route static
+ silent-interface Vlan-interface20
+ area 0.0.0.0
+ area 0.0.0.1
+  stub no-summary
+#
+ ip local policy-based-route sample-pbr
+#
+ ip route-static 0.0.0.0 0 198.51.100.2 track 1 preference 10
+ ip route-static 0.0.0.0 0 198.51.100.6 preference 100
+ ip route-static vpn-instance sample-vpn 203.0.113.0 25 192.0.2.2 description sample tenant route
+ ip route-static vpn-instance sample-vpn 203.0.113.128 25 vpn-instance sample-both 192.0.2.130
+ ipv6 route-static :: 0 2001:DB8::2 preference 10
+ ipv6 route-static 2001:DB8:20:: 48 Vlan-interface10 FE80::2
+ ipv6 route-static 2001:DB8:30:: 48 NULL0 description sample discard
+#
+ track 1 nqa entry admin sample reaction 1
+ track 2 interface GigabitEthernet1/0/1 delay negative 5 positive 10
+ track 3 interface Vlan-interface10 protocol ipv4
+ track 4 nqa entry admin sample-tcp reaction 1
+#
+ info-center loghost vpn-instance sample-vpn 192.0.2.20 facility local5
+#
+ ntp-service enable
+ ntp-service unicast-server 192.0.2.10 vpn-instance sample-vpn priority
+#
+dhcp server ip-pool sample-pool
+ network 203.0.113.0 mask 255.255.255.128
+ gateway-list 203.0.113.1 203.0.113.2 203.0.113.3
+ expired day 0 hour 1 minute 30
+#
+dhcp server ip-pool sample-long
+ network 203.0.113.128 mask 255.255.255.128
+ expired unlimited
+#
+return

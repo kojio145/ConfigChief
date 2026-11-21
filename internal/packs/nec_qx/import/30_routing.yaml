@@ -1,0 +1,112 @@
+# Static routes and OSPF.
+# Syntax: README, "参照した資料" (Static routing commands, OSPF commands).
+rules:
+  # ---- static routes ----
+  # The mask is a dotted mask or a length; the route goes to a next hop, or
+  # out of an interface (with a next hop or without), in the public table or
+  # in a VPN instance. A next hop may be watched by a track entry. The forms
+  # with "bfd", and a next hop in another VPN instance, stay unknown.
+  - id: route.static
+    match: '^ip route-static (?:vpn-instance (?P<vrf>\S+) )?(?P<dst>\d+\.\d+\.\d+\.\d+) (?:(?P<mask>\d+\.\d+\.\d+\.\d+)|(?P<len>\d+)) (?:(?P<nh>\d+\.\d+\.\d+\.\d+)|(?P<ifn>[A-Za-z][A-Za-z-]*\d[\d/.]*)(?: (?P<nh2>\d+\.\d+\.\d+\.\d+))?)(?:(?P<perm> permanent)| track (?P<track>\d+))?(?: preference (?P<pref>\d+))?(?: tag (?P<tag>\d+))?(?: description (?P<text>.+))?$'
+    when: "nh != 'vpn-instance'"
+    row:
+      table: static_routes
+      key:
+        vrf: "{{ vrf }}"
+        prefix: "{{ ((dst | with_mask(mask)) if mask else (dst ~ '/' ~ len)) | network }}"
+        next_hop: "{{ nh if nh else nh2 }}"
+        out_if: "{{ ifn | ifname }}"
+    set:
+      distance: "{{ pref }}"
+      track: "{{ track }}"
+      tag: "{{ tag }}"
+      description: "{{ text }}"
+      permanent: "{{ 'true' if perm else '' }}"
+
+  # ---- OSPF ----
+  # "ospf" without a number is process 1. The form with "vpn-instance"
+  # stays unknown.
+  - id: ospf
+    match: '^ospf(?: (?P<pid>\d+))?(?: router-id (?P<rid>\d+\.\d+\.\d+\.\d+)| vpn-instance (?P<vrf>\S+))*$'
+    row: {table: ospf_processes, key: {process_id: "{{ pid if pid else '1' }}"}}
+    set: {router_id: "{{ rid }}", vrf: "{{ vrf }}"}
+    children:
+      - id: ospf.reference_bandwidth
+        match: '^bandwidth-reference (?P<n>\d+)$'
+        set: {reference_bandwidth: "{{ n }}"}
+      # "direct" is what the dataset calls connected. "nssa-only" and
+      # "allow-ibgp" have no column: such a line stays unknown.
+      - id: ospf.import
+        match: '^import-route (?P<src>direct|static|bgp|rip)(?: cost (?P<cost>\d+)| tag (?P<tag>\d+)| type (?P<type>1|2)| route-policy (?P<policy>\S+))*$'
+        row:
+          table: ospf_redistribute
+          key: {process_id: "{{ pid if pid else '1' }}", source: "{{ 'connected' if src == 'direct' else src }}"}
+        set: {metric: "{{ cost }}", tag: "{{ tag }}", metric_type: "{{ type }}", filter: "{{ policy }}"}
+      - id: ospf.default
+        match: '^default-route-advertise(?P<always> always)?(?: cost (?P<cost>\d+))?$'
+        set: {default_originate: "{{ 'always' if always else 'when_present' }}", default_metric: "{{ cost }}"}
+      - id: ospf.silent.all
+        match: '^silent-interface all$'
+        set: {passive_default: true}
+      - id: ospf.silent
+        match: '^(?P<no>undo )?silent-interface (?P<ifn>[A-Za-z][A-Za-z-]*\d[\d/.]*)$'
+        emit:
+          - table: x_ospf_passive
+            key: {process_id: "{{ pid if pid else '1' }}", if_name: "{{ ifn | ifname }}"}
+            set: {passive: "{{ 'false' if no else 'true' }}"}
+      # An area holds its networks and what kind of area it is.
+      - id: ospf.area
+        match: '^area (?P<area>\d+(?:\.\d+\.\d+\.\d+)?)$'
+        children:
+          - id: ospf.area.network
+            match: '^network (?P<addr>\d+\.\d+\.\d+\.\d+) (?P<wc>\d+\.\d+\.\d+\.\d+)$'
+            emit:
+              - table: x_ospf_net
+                key: {process_id: "{{ pid if pid else '1' }}", prefix: "{{ addr | with_wildcard(wc) | network }}"}
+                set: {area: "{{ area }}"}
+          # "default-route-advertise-always" has no column: such a line stays unknown.
+          - id: ospf.area.stub
+            match: '^(?P<kind>stub|nssa)(?P<nosum> no-summary)?$'
+            row: {table: ospf_areas, key: {process_id: "{{ pid if pid else '1' }}", area: "{{ area }}"}}
+            set: {type: "{{ ('totally_' if nosum else '') ~ kind }}"}
+          # "cost" has no column: such a line stays unknown.
+          - id: ospf.area.summary
+            match: '^abr-summary (?P<ip>\d+\.\d+\.\d+\.\d+) (?:(?P<mask>\d+\.\d+\.\d+\.\d+)|(?P<len>\d+))(?: (?P<adv>advertise|not-advertise))?$'
+            row:
+              table: ospf_ranges
+              key: {process_id: "{{ pid if pid else '1' }}", area: "{{ area }}", prefix: "{{ ((ip | with_mask(mask)) if mask else (ip ~ '/' ~ len)) | network }}"}
+            set: {advertise: "{{ 'true' if adv == 'advertise' else ('false' if adv == 'not-advertise' else '') }}"}
+
+derive:
+  # An interface runs OSPF when a "network" line of an area has its address
+  # inside. What the interface says about OSPF itself joins the row.
+  - id: ospf.interface
+    for: interfaces
+    as: i
+    let:
+      net: "covering('x_ospf_net', 'prefix', i.ipv4)"
+      oi: "lookup('x_ospf_if', if_name=i.name)"
+      pv: "lookup('x_ospf_passive', process_id=net.process_id, if_name=i.name)"
+    when: "net.process_id"
+    row: {table: ospf_interfaces, key: {process_id: "{{ net.process_id }}", if_name: "{{ i.name }}"}}
+    set:
+      area: "{{ net.area }}"
+      cost: "{{ oi.cost }}"
+      priority: "{{ oi.priority }}"
+      hello: "{{ oi.hello }}"
+      dead: "{{ oi.dead }}"
+      network_type: "{{ oi.network_type }}"
+      passive: "{{ pv.passive }}"
+      auth_type: "{{ oi.auth_type }}"
+      auth_key_id: "{{ oi.auth_key_id }}"
+      auth_key: "{{ oi.auth_key }}"
+
+  # The version of VRRP is said once for the interface.
+  - id: vrrp.version
+    for: fhrp
+    as: f
+    let:
+      v: "lookup('x_vrrp_version', if_name=f.if_name)"
+    when: "v.version and f.protocol == 'vrrp'"
+    row: {table: fhrp, key: {if_name: "{{ f.if_name }}", group: "{{ f.group }}"}}
+    set: {version: "{{ v.version }}"}

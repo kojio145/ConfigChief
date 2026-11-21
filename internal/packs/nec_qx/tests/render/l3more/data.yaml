@@ -1,0 +1,125 @@
+# VPN instances, track entries with NQA, routing policies, policy-based routing, prefix lists, BGP, IPv6 and QoS policies (made-up values).
+tables:
+  acl_entries:
+    - {acl: "3000", seq: "0", action: "permit", dst: "any", protocol: "ip", src: "192.0.2.0/25"}
+    - {acl: "3001", seq: "0", action: "permit", dst: "any", dst_port: "5060", protocol: "tcp", src: "any"}
+  acls:
+    - {name: "3000", type: "extended"}
+    - {name: "3001", type: "extended"}
+  as_path_lists:
+    - {name: "10", seq: "10", action: "permit", regex: "^64497_"}
+  bgp_ipv6_neighbors:
+    - {neighbor: "2001:db8::2", description: "to rt-b01 by v6", prefix_list_out: "sample-in6", remote_as: "64497"}
+  bgp_neighbors:
+    - {neighbor: "198.51.100.2", default_originate: "true", description: "to rt-b01", ebgp_multihop: "2", filter_in: "sample-bgp-in", filter_out: "sample-bgp-out", holdtime: "30", keepalive: "10", next_hop_self: "true", password: "cipher $c$3$sampleSampleSampleSampleSample", prefix_list_in: "sample-in", remote_as: "64497", send_community: "true", soft_reconfig_in: "true", update_source: "LoopBack0"}
+    - {neighbor: "198.51.100.6", enabled: "false", remote_as: "64496"}
+    - {neighbor: "198.51.100.10", enabled: "false", remote_as: "64498"}
+  bgp_networks:
+    - {prefix: "192.0.2.0/24"}
+    - {prefix: "203.0.113.0/25"}
+  bgp_processes:
+    - {asn: "64496", holdtime: "90", ipv6_networks: ["2001:db8:10::/64"], ipv6_redistribute: ["connected"], keepalive: "30", router_id: "198.51.100.253"}
+  bgp_redistribute:
+    - {source: "connected"}
+    - {source: "static", filter: "sample-policy", metric: "50"}
+    - {source: "ospf", process_id: "1"}
+  community_lists:
+    - {name: "1", seq: "10", action: "permit", communities: ["64496:100", "no-export"], type: "standard"}
+    - {name: "sample-comm", seq: "10", action: "permit", communities: ["64496:200"], type: "standard"}
+    - {name: "100", seq: "10", action: "permit", regex: "^64496:1..$", type: "expanded"}
+  devices:
+    - {hostname: "l3-q04", local_policy_route: "sample-pbr", name_servers: ["192.0.2.53"], name_servers_vrf: "sample-vpn", vendor: "nec_qx"}
+  dhcp_pools:
+    - {name: "sample-pool", default_router: "203.0.113.1", default_routers_more: ["203.0.113.2", "203.0.113.3"], lease: "90m", network: "203.0.113.0/25"}
+    - {name: "sample-long", lease: "infinite", network: "203.0.113.128/25"}
+  fhrp:
+    - {if_name: "Vlan-interface10", group: "1", advert_interval: "1", preempt: "true", priority: "100", protocol: "vrrp", track: "1", track_decrement: "30", version: "3", virtual_ip: "192.0.2.126"}
+  interfaces:
+    - {name: "LoopBack0", enabled: "true", ipv4: "198.51.100.253/32", ipv6: ["2001:db8::253/128"], kind: "loopback"}
+    - {name: "Vlan-interface10", enabled: "true", ipv4: "192.0.2.1/25", ipv6: ["2001:db8:10::1/64"], kind: "vlan", policy_route: "sample-pbr", vlan_id: "10", vrf: "sample-vpn"}
+    - {name: "Vlan-interface20", enabled: "true", ipv4: "192.0.2.129/25", kind: "vlan", vlan_id: "20"}
+    - {name: "Vlan-interface30", enabled: "true", kind: "vlan", vlan_id: "30"}
+    - {name: "GigabitEthernet1/0/1", enabled: "true", kind: "physical"}
+  ipv6_acl_entries:
+    - {acl: "2000", seq: "0", action: "permit", src: "2001:db8:10::/64"}
+    - {acl: "2000", seq: "5", action: "deny", flags: ["log"], src: "any"}
+    - {acl: "sample-v6", seq: "0", action: "permit", dst: "2001:db8:20::1", dst_port: "443", protocol: "tcp", src: "2001:db8:10::/64"}
+    - {acl: "sample-v6", seq: "5", action: "permit", dst: "any", icmp_code: "0", icmp_type: "128", protocol: "icmp", src: "any"}
+    - {acl: "sample-v6", seq: "10", action: "permit", dscp: "46", dst: "any", dst_port: "1000-2000", protocol: "udp", src: "any"}
+    - {acl: "sample-v6", seq: "20", action: "deny", dst: "any", protocol: "ip", src: "any"}
+  ipv6_interfaces:
+    - {if_name: "Vlan-interface10", acl_in: "2000", acl_out: "sample-v6", anycast: ["2001:db8:12::1/64"], eui64: ["2001:db8:11::/64"], link_local: "fe80::1", mtu: "1400", ra: "send", ra_interval: "600", ra_interval_min: "200", ra_lifetime: "1800", ra_other: "true"}
+    - {if_name: "Vlan-interface20", enabled: "true"}
+    - {if_name: "Vlan-interface30", autoconfig: "true"}
+  ipv6_prefix_lists:
+    - {name: "sample-in6", seq: "10", action: "permit", le: "64", prefix: "2001:db8::/32"}
+  ipv6_ra_prefixes:
+    - {if_name: "Vlan-interface10", prefix: "2001:db8:10::/64", autonomous: "false", on_link: "true", preferred_lifetime: "3600", valid_lifetime: "86400"}
+    - {if_name: "Vlan-interface10", prefix: "2001:db8:11::/64", autonomous: "true", on_link: "true", preferred_lifetime: "3600", valid_lifetime: "86400"}
+  ipv6_routes:
+    - {prefix: "::/0", next_hop: "2001:db8::2", distance: "10"}
+    - {prefix: "2001:db8:20::/48", next_hop: "fe80::2", out_if: "Vlan-interface10"}
+    - {prefix: "2001:db8:30::/48", out_if: "Null0", description: "sample discard"}
+  l2_settings:
+    - {stp_enabled: "false"}
+  ntp_servers:
+    - {server: "192.0.2.10", prefer: "true", vrf: "sample-vpn"}
+  ospf_interfaces:
+    - {process_id: "2", if_name: "Vlan-interface10", area: "0.0.0.0"}
+    - {process_id: "1", if_name: "Vlan-interface20", area: "0.0.0.0"}
+  ospf_processes:
+    - {process_id: "1", router_id: "198.51.100.253"}
+    - {process_id: "2", router_id: "198.51.100.252", vrf: "sample-vpn"}
+  ospf_redistribute:
+    - {process_id: "1", source: "connected", filter: "sample-policy"}
+  ospfv3_areas:
+    - {process_id: "1", area: "0.0.0.1", type: "totally_stub"}
+  ospfv3_interfaces:
+    - {process_id: "1", if_name: "Vlan-interface10", area: "0.0.0.0", cost: "20", hello: "5", network_type: "point_to_point", priority: "0"}
+    - {process_id: "1", if_name: "Vlan-interface20", area: "0.0.0.1", passive: "true"}
+  ospfv3_processes:
+    - {process_id: "1", redistribute: ["static"], router_id: "198.51.100.253"}
+  prefix_lists:
+    - {name: "sample-in", seq: "10", action: "permit", ge: "25", le: "28", prefix: "192.0.2.0/24"}
+    - {name: "sample-in", seq: "20", action: "deny", le: "32", prefix: "0.0.0.0/0"}
+  qos_bindings:
+    - {if_name: "GigabitEthernet1/0/1", direction: "input", policy: "sample-in"}
+    - {if_name: "GigabitEthernet1/0/1", direction: "output", shape_bps: "50000000"}
+  qos_class_matches:
+    - {class: "sample-voice", seq: "10", dscp: ["46"]}
+    - {class: "sample-voice", seq: "20", acl: "3001"}
+    - {class: "sample-data", seq: "10", dscp: ["10", "12", "14"]}
+    - {class: "sample-data", seq: "20", cos: ["3"]}
+    - {class: "sample-data", seq: "30", acl: "sample-list"}
+    - {class: "sample-rest", seq: "10"}
+  qos_classes:
+    - {name: "sample-voice", match: "all"}
+    - {name: "sample-data", match: "any"}
+    - {name: "sample-rest", match: "all"}
+  qos_policies:
+    - {policy: "sample-in", class: "sample-voice", seq: "10", set_cos: "5", set_dscp: "46"}
+    - {policy: "sample-in", class: "sample-data", police_bc: "125000", police_be: "0", police_bps: "2000000", police_exceed: "set_dscp", police_exceed_value: "0", seq: "20"}
+    - {policy: "sample-in", class: "sample-rest", police_bps: "64000", seq: "30"}
+  route_policies:
+    - {name: "sample-policy", seq: "10", action: "permit", match_prefix_list: ["sample-in"], match_tag: ["20"], set_metric: "100", set_metric_type: "1", set_tag: "30"}
+    - {name: "sample-policy", seq: "20", action: "deny"}
+    - {name: "sample-bgp-in", seq: "10", action: "permit", match_as_path: "10", match_community_exact: "true", match_community_list: "1", match_next_hop_prefix_list: "sample-in", set_as_path_prepend: ["64496", "64496"], set_community: ["64496:300", "no-export"], set_community_additive: "true", set_local_preference: "200", set_origin: "igp", set_weight: "100"}
+    - {name: "sample-bgp-out", seq: "10", action: "permit", match_interface: ["Vlan-interface10", "Vlan-interface20"], match_metric: "50", match_prefix_list: ["sample-in"], set_community: ["none"], set_metric: "+10", set_next_hop: ["192.0.2.254"]}
+    - {name: "sample-pbr", seq: "10", action: "permit", match_acl: ["3000"], set_next_hop: ["198.51.100.2", "198.51.100.6"]}
+    - {name: "sample-pbr", seq: "20", action: "deny", match_acl: ["3001"]}
+  static_routes:
+    - {prefix: "0.0.0.0/0", next_hop: "198.51.100.2", distance: "10", track: "1"}
+    - {prefix: "0.0.0.0/0", next_hop: "198.51.100.6", distance: "100"}
+    - {vrf: "sample-vpn", prefix: "203.0.113.0/25", next_hop: "192.0.2.2", description: "sample tenant route"}
+  switchports:
+    - {if_name: "GigabitEthernet1/0/1", mode: "access"}
+  syslog_servers:
+    - {server: "192.0.2.20", facility: "local5", vrf: "sample-vpn"}
+  time_ranges:
+    - {name: "sample-hours", seq: "10", days: ["weekdays"], end_time: "18:00", kind: "periodic", start_time: "8:00"}
+  tracks:
+    - {id: "2", down_delay: "5", target: "GigabitEthernet1/0/1", type: "interface", up_delay: "10"}
+    - {id: "1", fail_count: "3", interval: "5", source_if: "LoopBack0", target: "198.51.100.2", timeout: "1000", type: "icmp", via_next_hop: "198.51.100.2", vrf: "sample-vpn"}
+  vrfs:
+    - {name: "sample-vpn", description: "sample tenant", rd: "64496:10", rt_export: ["64496:10", "64496:11"], rt_import: ["64496:10"]}
+    - {name: "sample-both", rd: "64496:20", rt_export: ["64496:20"], rt_import: ["64496:20"]}

@@ -22,6 +22,36 @@ hostname {{ device.hostname }}
 timezone {{ sign }}{{ ('0' ~ hm[0]) if hm[0] | length == 1 else hm[0] }} {{ hm[1] if hm | length == 2 else '00' }}
 {% endif %}
 !
+{# The log the device keeps and the switches of the device (appendix A
+   3.26). Where these lines stand in the saved text: the factory
+   configuration shows the logging lines right after the time zone. #}
+{% if device.log_buffer == true %}
+logging buffered{{ ' ' ~ device.log_buffer_size if device.log_buffer_size != '' else '' }}{{ ' ' ~ (device.log_buffer_mode | replace('_', '-')) if device.log_buffer_mode else '' }}
+{% elif device.log_buffer_size != '' or device.log_buffer_mode %}
+{{ fail('機器内ログの大きさ・いっぱいのときの動きは、「機器内にログを溜める」が有効のときだけ書けます') }}
+{% elif device.log_buffer == false %}
+{{ fail('「機器内にログを溜める」の無効は書けません（no logging buffered が保存した文面に出るかを確かめていません。セルを空にしてください）') }}
+{% endif %}
+{% if device.log_severity %}
+logging subsystem all {{ device.log_severity | lex('log_level') }}
+{% endif %}
+{% for ls in t.log_subsystems %}
+{% if ls.subsystem == 'all' %}
+{{ fail('ログの対象 all は、機器のシートの「ログに残す重要度」に書きます') }}
+{% endif %}
+logging subsystem {{ ls.subsystem }} {{ ls.severity | lex('log_level') }}
+{% endfor %}
+{% if device.log_timestamp %}
+logging timestamp {{ 'timeofday' if device.log_timestamp == 'time' else device.log_timestamp }}
+{% endif %}
+{% if device.password_encryption == true %}
+service password-encryption
+{% elif device.password_encryption == false %}
+no service password-encryption
+{% endif %}
+{% if device.log_buffer == true or device.log_severity or t.log_subsystems or device.log_timestamp or device.password_encryption != '' %}
+!
+{% endif %}
 {% for u in t.users %}
 {% set role = '' if not u.privilege else ('monitor' if u.privilege == 'monitor' else (u.privilege | lex('user_role'))) %}
 {% if u.secret_form == 'hashed' %}
@@ -41,9 +71,30 @@ username {{ u.name }} password plain {{ u.secret | required('パスワード') }
 {% if t.users %}
 !
 {% endif %}
+{% if device.forward_cache == true %}
+ip ufs-cache enable
+{% elif device.forward_cache == false %}
+{{ fail('「転送のキャッシュ」の無効は書けません（no ip ufs-cache enable が保存した文面に出るかを確かめていません。セルを空にしてください）') }}
+{% endif %}
+{% if device.forward_cache_ipv6 == true %}
+ipv6 ufs-cache enable
+{% elif device.forward_cache_ipv6 == false %}
+{{ fail('「転送のキャッシュ（IPv6）」の無効は書けません（no ipv6 ufs-cache enable が保存した文面に出るかを確かめていません。セルを空にしてください）') }}
+{% endif %}
+{% if device.name_servers_vrf and not device.name_servers %}
+{{ fail('DNS サーバの VRF がありますが、DNS サーバがありません') }}
+{% endif %}
 {% for a in device.name_servers %}
-ip name-server {{ a }}
+{% if ':' in a %}
+{# CRM p.25-13: the IPv6 server takes no VRF. #}
+{% if device.name_servers_vrf %}
+{{ fail('DNS サーバ ' ~ a ~ ': IPv6 の DNS サーバには VRF を付けられません（NEC IX の ipv6 name-server に VRF の指定がありません）') }}
+{% endif %}
+ipv6 name-server {{ a }}
+{% else %}
+ip name-server {{ 'vrf ' ~ device.name_servers_vrf ~ ' ' if device.name_servers_vrf else '' }}{{ a }}
+{% endif %}
 {% endfor %}
-{% if device.name_servers %}
+{% if device.name_servers or device.forward_cache == true or device.forward_cache_ipv6 == true %}
 !
 {% endif %}

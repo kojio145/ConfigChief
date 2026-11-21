@@ -1,0 +1,14 @@
+# L2 extension by EtherIP, appendix A 3.26 (made-up values): the tunnel and
+# the interface it extends are in the same bridge group. Bridging is not
+# switched on in the data: adapt.yaml switches it on and tells it (G-614).
+tables:
+  devices:
+    - hostname: ix-f02
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.61/30}
+    - {name: GigaEthernet1.0, enabled: true, bridge_group: 1}
+    - {name: Tunnel0.0, enabled: true, bridge_group: 1}
+  tunnels:
+    - {if_name: Tunnel0.0, type: etherip, source: 203.0.113.61, destination: 203.0.113.65}
+findings: [G-614]

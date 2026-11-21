@@ -1,0 +1,15 @@
+table: time_ranges
+title: {ja: 時間帯, en: Time ranges}
+since: M7
+key: [device, name, seq]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: 名前, en: Name}, type: string, required: true, note: {ja: "ACL の行の「効かせる時間帯」から、この名前で指す", en: "The entries of the ACLs name it as their time range"}}
+  - {name: seq, title: {ja: 順番, en: Sequence}, type: int, required: true, note: {ja: "取り込みでは 10 刻みで振る", en: "Counted in steps of 10 on import"}}
+  - {name: kind, title: {ja: 種類, en: Kind}, type: enum, values: [periodic, absolute], required: true, note: {ja: "periodic = 毎週くり返す。absolute = 日時で区切る（1 つの名前に 1 行まで）", en: "periodic = every week. absolute = between two dates (one row for a name at most)"}}
+  - {name: days, title: {ja: 曜日, en: Days}, type: "list<enum>", values: [monday, tuesday, wednesday, thursday, friday, saturday, sunday, daily, weekdays, weekend], note: {ja: "periodic だけ", en: "periodic only"}}
+  - {name: start_time, title: {ja: 開始の時刻, en: Start time}, type: string, note: {ja: "8:00 の形（24 時間）", en: "Like 8:00 (24 hours)"}}
+  - {name: end_days, title: {ja: 終了の曜日, en: End days}, type: "list<enum>", values: [monday, tuesday, wednesday, thursday, friday, saturday, sunday, daily, weekdays, weekend], note: {ja: "開始と違う曜日に終わるときだけ", en: "Only where it ends on other days than it starts"}}
+  - {name: end_time, title: {ja: 終了の時刻, en: End time}, type: string, note: {ja: "18:00 の形", en: "Like 18:00"}}
+  - {name: start_date, title: {ja: 開始の日, en: Start date}, type: string, note: {ja: "absolute だけ。2026-01-31 の形", en: "absolute only. Like 2026-01-31"}}
+  - {name: end_date, title: {ja: 終了の日, en: End date}, type: string, note: {ja: "absolute だけ。2026-12-31 の形", en: "absolute only. Like 2026-12-31"}}

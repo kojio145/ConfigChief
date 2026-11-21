@@ -1,0 +1,67 @@
+version 17.9
+hostname sw-c01
+!
+username admin privilege 15 secret 0 Example-Secret-1
+!
+vtp mode transparent
+!
+spanning-tree mode rapid-pvst
+spanning-tree portfast default
+spanning-tree portfast bpduguard default
+spanning-tree extend system-id
+spanning-tree vlan 10,20 priority 4096
+!
+vlan 10
+ name sample-office
+!
+vlan 20
+ name sample-voice
+!
+interface Port-channel1
+ description to sw-c02
+ switchport trunk allowed vlan 10,20
+ switchport mode trunk
+!
+interface GigabitEthernet1/0/1
+ description office desk
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet1/0/2
+ switchport access vlan 20
+ switchport mode access
+ speed 100
+ duplex full
+ storm-control broadcast level 5.00
+ spanning-tree bpduguard enable
+!
+interface GigabitEthernet1/0/3
+ switchport mode trunk
+ shutdown
+!
+interface GigabitEthernet1/0/23
+ switchport trunk allowed vlan 10,20
+ switchport mode trunk
+ channel-group 1 mode active
+!
+interface GigabitEthernet1/0/24
+ switchport trunk allowed vlan 10,20
+ switchport mode trunk
+ channel-group 1 mode active
+!
+interface Vlan10
+ description sample management
+ ip address 192.0.2.11 255.255.255.128
+!
+ip default-gateway 192.0.2.126
+!
+logging host 192.0.2.20
+snmp-server community example-ro RO
+ntp server 192.0.2.10
+!
+line vty 0 4
+ login local
+ transport input ssh
+!
+end

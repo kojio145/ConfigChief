@@ -7,14 +7,29 @@ tables:
     - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.9/30}
     - {name: Tunnel0.0, enabled: true, ipv4: "unnumbered:GigaEthernet0.0"}
     - {name: Tunnel1.0, enabled: true, ipv4: "unnumbered:GigaEthernet0.0"}
+    - {name: Tunnel2.0, enabled: true, ipv4: "unnumbered:GigaEthernet0.0"}
+    - {name: Tunnel3.0, enabled: true, ipv4: "unnumbered:GigaEthernet0.0"}
+    - {name: Tunnel4.0, enabled: true, ipv4: "unnumbered:GigaEthernet0.0"}
   tunnels:
     - {if_name: Tunnel0.0, type: ipsec}
     # No row on the IPsec sheet for this tunnel.
     - {if_name: Tunnel1.0, type: ipsec}
+    - {if_name: Tunnel2.0, type: ipsec}
+    - {if_name: Tunnel3.0, type: ipsec, destination: 203.0.113.99}
+    - {if_name: Tunnel4.0, type: ipsec}
   ipsec_tunnels:
     - {name: Tunnel0.0, style: tunnel_if, tunnel_if: Tunnel0.0, peer_address: 203.0.113.20, psk: dummy-psk-sample-a, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, nat_traversal: true}
-    # The style "policy"; NAT traversal on one row only.
-    - {name: vpn-sample-b, style: policy, local_if: GigaEthernet0.0, peer_address: 203.0.113.30, psk: dummy-psk-sample-b, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1}
+    # The style "policy" with IKE version 2; with a tunnel interface as its interface; without an interface.
+    - {name: vpn-sample-b, style: policy, local_if: GigaEthernet0.0, peer_address: 203.0.113.30, psk: dummy-psk-sample-b, ike_version: 2, ike_lifetime: 86400, ipsec_lifetime: 28800}
+    - {name: vpn-sample-h, style: policy, local_if: Tunnel0.0, peer_address: 203.0.113.31, psk: dummy-psk-sample-h, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, nat_traversal: true}
+    - {name: vpn-sample-i, style: policy, peer_address: 203.0.113.32, psk: dummy-psk-sample-i, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, nat_traversal: true}
     # A tunnel interface that is not on the sheet of the tunnels; a retry count without an interval.
     - {name: vpn-sample-c, style: tunnel_if, tunnel_if: Tunnel5.0, peer_address: 203.0.113.40, psk: dummy-psk-sample-c, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, dpd_retry: 3, nat_traversal: true}
-findings: [G-601]
+    # IKE version 1: NAT traversal "off", the transport mode, an identity that is not "kind:value".
+    - {name: Tunnel2.0, style: tunnel_if, tunnel_if: Tunnel2.0, peer_address: 203.0.113.50, local_id: sample-site-x, psk: dummy-psk-sample-d, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, ipsec_mode: transport, nat_traversal: false}
+    # IKE version 2: no identity and no source to take the own address from; the destination of the tunnel is another address; a retry interval without a count (written with the count of the device, which is told).
+    - {name: Tunnel3.0, style: tunnel_if, tunnel_if: Tunnel3.0, peer_address: 203.0.113.60, psk: dummy-psk-sample-e, ike_version: 2, ike_lifetime: 86400, ipsec_lifetime: 28800, dpd_interval: 30, dpd_retry_interval: 5, dpd_mode: periodic}
+    # IKE version 2: a peer "any" without an identity; another key for an identity that a row above has.
+    - {name: Tunnel4.0, style: tunnel_if, tunnel_if: Tunnel4.0, peer_address: any, local_id: "keyid:sample-site-a", psk: dummy-psk-sample-f, ike_version: 2, ike_lifetime: 86400, ipsec_lifetime: 28800}
+    - {name: vpn-sample-g, style: tunnel_if, tunnel_if: Tunnel9.0, peer_address: 203.0.113.70, local_id: "keyid:sample-site-a", psk: dummy-psk-sample-g, ike_version: 2, ike_lifetime: 86400, ipsec_lifetime: 28800}
+findings: [G-601, G-606, G-614]

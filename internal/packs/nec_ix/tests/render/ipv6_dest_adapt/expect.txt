@@ -1,0 +1,15 @@
+hostname ix-v03
+!
+ipv6 route 2001:db8:ff::/48 fe80::1%GigaEthernet1.0
+!
+watch-group wg-v6 10
+  event 10 ipv6 unreach-host 2001:db8:ff::10 GigaEthernet1.0 source 2001:db8:0:2::1
+  probe-counter variance 6
+  probe-timer variance 5
+!
+network-monitor wg-v6 enable
+!
+interface GigaEthernet1.0
+  ipv6 address 2001:db8:0:2::1/64
+  no shutdown
+!

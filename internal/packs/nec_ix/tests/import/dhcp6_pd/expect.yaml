@@ -1,0 +1,43 @@
+# What a DHCPv6 server hands out besides DNS (appendix A 3.23; made-up
+# values). The line gives one delegated prefix and how many of its bits the
+# device fills in: the pool is shorter by those bits (2001:db8:1000::/56 with
+# 16 bits is the pool 2001:db8:1000::/40). A part of the prefix the WAN side
+# received is delegated on by the name of a pool: the name is not kept (the
+# parts all start at the head of the received prefix here: a sample file may
+# only hold example addresses, and "::" is one). A
+# line whose bits to fill in are not 0 (pd-sample-lan3) is not read.
+tables:
+  ipv6_interfaces:
+    - {if_name: GigaEthernet0.0, pd_request: pd-sample, dhcp_request: [dns]}
+    - if_name: GigaEthernet1.0
+      dhcp_server: pd-sample-lan1
+      dhcp_dns: ["2001:db8::53"]
+      dhcp_ntp: ["2001:db8::123"]
+      dhcp_pd_pool: "2001:db8:1000::/40"
+      dhcp_pd_length: 56
+      dhcp_pd_valid: 1200
+      dhcp_pd_preferred: 600
+    - if_name: GigaEthernet2.0
+      dhcp_server: pd-sample-lan2
+      dhcp_pd_from: pd-sample
+      dhcp_pd_pool: "::/56"
+      dhcp_pd_length: 60
+    - {if_name: GigaEthernet2.1, dhcp_server: pd-sample-lan3, dhcp_pd_pool: "", dhcp_pd_length: ""}
+    - if_name: GigaEthernet2.2
+      dhcp_server: pd-sample-lan4
+      dhcp_pd_from: pd-sample
+      dhcp_pd_pool: "::/64"
+      dhcp_pd_length: 64
+    - if_name: GigaEthernet2.3
+      dhcp_server: pd-sample-lan5
+      dhcp_pd_pool: "2001:db8:4000::/48"
+      dhcp_pd_length: 48
+      dhcp_pd_valid: infinite
+      dhcp_pd_preferred: infinite
+unknown:
+  - "ia-pd redistribute pool pd-sample-static ::/62"
+  - "ia-option ia-pd 300 600"
+  - "ia-pd redistribute-static fe80::1 pool pd-sample-static"
+  - "ia-pd prefix 2001:db8:2001::/48 nla-length 8"
+  - "ia-pd static fe80::2 2001:db8:3000::/48"
+ignored_min: 1

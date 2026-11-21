@@ -1,0 +1,19 @@
+# L2TP values this vendor has no line for (made-up values; appendix A 3.21):
+# the idle time of a LAC, the address of a caller. Each is told as a value
+# that was not written (G-602). The PPPoE interfaces of the LAC are written
+# (appendix A 3.26): with no Virtual-Template named for them, the pack makes
+# one and tells it (G-614).
+tables:
+  devices:
+    - hostname: rt-c06
+      vendor: cisco_ios
+  interfaces:
+    - {name: Loopback0, enabled: true, ipv4: 203.0.113.1/32}
+    - {name: GigabitEthernet0/3, enabled: true}
+    - {name: Virtual-Template1, enabled: true, ipv4: "unnumbered:Loopback0"}
+  l2tp_groups:
+    - {name: lac-sample, role: lac, access_ifs: [GigabitEthernet0/3], peer_address: 198.51.100.1, tunnel_auth: false, domains: [example.com], idle_timeout: 120}
+    - {name: lns-sample, role: lns, logical_ifs: [Virtual-Template1], tunnel_auth: false, auth: chap}
+  l2tp_users:
+    - {group: lns-sample, name: example-user, password: dummy-l2tp-user-secret-1, address: 192.0.2.130}
+findings: [G-602, G-614]

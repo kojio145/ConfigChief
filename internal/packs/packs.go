@@ -9,7 +9,7 @@ import (
 
 // The folders of the bundled packs. A new pack is added here.
 //
-//go:embed cisco_ios nec_ix
+//go:embed cisco_ios nec_ix nec_qx
 var bundled embed.FS
 
 // IDs lists the bundled packs by the name of their folder, in a fixed order.

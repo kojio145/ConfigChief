@@ -1,0 +1,93 @@
+#
+ sysname sw-q08
+#
+ clock timezone JST add 9
+#
+ info-center timestamp boot
+ info-center source default logbuffer level warning
+ info-center source OSPF logbuffer level debugging
+#
+ dns server 192.0.2.53
+#
+ super password role network-admin hash $h$6$sampleSampleSampleSampleSample
+#
+local-user admin class manage
+ password hash $h$6$sampleSampleSampleSampleSampleSampleSample
+ service-type ssh terminal
+ authorization-attribute user-role network-admin
+#
+ time-range sample-hours 08:00 to 18:00 working-day
+ time-range sample-hours 09:00 to 12:00 Sat Sun
+ time-range sample-year from 00:00 1/1/2026 to 24:00 12/31/2026
+#
+acl basic 2000
+ rule 0 permit source 192.0.2.0 0.0.0.127
+#
+acl basic 2001
+ rule 0 permit source 192.0.2.128 0.0.0.127 time-range sample-year
+#
+acl advanced 3000
+ description sample filter
+ rule 0 permit tcp source 192.0.2.0 0.0.0.127 destination-port eq 22 syn 1
+ rule 5 permit udp destination-port eq 123 dscp 46 time-range sample-hours
+ rule 5 comment sample time servers
+ rule 10 permit icmp icmp-type 3 4 logging
+ rule 15 permit tcp precedence 5 tos 4 established
+ rule 25 permit ospf
+ rule 30 permit ip
+#
+interface Vlan-interface10
+ ip address 192.0.2.1 255.255.255.128
+ packet-filter 3000 inbound
+ vrrp version 3
+ vrrp vrid 1 virtual-ip 192.0.2.126
+ vrrp vrid 1 priority 100
+ vrrp vrid 1 preempt-mode
+ vrrp vrid 1 timer advertise 100
+ vrrp vrid 1 authentication-mode md5 cipher $c$3$sampleSampleSampleSampleSample
+ ospf authentication-mode hmac-md5 1 cipher $c$3$dummyDummyDummyDummyDummyDummy
+#
+interface Vlan-interface20
+ ip address 192.0.2.129 255.255.255.128
+#
+ospf 1 router-id 198.51.100.6
+ area 0.0.0.0
+  network 192.0.2.1 0.0.0.0
+#
+ info-center loghost source Vlan-interface10
+ info-center loghost 192.0.2.20 facility local5
+ info-center source default loghost level notification
+#
+ snmp-agent
+ snmp-agent community read cipher $c$3$sampleSampleSampleSampleSampleSampleSample acl 2000
+ snmp-agent sys-info version v2c v3
+ snmp-agent group v3 sample-group privacy read-view ViewDefault write-view ViewDefault acl 2000
+ snmp-agent usm-user v3 backup sample-group simple authentication-mode md5 Example-Auth-1 privacy-mode des56 Example-Priv-1
+ snmp-agent usm-user v3 monitor sample-group cipher authentication-mode sha $c$3$sampleSampleSampleSampleSample privacy-mode aes128 $c$3$dummyDummyDummyDummyDummyDummy acl 2001
+ snmp-agent target-host trap address udp-domain 192.0.2.30 params securityname monitor v3 privacy
+#
+ ntp-service enable
+ ntp-service authentication enable
+ ntp-service authentication-keyid 10 authentication-mode md5 cipher $c$3$sampleSampleSampleSampleSample
+ ntp-service reliable authentication-keyid 10
+ ntp-service unicast-server 192.0.2.10 priority authentication-keyid 10
+ ntp-service unicast-server 192.0.2.11
+#
+ header motd %sample notice: maintenance window on weekends%
+#
+ header shell %sample shell banner%
+#
+line aux 0
+ idle-timeout 5 30
+#
+ telnet server enable
+ telnet server acl 2001
+ ssh server enable
+ ssh server acl 2000
+#
+line vty 0 63
+ authentication-mode scheme
+ set authentication password hash $h$6$dummyDummyDummyDummyDummyDummyDummy
+ idle-timeout 10 30
+#
+return

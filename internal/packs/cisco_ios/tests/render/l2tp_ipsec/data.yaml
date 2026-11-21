@@ -1,0 +1,31 @@
+# L2TP over IPsec (made-up values; appendix A 3.13, 3.20 and 3.21).
+# expect.txt is the configuration the tables must turn into: the row that
+# protects the callers of an LNS has the name another vendor gave it and no
+# interface (adapt.yaml puts it on the interface the default route leaves
+# by, and tells so), and it goes into a crypto map named after that
+# interface; the two rows named "<map>/<number>" are entries of their map,
+# one with selectors that have a protocol and ports, and with backup peers.
+tables:
+  devices:
+    - hostname: rt-h01
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.9/30}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 203.0.113.33/29}
+    - {name: Loopback0, enabled: true, ipv4: 192.0.2.129/25}
+    - {name: Virtual-Template1, enabled: true, ipv4: "unnumbered:Loopback0"}
+  static_routes:
+    - {vrf: "", prefix: 0.0.0.0/0, next_hop: 203.0.113.10, out_if: ""}
+  ipsec_tunnels:
+    - {name: ipsec-sample-ra, style: policy, peer_address: any, ike_version: 1, psk: dummy-psk-sample-ra, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, ipsec_mode: transport, pfs: none, ipsec_lifetime: 3600, nat_traversal: true}
+    - {name: CMAP-SAMPLE/10, style: policy, local_if: GigabitEthernet0/1, peer_address: 203.0.113.38, peer_backup: [203.0.113.37, sample-peer.example.com], ike_version: 1, psk: dummy-psk-sample-c, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, ipsec_mode: transport, pfs: none, ipsec_lifetime: 3600}
+    - {name: CMAP-SAMPLE/20, style: policy, local_if: GigabitEthernet0/1, peer_address: any, ike_version: 1, psk: dummy-psk-sample-ra, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
+  ipsec_selectors:
+    - {tunnel: CMAP-SAMPLE/10, seq: 10, local_net: 203.0.113.33/32, remote_net: 203.0.113.38/32, protocol: udp, local_port: 1701, remote_port: 1701}
+    - {tunnel: CMAP-SAMPLE/10, seq: 20, local_net: 203.0.113.33/32, remote_net: 203.0.113.38/32, protocol: tcp, remote_port: 179}
+    - {tunnel: CMAP-SAMPLE/20, seq: 10, local_net: 192.0.2.0/25, remote_net: 0.0.0.0/0, protocol: ip}
+  l2tp_groups:
+    - {name: RA-SAMPLE, role: lns, logical_ifs: [Virtual-Template1], tunnel_auth: false, auth: chap, pool_start: 192.0.2.131, pool_end: 192.0.2.190, ipsec_policy: ipsec-sample-ra}
+  l2tp_users:
+    - {group: RA-SAMPLE, name: example-user, password: dummy-l2tp-user-secret-1}
+findings: [G-614]

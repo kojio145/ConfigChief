@@ -1,0 +1,37 @@
+# What the device cannot write of a route policy: each is told with what to
+# do about it (made-up values). The device has no AS path list and no
+# community list, and an entry takes one name where other devices take
+# several.
+tables:
+  devices:
+    - hostname: ix-r05
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.1/30}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.1/24}
+  acls:
+    - {name: al-r-a, type: extended}
+    - {name: al-r-b, type: extended}
+  acl_entries:
+    - {acl: al-r-a, seq: 10, action: permit, protocol: ip, src: 198.51.100.0/25, dst: any}
+    - {acl: al-r-b, seq: 10, action: permit, protocol: ip, src: 198.51.100.128/25, dst: any}
+  prefix_lists:
+    - {name: pl-r-a, seq: 5, action: permit, prefix: 198.51.100.0/24}
+    - {name: pl-r-b, seq: 5, action: permit, prefix: 192.0.2.0/24}
+  as_path_lists:
+    - {name: "10", seq: 10, action: permit, regex: "^64497_"}
+  community_lists:
+    - {name: cl-r-two, seq: 10, action: permit, type: standard, communities: ["64497:100"]}
+    - {name: cl-r-two, seq: 20, action: permit, type: standard, communities: ["64497:200"]}
+  route_policies:
+    - {name: rm-r-f, seq: 10, action: permit, match_prefix_list: [pl-r-a, pl-r-b]}
+    - {name: rm-r-f, seq: 20, action: permit, match_acl: [al-r-a, al-r-b]}
+    - {name: rm-r-f, seq: 30, action: permit, match_prefix_list: [pl-r-a], match_acl: [al-r-a]}
+    - {name: rm-r-f, seq: 40, action: permit, match_as_path: "10"}
+    - {name: rm-r-f, seq: 50, action: permit, match_community_list: cl-r-two}
+    - {name: rm-r-f, seq: 60, action: permit, match_community: [internet]}                             # a word the device does not have
+    - {name: rm-r-f, seq: 70, action: permit, match_interface: [GigaEthernet0.0, GigaEthernet1.0], match_tag: [1, 2]}
+    - {name: rm-r-f, seq: 80, action: permit, set_as_path_prepend: [65536], set_next_hop: [203.0.113.2, 203.0.113.6]}
+    - {name: rm-r-f, seq: 90, action: permit, set_metric: ten}
+    - {name: rm-r-sample-with-a-name-that-is-too-long, seq: 10, action: permit}
+findings: [G-601, G-603]

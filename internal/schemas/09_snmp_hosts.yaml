@@ -4,7 +4,8 @@ since: M1
 key: [device, host]
 columns:
   - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
-  - {name: host, title: {ja: 通知先, en: Host}, type: ip4, required: true}
+  - {name: host, title: {ja: 通知先, en: Host}, type: ip, required: true, note: {ja: "IPv4 か IPv6 のアドレス", en: "An IPv4 or an IPv6 address"}}
   - {name: version, title: {ja: 版, en: Version}, type: enum, values: ["1", 2c, "3"]}
   - {name: community, title: {ja: コミュニティ, en: Community}, type: secret}
   - {name: source_if, title: {ja: 送信元 IF, en: Source interface}, type: ifname}
+  - {name: security_level, title: {ja: セキュリティの段（版 3）, en: Security level (version 3)}, type: enum, values: [noauth, auth, priv], note: {ja: "版 3 の通知で使う段。noauth = 認証なし、auth = 認証あり、priv = 認証と暗号化。版 3 の行の「コミュニティ」には SNMP ユーザの名前を書く", en: "For version 3: noauth = no authentication, auth = authentication, priv = authentication and privacy. A version 3 row has the name of the SNMP user in the community column"}}

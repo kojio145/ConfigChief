@@ -1,0 +1,51 @@
+# Words of commands, from the public command references of the vendors (the
+# list of what was read is in the README). A report of unhandled lines that
+# leaves a site keeps the words of the pack's files and these, and hides every
+# other word (spec 8.6). One word or more on a line; "#" starts a note.
+# Made by a script of the maintainers from the public command references; words added by hand are kept.
+abort accept accesslist account acfc activate adaptive added additional addressname addrname
+adjacency adjust administratively advantage advertisement advertising aging agreement alarm
+algorithm alias already alternate arp arrival asbr ascii asnotation assignable assignment
+association attack attempt attempts authenticate autoconfigure autodeploy autokey automatic average
+balance balancing band bba bdi been best bestroute big bims binary bind bit bits blacklist bootfile
+bootp bootrom boundary bri bsm bsr buffered building burst bvi bye bypass byte cable calculate
+callin capability capable cautiously cdp cdup certificate cfd change chap check checking checksum
+checkzero circuit classify client clients close cluster codec collector combo commit comp compare
+compatibility compatible complexity compliance composition compression concentrator confederation
+configured conflict conform consistency continue control conventional conversational conversion
+cookie copy copyright core counter country cpu create crl crp crypto csec custom dad dampening
+databits decapsulation defense definition delaydown deleted demand dest destroy detail detected
+dfbit dial dialer dialin diameter different digest directed directory disconnect discovery dispute
+distributed dldp dmac dod dport drcp dsa dying ecdsa ecmp eee effect egress eigrp encap encr encrypt
+enhanced entity errored escape estimation eth ether event evpn exceeded exception exchange exclude
+execute exit expire expires ext extendable extract extranet fabric factor failure fair fake fan fast
+fecn fhp filename filepath fill fingerprint fixdisk flooding flush forced format forwarding fqdn
+frame free gasp gcm general generate generating genid get gigaethernet gigaethernetn gmac graceful
+gratuitous gts gunzip gzip hairpinning handshake help helper high history hoplimit hops horizon
+hotkey http https iap ident identifier idname igmp ike ikev imported init initiate invalid invoke
+ipaddr ipcp ipicmpecho ipsec ipsg irb iri isakmp isolate isolated issu job jumboframe keyring lac
+lcd lcp leave license life linenum linktrace listener lldp lns load loader locality lock longest low
+lsa lsdb lzs mad mandatory mapping master maximum mcheck mdix medium memory mep meplist mesh message
+method metricin metricout minimum minor mip missing mkdir mld mnemonic mobile mobility modulo
+modulus monetary month most mount mqtt mru msdp msec mss multi multiplier multiport myname napt nas
+nat nbns neglect negotiated nest netconf netmeister newer non nonstandard nsap ntk nud oam object
+occupied offline offload opaque option organization originating oui outside overflow ovsdb pacing
+pad pap parallel parity pathmtu paths payload peak percent periodical persistent pfc pfs pim pir pki
+pkt platform pmsi pmtu poison poll polling poor portfast power ppp pppoe pre precendence preemption
+previous prialarm private profile prohibited promiscuous proposal protected provide proxy prune
+pseudowire ptcp pvc pwd python qinq quench querier query quiet quota radius random reachable
+realtime reauth reauthentication reboot receive reconfiguration record records recoveries recovery
+redirects redundancy refclock reflect reflection reflector refresh register reinit rekey reliability
+reload remaining rename renumber repeat repeating report require reroute resend resequence reserved
+reset resolve resolving resource response restart restful restoration restore restorer restricted
+restriction resynchronization retrans retransmit retries retrieve retry reverse rfc rhelp rib ring
+rmdir rmon robust rollback rpf rrpp rsa rtr running sampling save scan scheduler scp screen seal
+secondaries segment selected sending sensitive sent sequence serial setup sflow sftp shared sharing
+should sig signaling sitename sla smart snap soap solicitation special spf splitting sport spt
+sshkey ssl ssm stability stale standalone standby startup stateful statistics status stop stopbits
+storage strategy strength strict subnet subnets substitute subvlan summer suppress symbol sync
+synchronize synchronous tar temperature tengige terminate test throughput tlv topology tpid tpv
+traceroute tracert tracking trans transform transition translate transport traversal triggered ttl
+tunneln udisk ufs umount undelete underlay uni unidirectional unnumbered unreach unreachables updown
+url urpf usage usb username using validate variance vcf verbose verify very violate vlink vni vpdn
+vpnv vsi vtep vxlan wait warn weak web wrr xconnect xml you

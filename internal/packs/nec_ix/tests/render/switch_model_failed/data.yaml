@@ -1,0 +1,17 @@
+# With the model of the device known (models.yaml): a port the model does
+# not have, and a VLAN group whose number is above the number of ports
+# (made-up values).
+tables:
+  devices:
+    - hostname: ix-m04
+      vendor: nec_ix
+      model: ix-1ge-4sw
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.2/30}
+    - {name: "GigaEthernet1:port1", enabled: true}
+    - {name: "GigaEthernet1:port5", enabled: true}           # the switch has 4 ports
+    - {name: "GigaEthernet1:5.0", enabled: true, ipv4: 192.0.2.1/25, vlan_id: 5}
+  switchports:
+    - {if_name: "GigaEthernet1:port1", mode: access, access_vlan: 5}   # groups 1 to 4
+    - {if_name: "GigaEthernet1:port5", mode: access, access_vlan: 5}
+findings: [G-601]

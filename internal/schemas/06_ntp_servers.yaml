@@ -8,3 +8,5 @@ columns:
   - {name: prefer, title: {ja: 優先, en: Prefer}, type: bool}
   - {name: source_if, title: {ja: 送信元 IF, en: Source interface}, type: ifname}
   - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name}
+  - {name: auth_key_id, title: {ja: 認証の鍵番号, en: Authentication key ID}, type: int, min: 1, max: 4294967295, note: {ja: "このサーバを確かめる鍵の番号。空 = 認証しない", en: "The number of the key that proves this server. Empty = no authentication"}}
+  - {name: auth_key, title: {ja: 認証の鍵, en: Authentication key}, type: secret, note: {ja: "その番号の鍵（MD5）。同じ番号の行は同じ鍵にする", en: "The key of that number (MD5). Rows with the same number carry the same key"}}

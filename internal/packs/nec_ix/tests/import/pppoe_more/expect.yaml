@@ -1,0 +1,14 @@
+# The rest of PPPoE, appendix A 3.26 (made-up values): a profile that asks
+# the peer too, a line that is called on demand with its idle time, and the
+# PPPoE server on the interfaces under a LAC (the profile says what the
+# callers are asked for).
+tables:
+  pppoe:
+    - {name: ppp-sample-a, physical_if: GigaEthernet0.0, logical_if: GigaEthernet0.1, username: example-user@example.net, auth: chap, auth_both: true, on_demand: ""}
+    - {name: ppp-sample-b, physical_if: GigaEthernet0.0, logical_if: GigaEthernet0.2, username: sample-user@example.net, auth_both: "", on_demand: true, idle_timeout: 300}
+  l2tp_groups:
+    - {name: lac-sample, role: lac, peer_address: 203.0.113.50, domains: [example.net], logical_ifs: [Tunnel1.0], access_ifs: [GigaEthernet2.1, GigaEthernet2.2], auth: chap_pap, idle_timeout: 120}
+# The idle time of one direction has no column.
+unknown:
+  - "idle-time 100 inbound"
+ignored_min: 0

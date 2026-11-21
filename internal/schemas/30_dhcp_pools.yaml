@@ -10,6 +10,7 @@ columns:
   - {name: range_end, title: {ja: 配る範囲の末尾, en: Range end}, type: ip4}
   - {name: excluded, title: {ja: 配らないアドレス, en: Excluded}, type: "list<string>", note: {ja: "192.0.2.1-192.0.2.10 の形。複数はカンマで区切る", en: "Like 192.0.2.1-192.0.2.10. Separate with commas"}}
   - {name: default_router, title: {ja: デフォルトゲートウェイ, en: Default router}, type: ip4}
+  - {name: default_routers_more, title: {ja: デフォルトゲートウェイ（2 つ目以降）, en: More default routers}, type: "list<ip4>", note: {ja: "Cisco だけ（8 つまで）", en: "Cisco only (up to eight)"}}
   - {name: dns_servers, title: {ja: DNS サーバ, en: DNS servers}, type: "list<ip4>"}
   - {name: domain, title: {ja: ドメイン名, en: Domain}, type: string}
-  - {name: lease, title: {ja: 貸し出し時間, en: Lease}, type: string, note: {ja: "1d、12h の形", en: "Like 1d or 12h"}}
+  - {name: lease, title: {ja: 貸し出し時間, en: Lease}, type: string, note: {ja: "1d、12h、90m、100s の形か、infinite（無期限）", en: "Like 1d, 12h, 90m or 100s, or infinite"}}

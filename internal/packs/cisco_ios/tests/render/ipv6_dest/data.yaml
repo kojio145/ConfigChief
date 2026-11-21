@@ -1,0 +1,27 @@
+# IPv6 destinations (appendix A 3.23, made-up values): the IPv6 form of
+# syslog, a name server, SNMP and NTP, a watch by ping of an IPv6 address
+# whose source address becomes its interface, and a watch of an IPv6 route.
+tables:
+  devices:
+    - hostname: rt-v02
+      vendor: cisco_ios
+      ipv6_routing: true
+      name_servers: [192.0.2.53, "2001:db8:0:53::1"]
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 192.0.2.1/24}
+    - {name: GigabitEthernet0/1, enabled: true, ipv6: ["2001:db8:0:2::1/64"]}
+  ipv6_routes:
+    - {prefix: "::/0", next_hop: "2001:db8:0:2::ff"}
+  syslog_servers:
+    - {server: 192.0.2.50}
+    - {server: "2001:db8:0:50::1"}
+  snmp_communities:
+    - {community: example-ro, access: ro}
+  snmp_hosts:
+    - {host: "2001:db8:0:162::1", version: 2c, community: example-ro}
+  ntp_servers:
+    - {server: "2001:db8:0:123::1"}
+  tracks:
+    - {id: 10, type: icmp, target: "2001:db8:ff::10", source_ip: "2001:db8:0:2::1", interval: 10, fail_count: 1}
+    - {id: 20, type: route, target: "2001:db8:100::/48"}
+findings: [G-614]

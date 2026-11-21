@@ -1,0 +1,76 @@
+hostname rt-v02
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+ lifetime 86400
+crypto isakmp key 6 DUMMYENCSAMPLEAAAA address 203.0.113.20
+crypto isakmp key dummy-psk-sample-any address 0.0.0.0 0.0.0.0
+crypto isakmp key 6 DUMMYENCSAMPLEAAAA address 203.0.113.21
+!
+crypto ikev2 keyring IKEV2-KEYS
+ peer Tunnel1
+  address 203.0.113.30
+  pre-shared-key local 6 DUMMYENCSAMPLEBBBB
+  pre-shared-key remote 6 DUMMYENCSAMPLECCCC
+!
+crypto ikev2 profile IKEV2-Tunnel1
+ match identity remote address 203.0.113.30 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS
+ lifetime 86400
+ nat force-encap
+!
+crypto ipsec transform-set TS-CMAP-SAMPLE-10 esp-aes 256 esp-sha256-hmac
+!
+crypto ipsec transform-set TS-CMAP-SAMPLE-20 esp-aes 256 esp-sha-hmac
+ mode transport
+!
+crypto ipsec transform-set TS-Tunnel1 esp-aes 256
+!
+crypto ipsec profile PROF-Tunnel1
+ set transform-set TS-Tunnel1
+ set security-association lifetime seconds 3600
+ set ikev2-profile IKEV2-Tunnel1
+!
+ip access-list extended ACL-CMAP-SAMPLE-10
+ 10 permit ip 192.0.2.0 0.0.0.127 198.51.100.128 0.0.0.127
+!
+crypto map CMAP-SAMPLE 10 ipsec-isakmp
+ set peer 203.0.113.20 default
+ set peer 203.0.113.21
+ set transform-set TS-CMAP-SAMPLE-10
+ set security-association lifetime seconds 7200
+ set security-association lifetime kilobytes 2000000
+ match address ACL-CMAP-SAMPLE-10
+!
+crypto dynamic-map DYN-CMAP-SAMPLE-20 10
+ set transform-set TS-CMAP-SAMPLE-20
+ set security-association lifetime seconds 7200
+ set nat demux
+!
+crypto map CMAP-SAMPLE 20 ipsec-isakmp dynamic DYN-CMAP-SAMPLE-20
+!
+crypto isakmp aggressive-mode disable
+crypto isakmp invalid-spi-recovery
+crypto ipsec security-association replay window-size 128
+crypto ipsec security-association idle-time 600
+crypto ipsec df-bit clear
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.9 255.255.255.248
+ crypto map CMAP-SAMPLE
+ no shutdown
+!
+interface Tunnel1
+ ip address 198.51.100.1 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.30
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-Tunnel1
+ no shutdown
+!
+end

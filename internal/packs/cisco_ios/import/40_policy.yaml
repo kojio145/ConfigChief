@@ -35,33 +35,59 @@ rules:
         match: '^(?:(?P<seq>\d+) )?remark (?P<text>.+)$'
         row: {table: acl_entries, key: {acl: "{{ parent.name }}", seq: "{{ seq if seq else (rows('acl_entries', acl=parent.name) | length + 1) * 10 }}"}}
         set: {action: remark, remark: "{{ text }}"}
-      # The device writes the protocol 51 as "ahp"; the dataset has "ah".
-      # Ports are read as numbers only: the names of the ports are not listed
-      # in a confirmed place yet.
+      # The device writes the protocol 51 as "ahp"; the dataset has "ah". A
+      # port is a number or one of the names whose number is confirmed
+      # (lexicon.yaml); a line with another name stays unknown. One TCP flag
+      # on a line at most: what several flags mean together is not
+      # confirmed, and neither is the form with "match-all" / "match-any".
       - id: acl.extended.l4
-        match: '^(?:(?P<seq>\d+) )?(?P<action>permit|deny) (?P<proto>tcp|udp) (?:(?P<sany>any)|host (?P<shost>\d+\.\d+\.\d+\.\d+)|(?P<snet>\d+\.\d+\.\d+\.\d+) (?P<swc>\d+\.\d+\.\d+\.\d+))(?: (?P<sop>eq|gt|lt|neq) (?P<sp>\d+)| range (?P<sp1>\d+) (?P<sp2>\d+))? (?:(?P<dany>any)|host (?P<dhost>\d+\.\d+\.\d+\.\d+)|(?P<dnet>\d+\.\d+\.\d+\.\d+) (?P<dwc>\d+\.\d+\.\d+\.\d+))(?: (?P<dop>eq|gt|lt|neq) (?P<dp>\d+)| range (?P<dp1>\d+) (?P<dp2>\d+))?(?:(?P<est> established)|(?P<frag> fragments)|(?P<log> log))*$'
-        when: "not est or proto == 'tcp'"
+        match: '^(?:(?P<seq>\d+) )?(?P<action>permit|deny) tcp (?:(?P<sany>any)|host (?P<shost>\d+\.\d+\.\d+\.\d+)|(?P<snet>\d+\.\d+\.\d+\.\d+) (?P<swc>\d+\.\d+\.\d+\.\d+))(?: (?P<sop>eq|gt|lt|neq) (?P<sp>[\w-]+)| range (?P<sp1>[\w-]+) (?P<sp2>[\w-]+))? (?:(?P<dany>any)|host (?P<dhost>\d+\.\d+\.\d+\.\d+)|(?P<dnet>\d+\.\d+\.\d+\.\d+) (?P<dwc>\d+\.\d+\.\d+\.\d+))(?: (?P<dop>eq|gt|lt|neq) (?P<dp>[\w-]+)| range (?P<dp1>[\w-]+) (?P<dp2>[\w-]+))?(?:(?P<est> established)|(?P<ack> ack)|(?P<fin> fin)|(?P<psh> psh)|(?P<rst> rst)|(?P<syn> syn)|(?P<urg> urg)|(?P<frag> fragments)|(?P<login> log-input)|(?P<log> log)| dscp (?P<dscp>\S+)| precedence (?P<prec>\S+)| tos (?P<tos>\S+)| time-range (?P<tr>\S+))*$'
+        when: "((1 if ack else 0) + (1 if fin else 0) + (1 if psh else 0) + (1 if rst else 0) + (1 if syn else 0) + (1 if urg else 0)) <= 1"
         row: {table: acl_entries, key: {acl: "{{ parent.name }}", seq: "{{ seq if seq else (rows('acl_entries', acl=parent.name) | length + 1) * 10 }}"}}
         set:
           action: "{{ action }}"
-          protocol: "{{ proto }}"
+          protocol: tcp
           src: "{{ 'any' if sany else (shost if shost else (snet | with_wildcard(swc) | network)) }}"
-          src_port: "{{ (sop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ sp }}{{ (sp1 ~ '-' ~ sp2) if sp1 else '' }}"
+          src_port: "{{ ((sop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ (sp if sp is digits else sp | unlex('tcp_port'))) if sp else '' }}{{ ((sp1 if sp1 is digits else sp1 | unlex('tcp_port')) ~ '-' ~ (sp2 if sp2 is digits else sp2 | unlex('tcp_port'))) if sp1 else '' }}"
           dst: "{{ 'any' if dany else (dhost if dhost else (dnet | with_wildcard(dwc) | network)) }}"
-          dst_port: "{{ (dop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ dp }}{{ (dp1 ~ '-' ~ dp2) if dp1 else '' }}"
-        append: {flags: "{{ 'established' if est else '' }} {{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
+          dst_port: "{{ ((dop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ (dp if dp is digits else dp | unlex('tcp_port'))) if dp else '' }}{{ ((dp1 if dp1 is digits else dp1 | unlex('tcp_port')) ~ '-' ~ (dp2 if dp2 is digits else dp2 | unlex('tcp_port'))) if dp1 else '' }}"
+          dscp: "{{ (dscp if dscp is digits else dscp | unlex('dscp')) if dscp else '' }}"
+          precedence: "{{ (prec if prec is digits else prec | unlex('precedence')) if prec else '' }}"
+          tos: "{{ (tos if tos is digits else tos | unlex('tos')) if tos else '' }}"
+          time_range: "{{ tr }}"
+        append: {flags: "{{ 'established' if est else '' }} {{ 'ack' if ack else '' }} {{ 'fin' if fin else '' }} {{ 'psh' if psh else '' }} {{ 'rst' if rst else '' }} {{ 'syn' if syn else '' }} {{ 'urg' if urg else '' }} {{ 'fragments' if frag else '' }} {{ 'log_input' if login else '' }} {{ 'log' if log else '' }}"}
+      - id: acl.extended.udp
+        match: '^(?:(?P<seq>\d+) )?(?P<action>permit|deny) udp (?:(?P<sany>any)|host (?P<shost>\d+\.\d+\.\d+\.\d+)|(?P<snet>\d+\.\d+\.\d+\.\d+) (?P<swc>\d+\.\d+\.\d+\.\d+))(?: (?P<sop>eq|gt|lt|neq) (?P<sp>[\w-]+)| range (?P<sp1>[\w-]+) (?P<sp2>[\w-]+))? (?:(?P<dany>any)|host (?P<dhost>\d+\.\d+\.\d+\.\d+)|(?P<dnet>\d+\.\d+\.\d+\.\d+) (?P<dwc>\d+\.\d+\.\d+\.\d+))(?: (?P<dop>eq|gt|lt|neq) (?P<dp>[\w-]+)| range (?P<dp1>[\w-]+) (?P<dp2>[\w-]+))?(?:(?P<frag> fragments)|(?P<login> log-input)|(?P<log> log)| dscp (?P<dscp>\S+)| precedence (?P<prec>\S+)| tos (?P<tos>\S+)| time-range (?P<tr>\S+))*$'
+        row: {table: acl_entries, key: {acl: "{{ parent.name }}", seq: "{{ seq if seq else (rows('acl_entries', acl=parent.name) | length + 1) * 10 }}"}}
+        set:
+          action: "{{ action }}"
+          protocol: udp
+          src: "{{ 'any' if sany else (shost if shost else (snet | with_wildcard(swc) | network)) }}"
+          src_port: "{{ ((sop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ (sp if sp is digits else sp | unlex('udp_port'))) if sp else '' }}{{ ((sp1 if sp1 is digits else sp1 | unlex('udp_port')) ~ '-' ~ (sp2 if sp2 is digits else sp2 | unlex('udp_port'))) if sp1 else '' }}"
+          dst: "{{ 'any' if dany else (dhost if dhost else (dnet | with_wildcard(dwc) | network)) }}"
+          dst_port: "{{ ((dop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ (dp if dp is digits else dp | unlex('udp_port'))) if dp else '' }}{{ ((dp1 if dp1 is digits else dp1 | unlex('udp_port')) ~ '-' ~ (dp2 if dp2 is digits else dp2 | unlex('udp_port'))) if dp1 else '' }}"
+          dscp: "{{ (dscp if dscp is digits else dscp | unlex('dscp')) if dscp else '' }}"
+          precedence: "{{ (prec if prec is digits else prec | unlex('precedence')) if prec else '' }}"
+          tos: "{{ (tos if tos is digits else tos | unlex('tos')) if tos else '' }}"
+          time_range: "{{ tr }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log_input' if login else '' }} {{ 'log' if log else '' }}"}
       - id: acl.extended.icmp
-        match: '^(?:(?P<seq>\d+) )?(?P<action>permit|deny) icmp (?:(?P<sany>any)|host (?P<shost>\d+\.\d+\.\d+\.\d+)|(?P<snet>\d+\.\d+\.\d+\.\d+) (?P<swc>\d+\.\d+\.\d+\.\d+)) (?:(?P<dany>any)|host (?P<dhost>\d+\.\d+\.\d+\.\d+)|(?P<dnet>\d+\.\d+\.\d+\.\d+) (?P<dwc>\d+\.\d+\.\d+\.\d+))(?P<frag> fragments)?(?P<log> log)?$'
+        match: '^(?:(?P<seq>\d+) )?(?P<action>permit|deny) icmp (?:(?P<sany>any)|host (?P<shost>\d+\.\d+\.\d+\.\d+)|(?P<snet>\d+\.\d+\.\d+\.\d+) (?P<swc>\d+\.\d+\.\d+\.\d+)) (?:(?P<dany>any)|host (?P<dhost>\d+\.\d+\.\d+\.\d+)|(?P<dnet>\d+\.\d+\.\d+\.\d+) (?P<dwc>\d+\.\d+\.\d+\.\d+))(?: (?P<type>\d+)(?: (?P<code>\d+))?| (?P<msg>administratively-prohibited|alternate-address|conversion-error|dod-host-prohibited|dod-net-prohibited|echo-reply|echo|general-parameter-problem|host-isolated|host-precedence-unreachable|host-redirect|host-tos-redirect|host-tos-unreachable|host-unknown|host-unreachable|information-reply|information-request|mask-reply|mask-request|mobile-redirect|net-redirect|net-tos-redirect|net-tos-unreachable|net-unreachable|network-unknown|no-room-for-option|option-missing|packet-too-big|parameter-problem|port-unreachable|precedence-unreachable|protocol-unreachable|reassembly-timeout|redirect|router-advertisement|router-solicitation|source-quench|source-route-failed|time-exceeded|timestamp-reply|timestamp-request|traceroute|ttl-exceeded|unreachable))?(?:(?P<frag> fragments)|(?P<login> log-input)|(?P<log> log)| dscp (?P<dscp>\S+)| precedence (?P<prec>\S+)| tos (?P<tos>\S+)| time-range (?P<tr>\S+))*$'
         row: {table: acl_entries, key: {acl: "{{ parent.name }}", seq: "{{ seq if seq else (rows('acl_entries', acl=parent.name) | length + 1) * 10 }}"}}
-        set: {action: "{{ action }}", protocol: icmp, src: "{{ 'any' if sany else (shost if shost else (snet | with_wildcard(swc) | network)) }}", dst: "{{ 'any' if dany else (dhost if dhost else (dnet | with_wildcard(dwc) | network)) }}"}
-        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
-      - id: acl.extended.icmp.type
-        match: '^(?:(?P<seq>\d+) )?(?P<action>permit|deny) icmp (?:(?P<sany>any)|host (?P<shost>\d+\.\d+\.\d+\.\d+)|(?P<snet>\d+\.\d+\.\d+\.\d+) (?P<swc>\d+\.\d+\.\d+\.\d+)) (?:(?P<dany>any)|host (?P<dhost>\d+\.\d+\.\d+\.\d+)|(?P<dnet>\d+\.\d+\.\d+\.\d+) (?P<dwc>\d+\.\d+\.\d+\.\d+)) (?P<type>\d+|[a-z]+(?:-[a-z]+)*)(?P<frag> fragments)?(?P<log> log)?$'
-        row: {table: acl_entries, key: {acl: "{{ parent.name }}", seq: "{{ seq if seq else (rows('acl_entries', acl=parent.name) | length + 1) * 10 }}"}}
-        set: {action: "{{ action }}", protocol: icmp, src: "{{ 'any' if sany else (shost if shost else (snet | with_wildcard(swc) | network)) }}", dst: "{{ 'any' if dany else (dhost if dhost else (dnet | with_wildcard(dwc) | network)) }}", icmp_type: "{{ type }}"}
-        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
+        set:
+          action: "{{ action }}"
+          protocol: icmp
+          src: "{{ 'any' if sany else (shost if shost else (snet | with_wildcard(swc) | network)) }}"
+          dst: "{{ 'any' if dany else (dhost if dhost else (dnet | with_wildcard(dwc) | network)) }}"
+          icmp_type: "{{ type if type else msg }}"
+          icmp_code: "{{ code }}"
+          dscp: "{{ (dscp if dscp is digits else dscp | unlex('dscp')) if dscp else '' }}"
+          precedence: "{{ (prec if prec is digits else prec | unlex('precedence')) if prec else '' }}"
+          tos: "{{ (tos if tos is digits else tos | unlex('tos')) if tos else '' }}"
+          time_range: "{{ tr }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log_input' if login else '' }} {{ 'log' if log else '' }}"}
       - id: acl.extended.ip
-        match: '^(?:(?P<seq>\d+) )?(?P<action>permit|deny) (?P<proto>ip|gre|esp|ahp|ospf|\d+) (?:(?P<sany>any)|host (?P<shost>\d+\.\d+\.\d+\.\d+)|(?P<snet>\d+\.\d+\.\d+\.\d+) (?P<swc>\d+\.\d+\.\d+\.\d+)) (?:(?P<dany>any)|host (?P<dhost>\d+\.\d+\.\d+\.\d+)|(?P<dnet>\d+\.\d+\.\d+\.\d+) (?P<dwc>\d+\.\d+\.\d+\.\d+))(?: dscp (?P<dscp>\S+)| precedence (?P<prec>\S+))?(?P<frag> fragments)?(?P<log> log)?$'
+        match: '^(?:(?P<seq>\d+) )?(?P<action>permit|deny) (?P<proto>ip|gre|esp|ahp|ospf|\d+) (?:(?P<sany>any)|host (?P<shost>\d+\.\d+\.\d+\.\d+)|(?P<snet>\d+\.\d+\.\d+\.\d+) (?P<swc>\d+\.\d+\.\d+\.\d+)) (?:(?P<dany>any)|host (?P<dhost>\d+\.\d+\.\d+\.\d+)|(?P<dnet>\d+\.\d+\.\d+\.\d+) (?P<dwc>\d+\.\d+\.\d+\.\d+))(?:(?P<frag> fragments)|(?P<login> log-input)|(?P<log> log)| dscp (?P<dscp>\S+)| precedence (?P<prec>\S+)| tos (?P<tos>\S+)| time-range (?P<tr>\S+))*$'
         row: {table: acl_entries, key: {acl: "{{ parent.name }}", seq: "{{ seq if seq else (rows('acl_entries', acl=parent.name) | length + 1) * 10 }}"}}
         set:
           action: "{{ action }}"
@@ -70,7 +96,9 @@ rules:
           dst: "{{ 'any' if dany else (dhost if dhost else (dnet | with_wildcard(dwc) | network)) }}"
           dscp: "{{ (dscp if dscp is digits else dscp | unlex('dscp')) if dscp else '' }}"
           precedence: "{{ (prec if prec is digits else prec | unlex('precedence')) if prec else '' }}"
-        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
+          tos: "{{ (tos if tos is digits else tos | unlex('tos')) if tos else '' }}"
+          time_range: "{{ tr }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log_input' if login else '' }} {{ 'log' if log else '' }}"}
 
   # ---- numbered lists (1-99 and 1300-1999 standard, 100-199 and 2000-2699 extended) ----
   - id: acl.numbered.remark
@@ -91,24 +119,116 @@ rules:
         key: {acl: "{{ n }}", seq: "{{ (rows('acl_entries', acl=n) | length + 1) * 10 }}"}
         set: {action: "{{ action }}", src: "{{ 'any' if sany else (shost if shost else ((snet | with_wildcard(swc) | network) if swc else snet)) }}"}
         append: {flags: "{{ 'log' if log else '' }}"}
-  # Only the form without ports: the rest of the numbered extended form is not
-  # confirmed in detail (cmdref 4.9).
-  - id: acl.numbered.extended
-    match: '^access-list (?P<n>\d+) (?P<action>permit|deny) (?P<proto>ip|tcp|udp|icmp|gre|esp|ahp|ospf) (?:(?P<sany>any)|host (?P<shost>\d+\.\d+\.\d+\.\d+)|(?P<snet>\d+\.\d+\.\d+\.\d+) (?P<swc>\d+\.\d+\.\d+\.\d+)) (?:(?P<dany>any)|host (?P<dhost>\d+\.\d+\.\d+\.\d+)|(?P<dnet>\d+\.\d+\.\d+\.\d+) (?P<dwc>\d+\.\d+\.\d+\.\d+))(?P<log> log)?$'
-    when: "(n | int >= 100 and n | int < 200) or (n | int >= 2000 and n | int < 2700)"
+  # The extended form has the same words as an entry of a named list
+  # (command reference, "access-list (IP extended)").
+  - id: acl.numbered.extended.tcp
+    match: '^access-list (?P<n>\d+) (?P<action>permit|deny) tcp (?:(?P<sany>any)|host (?P<shost>\d+\.\d+\.\d+\.\d+)|(?P<snet>\d+\.\d+\.\d+\.\d+) (?P<swc>\d+\.\d+\.\d+\.\d+))(?: (?P<sop>eq|gt|lt|neq) (?P<sp>[\w-]+)| range (?P<sp1>[\w-]+) (?P<sp2>[\w-]+))? (?:(?P<dany>any)|host (?P<dhost>\d+\.\d+\.\d+\.\d+)|(?P<dnet>\d+\.\d+\.\d+\.\d+) (?P<dwc>\d+\.\d+\.\d+\.\d+))(?: (?P<dop>eq|gt|lt|neq) (?P<dp>[\w-]+)| range (?P<dp1>[\w-]+) (?P<dp2>[\w-]+))?(?:(?P<est> established)|(?P<ack> ack)|(?P<fin> fin)|(?P<psh> psh)|(?P<rst> rst)|(?P<syn> syn)|(?P<urg> urg)|(?P<frag> fragments)|(?P<login> log-input)|(?P<log> log)| dscp (?P<dscp>\S+)| precedence (?P<prec>\S+)| tos (?P<tos>\S+)| time-range (?P<tr>\S+))*$'
+    when: "((n | int >= 100 and n | int < 200) or (n | int >= 2000 and n | int < 2700)) and ((1 if ack else 0) + (1 if fin else 0) + (1 if psh else 0) + (1 if rst else 0) + (1 if syn else 0) + (1 if urg else 0)) <= 1"
     row: {table: acls, key: {name: "{{ n }}"}}
     set: {type: extended}
     emit:
       - table: acl_entries
         key: {acl: "{{ n }}", seq: "{{ (rows('acl_entries', acl=n) | length + 1) * 10 }}"}
-        set: {action: "{{ action }}", protocol: "{{ 'ah' if proto == 'ahp' else proto }}", src: "{{ 'any' if sany else (shost if shost else (snet | with_wildcard(swc) | network)) }}", dst: "{{ 'any' if dany else (dhost if dhost else (dnet | with_wildcard(dwc) | network)) }}"}
-        append: {flags: "{{ 'log' if log else '' }}"}
+        set:
+          action: "{{ action }}"
+          protocol: tcp
+          src: "{{ 'any' if sany else (shost if shost else (snet | with_wildcard(swc) | network)) }}"
+          src_port: "{{ ((sop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ (sp if sp is digits else sp | unlex('tcp_port'))) if sp else '' }}{{ ((sp1 if sp1 is digits else sp1 | unlex('tcp_port')) ~ '-' ~ (sp2 if sp2 is digits else sp2 | unlex('tcp_port'))) if sp1 else '' }}"
+          dst: "{{ 'any' if dany else (dhost if dhost else (dnet | with_wildcard(dwc) | network)) }}"
+          dst_port: "{{ ((dop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ (dp if dp is digits else dp | unlex('tcp_port'))) if dp else '' }}{{ ((dp1 if dp1 is digits else dp1 | unlex('tcp_port')) ~ '-' ~ (dp2 if dp2 is digits else dp2 | unlex('tcp_port'))) if dp1 else '' }}"
+          dscp: "{{ (dscp if dscp is digits else dscp | unlex('dscp')) if dscp else '' }}"
+          precedence: "{{ (prec if prec is digits else prec | unlex('precedence')) if prec else '' }}"
+          tos: "{{ (tos if tos is digits else tos | unlex('tos')) if tos else '' }}"
+          time_range: "{{ tr }}"
+        append: {flags: "{{ 'established' if est else '' }} {{ 'ack' if ack else '' }} {{ 'fin' if fin else '' }} {{ 'psh' if psh else '' }} {{ 'rst' if rst else '' }} {{ 'syn' if syn else '' }} {{ 'urg' if urg else '' }} {{ 'fragments' if frag else '' }} {{ 'log_input' if login else '' }} {{ 'log' if log else '' }}"}
+  - id: acl.numbered.extended.udp
+    match: '^access-list (?P<n>\d+) (?P<action>permit|deny) udp (?:(?P<sany>any)|host (?P<shost>\d+\.\d+\.\d+\.\d+)|(?P<snet>\d+\.\d+\.\d+\.\d+) (?P<swc>\d+\.\d+\.\d+\.\d+))(?: (?P<sop>eq|gt|lt|neq) (?P<sp>[\w-]+)| range (?P<sp1>[\w-]+) (?P<sp2>[\w-]+))? (?:(?P<dany>any)|host (?P<dhost>\d+\.\d+\.\d+\.\d+)|(?P<dnet>\d+\.\d+\.\d+\.\d+) (?P<dwc>\d+\.\d+\.\d+\.\d+))(?: (?P<dop>eq|gt|lt|neq) (?P<dp>[\w-]+)| range (?P<dp1>[\w-]+) (?P<dp2>[\w-]+))?(?:(?P<frag> fragments)|(?P<login> log-input)|(?P<log> log)| dscp (?P<dscp>\S+)| precedence (?P<prec>\S+)| tos (?P<tos>\S+)| time-range (?P<tr>\S+))*$'
+    when: "((n | int >= 100 and n | int < 200) or (n | int >= 2000 and n | int < 2700))"
+    row: {table: acls, key: {name: "{{ n }}"}}
+    set: {type: extended}
+    emit:
+      - table: acl_entries
+        key: {acl: "{{ n }}", seq: "{{ (rows('acl_entries', acl=n) | length + 1) * 10 }}"}
+        set:
+          action: "{{ action }}"
+          protocol: udp
+          src: "{{ 'any' if sany else (shost if shost else (snet | with_wildcard(swc) | network)) }}"
+          src_port: "{{ ((sop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ (sp if sp is digits else sp | unlex('udp_port'))) if sp else '' }}{{ ((sp1 if sp1 is digits else sp1 | unlex('udp_port')) ~ '-' ~ (sp2 if sp2 is digits else sp2 | unlex('udp_port'))) if sp1 else '' }}"
+          dst: "{{ 'any' if dany else (dhost if dhost else (dnet | with_wildcard(dwc) | network)) }}"
+          dst_port: "{{ ((dop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ (dp if dp is digits else dp | unlex('udp_port'))) if dp else '' }}{{ ((dp1 if dp1 is digits else dp1 | unlex('udp_port')) ~ '-' ~ (dp2 if dp2 is digits else dp2 | unlex('udp_port'))) if dp1 else '' }}"
+          dscp: "{{ (dscp if dscp is digits else dscp | unlex('dscp')) if dscp else '' }}"
+          precedence: "{{ (prec if prec is digits else prec | unlex('precedence')) if prec else '' }}"
+          tos: "{{ (tos if tos is digits else tos | unlex('tos')) if tos else '' }}"
+          time_range: "{{ tr }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log_input' if login else '' }} {{ 'log' if log else '' }}"}
+  - id: acl.numbered.extended.icmp
+    match: '^access-list (?P<n>\d+) (?P<action>permit|deny) icmp (?:(?P<sany>any)|host (?P<shost>\d+\.\d+\.\d+\.\d+)|(?P<snet>\d+\.\d+\.\d+\.\d+) (?P<swc>\d+\.\d+\.\d+\.\d+)) (?:(?P<dany>any)|host (?P<dhost>\d+\.\d+\.\d+\.\d+)|(?P<dnet>\d+\.\d+\.\d+\.\d+) (?P<dwc>\d+\.\d+\.\d+\.\d+))(?: (?P<type>\d+)(?: (?P<code>\d+))?| (?P<msg>administratively-prohibited|alternate-address|conversion-error|dod-host-prohibited|dod-net-prohibited|echo-reply|echo|general-parameter-problem|host-isolated|host-precedence-unreachable|host-redirect|host-tos-redirect|host-tos-unreachable|host-unknown|host-unreachable|information-reply|information-request|mask-reply|mask-request|mobile-redirect|net-redirect|net-tos-redirect|net-tos-unreachable|net-unreachable|network-unknown|no-room-for-option|option-missing|packet-too-big|parameter-problem|port-unreachable|precedence-unreachable|protocol-unreachable|reassembly-timeout|redirect|router-advertisement|router-solicitation|source-quench|source-route-failed|time-exceeded|timestamp-reply|timestamp-request|traceroute|ttl-exceeded|unreachable))?(?:(?P<frag> fragments)|(?P<login> log-input)|(?P<log> log)| dscp (?P<dscp>\S+)| precedence (?P<prec>\S+)| tos (?P<tos>\S+)| time-range (?P<tr>\S+))*$'
+    when: "((n | int >= 100 and n | int < 200) or (n | int >= 2000 and n | int < 2700))"
+    row: {table: acls, key: {name: "{{ n }}"}}
+    set: {type: extended}
+    emit:
+      - table: acl_entries
+        key: {acl: "{{ n }}", seq: "{{ (rows('acl_entries', acl=n) | length + 1) * 10 }}"}
+        set:
+          action: "{{ action }}"
+          protocol: icmp
+          src: "{{ 'any' if sany else (shost if shost else (snet | with_wildcard(swc) | network)) }}"
+          dst: "{{ 'any' if dany else (dhost if dhost else (dnet | with_wildcard(dwc) | network)) }}"
+          icmp_type: "{{ type if type else msg }}"
+          icmp_code: "{{ code }}"
+          dscp: "{{ (dscp if dscp is digits else dscp | unlex('dscp')) if dscp else '' }}"
+          precedence: "{{ (prec if prec is digits else prec | unlex('precedence')) if prec else '' }}"
+          tos: "{{ (tos if tos is digits else tos | unlex('tos')) if tos else '' }}"
+          time_range: "{{ tr }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log_input' if login else '' }} {{ 'log' if log else '' }}"}
+  - id: acl.numbered.extended
+    match: '^access-list (?P<n>\d+) (?P<action>permit|deny) (?P<proto>ip|gre|esp|ahp|ospf|\d+) (?:(?P<sany>any)|host (?P<shost>\d+\.\d+\.\d+\.\d+)|(?P<snet>\d+\.\d+\.\d+\.\d+) (?P<swc>\d+\.\d+\.\d+\.\d+)) (?:(?P<dany>any)|host (?P<dhost>\d+\.\d+\.\d+\.\d+)|(?P<dnet>\d+\.\d+\.\d+\.\d+) (?P<dwc>\d+\.\d+\.\d+\.\d+))(?:(?P<frag> fragments)|(?P<login> log-input)|(?P<log> log)| dscp (?P<dscp>\S+)| precedence (?P<prec>\S+)| tos (?P<tos>\S+)| time-range (?P<tr>\S+))*$'
+    when: "((n | int >= 100 and n | int < 200) or (n | int >= 2000 and n | int < 2700))"
+    row: {table: acls, key: {name: "{{ n }}"}}
+    set: {type: extended}
+    emit:
+      - table: acl_entries
+        key: {acl: "{{ n }}", seq: "{{ (rows('acl_entries', acl=n) | length + 1) * 10 }}"}
+        set:
+          action: "{{ action }}"
+          protocol: "{{ 'ah' if proto == 'ahp' else proto }}"
+          src: "{{ 'any' if sany else (shost if shost else (snet | with_wildcard(swc) | network)) }}"
+          dst: "{{ 'any' if dany else (dhost if dhost else (dnet | with_wildcard(dwc) | network)) }}"
+          dscp: "{{ (dscp if dscp is digits else dscp | unlex('dscp')) if dscp else '' }}"
+          precedence: "{{ (prec if prec is digits else prec | unlex('precedence')) if prec else '' }}"
+          tos: "{{ (tos if tos is digits else tos | unlex('tos')) if tos else '' }}"
+          time_range: "{{ tr }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log_input' if login else '' }} {{ 'log' if log else '' }}"}
 
   # ---- prefix lists ----
   - id: prefix_list
     match: '^ip prefix-list (?P<name>\S+) seq (?P<seq>\d+) (?P<action>permit|deny) (?P<prefix>\d+\.\d+\.\d+\.\d+/\d+)(?: ge (?P<ge>\d+))?(?: le (?P<le>\d+))?$'
     row: {table: prefix_lists, key: {name: "{{ name }}", seq: "{{ seq }}"}}
     set: {action: "{{ action }}", prefix: "{{ prefix }}", ge: "{{ ge }}", le: "{{ le }}"}
+
+  # ---- time ranges (an entry of an access list names one) ----
+  # The days are words (Monday ... Sunday, daily, weekdays, weekend); a date
+  # is "day month year" with the month as a name (command reference,
+  # "periodic" and "absolute"). A time range has one "absolute" line: a
+  # second one stays unknown.
+  - id: time_range
+    match: '^time-range (?P<name>\S+)$'
+    children:
+      - id: time_range.periodic
+        match: '^periodic (?P<days>[A-Za-z]+(?: [A-Za-z]+)*) (?P<st>\d{1,2}:\d{2}) to(?: (?P<edays>[A-Za-z]+(?: [A-Za-z]+)*))? (?P<et>\d{1,2}:\d{2})$'
+        row: {table: time_ranges, key: {name: "{{ parent.name }}", seq: "{{ (rows('time_ranges', name=parent.name) | length + 1) * 10 }}"}}
+        set: {kind: periodic, start_time: "{{ st }}", end_time: "{{ et }}"}
+        append: {days: "{{ days | lower }}", end_days: "{{ edays | lower }}"}
+      - id: time_range.absolute
+        match: '^absolute(?: start (?P<st>\d{1,2}:\d{2}) (?P<sd>\d{1,2}) (?P<sm>[A-Za-z]+) (?P<sy>\d{4}))?(?: end (?P<et>\d{1,2}:\d{2}) (?P<ed>\d{1,2}) (?P<em>[A-Za-z]+) (?P<ey>\d{4}))?$'
+        when: "(st or et) and not (rows('time_ranges', name=parent.name) | selectattr('kind', 'equalto', 'absolute') | list)"
+        row: {table: time_ranges, key: {name: "{{ parent.name }}", seq: "{{ (rows('time_ranges', name=parent.name) | length + 1) * 10 }}"}}
+        set:
+          kind: absolute
+          start_time: "{{ st }}"
+          start_date: "{{ (sy ~ '-' ~ (sm | unlex('month')) ~ '-' ~ (('0' ~ sd) if sd | length == 1 else sd)) if st else '' }}"
+          end_time: "{{ et }}"
+          end_date: "{{ (ey ~ '-' ~ (em | unlex('month')) ~ '-' ~ (('0' ~ ed) if ed | length == 1 else ed)) if et else '' }}"
 
   # ---- NAT: a rule gets the name nat1, nat2 ... in the order of the lines ----
   - id: nat.pat.interface
@@ -130,11 +250,21 @@ rules:
         key: {name: "{{ name }}"}
         set: {start: "{{ start }}", end: "{{ end }}", prefix: "{{ len if len else (('0.0.0.0' | with_mask(mask)) | prefixlen) }}"}
   - id: nat.static
-    match: '^ip nat inside source static (?P<local>\d+\.\d+\.\d+\.\d+) (?P<global>\d+\.\d+\.\d+\.\d+)$'
+    match: '^ip nat inside source static (?P<local>\d+\.\d+\.\d+\.\d+) (?P<global>\d+\.\d+\.\d+\.\d+)(?P<ext> extendable)?$'
     row: {table: nat_rules, key: {name: "nat{{ rows('nat_rules') | length + 1 }}"}}
-    set: {type: static, local_ip: "{{ local }}", global_ip: "{{ global }}"}
+    set: {type: static, local_ip: "{{ local }}", global_ip: "{{ global }}", extendable: "{{ 'true' if ext else '' }}"}
+  # One to one for a whole network: the mask is written as a mask or as "/n".
+  - id: nat.static.network
+    match: '^ip nat inside source static network (?P<local>\d+\.\d+\.\d+\.\d+) (?P<global>\d+\.\d+\.\d+\.\d+) (?:/(?P<len>\d+)|(?P<mask>\d+\.\d+\.\d+\.\d+))(?P<ext> extendable)?$'
+    row: {table: nat_rules, key: {name: "nat{{ rows('nat_rules') | length + 1 }}"}}
+    set:
+      type: static_network
+      local_ip: "{{ local }}"
+      global_ip: "{{ global }}"
+      pool_prefix: "{{ len if len else (('0.0.0.0' | with_mask(mask)) | prefixlen) }}"
+      extendable: "{{ 'true' if ext else '' }}"
   - id: nat.static.port
-    match: '^ip nat inside source static (?P<proto>tcp|udp) (?P<local>\d+\.\d+\.\d+\.\d+) (?P<lport>\d+) (?P<global>\d+\.\d+\.\d+\.\d+) (?P<gport>\d+)$'
+    match: '^ip nat inside source static (?P<proto>tcp|udp) (?P<local>\d+\.\d+\.\d+\.\d+) (?P<lport>\d+) (?P<global>\d+\.\d+\.\d+\.\d+) (?P<gport>\d+)(?P<ext> extendable)?$'
     row: {table: nat_rules, key: {name: "nat{{ rows('nat_rules') | length + 1 }}"}}
     set:
       type: static_port
@@ -143,6 +273,7 @@ rules:
       local_port: "{{ lport }}"
       global_ip: "{{ global }}"
       global_port: "{{ gport }}"
+      extendable: "{{ 'true' if ext else '' }}"
 
   # The port of the address of an interface: the syntax line of the command
   # reference is garbled at this place (README).

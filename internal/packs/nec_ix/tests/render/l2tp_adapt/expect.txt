@@ -1,0 +1,20 @@
+hostname ix-c03
+!
+ppp profile lns-sample
+  authentication request chap-pap
+  authentication password example-user dummy-l2tp-user-secret-1
+  lcp pfc
+  lcp acfc
+  ipcp ip-compression
+  ipcp provide-ip-address range 192.0.2.131 192.0.2.190
+!
+interface Loopback0.0
+  ip address 192.0.2.129/25
+!
+interface Tunnel0.0
+  ip unnumbered Loopback0.0
+  ppp binding lns-sample
+  tunnel mode l2tp-lns ipsec
+  ipsec policy transport ipsec-sample-ra
+  no shutdown
+!

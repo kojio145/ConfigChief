@@ -397,7 +397,10 @@ func TestMakeBook(t *testing.T) {
 
 // A book made from the new side needs no mapping.
 func TestMakeBookFromNew(t *testing.T) {
-	e := newCase(t, map[string]string{"input/new/ix-a01.txt": sample(t, "nec_ix")})
+	// A line no rule takes in is put into the sample (the pack reads the
+	// sample whole by now).
+	text := strings.Replace(sample(t, "nec_ix"), "hostname ix-a01\n", "hostname ix-a01\nservice tcp-keepalives-in\n", 1)
+	e := newCase(t, map[string]string{"input/new/ix-a01.txt": text})
 	o, err := e.MakeBook("new", false, at)
 	if err != nil {
 		t.Fatal(err)

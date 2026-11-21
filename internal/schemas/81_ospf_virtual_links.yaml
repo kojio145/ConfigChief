@@ -1,0 +1,11 @@
+table: ospf_virtual_links
+title: {ja: OSPF バーチャルリンク, en: OSPF virtual links}
+since: M7
+key: [device, process_id, area, router_id]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: process_id, title: {ja: プロセス番号, en: Process ID}, type: int, required: true}
+  - {name: area, title: {ja: 通るエリア, en: Transit area}, type: string, required: true, note: {ja: "バックボーンにじかにつながらないエリアを、このエリアを通してつなぐ", en: "An area without a link to the backbone is joined through this area"}}
+  - {name: router_id, title: {ja: 相手のルータ ID, en: Neighbor router ID}, type: ip4, required: true}
+  - {name: hello, title: {ja: Hello 間隔（秒）, en: Hello interval (s)}, type: int}
+  - {name: dead, title: {ja: Dead 間隔（秒）, en: Dead interval (s)}, type: int}

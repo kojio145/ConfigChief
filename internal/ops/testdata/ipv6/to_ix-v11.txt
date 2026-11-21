@@ -1,0 +1,57 @@
+hostname ix-v11
+!
+ip route default Tunnel0.0
+!
+ipv6 route 2001:db8:100::/48 fe80::2%GigaEthernet0.0
+!
+ipv6 access-list v6-sample-in permit icmp src any dest any
+ipv6 access-list v6-sample-in permit udp src any sport eq 547 dest any dport eq 546
+ipv6 access-list v6-sample-in permit tcp established src any dest any
+ipv6 access-list v6-sample-in deny ip src any dest any
+ipv6 prefix-list pl6-sample 5 permit 2001:db8::/32 max 64
+!
+ipv6 router ospf 1
+  router-id 198.51.100.254
+  network GigaEthernet1.0 area 0
+  network Loopback0.0 area 0
+  passive-interface GigaEthernet1.0
+  redistribute static
+!
+ipv6 dhcp enable
+!
+ipv6 dhcp client-profile pd-sample
+  ia-pd subscriber GigaEthernet1.0 ::1/64
+!
+ipv6 dhcp server-profile dhcpv6-sample-lan
+  dns-server 2001:db8::53
+  dns-server dhcp
+!
+interface GigaEthernet0.0
+  description IPoE sample
+  ipv6 address autoconfig receive-default
+  ipv6 enable
+  ipv6 filter v6-sample-in 1 in
+  ipv6 dhcp client pd-sample
+  no shutdown
+!
+interface GigaEthernet1.0
+  description LAN sample
+  ip address 192.0.2.1/24
+  ipv6 nd ra enable
+  ipv6 nd ra other-config-flag
+  ipv6 nd ra dns-server 2001:db8::53 1800
+  ipv6 dhcp server dhcpv6-sample-lan
+  no shutdown
+!
+interface Loopback0.0
+  ip address 198.51.100.254/32
+  ipv6 address 2001:db8::1/128
+!
+interface Tunnel0.0
+  description DS-Lite sample
+  ip unnumbered GigaEthernet1.0
+  tunnel mode 4-over-6
+  tunnel source GigaEthernet0.0
+  tunnel destination fqdn aftr.example.jp
+  no shutdown
+!

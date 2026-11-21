@@ -1,0 +1,41 @@
+hostname ix-w02
+!
+ipv6 dhcp enable
+!
+ipv6 dhcp client-profile pd-sample
+  option-request dns-servers
+  ia-pd redistribute pool pd-sample-lan2 ::/60 nla-length 4
+!
+ipv6 dhcp server-profile pd-sample-lan1
+  dns-server 2001:db8::53
+  ntp-server 2001:db8::123
+  ntp-server dhcp
+  ia-pd prefix 2001:db8::/56 nla-length 16 life-time 1200 infinity
+!
+ipv6 dhcp server-profile pd-sample-lan2
+  ia-pd redistribute-prefix pool pd-sample-lan2
+!
+ipv6 dhcp server-profile pd-sample-lan3
+  ia-pd prefix 2001:db8:4000::/48 nla-length 0
+!
+interface GigaEthernet0.0
+  ipv6 enable
+  ipv6 dhcp client pd-sample
+  no shutdown
+!
+interface GigaEthernet1.0
+  ipv6 enable
+  ipv6 dhcp server pd-sample-lan1
+  no shutdown
+!
+interface GigaEthernet2.0
+  ipv6 enable
+  ipv6 dhcp server pd-sample-lan2
+  no shutdown
+!
+interface GigaEthernet2.1
+  encapsulation dot1q 10
+  ipv6 enable
+  ipv6 dhcp server pd-sample-lan3
+  no shutdown
+!

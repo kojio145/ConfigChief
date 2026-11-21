@@ -1,0 +1,161 @@
+hostname rt-v01
+!
+ip domain name example.com
+!
+vrf definition wan-a
+ address-family ipv4
+ exit-address-family
+!
+vrf definition cust-a
+ address-family ipv4
+ exit-address-family
+!
+vrf definition cust-b
+ address-family ipv4
+ exit-address-family
+!
+crypto keyring KR-SAMPLE-VT
+ pre-shared-key address 0.0.0.0 0.0.0.0 key dummy-psk-sample-vt
+!
+crypto keyring KR-SAMPLE-WAN vrf wan-a
+ pre-shared-key address 203.0.113.50 key dummy-psk-sample-wan
+!
+crypto keyring KR-SAMPLE-MAP vrf wan-a
+ pre-shared-key address 203.0.113.60 key dummy-psk-sample-map
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp key dummy-psk-sample-name hostname rt-v09.example.com
+!
+crypto isakmp profile ISAKMP-SAMPLE-VT
+ keyring KR-SAMPLE-VT
+ match identity address 0.0.0.0
+ virtual-template 1
+!
+crypto isakmp profile ISAKMP-SAMPLE-WAN
+ keyring KR-SAMPLE-WAN
+ match identity address 203.0.113.50 255.255.255.255 wan-a
+!
+crypto isakmp profile ISAKMP-SAMPLE-MAP
+ vrf cust-b
+ keyring KR-SAMPLE-MAP
+ match identity address 203.0.113.60 255.255.255.255 wan-a
+!
+crypto ikev2 proposal IKEV2-PROP-SAMPLE
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+!
+crypto ikev2 policy IKEV2-POL-SAMPLE
+ match fvrf any
+ proposal IKEV2-PROP-SAMPLE
+!
+crypto ikev2 keyring IKEV2-KEYS-SAMPLE
+ peer sample-any
+  address 0.0.0.0 0.0.0.0
+  pre-shared-key dummy-psk-sample-v2any
+ peer sample-wan
+  address 203.0.113.70
+  pre-shared-key dummy-psk-sample-v2wan
+!
+crypto ikev2 profile IKEV2-PROF-SAMPLE-VT
+ match identity remote fqdn rt-v08.example.com
+ identity local fqdn rt-v01.example.com
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS-SAMPLE
+ virtual-template 2
+!
+crypto ikev2 profile IKEV2-PROF-SAMPLE-WAN
+ match fvrf wan-a
+ match identity remote address 203.0.113.70 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS-SAMPLE
+!
+crypto ipsec transform-set TS-SAMPLE esp-aes 256 esp-sha256-hmac
+!
+crypto ipsec profile PROF-SAMPLE-VT
+ set transform-set TS-SAMPLE
+!
+crypto ipsec profile PROF-SAMPLE-NAME
+ set transform-set TS-SAMPLE
+!
+crypto ipsec profile PROF-SAMPLE-WAN
+ set transform-set TS-SAMPLE
+ set isakmp-profile ISAKMP-SAMPLE-WAN
+!
+crypto ipsec profile PROF-SAMPLE-V2VT
+ set transform-set TS-SAMPLE
+ set ikev2-profile IKEV2-PROF-SAMPLE-VT
+!
+crypto ipsec profile PROF-SAMPLE-V2WAN
+ set transform-set TS-SAMPLE
+ set ikev2-profile IKEV2-PROF-SAMPLE-WAN
+!
+crypto map CMAP-SAMPLE 10 ipsec-isakmp
+ set peer 203.0.113.60
+ set transform-set TS-SAMPLE
+ set isakmp-profile ISAKMP-SAMPLE-MAP
+ match address ACL-SAMPLE-MAP
+!
+interface Loopback0
+ ip address 192.0.2.1 255.255.255.255
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.9 255.255.255.248
+!
+interface GigabitEthernet0/1
+ vrf forwarding wan-a
+ ip address 203.0.113.17 255.255.255.248
+ crypto map CMAP-SAMPLE
+!
+interface Tunnel1
+ ip address 198.51.100.1 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel mode ipsec ipv4
+ tunnel destination rt-v09.example.com
+ tunnel protection ipsec profile PROF-SAMPLE-NAME
+!
+interface Tunnel2
+ vrf forwarding cust-a
+ ip address 198.51.100.5 255.255.255.252
+ tunnel source GigabitEthernet0/1
+ tunnel mode ipsec ipv4
+ tunnel destination 203.0.113.50
+ tunnel vrf wan-a
+ tunnel protection ipsec profile PROF-SAMPLE-WAN
+!
+interface Tunnel3
+ vrf forwarding cust-a
+ ip address 198.51.100.9 255.255.255.252
+ tunnel source GigabitEthernet0/1
+ tunnel mode ipsec ipv4
+ tunnel destination 203.0.113.70
+ tunnel vrf wan-a
+ tunnel protection ipsec profile PROF-SAMPLE-V2WAN
+!
+interface Tunnel4
+ ip address 198.51.100.13 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.80
+ tunnel vrf wan-a
+!
+interface Virtual-Template1 type tunnel
+ ip unnumbered Loopback0
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-SAMPLE-VT
+!
+interface Virtual-Template2 type tunnel
+ ip unnumbered Loopback0
+ tunnel source GigabitEthernet0/0
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-SAMPLE-V2VT
+!
+ip access-list extended ACL-SAMPLE-MAP
+ permit ip 192.0.2.128 0.0.0.127 198.51.100.128 0.0.0.127
+!
+end

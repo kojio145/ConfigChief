@@ -1,0 +1,26 @@
+# More candidates than one (appendix A 3.20, made-up values): the rows of
+# ipsec_proposals become further IKE policies (the same on every row of IKE
+# version 1) and further transform sets. expect.txt is the configuration the
+# tables must turn into.
+tables:
+  devices:
+    - hostname: rt-c05
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.9/29}
+    - {name: Tunnel1, enabled: true, ipv4: 192.0.2.209/30}
+  tunnels:
+    - {if_name: Tunnel1, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.20}
+  ipsec_tunnels:
+    - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: 203.0.113.20, psk: dummy-psk-more-a, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
+    - {name: CMAP-SAMPLE/10, style: policy, local_if: GigabitEthernet0/0, peer_address: 203.0.113.30, psk: dummy-psk-more-b, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
+  ipsec_proposals:
+    - {tunnel: Tunnel1, phase: ike, seq: 20, encryption: aes128, hash: sha1, dh: dh14, lifetime: 28800}
+    - {tunnel: Tunnel1, phase: ike, seq: 30, encryption: 3des, hash: sha1, dh: dh2}
+    - {tunnel: Tunnel1, phase: ipsec, seq: 20, encryption: aes128, hash: sha1}
+    - {tunnel: CMAP-SAMPLE/10, phase: ike, seq: 20, encryption: aes128, hash: sha1, dh: dh14, lifetime: 28800}
+    - {tunnel: CMAP-SAMPLE/10, phase: ike, seq: 30, encryption: 3des, hash: sha1, dh: dh2}
+    - {tunnel: CMAP-SAMPLE/10, phase: ipsec, seq: 20, encryption: aes128, hash: sha1}
+    - {tunnel: CMAP-SAMPLE/10, phase: ipsec, seq: 30, encryption: 3des, ah_hash: sha1}
+  ipsec_selectors:
+    - {tunnel: CMAP-SAMPLE/10, seq: 10, local_net: 198.51.100.0/24, remote_net: 192.0.2.0/25}

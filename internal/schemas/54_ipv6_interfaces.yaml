@@ -1,0 +1,48 @@
+table: ipv6_interfaces
+title: {ja: IPv6 インタフェース, en: IPv6 interfaces}
+since: M7
+key: [device, if_name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: if_name, title: {ja: IF 名, en: Interface}, type: ifname, required: true, note: {ja: "固定の IPv6 アドレスは、シート「インタフェース」の「IPv6 アドレス」に書く", en: "A fixed IPv6 address goes on the Interfaces sheet"}}
+  - {name: enabled, title: {ja: IPv6 を使う, en: IPv6 enabled}, type: bool, note: {ja: "アドレスを書かずに IPv6 を使う IF（リンクローカルだけで動かす）", en: "IPv6 without an address of its own (link-local only)"}}
+  - {name: link_local, title: {ja: リンクローカルアドレス, en: Link-local address}, type: ip6, note: {ja: "例 fe80::1。空 = 機器が自動で作る", en: "e.g. fe80::1. Empty = made by the device"}}
+  - {name: eui64, title: {ja: EUI-64 で付けるプレフィックス, en: EUI-64 prefixes}, type: "list<net6>", note: {ja: "例 2001:db8:0:1::/64。下 64 ビットは機器が MAC アドレスから作る", en: "e.g. 2001:db8:0:1::/64. The device makes the lower 64 bits"}}
+  - {name: anycast, title: {ja: エニーキャストアドレス, en: Anycast addresses}, type: "list<cidr6>"}
+  - {name: autoconfig, title: {ja: 自動設定（RA を受ける）, en: Autoconfig (from RA)}, type: bool, note: {ja: "ルータ広告（RA）を受けてアドレスを作る。IPoE の WAN 側", en: "Makes the address from router advertisements. The WAN side of IPoE"}}
+  - {name: autoconfig_default, title: {ja: RA の送り元をデフォルト経路にする, en: Default route from RA}, type: bool}
+  - {name: dhcp_address, title: {ja: DHCPv6 でアドレスをもらう, en: Address by DHCPv6}, type: bool}
+  - {name: mtu, title: {ja: IPv6 MTU, en: IPv6 MTU}, type: int, min: 1280}
+  - {name: acl_in, title: {ja: 入力 IPv6 フィルタ, en: IPv6 filter in}, type: ref, ref: ipv6_acl_entries.acl}
+  - {name: acl_out, title: {ja: 出力 IPv6 フィルタ, en: IPv6 filter out}, type: ref, ref: ipv6_acl_entries.acl}
+  - {name: acl_in_more, title: {ja: 入力 IPv6 フィルタ（2 つ目以降）, en: More IPv6 filters in}, type: "list<ref>", ref: ipv6_acl_entries.acl, note: {ja: "入力 IPv6 フィルタの後に、書いた順で見るリスト", en: "The lists looked at after the IPv6 filter in, in this order"}}
+  - {name: acl_out_more, title: {ja: 出力 IPv6 フィルタ（2 つ目以降）, en: More IPv6 filters out}, type: "list<ref>", ref: ipv6_acl_entries.acl, note: {ja: "出力 IPv6 フィルタの後に、書いた順で見るリスト", en: "The lists looked at after the IPv6 filter out, in this order"}}
+  - {name: ra, title: {ja: RA を送る, en: RA sending}, type: enum, values: [send, reply_only, "off"], note: {ja: "send = 送る、reply_only = 問い合わせにだけ答える、off = 送らない。空 = 機器の既定", en: "send, reply_only = answers solicitations only, off. Empty = the default of the device"}}
+  - {name: ra_interval, title: {ja: RA の間隔・最大（秒）, en: RA interval max (s)}, type: int}
+  - {name: ra_interval_min, title: {ja: RA の間隔・最小（秒）, en: RA interval min (s)}, type: int}
+  - {name: ra_lifetime, title: {ja: RA のルータ生存時間（秒）, en: RA router lifetime (s)}, type: int}
+  - {name: ra_managed, title: {ja: RA の M フラグ, en: RA managed flag}, type: bool, note: {ja: "アドレスを DHCPv6 でもらうよう端末に伝える", en: "Tells the hosts to get the address by DHCPv6"}}
+  - {name: ra_other, title: {ja: RA の O フラグ, en: RA other flag}, type: bool, note: {ja: "DNS などを DHCPv6 でもらうよう端末に伝える", en: "Tells the hosts to get DNS and the like by DHCPv6"}}
+  - {name: ra_dns, title: {ja: RA で配る DNS サーバ, en: RA DNS servers}, type: "list<ip6>"}
+  - {name: ra_dns_lifetime, title: {ja: RA で配る DNS の生存時間（秒）, en: RA DNS lifetime (s)}, type: int}
+  - {name: nd_proxy, title: {ja: ND プロキシの LAN 側 IF, en: ND proxy downstream}, type: ifname, note: {ja: "WAN 側の IF の行に、LAN 側の IF 名を書く（プレフィックスを LAN と共有する IPoE）", en: "On the row of the WAN interface: the LAN interface that shares its prefix"}}
+  - {name: nd_proxy_acl, title: {ja: ND プロキシの対象外リスト, en: ND proxy list}, type: ref, ref: ipv6_acl_entries.acl}
+  - {name: pd_request, title: {ja: プレフィックスをもらう（DHCPv6-PD）, en: Prefix delegation request}, type: string, note: {ja: "もらったプレフィックスに付ける名前。WAN 側の IF の行に書く", en: "The name given to the delegated prefix. On the row of the WAN interface"}}
+  - {name: pd_from, title: {ja: もらったプレフィックスから付ける, en: Address from prefix}, type: string, note: {ja: "プレフィックスの名前（「プレフィックスをもらう」に書いた名前）。LAN 側の IF の行に書く", en: "The name of the delegated prefix. On the row of the LAN interface"}}
+  - {name: pd_suffix, title: {ja: 付けるアドレスの下の部分, en: Address suffix}, type: cidr6, note: {ja: "例 ::1/64。もらったプレフィックスの後ろに足す", en: "e.g. ::1/64, joined to the delegated prefix"}}
+  - {name: pd_eui64, title: {ja: 下 64 ビットを EUI-64 で作る, en: Suffix by EUI-64}, type: bool}
+  - {name: rapid_commit, title: {ja: DHCPv6 の Rapid Commit, en: DHCPv6 rapid commit}, type: bool}
+  - {name: dhcp_request, title: {ja: DHCPv6 でもらう情報, en: DHCPv6 requested options}, type: "list<enum>", values: [dns, domain, ntp]}
+  - {name: dhcp_info_only, title: {ja: DHCPv6 で情報だけもらう, en: DHCPv6 information only}, type: bool, note: {ja: "アドレスやプレフィックスはもらわず、DNS などだけをもらう", en: "No address and no prefix: DNS and the like only"}}
+  - {name: dhcp_server, title: {ja: DHCPv6 サーバ（名前）, en: DHCPv6 server (name)}, type: string, note: {ja: "この IF で DHCPv6 サーバを動かす。設定の名前を書く", en: "Runs a DHCPv6 server on the interface. The name of its settings"}}
+  - {name: dhcp_dns, title: {ja: DHCPv6 で配る DNS サーバ, en: DHCPv6 DNS servers}, type: "list<ip6>", also: [dhcp], note: {ja: "アドレス。dhcp と書くと、WAN 側の DHCPv6 でもらった DNS を配る", en: "Addresses. dhcp = hands on what the DHCPv6 client got"}}
+  - {name: dhcp_domain, title: {ja: DHCPv6 で配るドメイン名, en: DHCPv6 domain}, type: string}
+  - {name: dhcp_ntp, title: {ja: DHCPv6 で配る NTP サーバ, en: DHCPv6 NTP servers}, type: "list<ip6>", also: [dhcp], note: {ja: "アドレス。dhcp と書くと、WAN 側の DHCPv6 でもらった NTP サーバを配る（NEC IX）", en: "Addresses. dhcp = hands on what the WAN side got by DHCPv6 (NEC IX)"}}
+  - {name: dhcp_pd_pool, title: {ja: 下流へ配るプレフィックスの元, en: Delegation pool}, type: net6, note: {ja: "下流のルータへ配るプレフィックスを、ここから切り出す。例 2001:db8::/32。「上流からもらったプレフィックスから配る」があるときは、もらったプレフィックスの下の部分（先頭から切り出すなら ::/56。もらったプレフィックスの部分は 0 で書く）", en: "The prefix the delegated prefixes are cut from, e.g. 2001:db8::/32. With \"Delegate from the received prefix\": the part below that prefix, with the bits of the received prefix as 0 (::/56 is its head)"}}
+  - {name: dhcp_pd_length, title: {ja: 下流へ配る長さ, en: Delegated length}, type: int, min: 1, max: 128, note: {ja: "1 台に配るプレフィックスの長さ。例 48", en: "The length of the prefix one router gets, e.g. 48"}}
+  - {name: dhcp_pd_from, title: {ja: 上流からもらったプレフィックスから配る, en: Delegate from the received prefix}, type: string, note: {ja: "WAN 側の「プレフィックスをもらう（DHCPv6-PD）」の名前。もらったプレフィックスを分けて、下流へ配り直す（NEC IX）", en: "The name of the prefix the WAN side asks for: it is split and delegated on (NEC IX)"}}
+  - {name: dhcp_pd_valid, title: {ja: 配るプレフィックスの有効時間（秒）, en: Delegated valid lifetime (s)}, type: int, min: 0, also: [infinite], note: {ja: "秒か infinite（無期限）。推奨時間と組で書く。空 = 機器の既定", en: "Seconds, or infinite. Written together with the preferred lifetime. Empty = the default of the device"}}
+  - {name: dhcp_pd_preferred, title: {ja: 配るプレフィックスの推奨時間（秒）, en: Delegated preferred lifetime (s)}, type: int, min: 0, also: [infinite]}
+  - {name: dhcp_address_prefix, title: {ja: 端末へ配るアドレスのプレフィックス, en: DHCPv6 address prefixes}, type: "list<net6>", note: {ja: "端末へ DHCPv6 でアドレスを配る（Cisco）", en: "Hands out addresses to the hosts by DHCPv6 (Cisco)"}}
+  - {name: policy_route, title: {ja: IPv6 のポリシールーティング, en: IPv6 policy route}, type: string, note: {ja: "この IF に入ってくる IPv6 の通信に当てる経路制御の方針の名前", en: "The route policy for the IPv6 packets that come in here"}}
+  - {name: tcp_mss, title: {ja: IPv6 の TCP MSS 調整, en: IPv6 TCP MSS adjust}, type: int, also: [auto], note: {ja: "数か auto（MTU から機器が決める。NEC IX）", en: "A number, or auto (the device takes it from the MTU; NEC IX)"}}

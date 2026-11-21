@@ -71,7 +71,7 @@ func cmdCustomer(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, err)
 		return 2
 	}
-	fmt.Fprintln(out, "お客様の一覧とパラメータブックの比較")
+	fmt.Fprintln(out, "外部一覧とパラメータブックの比較")
 	for _, l := range o.Lists {
 		switch {
 		case l.Err != "":

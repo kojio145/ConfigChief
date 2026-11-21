@@ -1,0 +1,33 @@
+# The candidates of IPsec (made-up values; appendix A 3.20). expect.txt is
+# the configuration the tables must turn into. The row of IKE version 2 has
+# the lists another vendor writes on one proposal: those of IKE go on the
+# lines of the IKEv2 proposal; those of ESP become a transform set for each
+# combination, and the second group of PFS is not written (both are told).
+# The further candidates are numbered as a person may number them (15, 25):
+# only their order counts.
+tables:
+  devices:
+    - hostname: rt-h02
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.9/29}
+    - {name: Tunnel1, enabled: true, ipv4: 198.51.100.1/30}
+    - {name: Tunnel2, enabled: true, ipv4: 198.51.100.5/30}
+  tunnels:
+    - {if_name: Tunnel1, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.20}
+    - {if_name: Tunnel2, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.30}
+  ipsec_tunnels:
+    - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: 203.0.113.20, ike_version: 2, psk: dummy-psk-sample-a, ike_encryption: aes256, ike_encryption_more: [aes128], ike_hash: sha512, ike_hash_more: [sha256], ike_dh: dh14, ike_dh_more: [dh5], ike_prf: sha512, ike_prf_more: [sha256], ike_lifetime: 86400, esp_encryption: aes256, esp_encryption_more: [aes128], esp_hash: sha256, esp_hash_more: [sha1], pfs: dh14, pfs_more: [dh5], ipsec_lifetime: 3600}
+    - {name: Tunnel2, style: tunnel_if, tunnel_if: Tunnel2, peer_address: 203.0.113.30, ike_version: 1, psk: dummy-psk-sample-b, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
+  ipsec_proposals:
+    - {tunnel: Tunnel1, phase: ike, seq: 15, encryption: aes128, hash: sha1, dh: dh14}
+    - {tunnel: Tunnel2, phase: ike, seq: 15, encryption: aes256, hash: sha1, dh: dh14}
+    - {tunnel: Tunnel2, phase: ike, seq: 25, encryption: aes128, hash: sha256, dh: dh14}
+    - {tunnel: Tunnel2, phase: ike, seq: 35, encryption: aes128, hash: sha1, dh: dh14}
+    - {tunnel: Tunnel2, phase: ike, seq: 45, encryption: 3des, hash: sha1, dh: dh5}
+    - {tunnel: Tunnel2, phase: ipsec, seq: 15, encryption: aes192, hash: sha1}
+    - {tunnel: Tunnel2, phase: ipsec, seq: 25, encryption: aes128, hash: sha1}
+    - {tunnel: Tunnel2, phase: ipsec, seq: 35, encryption: 3des, hash: sha1}
+    - {tunnel: Tunnel2, phase: ipsec, seq: 45, encryption: aes256, hash: sha256}
+    - {tunnel: Tunnel2, phase: ipsec, seq: 55, encryption: aes128, hash: sha256}
+findings: [G-614]

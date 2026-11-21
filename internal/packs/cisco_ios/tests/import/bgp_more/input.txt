@@ -1,0 +1,69 @@
+hostname rt-b01
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.1 255.255.255.248
+ no shutdown
+!
+interface Loopback0
+ ip address 192.0.2.1 255.255.255.255
+!
+router bgp 64496
+ bgp router-id 192.0.2.1
+ no bgp log-neighbor-changes
+ bgp default local-preference 150
+ timers bgp 20 60
+ distance bgp 30 190 190
+ neighbor PG-SAMPLE-IN peer-group
+ neighbor PG-SAMPLE-IN remote-as 64496
+ neighbor PG-SAMPLE-IN update-source Loopback0
+ neighbor PG-SAMPLE-IN password 7 00SAMPLE00DUMMY00
+ neighbor PG-SAMPLE-IN timers 10 30
+ neighbor PG-SAMPLE-IN next-hop-self
+ neighbor PG-SAMPLE-IN send-community both
+ neighbor PG-SAMPLE-IN route-reflector-client
+ neighbor 192.0.2.2 peer-group PG-SAMPLE-IN
+ neighbor 192.0.2.3 peer-group PG-SAMPLE-IN
+ neighbor 192.0.2.3 description sample-reflected
+ neighbor 192.0.2.3 timers 5 15
+ neighbor 203.0.113.2 remote-as 64497
+ neighbor 203.0.113.2 password 7 11DUMMY11SAMPLE11
+ neighbor 203.0.113.2 timers 30 90
+ neighbor 203.0.113.2 default-originate
+ neighbor 203.0.113.2 filter-list 10 in
+ neighbor 203.0.113.2 filter-list 20 out
+ neighbor 203.0.113.2 maximum-prefix 1000 80 restart 30
+ neighbor 203.0.113.2 weight 200
+ neighbor 203.0.113.2 advertisement-interval 15
+ neighbor 203.0.113.3 remote-as 64498
+ neighbor 203.0.113.3 default-originate route-map RM-SAMPLE-DEF
+ neighbor 203.0.113.3 distribute-list ACL-SAMPLE-BGP in
+ neighbor 203.0.113.3 maximum-prefix 500 warning-only
+ neighbor 203.0.113.3 send-community extended
+ neighbor 203.0.113.4 remote-as 64499
+ neighbor 203.0.113.4 maximum-prefix 200 discard-extra
+ neighbor 203.0.113.4 timers 30 90 20
+ neighbor PG-SAMPLE-NONE peer-group
+ neighbor PG-SAMPLE-NONE remote-as 64500
+ neighbor 3fff:a:b::2 remote-as 64497
+ neighbor 3fff:a:b::2 password 7 22SAMPLE22DUMMY22
+ network 198.51.100.0
+ network 192.0.2.64
+ network 192.0.2.128 mask 255.255.255.128
+ aggregate-address 198.51.100.0 255.255.254.0 summary-only
+ aggregate-address 192.0.2.0 255.255.255.0 as-set summary-only
+ aggregate-address 203.0.113.0 255.255.255.0 suppress-map RM-SAMPLE-SUP
+ timers bgp 20 60 10
+ address-family ipv6
+  neighbor 3fff:a:b::2 activate
+  neighbor 3fff:a:b::2 send-community both
+ exit-address-family
+!
+ip access-list standard ACL-SAMPLE-BGP
+ permit 198.51.100.0 0.0.0.255
+!
+ip as-path access-list 10 permit ^64497_
+ip as-path access-list 20 permit ^$
+!
+route-map RM-SAMPLE-DEF permit 10
+!
+end

@@ -1,0 +1,158 @@
+hostname sw-m02
+!
+vtp domain sample-domain
+vtp mode transparent
+spanning-tree mode mst
+spanning-tree loopguard default
+spanning-tree portfast bpdufilter default
+spanning-tree backbonefast
+spanning-tree uplinkfast
+vtp pruning
+ip dhcp snooping
+spanning-tree pathcost method long
+port-channel load-balance src-dst-ip
+lacp system-priority 100
+vtp version 2
+vtp password Example-Vtp-1
+errdisable recovery interval 600
+udld aggressive
+udld message time 10
+cdp timer 20
+cdp holdtime 60
+lldp timer 30
+lldp holdtime 120
+lldp reinit 2
+mac address-table aging-time 600
+vlan internal allocation policy ascending
+system mtu 1600
+errdisable recovery cause bpduguard
+errdisable recovery cause psecure-violation
+no cdp run
+lldp run
+ip dhcp snooping vlan 10,20
+no ip dhcp snooping information option
+ip arp inspection vlan 10
+spanning-tree mst hello-time 2
+spanning-tree mst forward-time 15
+spanning-tree mst max-age 20
+spanning-tree mst configuration
+ name sample-region
+ revision 3
+ instance 1 vlan 10,20
+ instance 2 vlan 30-40
+spanning-tree mst 0 priority 4096
+spanning-tree mst 1 priority 4096
+spanning-tree mst 2 root secondary
+spanning-tree vlan 10,20 root primary diameter 4
+spanning-tree vlan 30 root secondary
+no spanning-tree vlan 99
+monitor session 1 source interface GigabitEthernet1/0/1
+monitor session 1 source interface GigabitEthernet1/0/2 rx
+monitor session 1 destination interface GigabitEthernet1/0/3
+!
+vlan 10
+ name sample-office
+ state suspend
+!
+vlan 20
+!
+vlan 21
+!
+vlan 22
+!
+vlan 30
+!
+vlan 99
+ shutdown
+!
+vlan 500
+ private-vlan primary
+ private-vlan association 501-502
+!
+vlan 501
+ private-vlan isolated
+!
+vlan 900
+ remote-span
+!
+bridge 1 protocol ieee
+bridge 1 priority 4096
+!
+interface GigabitEthernet1/0/1
+ switchport access vlan 10
+ switchport mode access
+ switchport port-security maximum 3
+ switchport port-security
+ storm-control broadcast level 87 65
+ storm-control multicast level pps 2000 1000
+ storm-control unicast level bps 100000000
+ switchport voice vlan dot1p
+ switchport port-security mac-address 0000.5e00.5310
+ switchport port-security mac-address sticky 0000.5e00.5311
+ switchport port-security mac-address sticky 0000.5e00.5312 vlan access
+ switchport port-security aging time 120
+ switchport port-security aging type inactivity
+ switchport port-security aging static
+ switchport protected
+ spanning-tree guard root
+ spanning-tree bpdufilter enable
+ spanning-tree cost 19
+ spanning-tree port-priority 64
+ spanning-tree link-type point-to-point
+ ip dhcp snooping limit rate 150
+ speed auto 10 100
+ no cdp enable
+ no lldp transmit
+ no lldp receive
+ no shutdown
+!
+interface GigabitEthernet1/0/2
+ switchport mode private-vlan host
+ switchport private-vlan host-association 500 501
+ spanning-tree guard loop
+ spanning-tree bpdufilter disable
+ udld port disable
+ speed 2500
+ no shutdown
+!
+interface GigabitEthernet1/0/3
+ switchport mode private-vlan promiscuous
+ switchport private-vlan mapping 500 501-502
+ no shutdown
+!
+interface GigabitEthernet1/0/47
+ switchport mode trunk
+ udld port aggressive
+ ip dhcp snooping trust
+ ip arp inspection trust
+ channel-protocol pagp
+ channel-group 1 mode desirable non-silent
+ no shutdown
+!
+interface GigabitEthernet1/0/48
+ switchport mode trunk
+ udld port
+ channel-group 2 mode active
+ lacp port-priority 100
+ lacp rate fast
+ speed nonegotiate
+ no shutdown
+!
+interface Port-channel1
+ switchport mode trunk
+ no shutdown
+!
+interface TenGigabitEthernet1/1/1
+ no switchport
+ speed 10000
+ no shutdown
+!
+interface TenGigabitEthernet1/1/1.100
+ encapsulation dot1Q 100 second-dot1q 200,300-310
+ ip address 198.51.100.1 255.255.255.252
+ cdp enable
+ lldp transmit
+ lldp receive
+ no shutdown
+!
+end

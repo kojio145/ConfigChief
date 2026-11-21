@@ -7,3 +7,5 @@ columns:
   - {name: name, title: {ja: 名前, en: Name}, type: string, required: true}
   - {name: rd, title: {ja: RD, en: RD}, type: string}
   - {name: description, title: {ja: 説明, en: Description}, type: string}
+  - {name: rt_import, title: {ja: 取り込むルートターゲット, en: Route targets (import)}, type: "list<string>", note: {ja: "64496:100 の形。Cisco だけ", en: "64496:100. Cisco only"}}
+  - {name: rt_export, title: {ja: 付けるルートターゲット, en: Route targets (export)}, type: "list<string>", note: {ja: "64496:100 の形。Cisco だけ", en: "64496:100. Cisco only"}}

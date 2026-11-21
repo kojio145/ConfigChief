@@ -1,0 +1,68 @@
+{# RIP and RIPng, the lines under an interface (appendix A 3.27; CRM chapter
+   10). Included from ipv6_if.j2: the interface is i. #}
+{% for r in t.rip_interfaces %}
+{% if r.if_name == i.name %}
+{% set v6 = r.family == 'ipv6' %}
+{% set fam = 'ipv6' if v6 else 'ip' %}
+{% set what = i.name ~ (' の RIPng' if v6 else ' の RIP') %}
+  {{ fam }} rip enable
+{% if r.send == false %}
+  no {{ fam }} rip send
+{% endif %}
+{% if r.receive == false %}
+  no {{ fam }} rip receive
+{% endif %}
+{% if v6 %}
+{% if r.send_version or r.receive_version or r.v2_broadcast == true or r.auth_mode or r.auth_key or r.auth_key_id or r.auth_key_id == 0 %}
+{{ fail(what ~ ': 版・認証は RIP（ipv4）だけの設定です（セルを空にしてください）') }}
+{% endif %}
+{% else %}
+{% if r.v2_broadcast == true %}
+{% if r.send_version | join(' ') != '2' %}
+{{ fail(what ~ ': 「版 2 をブロードキャストで送る」は、「送る版」が 2 の行にだけ書けます（NEC IX の ip rip send version compatible）') }}
+{% else %}
+  ip rip send version compatible
+{% endif %}
+{% elif r.send_version %}
+  ip rip send version {{ r.send_version | join(' ') }}
+{% endif %}
+{% if r.receive_version %}
+  ip rip receive version {{ r.receive_version | join(' ') }}
+{% endif %}
+{% if r.auth_mode == 'md5' %}
+{{ fail(what ~ ': NEC IX の RIP の認証は、平文の鍵（text）だけです（md5 は書けません。両端を text にするか、追加コンフィグで別の守り方にしてください）') }}
+{% elif r.auth_key %}
+{% if r.auth_key | length > 16 %}
+{{ fail(what ~ ': NEC IX の RIP の認証キーは 16 字までです') }}
+{% endif %}
+  ip rip authentication text {{ r.auth_key }}
+{% elif r.auth_mode %}
+{{ fail(what ~ ': 「認証」には、「認証キー」が要ります') }}
+{% endif %}
+{% endif %}
+{% if r.metric_offset %}
+  {{ fam }} rip metric-offset {{ r.metric_offset }}
+{% endif %}
+{% if r.split_horizon %}
+  {{ fam }} rip split-type {{ r.split_horizon | replace('_', '-') }}
+{% endif %}
+{% for s in r.summary %}
+{% if (':' in s) != v6 %}
+{{ fail(what ~ ': 「集約して送る経路」' ~ s ~ ' の種類（IPv4・IPv6）が、行の種類と合いません') }}
+{% else %}
+  {{ fam }} rip summary-address {{ s }}
+{% endif %}
+{% endfor %}
+{% if r.default_originate == true %}
+  {{ fam }} rip originate-default{{ ' ' ~ r.default_originate_metric if r.default_originate_metric else '' }}
+{% elif r.default_originate_metric %}
+{{ fail(what ~ ': 「広告するデフォルト経路のメトリック」は、「この IF でデフォルト経路を広告する」が有効な行にだけ書けます') }}
+{% endif %}
+{% if r.prefix_list_in %}
+  {{ fam }} rip distribute-list prefix {{ r.prefix_list_in }} in
+{% endif %}
+{% if r.prefix_list_out %}
+  {{ fam }} rip distribute-list prefix {{ r.prefix_list_out }} out
+{% endif %}
+{% endif %}
+{% endfor %}

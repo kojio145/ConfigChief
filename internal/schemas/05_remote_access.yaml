@@ -7,6 +7,9 @@ columns:
   - {name: protocols, title: {ja: 許可する方式, en: Protocols}, type: "list<enum>", values: [ssh, telnet], required: true}
   - {name: ssh_version, title: {ja: SSH の版, en: SSH version}, type: enum, values: ["1", "2"]}
   - {name: acl, title: {ja: 接続元の制限, en: Source ACL}, type: ref, ref: acls.name}
+  - {name: acl_ssh, title: {ja: 接続元の制限（SSH だけ）, en: Source ACL (SSH only)}, type: ref, ref: acls.name, note: {ja: "方式で制限が違うときだけ。同じなら「接続元の制限」に書く", en: "Only where the protocols have different lists; else use the source ACL"}}
+  - {name: acl_telnet, title: {ja: 接続元の制限（Telnet だけ）, en: Source ACL (Telnet only)}, type: ref, ref: acls.name, note: {ja: "方式で制限が違うときだけ。同じなら「接続元の制限」に書く", en: "Only where the protocols have different lists; else use the source ACL"}}
   - {name: idle_timeout, title: {ja: 無操作切断（分）, en: Idle timeout (min)}, type: int}
   - {name: auth, title: {ja: 認証, en: Authentication}, type: enum, values: [local, password, aaa], note: {ja: "aaa の中身は追加コンフィグに書く", en: "What aaa does goes into the extra config"}}
   - {name: line_password, title: {ja: 回線パスワード, en: Line password}, type: secret}
+  - {name: idle_timeout_sec, title: {ja: 無操作切断（秒の端数）, en: Idle timeout (extra s)}, type: int, min: 0, max: 59}

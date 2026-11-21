@@ -1,0 +1,49 @@
+hostname rt-v01
+!
+vlan 2
+!
+interface FastEthernet0
+ switchport access vlan 1
+ switchport mode access
+ no shutdown
+!
+interface FastEthernet1
+ switchport access vlan 1
+ switchport mode access
+ no shutdown
+!
+interface FastEthernet2
+ switchport access vlan 2
+ switchport mode access
+ duplex full
+ speed 100
+ no shutdown
+!
+interface FastEthernet3
+ switchport access vlan 2
+ switchport mode access
+ shutdown
+!
+interface GigabitEthernet8
+ ip address 203.0.113.2 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet9
+ no shutdown
+!
+interface GigabitEthernet9.30
+ encapsulation dot1Q 30
+ ip address 198.51.100.1 255.255.255.128
+ no shutdown
+!
+interface Vlan1
+ ip address 192.0.2.1 255.255.255.128
+ no shutdown
+!
+interface Vlan2
+ ip address 192.0.2.129 255.255.255.128
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.1 1
+!
+end

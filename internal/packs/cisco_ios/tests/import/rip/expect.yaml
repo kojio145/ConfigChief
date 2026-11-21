@@ -1,0 +1,49 @@
+# RIP and RIPng (appendix A 3.27; made-up values). RIP runs on the
+# interfaces a "network" line covers (GigabitEthernet0/2 is in no network:
+# what it says of RIP stays unknown). The key of an interface comes from its
+# key chain. Of RIPng only the process the interfaces name first is read.
+tables:
+  rip_processes:
+    - family: ipv4
+      version: 2
+      auto_summary: false
+      passive_default: true
+      default_originate: true
+      default_originate_filter: RM-SAMPLE-DEF
+      default_metric: 3
+      distance: 130
+      timer_update: 10
+      timer_invalid: 60
+      timer_holddown: 60
+      timer_flush: 80
+      prefix_list_in: PL-SAMPLE-IN
+    - {family: ipv6, distance: 130, timer_update: 10, timer_invalid: 60, timer_holddown: 0, timer_flush: 100, prefix_list_in: PL6-SAMPLE-IN, auto_summary: ""}
+  rip_interfaces:
+    - family: ipv4
+      if_name: GigabitEthernet0/0
+      send: true
+      send_version: ["1", "2"]
+      receive_version: ["2"]
+      auth_mode: text
+      auth_key: Example-Rip-1
+      auth_key_id: ""
+      summary: ["198.51.100.0/24"]
+      split_horizon: none
+      prefix_list_out: PL-SAMPLE-OUT
+    - {family: ipv4, if_name: GigabitEthernet0/1, send: "", v2_broadcast: true, auth_mode: md5, auth_key: Example-Rip-5, auth_key_id: 5}
+    - {family: ipv6, if_name: GigabitEthernet0/0, default_originate: true, default_originate_metric: 3, metric_offset: 2, summary: ["2001:db8:10::/48"], split_horizon: poisoned_reverse}
+    - {family: ipv6, if_name: GigabitEthernet0/1, default_originate: "", split_horizon: poisoned_reverse, prefix_list_out: PL6-SAMPLE-OUT}
+  rip_redistribute:
+    - {family: ipv4, source: static, metric: 2, filter: RM-SAMPLE-RIP}
+    - {family: ipv4, source: ospf, process_id: 1}
+    - {family: ipv4, source: bgp, process_id: "", metric: 5}
+    - {family: ipv6, source: static, metric: 2}
+    - {family: ipv6, source: ospf, process_id: 1, filter: RM-SAMPLE-RIP}
+unknown:
+  - "ipv6 rip other enable"
+  - "ipv6 rip sample default-information only"
+  - "ip rip send version 2"
+  - "distance 140"
+  - "neighbor 192.0.2.2"
+  - "offset-list 10 in 2 GigabitEthernet0/0"
+ignored_min: 1

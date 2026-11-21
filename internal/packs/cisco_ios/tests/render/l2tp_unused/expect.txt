@@ -1,0 +1,39 @@
+hostname rt-c06
+!
+vpdn enable
+!
+bba-group pppoe lac-sample
+ virtual-template 2
+!
+vpdn-group lac-sample
+ request-dialin
+  protocol l2tp
+  domain example.com
+ initiate-to ip 198.51.100.1
+ no l2tp tunnel authentication
+!
+vpdn-group lns-sample
+ accept-dialin
+  protocol l2tp
+  virtual-template 1
+ no l2tp tunnel authentication
+!
+username example-user password 0 dummy-l2tp-user-secret-1
+!
+interface GigabitEthernet0/3
+ pppoe enable group lac-sample
+ no shutdown
+!
+interface Loopback0
+ ip address 203.0.113.1 255.255.255.255
+ no shutdown
+!
+interface Virtual-Template1
+ ip unnumbered Loopback0
+ ppp authentication chap
+ no shutdown
+!
+interface Virtual-Template2
+ no shutdown
+!
+end

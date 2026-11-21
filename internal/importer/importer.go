@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/kojio145/configchief/internal/conftree"
@@ -96,6 +97,9 @@ func (c Count) Covered() float64 {
 }
 
 type run struct {
+	// whenHeld tells deriveItem that the "when" of the step was asked and
+	// held already (deriveOne).
+	whenHeld bool
 	p      *pack.Pack
 	sc     *schema.Set // nil: no table definitions, nothing is checked
 	file   string
@@ -382,6 +386,9 @@ type write struct {
 	col    string
 	vals   []string // one value, or the items of an `append`
 	append bool
+	// replace drops what the list held before the items are added (the
+	// "replace" of adapt.yaml).
+	replace bool
 }
 
 // fire carries out a rule that hit a line. Every value is worked out before
@@ -677,13 +684,15 @@ func (x *run) match(args []any, kwargs map[string]any) ([]*model.Row, error) {
 	// The rows of the design data hold their values in the way of writing of
 	// the column: what is looked for is brought to it too.
 	want := map[string]string{}
+	isList := map[string]bool{}
 	def, _ := x.table(name)
 	for _, c := range cols {
 		if kwargs[c] == nil {
 			continue
 		}
 		want[c] = fmt.Sprint(kwargs[c])
-		if col := def.Column(c); col != nil && !col.List {
+		if col := def.Column(c); col != nil {
+			isList[c] = col.List
 			if v, err := x.one(def, col, want[c]); err == nil {
 				want[c] = v
 			}
@@ -693,7 +702,26 @@ func (x *run) match(args []any, kwargs map[string]any) ([]*model.Row, error) {
 	for _, r := range t.Rows {
 		ok := true
 		for _, c := range cols {
-			if want[c] == "" || r.Get(c) != want[c] {
+			if want[c] == "" {
+				ok = false
+				break
+			}
+			// A column that holds a list is hit by a row that has the value
+			// among its items (appendix B 3.6).
+			if isList[c] {
+				has := false
+				if cell := r.Cells[c]; cell != nil {
+					for _, v := range cell.Values {
+						has = has || v == want[c]
+					}
+				}
+				if !has {
+					ok = false
+					break
+				}
+				continue
+			}
+			if r.Get(c) != want[c] {
 				ok = false
 				break
 			}
@@ -796,7 +824,7 @@ func (x *run) fnCovering(args []any, _ map[string]any) (any, error) {
 func (x *run) derive() {
 	for _, d := range x.p.Derives {
 		t := x.ds.Tables[d.For]
-		if t == nil {
+		if t == nil || !x.onlyIf(d) {
 			continue
 		}
 		for _, src := range append([]*model.Row{}, t.Rows...) {
@@ -901,7 +929,7 @@ func (x *run) back(lines []int, reason string) {
 
 func (x *run) deriveOne(d *pack.Derive, src *model.Row) error {
 	vars := map[string]any{d.As: workRec{src, x}, "device": x.device}
-	for _, kv := range d.Let {
+	let := func(kv model.KV) error {
 		v, err := x.eng.Eval(kv.Value, vars)
 		if err != nil {
 			return fmt.Errorf("let %s（%s）: %w", kv.Name, kv.Value, err)
@@ -911,8 +939,139 @@ func (x *run) deriveOne(d *pack.Derive, src *model.Row) error {
 			v = rowRec{}
 		}
 		vars[kv.Name] = v
+		return nil
 	}
-	if d.When != "" {
+	// Most rows of a table are not what a step is for: its "when" says no.
+	// So the values of "let" that "when" reads are worked out first, and the
+	// others only for a row the step takes. What a value of "let" looked at
+	// counts only when the step makes a row (touched), so a row the step
+	// leaves is the same either way. (With "each" the "when" is asked for
+	// every item, after all of "let".)
+	if d.When != "" && d.Each == "" && len(d.Let) > 0 {
+		need := whenNeeds(d)
+		for i, kv := range d.Let {
+			if need[i] {
+				if err := let(kv); err != nil {
+					return err
+				}
+			}
+		}
+		v, err := x.eng.Eval(d.When, vars)
+		if err != nil {
+			return fmt.Errorf("when（%s）: %w", d.When, err)
+		}
+		if !tmpl.Truth(v) {
+			return nil
+		}
+		for i, kv := range d.Let {
+			if !need[i] {
+				if err := let(kv); err != nil {
+					return err
+				}
+			}
+		}
+		x.whenHeld = true
+		defer func() { x.whenHeld = false }()
+		return x.deriveItem(d, src, vars, false)
+	}
+	for _, kv := range d.Let {
+		if err := let(kv); err != nil {
+			return err
+		}
+	}
+	return x.deriveItem(d, src, vars, false)
+}
+
+// onlyIf tells whether a step runs for the device at all: its "only_if",
+// asked once before the rows (appendix B 3.6). What the expression looks at
+// is not counted as used (no row is being made). An expression that cannot
+// be worked out lets the step run: its own "when" decides then.
+func (x *run) onlyIf(d *pack.Derive) bool {
+	if d.OnlyIf == "" {
+		return true
+	}
+	v, err := x.eng.Eval(d.OnlyIf, map[string]any{"device": x.device})
+	if err != nil {
+		x.warnf("%s: only_if（%s）: %v", d.ID, d.OnlyIf, err)
+		return true
+	}
+	return tmpl.Truth(v)
+}
+
+// whenNeeds tells which values of "let" the "when" of a step reads, by
+// itself or through another value of "let" (by the names in the text of the
+// expressions: a name that only looks like one costs a value worked out too
+// early, nothing else). A value that needs one that stands after it is
+// taken as it comes, in the order of the step.
+func whenNeeds(d *pack.Derive) []bool {
+	if v, ok := whenNeed.Load(d); ok {
+		return v.([]bool)
+	}
+	need := make([]bool, len(d.Let))
+	names := func(text string, mark func(int)) {
+		for i, kv := range d.Let {
+			if !need[i] && hasName(text, kv.Name) {
+				mark(i)
+			}
+		}
+	}
+	var mark func(int)
+	mark = func(i int) {
+		need[i] = true
+		names(d.Let[i].Value, mark)
+	}
+	names(d.When, mark)
+	// A value "when" needs may read one that is not needed and stands
+	// before it only through a name: the walk above took those too. What is
+	// left is worked out after "when", in the order of the step; one of
+	// them never stands before a needed one that reads it.
+	whenNeed.Store(d, need)
+	return need
+}
+
+var whenNeed sync.Map // *pack.Derive → []bool
+
+// hasName tells whether the text holds the name as a word of its own.
+func hasName(text, name string) bool {
+	for from := 0; ; {
+		i := strings.Index(text[from:], name)
+		if i < 0 {
+			return false
+		}
+		i += from
+		j := i + len(name)
+		before := i == 0 || !isWord(text[i-1])
+		after := j == len(text) || !isWord(text[j])
+		if before && after {
+			return true
+		}
+		from = i + 1
+	}
+}
+
+func isWord(c byte) bool {
+	return c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+// deriveItem is the part of a derive after its "let": once for the row, or,
+// with "each", once for every item of the list (each tells that vars holds
+// an item).
+func (x *run) deriveItem(d *pack.Derive, src *model.Row, vars map[string]any, each bool) error {
+	if d.Each != "" && !each {
+		v, err := x.eng.Eval(d.Each, vars)
+		if err != nil {
+			return fmt.Errorf("each %s（%s）: %w", d.EachAs, d.Each, err)
+		}
+		list, _ := v.([]any)
+		for i, item := range list {
+			vars[d.EachAs], vars[d.EachAs+"_n"] = item, i+1
+			if err := x.deriveItem(d, src, vars, true); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if d.When != "" && !x.whenHeld {
 		v, err := x.eng.Eval(d.When, vars)
 		if err != nil {
 			return fmt.Errorf("when（%s）: %w", d.When, err)
@@ -940,6 +1099,17 @@ func (x *run) deriveOne(d *pack.Derive, src *model.Row) error {
 		for _, c := range d.Clear {
 			delete(src.Cells, c)
 		}
+		if d.Drop != nil {
+			key, err := x.key(d.Drop.Table, d.Drop.Key, vars)
+			if err != nil {
+				return err
+			}
+			if t := x.ds.Tables[d.Drop.Table]; t != nil {
+				if r := t.Find(key); r != nil {
+					x.ds.Remove(r)
+				}
+			}
+		}
 		return nil
 	}
 	key, err := x.key(d.Row.Table, d.Row.Key, vars)
@@ -966,6 +1136,27 @@ func (x *run) deriveOne(d *pack.Derive, src *model.Row) error {
 			return err
 		}
 		writes = append(writes, write{col: col, vals: vals, append: i >= len(d.Set)})
+	}
+	// A list that is put anew (adapt.yaml): its items are told like those of
+	// "append", and an empty value leaves the column empty.
+	for _, s := range d.Replace {
+		col, err := x.eng.Expand(s.Name, vars)
+		if err != nil {
+			return fmt.Errorf("列の名前（%s）: %w", s.Name, err)
+		}
+		val, err := x.eng.Expand(s.Value, vars)
+		if err != nil {
+			return fmt.Errorf("%s（%s）: %w", col, s.Value, err)
+		}
+		w := write{col: col, append: true, replace: true}
+		if strings.TrimSpace(val) != "" {
+			if w.vals, err = x.values(into, col, val, true); err != nil {
+				return err
+			}
+		} else if t, _ := x.table(into.Table); t != nil && (t.Column(col) == nil || !t.Column(col).List) {
+			return fmt.Errorf("replace は値を並べる列に書きます（%s の %s）", into.Table, col)
+		}
+		writes = append(writes, w)
 	}
 
 	// The origin of the new values: the line that opened each row the derive
@@ -1004,6 +1195,9 @@ func (x *run) deriveOne(d *pack.Derive, src *model.Row) error {
 
 	row := x.ds.Open(d.Row.Table, key, first)
 	for _, w := range writes {
+		if w.replace {
+			delete(row.Cells, w.col)
+		}
 		if w.append {
 			for _, v := range w.vals {
 				row.Append(w.col, v, item)
@@ -1059,7 +1253,7 @@ func Adapt(p *pack.Pack, sc *schema.Set, ds *model.Dataset, device string) ([]No
 	x.eng.SetFunc("covering", x.fnCovering)
 	for _, d := range p.Adapts {
 		t := ds.Tables[d.For]
-		if t == nil {
+		if t == nil || !x.onlyIf(d) {
 			continue
 		}
 		for _, src := range append([]*model.Row{}, t.Rows...) {

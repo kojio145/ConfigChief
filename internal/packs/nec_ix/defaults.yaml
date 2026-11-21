@@ -2,8 +2,10 @@
 # the command reference (the page of the book, or the section of cmdref, is
 # named on each line).
 defaults:
+  # A port of the built-in switch works unless "port <n> shutdown" (CRM p.3-12).
+  - {table: interfaces, column: enabled, value: true, when: "':port' in row.name"}  # CRM p.3-12
   # An interface is stopped until "no shutdown" (CRM p.3-6).
-  - {table: interfaces, column: enabled, value: false, when: "row.kind in ['physical', 'subif', 'tunnel']"}  # CRM p.3-6
+  - {table: interfaces, column: enabled, value: false, when: "row.kind in ['physical', 'subif', 'tunnel', 'bvi']"}  # CRM p.3-6
   # Loopback and Null show neither "shutdown" nor "no shutdown" (cmdref,
   # note 1: the lines stand on Ethernet and tunnel interfaces only). They are
   # taken as working: that is a reading of the note, not a sentence of the
@@ -27,10 +29,23 @@ defaults:
   - {table: tracks, column: fail_count, value: 6, when: "row.type == 'icmp'"}     # CRM p.17-21
   - {table: tracks, column: restore_count, value: 1, when: "row.type == 'icmp'"}  # CRM p.17-22
   - {table: pppoe, column: auth, value: chap_pap}               # cmdref 4.12
-  - {table: ipsec_tunnels, column: ike_encryption, value: des}  # CRM p.13-43
-  - {table: ipsec_tunnels, column: ike_hash, value: md5}        # CRM p.13-43
-  - {table: ipsec_tunnels, column: ike_dh, value: dh1}          # CRM p.13-43
-  - {table: ipsec_tunnels, column: ike_lifetime, value: 28800}  # CRM p.13-43
+  # IKE version 1 (CRM p.13-43). With version 2 an empty proposal is left to
+  # the device, which offers all it has (appendix A 3.20); its lifetimes are
+  # those of CRM p.13-55 and p.13-62.
+  - {table: ipsec_tunnels, column: ike_encryption, value: des, when: "(row.ike_version | string) != '2'"}
+  - {table: ipsec_tunnels, column: ike_hash, value: md5, when: "(row.ike_version | string) != '2'"}
+  - {table: ipsec_tunnels, column: ike_dh, value: dh1, when: "(row.ike_version | string) != '2'"}
+  - {table: ipsec_tunnels, column: ike_lifetime, value: 28800, when: "(row.ike_version | string) != '2'"}
+  - {table: ipsec_tunnels, column: ike_lifetime, value: 86400, when: "(row.ike_version | string) == '2'"}
+  - {table: ipsec_tunnels, column: ipsec_lifetime, value: 28800, when: "(row.ike_version | string) == '2'"}
+  # A tunnel interface carries the tunnel mode ("ipsec policy tunnel",
+  # CRM p.13-30; "ipsec-mode", CRM p.13-57).
+  - {table: ipsec_tunnels, column: ipsec_mode, value: tunnel}
+  # How the peer is watched is not chosen on this device: version 1 asks
+  # only while nothing comes from the peer, version 2 at every interval
+  # (the description of the functions, chapter 2.38).
+  - {table: ipsec_tunnels, column: dpd_mode, value: on_demand, when: "(row.ike_version | string) != '2' and row.dpd_interval"}
+  - {table: ipsec_tunnels, column: dpd_mode, value: periodic, when: "(row.ike_version | string) == '2' and row.dpd_interval"}
   - {table: dhcp_pools, column: lease, value: 4h}               # CRM p.8-50 (14400 seconds)
   # Not a default of the device: it has one kind of access list, which the
   # import takes as the extended kind (import/40_policy.yaml).
@@ -42,3 +57,22 @@ defaults:
   # has the hashed form, which the import marks).
   - {table: users, column: secret_form, value: plain, when: "row.secret"}
   - {table: qos_classes, column: match, value: all}             # CRM p.14-16
+  # A tunnel of L2TP has no password until "l2tp password" (CRM p.12-11):
+  # with one the other side is authenticated, without one it is not. That
+  # is a reading of the command, not a sentence of the manual (README).
+  - {table: l2tp_groups, column: tunnel_auth, value: true, when: "row.password"}
+  - {table: l2tp_groups, column: tunnel_auth, value: false, when: "not row.password"}
+  # A LAG of the built-in switch is static: the device has no LACP (FD p.2-20).
+  - {table: lags, column: mode, value: "on"}                    # FD p.2-20
+  # CRM p.9-16 ("ipv6 prefix"): 30 days and 7 days, both flags off.
+  - {table: ipv6_ra_prefixes, column: valid_lifetime, value: 2592000}
+  - {table: ipv6_ra_prefixes, column: preferred_lifetime, value: 604800}
+  - {table: ipv6_ra_prefixes, column: on_link, value: false}
+  - {table: ipv6_ra_prefixes, column: autonomous, value: false}
+  # CRM p.10-7 ("auto-summary"): off.
+  - {table: rip_processes, column: auto_summary, value: false, when: "row.family == 'ipv4'"}
+  # IPv6 VRRP: the same lines as IPv4 (CRM p.16-4 priority 100 and preempt
+  # mode, p.16-5 advertisement 1 second).
+  - {table: ipv6_fhrp, column: priority, value: 100}
+  - {table: ipv6_fhrp, column: preempt, value: true}
+  - {table: ipv6_fhrp, column: advert_interval, value: 1000}

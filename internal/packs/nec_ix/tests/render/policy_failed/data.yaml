@@ -11,10 +11,13 @@ tables:
   acl_entries:
     - {acl: acl-sample-std, seq: 10, action: permit, protocol: ip, src: 192.0.2.0/24, dst: any}
     - {acl: acl-sample-toolong1, seq: 10, action: permit, protocol: ip, src: any, dst: any}
-    - {acl: acl-sample-seq, seq: 5, action: remark, remark: sample remark}                                              # not numbered by tens, and a remark
-    - {acl: acl-sample-seq, seq: 20, action: permit, protocol: esp, src: any, dst: any}                                 # a protocol that is not read back
-    - {acl: acl-sample-seq, seq: 30, action: permit, protocol: tcp, src: any, dst: any, dst_port: 8000-8080}            # a range of ports
-    - {acl: acl-sample-seq, seq: 40, action: permit, protocol: tcp, src: any, dst: any, flags: [established]}           # an option
+    - {acl: acl-sample-seq, seq: 10, action: remark, remark: sample remark}                                             # a remark
+    - {acl: acl-sample-seq, seq: 20, action: permit, protocol: ospf, src: any, dst: any}                                # a protocol without a confirmed number
+    - {acl: acl-sample-seq, seq: 30, action: permit, protocol: tcp, src: any, dst: any, flags: [log]}                   # the device does not log by entry
+    - {acl: acl-sample-seq, seq: 40, action: permit, protocol: ip, src: any, dst: any, time_range: tr-sample}           # no time range
+    - {acl: acl-sample-seq, seq: 50, action: permit, protocol: icmp, src: any, dst: any, icmp_type: traceroute}         # a message the device has no name for
+    - {acl: acl-sample-seq, seq: 60, action: permit, protocol: tcp, src: any, dst: any, flags: [ack, syn]}              # two TCP flags
+    - {acl: acl-sample-seq, seq: 70, action: permit, protocol: udp, src: any, dst: any, icmp_type: echo}                # an ICMP type on another protocol
   prefix_lists:
     - {name: PL-SAMPLE-IN, seq: 5, action: permit, prefix: 0.0.0.0/0}                                                   # the device keeps the name in small letters
 findings: [G-601]

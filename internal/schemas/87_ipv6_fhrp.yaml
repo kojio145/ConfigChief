@@ -1,0 +1,16 @@
+table: ipv6_fhrp
+title: {ja: 冗長化（IPv6 の VRRP）, en: FHRP (IPv6 VRRP)}
+since: M7
+key: [device, if_name, group]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: if_name, title: {ja: IF 名, en: Interface}, type: ifname, required: true}
+  - {name: group, title: {ja: グループ番号, en: Group}, type: int, min: 1, max: 255, required: true, note: {ja: "IPv6 の VRRP は版 3（VRRPv3）。NEC IX は、IPv4 の VRRP と同じ番号を機器の中で使えない", en: "IPv6 VRRP is version 3 (VRRPv3). NEC IX cannot use a number of IPv4 VRRP again on the device"}}
+  - {name: link_local, title: {ja: 仮想リンクローカルアドレス, en: Virtual link-local address}, type: ip6, required: true, note: {ja: "例 fe80::1。同じグループの機器で同じ値にする", en: "e.g. fe80::1. The same on every device of the group"}}
+  - {name: addresses, title: {ja: 仮想グローバルアドレス, en: Virtual global addresses}, type: "list<ip6>", note: {ja: "長さを付けずに書く（例 2001:db8:0:1::1）", en: "Without the prefix length (e.g. 2001:db8:0:1::1)"}}
+  - {name: priority, title: {ja: 優先度, en: Priority}, type: int, min: 1, max: 254, explicit: true}
+  - {name: preempt, title: {ja: 切り戻し, en: Preempt}, type: bool, explicit: true}
+  - {name: preempt_delay, title: {ja: 切り戻し待ち（秒）, en: Preempt delay (s)}, type: int}
+  - {name: advert_interval, title: {ja: 広告間隔（ミリ秒）, en: Advertisement interval (ms)}, type: int, min: 10, max: 40000, explicit: true, note: {ja: "IPv4 の冗長化（秒）と単位が違う。例 1000 = 1 秒", en: "Not seconds as in IPv4. e.g. 1000 = 1 second"}}
+  - {name: track, title: {ja: 回線監視, en: Track}, type: ref, ref: tracks.id}
+  - {name: track_decrement, title: {ja: 監視断のときの減点, en: Track decrement}, type: int, min: 1, max: 255}

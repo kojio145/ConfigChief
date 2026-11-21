@@ -1,0 +1,24 @@
+# The rest of PPPoE, appendix A 3.26 (made-up values): the words after the
+# pool number, a service name with a space, authentication in both
+# directions, what starts a call, a password in the encrypted form of the
+# device, and the ports that take PPPoE for a LAC.
+tables:
+  devices:
+    - hostname: rt-e12
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true}
+    - {name: GigabitEthernet0/1, enabled: true}
+    - {name: GigabitEthernet0/2, enabled: true}
+    - {name: Dialer1, enabled: true, ipv4: negotiated}
+    - {name: Dialer2, enabled: true, ipv4: negotiated}
+    - {name: Virtual-Template1, enabled: true}
+  acls:
+    - {name: 10, type: standard}
+  acl_entries:
+    - {acl: 10, seq: 10, action: permit, src: 198.51.100.0/24}
+  pppoe:
+    - {name: Dialer1, physical_if: GigabitEthernet0/0, logical_if: Dialer1, username: example-user@example.net, password: "7 dummy7sample1A2B3C", auth: chap, auth_both: true, service_name: sample service a, on_demand: true, restart_delay: 30, mac_override: true, dial_trigger: ip}
+    - {name: Dialer2, physical_if: GigabitEthernet0/1, logical_if: Dialer2, username: sample-user@example.net, password: dummy-ppp-password-b, auth: pap, service_name: sample-b, dial_trigger: 10}
+  l2tp_groups:
+    - {name: lac-sample, role: lac, peer_address: 203.0.113.50, tunnel_auth: false, domains: [example.net], access_ifs: [GigabitEthernet0/2], logical_ifs: [Virtual-Template1], auth: chap}

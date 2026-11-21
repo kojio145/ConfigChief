@@ -1,0 +1,68 @@
+hostname rt-q01
+!
+vrf definition cust-a
+ address-family ipv4
+ exit-address-family
+!
+crypto keyring KR-SAMPLE-VT
+ pre-shared-key address 0.0.0.0 0.0.0.0 key dummy-psk-sample-vt
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp key dummy-psk-sample-name hostname rt-q09.example.com
+crypto isakmp key dummy-psk-sample-c address 203.0.113.40
+!
+crypto isakmp profile ISAKMP-SAMPLE-VT
+ keyring KR-SAMPLE-VT
+ match identity address 0.0.0.0
+ virtual-template 1
+!
+crypto ipsec transform-set TS-SAMPLE esp-aes 256 esp-sha256-hmac
+!
+crypto ipsec profile PROF-SAMPLE-VT
+ set transform-set TS-SAMPLE
+!
+crypto ipsec profile PROF-SAMPLE
+ set transform-set TS-SAMPLE
+!
+interface GigabitEthernet0/0
+ description sample-wan
+ ip address 203.0.113.9 255.255.255.248
+!
+interface GigabitEthernet0/1
+ description sample-lan
+ ip address 192.0.2.1 255.255.255.128
+!
+interface GigabitEthernet0/2
+ description sample-lan-cust-a
+ vrf forwarding cust-a
+ ip address 192.0.2.129 255.255.255.128
+!
+interface Tunnel1
+ ip unnumbered GigabitEthernet0/1
+ tunnel source GigabitEthernet0/0
+ tunnel mode ipsec ipv4
+ tunnel destination rt-q09.example.com
+ tunnel protection ipsec profile PROF-SAMPLE
+!
+interface Tunnel2
+ vrf forwarding cust-a
+ ip unnumbered GigabitEthernet0/2
+ tunnel source GigabitEthernet0/0
+ tunnel mode ipsec ipv4
+ tunnel destination 203.0.113.40
+ tunnel protection ipsec profile PROF-SAMPLE
+!
+interface Virtual-Template1 type tunnel
+ ip unnumbered GigabitEthernet0/1
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-SAMPLE-VT
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.14
+ip route 198.51.100.128 255.255.255.128 Tunnel1
+ip route vrf cust-a 198.51.100.0 255.255.255.128 Tunnel2
+!
+end

@@ -1,0 +1,20 @@
+# QoS of another vendor that has no line on this device and nothing near it
+# (made-up values; appendix A 3.26): shaping to the peak or by percent,
+# policing by percent, WRED, the unit of a queue limit. The values are told
+# as not used (G-602); a person decides.
+tables:
+  devices:
+    - hostname: ix-q24
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.29/30}
+  qos_classes:
+    - {name: cm-u-a, match: any}
+  qos_class_matches:
+    - {class: cm-u-a, seq: 10, cos: [3]}
+  qos_policies:
+    - {policy: pm-u-out, class: cm-u-a, seq: 10, shape_mode: peak, shape_percent: 30, random_detect: dscp, queue_limit: [64], queue_limit_unit: ms}
+    - {policy: pm-u-out, class: default, seq: 20, police_percent: 10, police_violate: drop}
+  qos_bindings:
+    - {if_name: GigaEthernet0.0, direction: output, policy: pm-u-out}
+findings: [G-602]

@@ -8,6 +8,19 @@ ip router ospf {{ p.process_id }}
 {% if p.router_id %}
   router-id {{ p.router_id }}
 {% endif %}
+{% if p.distance_intra != '' or p.distance_inter != '' or p.distance_external != '' %}
+  distance{{ ' external ' ~ p.distance_external if p.distance_external != '' else '' }}{{ ' inter-area ' ~ p.distance_inter if p.distance_inter != '' else '' }}{{ ' intra-area ' ~ p.distance_intra if p.distance_intra != '' else '' }}
+{% endif %}
+{% if p.filter_in_acl %}
+{{ fail(what ~ ': 「経路表に入れる経路の絞り込み（ACL）」は書けません（NEC IX は、プレフィックスリストか経路制御の方針で絞ります。同じ宛先を通すプレフィックスリストを作って、そちらの列に書いてください）') }}
+{% endif %}
+{% if p.filter_in_prefix_list and p.filter_in_policy %}
+{{ fail(what ~ ': 「経路表に入れる経路の絞り込み」は、プレフィックスリストと経路制御の方針のどちらか 1 つだけ書けます') }}
+{% elif p.filter_in_prefix_list %}
+  distribute-list prefix {{ p.filter_in_prefix_list }}
+{% elif p.filter_in_policy %}
+  distribute-list route-map {{ p.filter_in_policy }}
+{% endif %}
 {% for a in t.ospf_areas %}
 {% if a.process_id == p.process_id %}
 {% if a.type in ['stub', 'totally_stub'] %}
@@ -22,15 +35,20 @@ ip router ospf {{ p.process_id }}
   area {{ r.area }} range {{ r.prefix }} {{ 'not-advertise' if r.advertise == false else 'advertise' }}
 {% endif %}
 {% endfor %}
+{% for v in t.ospf_virtual_links %}
+{% if v.process_id == p.process_id %}
+  area {{ v.area }} virtual-link {{ v.router_id }}{{ ' dead-interval ' ~ v.dead if v.dead != '' else '' }}{{ ' hello-interval ' ~ v.hello if v.hello != '' else '' }}
+{% endif %}
+{% endfor %}
 {% for r in t.ospf_redistribute %}
 {% if r.process_id == p.process_id %}
-  redistribute {{ r.source }}{{ ' metric ' ~ r.metric if r.metric != '' else '' }}{{ ' metric-type ' ~ r.metric_type if r.metric_type else '' }}{{ ' route-map ' ~ r.filter if r.filter else '' }}
+  redistribute {{ r.source }}{{ ' metric ' ~ r.metric if r.metric != '' else '' }}{{ ' metric-type ' ~ r.metric_type if r.metric_type else '' }}{{ ' tag ' ~ r.tag if r.tag != '' else '' }}{{ ' route-map ' ~ r.filter if r.filter else '' }}
 {% endif %}
 {% endfor %}
 {% if p.default_originate in ['when_present', 'always'] %}
-  originate-default{{ ' always' if p.default_originate == 'always' else '' }}{{ ' metric ' ~ p.default_metric if p.default_metric != '' else '' }}
-{% elif p.default_metric != '' %}
-{{ fail(what ~ ' の広告のメトリックは、デフォルト経路の広告が when_present か always のときだけ書けます') }}
+  originate-default{{ ' always' if p.default_originate == 'always' else '' }}{{ ' metric ' ~ p.default_metric if p.default_metric != '' else '' }}{{ ' metric-type ' ~ p.default_metric_type if p.default_metric_type else '' }}{{ ' route-map ' ~ p.default_filter if p.default_filter else '' }}
+{% elif p.default_metric != '' or p.default_metric_type or p.default_filter %}
+{{ fail(what ~ ' の広告のメトリック・メトリックの種類・条件は、デフォルト経路の広告が when_present か always のときだけ書けます') }}
 {% endif %}
 {% if p.passive_default == true %}
 {{ fail(what ~ ' の「既定を受動にする」は書けません（NEC IX にありません。受動にするインタフェースの行で「受動」を有効にしてください）') }}
@@ -76,5 +94,16 @@ ip router ospf {{ p.process_id }}
 {% endfor %}
 {% if not n.seen %}
 {{ fail('OSPF インタフェース ' ~ o.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{% for v in t.ospf_virtual_links %}
+{% set known = namespace(v=false) %}
+{% for p in t.ospf_processes %}
+{% if p.process_id == v.process_id %}
+{% set known.v = true %}
+{% endif %}
+{% endfor %}
+{% if not known.v %}
+{{ fail('OSPF バーチャルリンク ' ~ v.router_id ~ ' のプロセス番号 ' ~ v.process_id ~ ' が、OSPF の表にありません') }}
 {% endif %}
 {% endfor %}

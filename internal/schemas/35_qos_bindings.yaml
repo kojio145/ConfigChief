@@ -10,3 +10,4 @@ columns:
   - {name: shape_bps, title: {ja: IF 全体を絞る速さ（bps）, en: Interface shape (bps)}, type: int, min: 1, note: {ja: "出力だけ", en: "Output only"}}
   - {name: shape_bc, title: {ja: IF 全体の通常バースト（ビット）, en: Interface shape Bc (bits)}, type: int, min: 1}
   - {name: shape_be, title: {ja: IF 全体の超過バースト（ビット）, en: Interface shape Be (bits)}, type: int, min: 0}
+  - {name: ngn_default, title: {ja: NGN 用の既定のポリシー, en: NGN default policy}, type: bool, note: {ja: "機器が持つ NGN 用のポリシーを当てる（ポリシー名は空にする）", en: "Applies the policy the device has for NGN (leave the policy name empty)"}}

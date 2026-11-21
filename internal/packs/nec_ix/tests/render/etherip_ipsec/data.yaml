@@ -1,0 +1,26 @@
+# EtherIP with IPsec and over IPv6 (made-up values; appendix A 3.20 and
+# 3.26). expect.txt is the configuration the tables must turn into: an
+# EtherIP tunnel that a row of IPsec protects (transport mode; IKE version 1
+# with a map on the tunnel and "with-id-payload", version 2 with the mode
+# "ether-ip ipsec-ikev2"), and EtherIP over IPv6.
+tables:
+  devices:
+    - hostname: ix-f02
+      vendor: nec_ix
+  l2_settings:
+    - {bridge_irb: true}
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.61/30, ipv6: ["2001:db8:0:61::1/64"]}
+    - {name: GigaEthernet1.0, enabled: true, bridge_group: 1}
+    - {name: Tunnel0.0, enabled: true, bridge_group: 1}
+    - {name: Tunnel1.0, enabled: true, bridge_group: 1}
+    - {name: Tunnel2.0, enabled: true, bridge_group: 1}
+  tunnels:
+    - {if_name: Tunnel0.0, type: etherip}
+    - {if_name: Tunnel1.0, type: etherip, source: GigaEthernet0.0, destination: 203.0.113.69}
+    - {if_name: Tunnel2.0, type: etherip, source: "2001:db8:0:61::1", destination_v6: "2001:db8:0:65::1"}
+  ipsec_tunnels:
+    - {name: Tunnel0.0, style: tunnel_if, tunnel_if: Tunnel0.0, peer_address: 203.0.113.65, ike_version: 1, ike_mode: aggressive, local_id: "keyid:sample-eip", psk: dummy-psk-sample-eip, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha256, ipsec_mode: transport, pfs: none, ipsec_lifetime: 3600}
+    - {name: Tunnel1.0, style: tunnel_if, tunnel_if: Tunnel1.0, peer_address: 203.0.113.69, ike_version: 2, local_id: "keyid:sample-site-a", remote_id: "keyid:sample-site-b", psk: dummy-psk-sample-a, psk_remote: dummy-psk-sample-b, ike_lifetime: 86400, ipsec_mode: transport, ipsec_lifetime: 28800, always_on: true}
+  ipsec_selectors:
+    - {tunnel: Tunnel0.0, seq: 10, local_net: 192.0.2.2/32, remote_net: 0.0.0.0/0, protocol: ip}

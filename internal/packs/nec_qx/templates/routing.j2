@@ -1,0 +1,274 @@
+{# Static routes and OSPF (README, "コンフィグの書き出し"). #}
+{% for r in t.static_routes %}
+{% if not r.next_hop and not r.out_if %}
+{{ fail('スタティック経路 ' ~ r.prefix ~ ': ネクストホップか出力 IF が要ります') }}
+{% endif %}
+{% if (r.permanent == true or r.track) and (r.out_if or not r.next_hop) %}
+{{ fail('スタティック経路 ' ~ r.prefix ~ ': 「IF が落ちても残す」「回線監視」は、ネクストホップだけの経路に書けます') }}
+{% endif %}
+{% if r.permanent == true and r.track %}
+{{ fail('スタティック経路 ' ~ r.prefix ~ ': 「IF が落ちても残す」と「回線監視」は、同時には書けません') }}
+{% endif %}
+ ip route-static {{ 'vpn-instance ' ~ r.vrf ~ ' ' if r.vrf else '' }}{{ r.prefix | ip }} {{ r.prefix | prefixlen }}{{ ' ' ~ ('NULL0' if r.out_if | lower == 'null0' else r.out_if) if r.out_if else '' }}{{ ' ' ~ r.next_hop if r.next_hop else '' }}{{ ' permanent' if r.permanent == true else '' }}{{ ' track ' ~ r.track if r.track else '' }}{{ ' preference ' ~ r.distance if r.distance != '' else '' }}{{ ' tag ' ~ r.tag if r.tag != '' else '' }}{{ ' description ' ~ r.description if r.description else '' }}
+{% endfor %}
+{% if t.static_routes %}
+#
+{% endif %}
+{% for p in t.ospf_processes %}
+ospf {{ p.process_id }}{{ ' router-id ' ~ p.router_id if p.router_id else '' }}{{ ' vpn-instance ' ~ p.vrf if p.vrf else '' }}
+{% if p.reference_bandwidth != '' %}
+ bandwidth-reference {{ p.reference_bandwidth }}
+{% endif %}
+{% if p.default_originate in ['when_present', 'always'] %}
+ default-route-advertise{{ ' always' if p.default_originate == 'always' else '' }}{{ ' cost ' ~ p.default_metric if p.default_metric != '' else '' }}
+{% elif p.default_metric != '' %}
+{{ fail('OSPF ' ~ p.process_id ~ ': 「デフォルト経路のメトリック」は、「デフォルト経路の広告」があるときだけ書けます') }}
+{% endif %}
+{% for r in t.ospf_redistribute %}
+{% if r.process_id == p.process_id %}
+{% if r.source not in ['connected', 'static', 'bgp', 'rip'] %}
+{{ fail('OSPF ' ~ p.process_id ~ ' の再配布: 元「' ~ r.source ~ '」は書けません') }}
+{% endif %}
+ import-route {{ 'direct' if r.source == 'connected' else r.source }}{{ ' cost ' ~ r.metric if r.metric != '' else '' }}{{ ' tag ' ~ r.tag if r.tag != '' else '' }}{{ ' type ' ~ r.metric_type if r.metric_type else '' }}{{ ' route-policy ' ~ r.filter if r.filter else '' }}
+{% endif %}
+{% endfor %}
+{% if p.passive_default == true %}
+ silent-interface all
+{% elif p.passive_default == false %}
+{{ fail('OSPF ' ~ p.process_id ~ ': 「既定で受動」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% set areas = namespace(ids=[]) %}
+{% for o in t.ospf_interfaces %}
+{% if o.process_id == p.process_id %}
+{% if o.passive == true and p.passive_default != true %}
+ silent-interface {{ o.if_name }}
+{% elif o.passive == false and p.passive_default == true %}
+ undo silent-interface {{ o.if_name }}
+{% endif %}
+{% set a = o.area | required(o.if_name ~ ' の OSPF のエリア') | string %}
+{% if a not in areas.ids %}
+{% set areas.ids = areas.ids + [a] %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for x in t.ospf_areas %}
+{% if x.process_id == p.process_id and x.area | string not in areas.ids %}
+{% set areas.ids = areas.ids + [x.area | string] %}
+{% endif %}
+{% endfor %}
+{% for x in t.ospf_ranges %}
+{% if x.process_id == p.process_id and x.area | string not in areas.ids %}
+{% set areas.ids = areas.ids + [x.area | string] %}
+{% endif %}
+{% endfor %}
+{% for a in areas.ids %}
+ area {{ a }}
+{% for o in t.ospf_interfaces %}
+{% if o.process_id == p.process_id and o.area | string == a %}
+{% set net = namespace(ip='') %}
+{% for i in t.interfaces %}
+{% if i.name == o.if_name and i.ipv4 is cidr %}
+{% set net.ip = i.ipv4 | ip %}
+{% endif %}
+{% endfor %}
+{% if not net.ip %}
+{{ fail('OSPF ' ~ p.process_id ~ ': ' ~ o.if_name ~ ' に固定の IPv4 アドレスがありません（QX は、IF のアドレスを network の行で指して OSPF を有効にします）') }}
+{% endif %}
+  network {{ net.ip }} 0.0.0.0
+{% endif %}
+{% endfor %}
+{% for x in t.ospf_areas %}
+{% if x.process_id == p.process_id and x.area | string == a %}
+{% if x.type in ['stub', 'totally_stub'] %}
+  stub{{ ' no-summary' if x.type == 'totally_stub' else '' }}
+{% elif x.type in ['nssa', 'totally_nssa'] %}
+  nssa{{ ' no-summary' if x.type == 'totally_nssa' else '' }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for x in t.ospf_ranges %}
+{% if x.process_id == p.process_id and x.area | string == a %}
+  abr-summary {{ x.prefix | ip }} {{ x.prefix | prefixlen }}{{ ' not-advertise' if x.advertise == false else '' }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+#
+{% endfor %}
+{# IPv6 static routes. #}
+{% for r in t.ipv6_routes %}
+{% if r.gateway_from %}
+{{ fail('IPv6 の経路 ' ~ r.prefix ~ ': 「ネクストホップの決め方」（' ~ r.gateway_from ~ '）は、QX では書けません') }}
+{% endif %}
+{% if not r.next_hop and not r.out_if %}
+{{ fail('IPv6 の経路 ' ~ r.prefix ~ ': ネクストホップか出力 IF が要ります') }}
+{% endif %}
+ ipv6 route-static {{ 'vpn-instance ' ~ r.vrf ~ ' ' if r.vrf else '' }}{{ r.prefix | ip }} {{ r.prefix | prefixlen }}{{ ' ' ~ ('NULL0' if r.out_if | lower == 'null0' else r.out_if) if r.out_if else '' }}{{ ' ' ~ r.next_hop if r.next_hop else '' }}{{ ' preference ' ~ r.distance if r.distance != '' else '' }}{{ ' description ' ~ r.description if r.description else '' }}
+{% endfor %}
+{% if t.ipv6_routes %}
+#
+{% endif %}
+{# OSPFv3: the areas of the interfaces stand under the interfaces. #}
+{% for p in t.ospfv3_processes %}
+ospfv3 {{ p.process_id }}
+{% if p.router_id %}
+ router-id {{ p.router_id }}
+{% endif %}
+{% if p.default_originate or p.default_metric != '' %}
+{{ fail('OSPFv3 ' ~ p.process_id ~ ': 「デフォルト経路の広告」は、このパックでは書けません（追加コンフィグに書いてください）') }}
+{% endif %}
+{% for src in p.redistribute %}
+ import-route {{ 'direct' if src == 'connected' else ('bgp4+' if src == 'bgp' else ('ripng' if src == 'rip' else src)) }}
+{% endfor %}
+{% if p.passive_default == true %}
+ silent-interface all
+{% elif p.passive_default == false %}
+{{ fail('OSPFv3 ' ~ p.process_id ~ ': 「既定で受動」の「無効」は書けません（セルを空にしてください）') }}
+{% endif %}
+{% for o in t.ospfv3_interfaces %}
+{% if o.process_id == p.process_id and o.passive == true and p.passive_default != true %}
+ silent-interface {{ o.if_name }}
+{% elif o.process_id == p.process_id and o.passive == false %}
+{{ fail('OSPFv3 ' ~ p.process_id ~ ': ' ~ o.if_name ~ ' の「受動」の「無効」は書けません（セルを空にしてください）') }}
+{% endif %}
+{% endfor %}
+{% for x in t.ospfv3_areas %}
+{% if x.process_id == p.process_id %}
+ area {{ x.area }}
+{% if x.type in ['stub', 'totally_stub'] %}
+  stub{{ ' no-summary' if x.type == 'totally_stub' else '' }}
+{% elif x.type and x.type != 'normal' %}
+{{ fail('OSPFv3 ' ~ p.process_id ~ ' のエリア ' ~ x.area ~ ': 種類 ' ~ x.type ~ ' は、このパックでは書けません（stub・totally_stub です）') }}
+{% endif %}
+{% if x.default_cost != '' or x.ranges or x.ranges_hidden %}
+{{ fail('OSPFv3 ' ~ p.process_id ~ ' のエリア ' ~ x.area ~ ': 既定経路のコスト・集約は、このパックでは書けません（追加コンフィグに書いてください）') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+#
+{% endfor %}
+{# BGP: the public instance, its peers and the two address families. #}
+{% for p in t.bgp_processes %}
+{% if p.vrf %}
+{{ fail('BGP: VRF ' ~ p.vrf ~ ' の中の BGP は、このパックでは書けません') }}
+{% endif %}
+bgp {{ p.asn | required('BGP の AS 番号') }}
+{% if p.router_id %}
+ router-id {{ p.router_id }}
+{% endif %}
+{% if p.keepalive != '' or p.holdtime != '' %}
+ timer keepalive {{ p.keepalive | required('BGP の Keepalive（QX は、Keepalive と Hold を組で書きます）') }} hold {{ p.holdtime | required('BGP の Hold') }}
+{% endif %}
+{% if p.log_neighbor_changes != '' %}
+{{ fail('BGP: 「ネイバーの変化を記録」は、このパックでは書けません（セルを空にしてください）') }}
+{% endif %}
+{% for fam in ['4', '6'] %}
+{% for n in (t.bgp_neighbors if fam == '4' else t.bgp_ipv6_neighbors) %}
+{% set what = 'BGP ネイバー ' ~ n.neighbor %}
+{% if n.vrf %}
+{{ fail(what ~ ': VRF の中のネイバーは、このパックでは書けません') }}
+{% endif %}
+ peer {{ n.neighbor }} as-number {{ n.remote_as | required(what ~ ' の相手 AS 番号') }}
+{% if n.description %}
+ peer {{ n.neighbor }} description {{ n.description }}
+{% endif %}
+{% if n.update_source %}
+ peer {{ n.neighbor }} connect-interface {{ n.update_source }}
+{% endif %}
+{% if n.ebgp_multihop != '' %}
+ peer {{ n.neighbor }} ebgp-max-hop {{ n.ebgp_multihop }}
+{% endif %}
+{% if n.password %}
+ peer {{ n.neighbor }} password {{ n.password if n.password is startingwith('cipher ') else 'simple ' ~ n.password }}
+{% endif %}
+{% if fam == '4' and (n.keepalive != '' or n.holdtime != '') %}
+ peer {{ n.neighbor }} timer keepalive {{ n.keepalive | required(what ~ ' の Keepalive（QX は、Keepalive と Hold を組で書きます）') }} hold {{ n.holdtime | required(what ~ ' の Hold') }}
+{% endif %}
+{% if n.enabled == false %}
+ peer {{ n.neighbor }} ignore
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% if t.bgp_neighbors or t.bgp_networks or t.bgp_redistribute %}
+ #
+ address-family ipv4 unicast
+{% for x in t.bgp_networks %}
+{% if x.vrf %}
+{{ fail('BGP の広告経路 ' ~ x.prefix ~ ': VRF の中の BGP は、このパックでは書けません') }}
+{% endif %}
+  network {{ x.prefix | ip }} {{ x.prefix | mask }}
+{% endfor %}
+{% for x in t.bgp_redistribute %}
+{% if x.vrf %}
+{{ fail('BGP の再配布 ' ~ x.source ~ ': VRF の中の BGP は、このパックでは書けません') }}
+{% endif %}
+{% if x.source in ['connected', 'static'] %}
+  import-route {{ 'direct' if x.source == 'connected' else 'static' }}{{ ' med ' ~ x.metric if x.metric != '' else '' }}{{ ' route-policy ' ~ x.filter if x.filter else '' }}
+{% else %}
+  import-route {{ x.source }}{{ ' ' ~ x.process_id if x.process_id != '' and x.source == 'ospf' else '' }}{{ ' med ' ~ x.metric if x.metric != '' else '' }}{{ ' route-policy ' ~ x.filter if x.filter else '' }}
+{% endif %}
+{% endfor %}
+{% for n in t.bgp_neighbors %}
+{% if n.enabled != false %}
+  peer {{ n.neighbor }} enable
+{% endif %}
+{% if n.next_hop_self == true %}
+  peer {{ n.neighbor }} next-hop-local
+{% endif %}
+{% if n.default_originate == true %}
+  peer {{ n.neighbor }} default-route-advertise
+{% endif %}
+{% if n.soft_reconfig_in == true %}
+  peer {{ n.neighbor }} keep-all-routes
+{% endif %}
+{% if n.send_community == true %}
+  peer {{ n.neighbor }} advertise-community
+{% endif %}
+{% if n.prefix_list_in %}
+  peer {{ n.neighbor }} prefix-list {{ n.prefix_list_in }} import
+{% endif %}
+{% if n.prefix_list_out %}
+  peer {{ n.neighbor }} prefix-list {{ n.prefix_list_out }} export
+{% endif %}
+{% if n.filter_in %}
+  peer {{ n.neighbor }} route-policy {{ n.filter_in }} import
+{% endif %}
+{% if n.filter_out %}
+  peer {{ n.neighbor }} route-policy {{ n.filter_out }} export
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if t.bgp_ipv6_neighbors or p.ipv6_networks or p.ipv6_redistribute %}
+ #
+ address-family ipv6 unicast
+{% for x in p.ipv6_networks %}
+  network {{ x | ip }} {{ x | prefixlen }}
+{% endfor %}
+{% for src in p.ipv6_redistribute %}
+  import-route {{ 'direct' if src == 'connected' else ('ospfv3' if src == 'ospf' else src) }}
+{% endfor %}
+{% for n in t.bgp_ipv6_neighbors %}
+{% if n.enabled != false %}
+  peer {{ n.neighbor }} enable
+{% endif %}
+{% if n.next_hop_self == true %}
+  peer {{ n.neighbor }} next-hop-local
+{% endif %}
+{% if n.soft_reconfig_in == true %}
+  peer {{ n.neighbor }} keep-all-routes
+{% endif %}
+{% if n.prefix_list_in %}
+  peer {{ n.neighbor }} prefix-list {{ n.prefix_list_in }} import
+{% endif %}
+{% if n.prefix_list_out %}
+  peer {{ n.neighbor }} prefix-list {{ n.prefix_list_out }} export
+{% endif %}
+{% if n.filter_in %}
+  peer {{ n.neighbor }} route-policy {{ n.filter_in }} import
+{% endif %}
+{% if n.filter_out %}
+  peer {{ n.neighbor }} route-policy {{ n.filter_out }} export
+{% endif %}
+{% endfor %}
+{% endif %}
+#
+{% endfor %}

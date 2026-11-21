@@ -1,0 +1,78 @@
+# Route policies: route maps, AS path lists, community lists, and the small
+# things of routing that came with them (appendix A 3.19). Made-up values.
+# expect.txt is the configuration the tables must turn into.
+#
+# The communities an entry names itself (RM-SAMPLE-IN 10 and 20) come out as
+# lists the pack makes (CL-<policy>-<seq>). CL-SAMPLE-ONE is a list of one
+# "permit" line: the pack writes it the same way, without telling.
+tables:
+  devices:
+    - hostname: rt-r01
+      vendor: cisco_ios
+      local_policy_route: RM-SAMPLE-LOCAL
+  vrfs:
+    - {name: VRF-SAMPLE-R, rd: "64496:10", rt_export: ["64496:10", "64496:30"], rt_import: ["64496:10", "64496:20"]}
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.1/30}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 198.51.100.1/24, policy_route: RM-SAMPLE-PBR}
+    - {name: GigabitEthernet0/2, enabled: true, ipv4: 192.0.2.129/25, vrf: VRF-SAMPLE-R}
+    - {name: Loopback0, enabled: true, ipv4: 192.0.2.1/32}
+  static_routes:
+    - {prefix: 192.0.2.64/26, next_hop: 198.51.100.254, tag: 100}
+    - {prefix: 192.0.2.32/27, out_if: Null0, distance: 250, description: sample-hold, permanent: true}
+    - {prefix: 0.0.0.0/0, next_hop: 203.0.113.2, description: sample-default, tag: 200}
+  ospf_processes:
+    - {process_id: 1, router_id: 192.0.2.1}
+    - {process_id: 20, vrf: VRF-SAMPLE-R, router_id: 192.0.2.129}
+  ospf_interfaces:
+    - {process_id: 1, if_name: GigabitEthernet0/1, area: "0", hello: 10, dead: 40, network_type: broadcast, auth_type: none}
+    - {process_id: 20, if_name: GigabitEthernet0/2, area: "0", hello: 10, dead: 40, network_type: broadcast, auth_type: none}
+  ospf_redistribute:
+    - {process_id: 1, source: static, metric: 20, metric_type: "1", tag: 100, filter: RM-SAMPLE-STATIC}
+    - {process_id: 1, source: bgp, filter: RM-SAMPLE-B2O}
+  bgp_processes:
+    - {asn: 64496, router_id: 192.0.2.1}
+    - {vrf: VRF-SAMPLE-R, asn: 64496}
+  bgp_neighbors:
+    - {neighbor: 203.0.113.2, remote_as: 64497, send_community: true, filter_in: RM-SAMPLE-IN, filter_out: RM-SAMPLE-OUT}
+    - {neighbor: 192.0.2.2, remote_as: 64496, update_source: Loopback0}
+  bgp_networks:
+    - {prefix: 198.51.100.0/24}
+  bgp_redistribute:
+    - {source: ospf, metric: 50, filter: RM-SAMPLE-O2B}                 # the one process of the global table
+    - {vrf: VRF-SAMPLE-R, source: ospf, process_id: 20}
+  acls:
+    - {name: ACL-SAMPLE-PBR, type: extended}
+    - {name: ACL-SAMPLE-STD, type: standard}
+  acl_entries:
+    - {acl: ACL-SAMPLE-PBR, seq: 10, action: permit, protocol: ip, src: 198.51.100.0/25, dst: any}
+    - {acl: ACL-SAMPLE-STD, seq: 10, action: permit, src: 192.0.2.64/26}
+  prefix_lists:
+    - {name: PL-SAMPLE-IN, seq: 5, action: permit, prefix: 0.0.0.0/0, le: 24}
+    - {name: PL-SAMPLE-OUT, seq: 5, action: permit, prefix: 198.51.100.0/24}
+    - {name: PL-SAMPLE-ALT, seq: 5, action: permit, prefix: 192.0.2.0/24, ge: 25}
+  as_path_lists:
+    - {name: "10", seq: 10, action: permit, regex: "^64497_"}
+    - {name: "10", seq: 20, action: deny, regex: ".*"}
+  community_lists:
+    - {name: "5", seq: 10, action: permit, type: standard, communities: ["64497:300"]}
+    - {name: "5", seq: 20, action: deny, type: standard, communities: ["64497:400"]}
+    - {name: CL-SAMPLE-RE, seq: 10, action: permit, type: expanded, regex: "64497:[0-9]+_"}
+    - {name: "150", seq: 10, action: deny, type: expanded, regex: "_64511:.*"}
+    - {name: CL-SAMPLE-ONE, seq: 10, action: permit, type: standard, communities: ["64497:500", local-as]}
+  route_policies:
+    - {name: RM-SAMPLE-IN, seq: 10, action: permit, match_as_path: "10", match_community: ["64497:100"], set_local_preference: 200, set_weight: 100}
+    - {name: RM-SAMPLE-IN, seq: 20, action: permit, match_prefix_list: [PL-SAMPLE-IN, PL-SAMPLE-ALT], match_community: ["64497:200", no-export], match_community_exact: true, set_community: ["64496:50", no-export], set_community_additive: true}
+    - {name: RM-SAMPLE-IN, seq: 30, action: permit, match_community_list: "5"}
+    - {name: RM-SAMPLE-IN, seq: 40, action: deny, match_community_list: CL-SAMPLE-RE}
+    - {name: RM-SAMPLE-IN, seq: 50, action: deny, match_community_list: "150"}
+    - {name: RM-SAMPLE-IN, seq: 60, action: permit, match_community_list: CL-SAMPLE-ONE}
+    - {name: RM-SAMPLE-OUT, seq: 10, action: permit, match_prefix_list: [PL-SAMPLE-OUT], set_metric: 50, set_as_path_prepend: [64496, 64496], set_origin: igp, set_next_hop: [self]}
+    - {name: RM-SAMPLE-OUT, seq: 20, action: permit, set_community: [none]}
+    - {name: RM-SAMPLE-STATIC, seq: 10, action: permit, match_tag: [100, 200], match_interface: [GigabitEthernet0/1, Null0], set_metric_type: "1", set_tag: 300}
+    - {name: RM-SAMPLE-STATIC, seq: 20, action: deny, match_acl: [ACL-SAMPLE-STD]}
+    - {name: RM-SAMPLE-B2O, seq: 10, action: permit, match_metric: 50, set_metric_type: "2"}
+    - {name: RM-SAMPLE-O2B, seq: 10, action: permit, set_metric_type: internal, set_next_hop: [203.0.113.9, 203.0.113.10]}
+    - {name: RM-SAMPLE-PBR, seq: 10, action: permit, match_acl: [ACL-SAMPLE-PBR], set_next_hop: [203.0.113.2], set_default_next_hop: [198.51.100.254]}
+    - {name: RM-SAMPLE-PBR, seq: 20, action: permit, set_interface: [Null0], set_default_interface: [GigabitEthernet0/0]}
+    - {name: RM-SAMPLE-LOCAL, seq: 10, action: permit, match_acl: [ACL-SAMPLE-PBR], set_next_hop: [203.0.113.2]}

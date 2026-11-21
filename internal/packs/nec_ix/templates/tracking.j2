@@ -1,46 +1,175 @@
-{# Line monitoring. Syntax: cmdref 4.11. A watch group holds what is watched
-   ("event") and what is done ("action"); it works once "network-monitor" is
-   switched on. The static routes that name the watch become its actions.
-   The event is written without an output interface (Ver.10.6 and later:
-   README). The timeout and the delays have no line here: those cells are not
-   read. #}
+{# Line monitoring. Syntax: CRM 17 and FD 2.28. A watch group holds what is
+   watched ("event") and what is done ("action"); it works once
+   "network-monitor" is switched on. The static routes that name the watch
+   become its actions, and so do the virtual routers (VRRP) and the
+   interfaces to shut. A row of the type "list" is one group with an event
+   for each of its members: events with different numbers act when one of
+   them happens (all_up), events with one number and different "sub" numbers
+   act when all of them happen (any_up). A member that nothing else names
+   gets no group of its own. The timeout, the threshold and the delays have
+   no line here: those cells are not read. #}
+{% set named = namespace(ids=[], members=[]) %}
+{% for r in t.static_routes %}
+{% if r.track %}
+{% set named.ids = named.ids + [r.track] %}
+{% endif %}
+{% endfor %}
+{% for f in t.fhrp %}
+{% if f.track %}
+{% set named.ids = named.ids + [f.track] %}
+{% endif %}
+{% endfor %}
+{% for k in t.tracks %}
+{% if k.type == 'list' %}
+{% set named.members = named.members + k.members %}
+{% endif %}
+{% endfor %}
 {% for k in t.tracks %}
 {% set what = '回線監視 ' ~ k.id %}
 {% if ' ' in k.id %}
 {{ fail(what ~ ' の番号・名前に空白があります（NEC IX では、ウォッチグループの名前になります）') }}
 {% endif %}
-watch-group {{ k.id }} 10
-{% if k.type == 'icmp' %}
-{% set target = k.target | required(what ~ ' の監視先') %}
-{% if target and not ((target ~ '/32') is cidr) %}
-{{ fail(what ~ ' の監視先「' ~ target ~ '」は IPv4 アドレスで書きます') }}
+{% if k.type != 'list' and k.members %}
+{{ fail(what ~ ' の「まとめる監視」は、監視の方法が list の行にだけ書けます') }}
 {% endif %}
-  event 10 ip unreach-host {{ target }}{{ ' source ' ~ k.source_if if k.source_if else '' }}
-{% if k.fail_count != '' %}
-  probe-counter variance {{ k.fail_count }}
-{% endif %}
-{% if k.restore_count != '' %}
-  probe-counter restorer {{ k.restore_count }}
-{% endif %}
-{% if k.interval != '' %}
-  probe-timer variance {{ k.interval }}
-{% endif %}
-{% elif k.type == 'interface' %}
-  event 10 interface-down {{ k.target | required(what ~ ' の監視先（IF 名）') }}
+{% if k.type != 'list' and k.id in named.members and k.id not in named.ids and not k.shutdown_ifs %}
+{# Only a member of a list: its event stands in the group of the list. #}
 {% else %}
-{{ fail(what ~ ' の監視の方法「' ~ k.type ~ '」は、このパックでは書けません（書き方を確かめていません。追加コンフィグに書いてください）') }}
+{# The rows whose events stand in this group, and the row with the timers. #}
+{% set g = namespace(rows=[], n=0) %}
+{% if k.type == 'list' %}
+{% if not k.members %}
+{{ fail(what ~ ' の「まとめる監視」が空です') }}
 {% endif %}
-{% set n = namespace(a=0) %}
+{% for id in k.members %}
+{% set hit = namespace(n=0) %}
+{% for m in t.tracks %}
+{% if m.id == id %}
+{% set hit.n = 1 %}
+{% if m.type == 'list' %}
+{{ fail(what ~ ' がまとめる ' ~ id ~ ' も list です（NEC IX では、list の中に list を入れられません）') }}
+{% elif id != k.id ~ '-' ~ (g.rows | length + 1) %}
+{{ fail(what ~ ' がまとめる監視の名前は、NEC IX では「' ~ k.id ~ '-1」「' ~ k.id ~ '-2」… の順にします（1 つの監視グループの event になり、取り込み直すとその名前になるためです）。' ~ id ~ ' の行の「番号・名前」を ' ~ k.id ~ '-' ~ (g.rows | length + 1) ~ ' に直し、「まとめる監視」も合わせてください') }}
+{% else %}
+{% set g.rows = g.rows + [m] %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if hit.n == 0 %}
+{{ fail(what ~ ' がまとめる ' ~ id ~ ' の行が、回線監視の表にありません') }}
+{% endif %}
+{% endfor %}
+{% else %}
+{% set g.rows = [k] %}
+{% endif %}
+watch-group {{ k.id }} 10
+{% for m in g.rows %}
+{% set g.n = g.n + 1 %}
+{% set mw = '回線監視 ' ~ m.id %}
+{% if k.type == 'list' and k.list_rule == 'any_up' %}
+{% set ev = 'event 10 sub ' ~ (g.n * 10) %}
+{% else %}
+{% set ev = 'event ' ~ (g.n * 10) %}
+{% endif %}
+{% if g.n > 1 and (m.interval != g.rows[0].interval or m.restore_interval != g.rows[0].restore_interval or m.fail_count != g.rows[0].fail_count or m.restore_count != g.rows[0].restore_count) %}
+{{ fail(mw ~ ' の間隔・回数が、' ~ g.rows[0].id ~ ' と違います（NEC IX では、1 つの監視グループの event は同じ間隔・回数で動きます。値をそろえてください）') }}
+{% endif %}
+{% if m.up_when == 'within_threshold' %}
+{{ fail(mw ~ ' の「正常とみなす条件」within_threshold は書けません（NEC IX の監視は、届くかどうかだけを見ます。列を空にしてください）') }}
+{% endif %}
+{% set v6 = ':' in m.target %}
+{% if m.source_ip and not v6 %}
+{{ fail(mw ~ ' の送信元アドレス ' ~ m.source_ip ~ ' を持つインタフェースがありません（NEC IX は、送信元を IF 名で書きます。「送信元 IF」に書いてください）') }}
+{% endif %}
+{% if v6 and m.type in ['icmp', 'route'] %}
+{# IPv6 (CRM p.17-18): "ipv6 unreach-host <address> <interface>
+   [<next hop>] [source <address>]" and "ipv6 unreach-route <prefix>
+   [<next hop> | <interface>]"; neither takes a VRF. #}
+{% if m.vrf %}
+{{ fail(mw ~ ': IPv6 の監視には VRF を付けられません（NEC IX の event … ipv6 … に VRF の指定がありません）') }}
+{% endif %}
+{% if m.type == 'icmp' %}
+{% set target = m.target %}
+{% if not ((target ~ '/128') is cidr) %}
+{{ fail(mw ~ ' の監視先「' ~ target ~ '」は IPv6 アドレスの形ではありません') }}
+{% endif %}
+{% if m.source_if %}
+{{ fail(mw ~ ' の送信元 IF ' ~ m.source_if ~ ' に固定の IPv6 アドレスがありません（NEC IX の IPv6 の監視は、送信元をアドレスで書きます。「送信元アドレス」に書いてください）') }}
+{% endif %}
+  {{ ev }} ipv6 unreach-host {{ target }} {{ m.via_if | required(mw ~ ' の「監視の出口の IF」（NEC IX の IPv6 の監視には出力 IF が要ります）') }}{{ ' ' ~ m.via_next_hop if m.via_next_hop else '' }}{{ ' source ' ~ m.source_ip if m.source_ip else '' }}
+{% else %}
+{% set target = m.target %}
+{% if not (target is cidr) %}
+{{ fail(mw ~ ' の監視先「' ~ target ~ '」は、2001:db8::/32 の形で書きます') }}
+{% endif %}
+{% if m.via_next_hop and m.via_if %}
+{{ fail(mw ~ ': 経路の監視では、「監視の出口の IF」と「監視の出口のネクストホップ」のどちらか 1 つだけ書けます') }}
+{% endif %}
+  {{ ev }} ipv6 unreach-route {{ target }}{{ ' ' ~ m.via_next_hop if m.via_next_hop else '' }}{{ ' ' ~ m.via_if if m.via_if else '' }}
+{% endif %}
+{% elif m.type == 'icmp' %}
+{% set target = m.target | required(mw ~ ' の監視先') %}
+{% if target and not ((target ~ '/32') is cidr) %}
+{{ fail(mw ~ ' の監視先「' ~ target ~ '」は IPv4 アドレスで書きます') }}
+{% endif %}
+{% if m.via_next_hop and not m.via_if %}
+{{ fail(mw ~ ' の「監視の出口のネクストホップ」は、「監視の出口の IF」と組で書きます') }}
+{% endif %}
+  {{ ev }}{{ ' vrf ' ~ m.vrf if m.vrf else '' }} ip unreach-host {{ target }}{{ ' ' ~ m.via_if if m.via_if else '' }}{{ ' ' ~ m.via_next_hop if m.via_next_hop else '' }}{{ ' source ' ~ m.source_if if m.source_if else '' }}
+{% elif m.type == 'route' %}
+{% set target = m.target | required(mw ~ ' の監視先') %}
+{% if target and not (target is cidr) %}
+{{ fail(mw ~ ' の監視先「' ~ target ~ '」は、192.0.2.0/24 の形で書きます') }}
+{% endif %}
+{% if m.via_next_hop and m.via_if %}
+{{ fail(mw ~ ': 経路の監視では、「監視の出口の IF」と「監視の出口のネクストホップ」のどちらか 1 つだけ書けます') }}
+{% endif %}
+  {{ ev }}{{ ' vrf ' ~ m.vrf if m.vrf else '' }} ip unreach-route {{ target }}{{ ' ' ~ m.via_next_hop if m.via_next_hop else '' }}{{ ' ' ~ m.via_if if m.via_if else '' }}
+{% elif m.type == 'interface' %}
+  {{ ev }} interface-down {{ m.target | required(mw ~ ' の監視先（IF 名）') }}
+{% else %}
+{{ fail(mw ~ ' の監視の方法「' ~ m.type ~ '」は書けません') }}
+{% endif %}
+{% endfor %}
+{% set c = g.rows[0] if g.rows else k %}
+{% if c.fail_count != '' %}
+  probe-counter variance {{ c.fail_count }}
+{% endif %}
+{% if c.restore_count != '' %}
+  probe-counter restorer {{ c.restore_count }}
+{% endif %}
+{% if c.interval != '' %}
+  probe-timer variance {{ c.interval }}
+{% endif %}
+{% if c.restore_interval != '' %}
+  probe-timer restorer {{ c.restore_interval }}
+{% endif %}
+{% set n = namespace(a=0, vr=[]) %}
 {% for r in t.static_routes %}
 {% if r.track == k.id %}
 {% if r.vrf %}
 {{ fail('経路 ' ~ r.prefix ~ '（VRF ' ~ r.vrf ~ '）の回線監視は、このパックでは書けません（VRF の経路を止める行を確かめていません）') }}
 {% endif %}
 {% set n.a = n.a + 10 %}
-  action {{ n.a }} ip shutdown-route {{ r.prefix }}{{ ' ' ~ r.next_hop if r.next_hop else '' }}
+  action {{ n.a }} ip shutdown-route {{ r.prefix }}{{ ' ' ~ r.next_hop if r.next_hop and r.next_hop != 'dhcp' else '' }}
 {% endif %}
+{% endfor %}
+{% for f in t.fhrp %}
+{% if f.track == k.id and f.group not in n.vr %}
+{% set n.vr = n.vr + [f.group] %}
+{% if f.protocol != 'vrrp' %}
+{{ fail(what ~ ': ' ~ f.if_name ~ ' の冗長化（' ~ f.protocol ~ '）は書けません（NEC IX は VRRP だけです）') }}
+{% endif %}
+{% set n.a = n.a + 10 %}
+  action {{ n.a }} ip decrement-vrrp-priority {{ f.group }} {{ f.track_decrement | required(f.if_name ~ ' の VRRP ' ~ f.group ~ ' の「監視断のときの減点」（NEC IX は、下げる値を書きます）') }}
+{% endif %}
+{% endfor %}
+{% for i in k.shutdown_ifs %}
+{% set n.a = n.a + 10 %}
+  action {{ n.a }} shutdown-interface {{ i }}
 {% endfor %}
 !
 network-monitor {{ k.id }} enable
 !
+{% endif %}
 {% endfor %}

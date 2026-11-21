@@ -1,0 +1,25 @@
+# What a DHCPv6 server hands out besides DNS (appendix A 3.23; made-up
+# values): prefixes for the routers downstream (a local pool and the length
+# of one delegated prefix), addresses for the hosts, an NTP server. The name
+# of the local pool is not kept.
+tables:
+  ipv6_interfaces:
+    - if_name: GigabitEthernet0/0
+      dhcp_server: pool-sample-pd
+      dhcp_dns: ["2001:db8::53"]
+      dhcp_ntp: ["2001:db8::123"]
+      dhcp_address_prefix: ["2001:db8:0:10::/64"]
+      dhcp_pd_pool: "2001:db8:1000::/40"
+      dhcp_pd_length: 56
+      dhcp_pd_valid: 1800
+      dhcp_pd_preferred: 600
+    - if_name: GigabitEthernet0/1
+      dhcp_server: pool-sample-inf
+      dhcp_pd_pool: "2001:db8:4000::/36"
+      dhcp_pd_length: 48
+      dhcp_pd_valid: infinite
+      dhcp_pd_preferred: infinite
+unknown:
+  - "ipv6 local pool pool-sample-shared 2001:DB8:2000::/40 56 shared"
+  - "prefix-delegation 2001:DB8:1200::/48 00030001000A0B0C0D0E"
+ignored_min: 1

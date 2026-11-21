@@ -1,0 +1,52 @@
+hostname rt-f03
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.1 255.255.255.224
+ ip access-group Gi0-0-in in
+ ip nat outside
+ no shutdown
+!
+interface GigabitEthernet0/1
+ ip address 198.51.100.1 255.255.255.0
+ ip nat inside
+ no shutdown
+!
+ip sla 1
+ icmp-echo 203.0.113.2
+ threshold 2000
+ timeout 2000
+ frequency 10
+ip sla schedule 1 life forever start-time now
+track 1 ip sla 1 reachability
+!
+ip sla 2
+ icmp-echo 203.0.113.3
+ frequency 10
+ip sla schedule 2 life forever start-time now
+track 2 ip sla 2 reachability
+!
+ip access-list extended acl-f-lan
+ 100 permit udp any eq 53 198.51.100.0 0.0.0.255 tos 4
+ 200 deny ip any any
+!
+ip access-list extended acl-f-mgmt
+ permit ip 192.0.2.0 0.0.0.127 any
+!
+ip access-list extended acl-f-wan
+ permit tcp any any established
+ permit icmp any any 3 4
+!
+ip access-list extended Gi0-0-in
+ permit ip 192.0.2.0 0.0.0.127 any
+ permit tcp any any established
+ permit icmp any any 3 4
+ permit udp any eq 53 198.51.100.0 0.0.0.255 tos 4
+ deny ip any any
+!
+ip nat pool pool-f-a 203.0.113.17 203.0.113.22 prefix-length 27
+ip nat inside source list acl-f-lan pool pool-f-a
+!
+line vty 0 4
+ transport input ssh telnet
+!
+end

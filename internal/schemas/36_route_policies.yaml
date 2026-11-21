@@ -1,0 +1,44 @@
+table: route_policies
+title: {ja: 経路制御の方針, en: Route policies}
+since: M7
+key: [device, name, seq]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: 方針名, en: Policy}, type: string, required: true, note: {ja: "BGP ネイバーの受信・送信の経路制御、再配布の経路制御の条件、IF のポリシールーティングから、この名前で指す", en: "Named by the filters of the BGP neighbors, the filters of the redistribution and the policy routing of the interfaces"}}
+  - {name: seq, title: {ja: 順番, en: Sequence}, type: int, min: 0, max: 65535, required: true, note: {ja: "小さい順に見て、最初に条件が合った行で決まる", en: "Looked at from the smallest; the first row whose conditions hit decides"}}
+  - {name: action, title: {ja: 動作, en: Action}, type: enum, values: [permit, deny], required: true, note: {ja: "permit = 条件に合ったら通して値を付ける。deny = 条件に合ったら落とす（ポリシールーティングでは、ふつうの経路表どおりに送る）", en: "permit = let through and set the values. deny = drop (policy routing: forward by the routing table)"}}
+  - {name: match_prefix_list, title: {ja: "条件: 宛先（プレフィックスリスト）", en: "Match: prefix list"}, type: "list<ref>", ref: prefix_lists.name, note: {ja: "経路の宛先がリストに合う。複数はどれか 1 つに合えばよい", en: "The prefix of the route is in the list. Several = any of them"}}
+  - {name: match_acl, title: {ja: "条件: ACL", en: "Match: ACL"}, type: "list<ref>", ref: acls.name, note: {ja: "ポリシールーティングでは通信、経路の方針では経路の宛先を ACL で見る", en: "Policy routing: the packets. A policy of routes: the prefix of the route"}}
+  - {name: match_next_hop_prefix_list, title: {ja: "条件: ネクストホップ（プレフィックスリスト）", en: "Match: next hop (prefix list)"}, type: ref, ref: prefix_lists.name}
+  - {name: match_as_path, title: {ja: "条件: AS パス", en: "Match: AS path"}, type: ref, ref: as_path_lists.name}
+  - {name: match_community, title: {ja: "条件: コミュニティ", en: "Match: communities"}, type: "list<string>", note: {ja: "経路が、書いたコミュニティをすべて持つ。64496:100 の形か、no-export などの語", en: "The route carries all of them. 64496:100, or a word like no-export"}}
+  - {name: match_community_list, title: {ja: "条件: コミュニティのリスト", en: "Match: community list"}, type: ref, ref: community_lists.name, note: {ja: "「条件: コミュニティ」とは、1 行にどちらか 1 つ", en: "Either this or the communities, not both"}}
+  - {name: match_community_exact, title: {ja: "条件: コミュニティが完全に同じ", en: "Match: communities exactly"}, type: bool, note: {ja: "書いたもの以外のコミュニティを持つ経路には合わない", en: "A route with any other community does not match"}}
+  - {name: match_interface, title: {ja: "条件: 出力 IF", en: "Match: out interface"}, type: "list<ifname>", note: {ja: "経路の出口の IF", en: "The interface the route goes out of"}}
+  - {name: match_metric, title: {ja: "条件: メトリック", en: "Match: metric"}, type: int, min: 0}
+  - {name: match_tag, title: {ja: "条件: タグ", en: "Match: tag"}, type: "list<int>", min: 0}
+  - {name: set_local_preference, title: {ja: "付ける値: ローカルプリファレンス", en: "Set: local preference"}, type: int, min: 0}
+  - {name: set_metric, title: {ja: "付ける値: メトリック（MED）", en: "Set: metric (MED)"}, type: string, note: {ja: "数で書く。+10・-10 と書くと、今の値に足す・引く", en: "A number. +10 / -10 = add to / take from the value the route has"}}
+  - {name: set_metric_type, title: {ja: "付ける値: メトリックの種類", en: "Set: metric type"}, type: enum, values: ["1", "2", internal], note: {ja: "1・2 = OSPF の外部経路の種類。internal = BGP の MED に IGP のメトリックを入れる", en: "1 / 2 = the type of an OSPF external route. internal = the IGP metric as the MED of BGP"}}
+  - {name: set_as_path_prepend, title: {ja: "付ける値: AS パスに足す AS", en: "Set: AS path prepend"}, type: "list<int>", min: 1, note: {ja: "書いた順に足す", en: "Prepended in the written order"}}
+  - {name: set_community, title: {ja: "付ける値: コミュニティ", en: "Set: communities"}, type: "list<string>", note: {ja: "64496:100 の形か、no-export などの語。none は、コミュニティをすべて外す", en: "64496:100, or a word like no-export. none = take every community off"}}
+  - {name: set_community_additive, title: {ja: コミュニティを足す, en: Add the communities}, type: bool, note: {ja: "有効 = 今のコミュニティに足す。空・無効 = 置き換える", en: "true = add to the ones the route has. Empty or false = replace them"}}
+  - {name: set_weight, title: {ja: "付ける値: weight", en: "Set: weight"}, type: int, min: 0, max: 65535}
+  - {name: set_origin, title: {ja: "付ける値: オリジン", en: "Set: origin"}, type: enum, values: [igp, incomplete]}
+  - {name: set_tag, title: {ja: "付ける値: タグ", en: "Set: tag"}, type: int, min: 0}
+  - {name: set_next_hop, title: {ja: "付ける値: ネクストホップ", en: "Set: next hop"}, type: "list<ip4>", also: [self], note: {ja: "経路ではネクストホップの属性、ポリシールーティングでは送り先。self = 自分のアドレス（BGP）", en: "The next hop attribute of a route, or where policy routing sends. self = the own address (BGP)"}}
+  - {name: set_default_next_hop, title: {ja: 経路が無いときのネクストホップ, en: Default next hop}, type: "list<ip4>", note: {ja: "ポリシールーティング。経路表に宛先が無いときだけ使う", en: "Policy routing: used only when the routing table has no route"}}
+  - {name: set_interface, title: {ja: "付ける値: 出力 IF", en: "Set: out interface"}, type: "list<ifname>", also: ["Null*"], note: {ja: "ポリシールーティング", en: "Policy routing"}}
+  - {name: set_default_interface, title: {ja: 経路が無いときの出力 IF, en: Default out interface}, type: "list<ifname>", also: ["Null*"], note: {ja: "ポリシールーティング。経路表に宛先が無いときだけ使う", en: "Policy routing: used only when the routing table has no route"}}
+  - {name: match_ipv6_prefix_list, title: {ja: "条件: IPv6 の宛先（プレフィックスリスト）", en: "Match: IPv6 prefix list"}, type: "list<ref>", ref: ipv6_prefix_lists.name, note: {ja: "IPv6 の経路の宛先がリストに合う", en: "The destination of an IPv6 route is in the list"}}
+  - {name: match_ipv6_acl, title: {ja: "条件: IPv6 フィルタ", en: "Match: IPv6 access list"}, type: "list<ref>", ref: ipv6_acl_entries.acl, note: {ja: "ポリシールーティングでは、IPv6 の通信をフィルタで見る", en: "Policy routing: the IPv6 packets the list permits"}}
+  - {name: match_ipv6_next_hop_prefix_list, title: {ja: "条件: IPv6 のネクストホップ（プレフィックスリスト）", en: "Match: IPv6 next hop (prefix list)"}, type: ref, ref: ipv6_prefix_lists.name, note: {ja: "IPv6 の経路のネクストホップがリストに合う", en: "The next hop of an IPv6 route is in the list"}}
+  - {name: match_next_hop_acl, title: {ja: "条件: ネクストホップ（ACL）", en: "Match: next hop (ACL)"}, type: "list<ref>", ref: acls.name, note: {ja: "経路のネクストホップを ACL で見る。Cisco だけ（NEC IX はプレフィックスリストで見る）", en: "The next hop of the route is permitted by the access list. Cisco only (NEC IX takes a prefix list)"}}
+  - {name: match_route_type, title: {ja: "条件: 経路の種類", en: "Match: route type"}, type: "list<enum>", values: [local, internal, external, external_type1, external_type2], note: {ja: "local = 自分で作った BGP の経路。internal = OSPF のエリア内・エリア間。external = 外部経路（type1・type2 で分けられる）。Cisco だけ", en: "local = BGP routes made here. internal = OSPF intra- and inter-area. external = external routes (type 1 or 2 can be told apart). Cisco only"}}
+  - {name: continue_to, title: {ja: 合った後に続けて見る順番, en: Continue}, type: string, note: {ja: "条件に合って値を付けた後、この順番の行も続けて見る。next = 次の行。Cisco だけ", en: "After the entry matched and set its values, the entry of this number is looked at too. next = the following entry. Cisco only"}}
+  - {name: set_community_delete, title: {ja: "外すコミュニティ", en: "Set: communities to delete"}, type: "list<string>", note: {ja: "経路から、ここに書いたコミュニティだけを外す。Cisco はパックがリストを作って書く", en: "These communities are taken off the route. For Cisco the pack makes a list"}}
+  - {name: set_extcommunity_rt, title: {ja: "付ける値: 拡張コミュニティ（ルートターゲット）", en: "Set: extended community (route target)"}, type: "list<string>", note: {ja: "64496:100 の形。Cisco だけ", en: "Like 64496:100. Cisco only"}}
+  - {name: set_extcommunity_rt_additive, title: {ja: ルートターゲットを足す, en: Route targets additive}, type: bool, note: {ja: "有効 = 今のルートターゲットに足す", en: "On = added to the route targets the route has"}}
+  - {name: set_extcommunity_soo, title: {ja: "付ける値: 拡張コミュニティ（Site of Origin）", en: "Set: extended community (site of origin)"}, type: string, note: {ja: "64496:100 の形。Cisco だけ", en: "Like 64496:100. Cisco only"}}
+  - {name: set_ipv6_next_hop, title: {ja: "付ける値: IPv6 のネクストホップ", en: "Set: IPv6 next hop"}, type: "list<ip6>", note: {ja: "IPv6 のポリシールーティングの送り先（経路ではネクストホップの属性）", en: "Where IPv6 policy routing sends the packets (for routes: the next hop)"}}
+  - {name: set_ipv6_default_next_hop, title: {ja: 経路が無いときの IPv6 のネクストホップ, en: "Set: IPv6 default next hop"}, type: "list<ip6>", note: {ja: "IPv6 のポリシールーティング。経路表に宛先が無いときだけ使う", en: "IPv6 policy routing: used only when the routing table has no route"}}

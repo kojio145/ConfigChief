@@ -1,0 +1,57 @@
+hostname rt-g01
+!
+interface GigabitEthernet0/0
+ description sample wan
+ ip address 203.0.113.1 255.255.255.224
+ ip access-group Gi0-0-in in
+ ip nat outside
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description sample lan
+ ip address 198.51.100.1 255.255.255.0
+ ip nat inside
+ no shutdown
+!
+ip sla 1
+ icmp-echo 203.0.113.2 source-interface GigabitEthernet0/0
+ frequency 5
+ip sla schedule 1 life forever start-time now
+track 1 ip sla 1 reachability
+ delay down 25
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.2 1 track 1
+!
+ip access-list extended acl-g-mgmt
+ permit ip 192.0.2.0 0.0.0.127 any
+!
+ip access-list extended acl-g-nat
+ permit ip 198.51.100.0 0.0.0.127 any
+!
+ip access-list extended acl-g-pool
+ permit ip 198.51.100.128 0.0.0.127 any
+!
+ip access-list extended acl-g-wan
+ permit tcp any any established
+ permit tcp any host 203.0.113.1 eq 80
+ permit udp any eq 53 any range 1024 65535
+ permit icmp any any echo-reply
+!
+ip access-list extended Gi0-0-in
+ permit ip 192.0.2.0 0.0.0.127 any
+ permit tcp any any established
+ permit tcp any host 203.0.113.1 eq 80
+ permit udp any eq 53 any range 1024 65535
+ permit icmp any any echo-reply
+!
+ip nat inside source list acl-g-nat interface GigabitEthernet0/0 overload
+ip nat inside source static tcp 198.51.100.10 8080 interface GigabitEthernet0/0 80
+ip nat pool nat3 203.0.113.17 203.0.113.22 prefix-length 27
+ip nat inside source list acl-g-pool pool nat3
+!
+ip dhcp pool dhcp-g-lan
+ network 198.51.100.0 255.255.255.0
+ default-router 198.51.100.1
+ lease 0 1 30
+!
+end

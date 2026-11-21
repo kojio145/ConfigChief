@@ -1,0 +1,17 @@
+# What this vendor cannot write of IPv6 VRRP (made-up values): a number an
+# IPv4 group uses too, a watch, an interval longer than 30 seconds, an
+# interval that is not whole centiseconds.
+tables:
+  devices:
+    - {hostname: ix-w04, vendor: nec_ix}
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 192.0.2.5/24, ipv6: ["2001:db8:0:1::5/64"]}
+    - {name: GigaEthernet1.0, enabled: true, ipv6: ["2001:db8:0:2::5/64"]}
+  tracks:
+    - {id: watch-a, type: interface, target: GigaEthernet1.0}
+  fhrp:
+    - {if_name: GigaEthernet0.0, group: 1, protocol: vrrp, virtual_ip: 192.0.2.1, priority: 100, preempt: true}
+  ipv6_fhrp:
+    - {if_name: GigaEthernet0.0, group: 1, link_local: "fe80::1", priority: 100, preempt: true, advert_interval: 40000, track: watch-a, track_decrement: 20}
+    - {if_name: GigaEthernet1.0, group: 3, link_local: "fe80::3", priority: 100, preempt: true, advert_interval: 1505}
+findings: [G-601, G-601, G-601, G-601]

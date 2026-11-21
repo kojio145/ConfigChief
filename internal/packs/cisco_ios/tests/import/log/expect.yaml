@@ -14,8 +14,5 @@ tables:
     - {prefix: 192.0.2.64/26, next_hop: 198.51.100.2}
   ntp_servers:
     - {server: 192.0.2.123}
-# The console line has no rule yet (README.md).
-unknown:
-  - "line con 0"
-  - "exec-timeout 5 0"
+unknown: []
 ignored_min: 4

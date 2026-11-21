@@ -23,7 +23,12 @@ ip dhcp excluded-address {{ ends[0] }}{{ ' ' ~ ends[1] if ends[1] != ends[0] els
 ip dhcp pool {{ p.name }}
  network {{ p.network | ip }} {{ p.network | mask }}
 {% if p.default_router %}
- default-router {{ p.default_router }}
+{% if p.default_routers_more | length > 7 %}
+{{ fail(what ~ ' のデフォルトゲートウェイが ' ~ (p.default_routers_more | length + 1) ~ ' つあります（Cisco は 8 つまでです）') }}
+{% endif %}
+ default-router {{ p.default_router }}{{ ' ' ~ (p.default_routers_more | join(' ')) if p.default_routers_more else '' }}
+{% elif p.default_routers_more %}
+{{ fail(what ~ ': 「デフォルトゲートウェイ（2 つ目以降）」があるのに、「デフォルトゲートウェイ」が空です') }}
 {% endif %}
 {% if p.dns_servers %}
  dns-server {{ p.dns_servers | join(' ') }}
@@ -31,17 +36,29 @@ ip dhcp pool {{ p.name }}
 {% if p.domain %}
  domain-name {{ p.domain }}
 {% endif %}
-{# "2d" is two days, "36h" one day and twelve hours. #}
-{% if p.lease %}
+{# Days, hours, minutes: "2d" is "lease 2", "36h" "lease 1 12", "90m"
+   "lease 0 1 30". The device has no seconds. #}
+{% if p.lease == 'infinite' %}
+ lease infinite
+{% elif p.lease %}
 {% set n = p.lease[:-1] %}
-{% if not (n is digits) or p.lease[-1:] not in ['d', 'h'] or (n | int) == 0 %}
-{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は書けません（2d、12h の形で書きます）') }}
-{% elif p.lease[-1:] == 'd' %}
- lease {{ n }}
-{% elif (n | int) % 24 == 0 %}
-{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は、日の形（' ~ ((n | int) // 24) ~ 'd）で書いてください') }}
+{% set unit = {'d': 86400, 'h': 3600, 'm': 60, 's': 1} %}
+{% if not (n is digits) or p.lease[-1:] not in ['d', 'h', 'm', 's'] or (n | int) == 0 %}
+{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は書けません（2d、12h、90m の形か、infinite と書きます）') }}
 {% else %}
- lease {{ (n | int) // 24 }} {{ (n | int) % 24 }}
+{% set sec = (n | int) * unit[p.lease[-1:]] %}
+{% set best = ((sec // 86400) ~ 'd') if sec % 86400 == 0 else (((sec // 3600) ~ 'h') if sec % 3600 == 0 else (((sec // 60) ~ 'm') if sec % 60 == 0 else (sec ~ 's'))) %}
+{% if sec % 60 != 0 %}
+{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は書けません（Cisco の貸し出し時間は分までです。分で割り切れる値にしてください）') }}
+{% elif best != p.lease %}
+{{ fail(what ~ ' の貸し出し時間「' ~ p.lease ~ '」は、割り切れるいちばん大きい単位（' ~ best ~ '）で書いてください') }}
+{% elif sec % 86400 == 0 %}
+ lease {{ sec // 86400 }}
+{% elif sec % 3600 == 0 %}
+ lease {{ sec // 86400 }} {{ (sec % 86400) // 3600 }}
+{% else %}
+ lease {{ sec // 86400 }} {{ (sec % 86400) // 3600 }} {{ (sec % 3600) // 60 }}
+{% endif %}
 {% endif %}
 {% endif %}
 !

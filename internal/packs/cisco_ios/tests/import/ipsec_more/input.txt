@@ -1,0 +1,49 @@
+!
+hostname rt-c05
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp policy 20
+ encryption aes
+ hash sha
+ authentication pre-share
+ group 14
+ lifetime 28800
+crypto isakmp policy 30
+ encryption 3des
+ hash sha
+ authentication pre-share
+ group 2
+crypto isakmp key dummy-psk-more-a address 203.0.113.20
+crypto isakmp key dummy-psk-more-b address 203.0.113.30
+!
+crypto ipsec transform-set TS-SAMPLE-A esp-aes 256 esp-sha-hmac
+crypto ipsec transform-set TS-SAMPLE-B esp-aes esp-sha-hmac
+crypto ipsec transform-set TS-SAMPLE-C ah-sha-hmac esp-3des
+!
+crypto ipsec profile PROF-SAMPLE
+ set transform-set TS-SAMPLE-A TS-SAMPLE-B
+!
+crypto map CMAP-SAMPLE 10 ipsec-isakmp
+ set peer 203.0.113.30
+ set transform-set TS-SAMPLE-A TS-SAMPLE-B TS-SAMPLE-C
+ match address ACL-SAMPLE-B
+!
+interface Tunnel1
+ ip address 192.0.2.209 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel mode ipsec ipv4
+ tunnel destination 203.0.113.20
+ tunnel protection ipsec profile PROF-SAMPLE
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.9 255.255.255.248
+ crypto map CMAP-SAMPLE
+!
+ip access-list extended ACL-SAMPLE-B
+ 10 permit ip 198.51.100.0 0.0.0.255 192.0.2.0 0.0.0.127
+!
+end

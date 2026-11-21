@@ -1,0 +1,16 @@
+hostname ix-w03
+!
+vrrp enable
+!
+interface GigaEthernet0.0
+  ip address 192.0.2.4/24
+  ipv6 address 2001:db8:0:1::4/64
+  vrrp 1 ip 192.0.2.1
+  vrrp 1 priority 100
+  vrrp 1 preempt
+  vrrp 2 ipv6 fe80::1
+  vrrp 2 priority 100
+  vrrp 2 preempt
+  vrrp 2 timers advertisement 1
+  no shutdown
+!

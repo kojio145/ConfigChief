@@ -76,7 +76,7 @@ rows:
 	if code != 0 {
 		t.Fatalf("approve = %d: %s%s", code, out, errOut)
 	}
-	wants(t, "the output", out, "当たった指摘 1 件", "次にお客様の一覧を読んだとき")
+	wants(t, "the output", out, "当たった指摘 1 件", "次に外部一覧を読んだとき")
 	code, out, _ = do("customer", "--project", dir)
 	if code != 0 {
 		t.Fatalf("customer after = %d:\n%s", code, out)

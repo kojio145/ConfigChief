@@ -1,0 +1,78 @@
+hostname sw-c11
+!
+username admin privilege 15 secret 0 Example-Secret-1
+!
+spanning-tree mode rapid-pvst
+spanning-tree portfast bpduguard default
+spanning-tree vlan 10,20 priority 4096
+!
+vlan 1
+!
+vlan 10
+ name sample-office
+!
+vlan 20
+ name sample-voice
+!
+interface GigabitEthernet1/0/1
+ description office desk
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+ no shutdown
+!
+interface GigabitEthernet1/0/2
+ switchport access vlan 20
+ switchport mode access
+ storm-control broadcast level 5
+ spanning-tree bpduguard enable
+ duplex full
+ speed 100
+ no shutdown
+!
+interface GigabitEthernet1/0/3
+ switchport mode access
+ shutdown
+!
+interface GigabitEthernet1/0/23
+ switchport trunk allowed vlan 10,20
+ switchport mode trunk
+ channel-group 1 mode active
+ no shutdown
+!
+interface GigabitEthernet1/0/24
+ switchport trunk allowed vlan 10,20
+ switchport mode trunk
+ channel-group 1 mode active
+ no shutdown
+!
+interface Port-channel1
+ description to sw-q12
+ switchport trunk allowed vlan 10,20
+ switchport mode trunk
+ no shutdown
+!
+interface Vlan10
+ description sample management
+ ip address 192.0.2.12 255.255.255.128
+ ip access-group sample-in in
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 192.0.2.126
+!
+ip access-list extended sample-in
+ permit tcp 192.0.2.0 0.0.0.127 any eq 22
+ deny ip any any
+!
+logging facility local7
+logging host 192.0.2.20
+!
+snmp-server community example-ro RO
+!
+ntp server 192.0.2.10
+!
+line vty 0 4
+ login local
+ transport input ssh
+!
+end

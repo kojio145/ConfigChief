@@ -1,0 +1,58 @@
+table: l2_settings
+title: {ja: L2 の全体設定, en: Layer 2 settings}
+since: M7
+key: [device]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: stp_enabled, title: {ja: スパニングツリーを使う, en: Spanning tree enabled}, type: bool, note: {ja: "機器全体の有効・無効。空 = 機器の既定（メーカーで違う）", en: "On or off for the device. Empty = the default of the device (it differs by vendor)"}}
+  - {name: stp_mode, title: {ja: スパニングツリーの方式, en: Spanning tree mode}, type: enum, values: [pvst, rapid_pvst, mst, rstp, stp], note: {ja: "pvst・rapid_pvst = VLAN ごとの木（rapid は収束の速い方式）。mst = MSTP。rstp・stp = 機器に 1 本の木（RSTP・STP）", en: "pvst, rapid_pvst = a tree per VLAN (rapid: the fast one). mst = MSTP. rstp, stp = one tree for the device (RSTP, STP)"}}
+  - {name: stp_priority, title: {ja: 優先度（機器全体）, en: Priority (device)}, type: int, min: 0, max: 65535, note: {ja: "機器に 1 本の木（rstp・stp）と、MSTP の共通の木での優先度。VLAN ごとの優先度は「VLAN ごとのスパニングツリー」に書く", en: "The priority in the one tree of the device (rstp, stp) and in the common tree of MSTP. The priority per VLAN stands in the table of spanning tree per VLAN"}}
+  - {name: stp_edge_default, title: {ja: アクセスポートをすぐ転送にする, en: Edge ports by default}, type: bool, note: {ja: "全体の既定（PortFast default）", en: "The global default (PortFast default)"}}
+  - {name: stp_bpdu_guard_default, title: {ja: エッジポートの BPDU ガード, en: BPDU guard by default}, type: bool, note: {ja: "すぐ転送にするポートすべてに BPDU ガードを掛ける", en: "BPDU guard on every edge port"}}
+  - {name: stp_extend_system_id, title: {ja: 拡張システム ID, en: Extended system ID}, type: bool}
+  - {name: ip_routing, title: {ja: L3 の転送, en: IP routing}, type: bool, note: {ja: "L3 スイッチで経路による転送を使う", en: "A layer-3 switch forwards by its routes"}}
+  - {name: default_gateway, title: {ja: デフォルトゲートウェイ, en: Default gateway}, type: ip4, note: {ja: "L3 の転送を使わない機器（L2 スイッチ）の管理通信の出口", en: "Where a device that does not route (a layer-2 switch) sends its own traffic"}}
+  - {name: vtp_mode, title: {ja: VTP のモード, en: VTP mode}, type: enum, values: [server, client, transparent, "off"]}
+  - {name: vtp_domain, title: {ja: VTP のドメイン名, en: VTP domain}, type: string}
+  - {name: bridge_irb, title: {ja: ブリッジと L3 の併用（IRB）, en: Integrated routing and bridging}, type: bool, note: {ja: "ブリッジグループを BVI で L3 につなぐ", en: "A bridge group meets layer 3 at its BVI"}}
+  - {name: stp_root, title: {ja: ルートブリッジの指定（機器全体）, en: Root bridge (device)}, type: enum, values: [primary, secondary], note: {ja: "primary = ルートブリッジにする、secondary = 予備のルートブリッジにする（優先度を機器が決める）", en: "primary = make the device the root bridge, secondary = the backup root (the device picks the priority)"}}
+  - {name: stp_hello, title: {ja: Hello 間隔（秒）, en: Hello time (s)}, type: int, note: {ja: "機器に 1 本の木と、MSTP の共通の木", en: "The one tree of the device, and the common tree of MSTP"}}
+  - {name: stp_forward, title: {ja: 転送遅延（秒）, en: Forward time (s)}, type: int}
+  - {name: stp_max_age, title: {ja: 最大エージ（秒）, en: Max age (s)}, type: int}
+  - {name: mst_name, title: {ja: MST リージョン名, en: MST region name}, type: string}
+  - {name: mst_revision, title: {ja: MST リビジョン, en: MST revision}, type: int, min: 0, max: 65535}
+  - {name: loop_detect_vlans, title: {ja: ループ検出をする VLAN（全体）, en: Loop detection VLANs (device)}, type: "list<string>", note: {ja: "全部のポートでループ検出をする VLAN。10,20,30-40 の形か all", en: "The VLANs loop detection watches on every port: 10,20,30-40 or all"}}
+  - {name: loop_detect_action, title: {ja: ループのときの動作（全体）, en: Action on a loop (device)}, type: enum, values: [shutdown], note: {ja: "空 = 記録するだけ", en: "Empty = a log only"}}
+  - {name: loop_detect_interval, title: {ja: ループ検出の間隔（秒）, en: Loop detection interval (s)}, type: int}
+  - {name: dhcp_snooping, title: {ja: DHCP スヌーピング, en: DHCP snooping}, type: bool}
+  - {name: port_security, title: {ja: ポートセキュリティを使う, en: Port security}, type: bool, note: {ja: "機器全体で入り切りする機器だけ（NEC QX の port-security enable）", en: "Only for a device that switches it for the whole device (port-security enable of NEC QX)"}}
+  - {name: lacp_system_priority, title: {ja: LACP のシステム優先度, en: LACP system priority}, type: int, min: 0, max: 65535}
+  - {name: stp_loopguard_default, title: {ja: ループガードを全体の既定にする, en: Loop guard by default}, type: bool}
+  - {name: stp_bpdu_filter_default, title: {ja: エッジポートの BPDU フィルタ, en: BPDU filter by default}, type: bool, note: {ja: "すぐ転送にするポートすべてに BPDU フィルタを掛ける", en: "BPDU filter on every edge port"}}
+  - {name: stp_pathcost_method, title: {ja: スパニングツリーのコストの桁, en: Spanning tree path cost method}, type: enum, values: [short, long], note: {ja: "short = 16 ビット。long = 32 ビット", en: "short = 16 bits. long = 32 bits"}}
+  - {name: stp_backbonefast, title: {ja: BackboneFast, en: BackboneFast}, type: bool}
+  - {name: stp_uplinkfast, title: {ja: UplinkFast, en: UplinkFast}, type: bool}
+  - {name: lag_load_balance, title: {ja: LAG の振り分け方, en: LAG load balancing}, type: enum, values: [dst-ip, dst-mac, dst-mixed-ip-port, dst-port, src-dst-ip, src-dst-mac, src-dst-mixed-ip-port, src-dst-port, src-ip, src-mac, src-mixed-ip-port, src-port], note: {ja: "どの値でメンバーに振り分けるか", en: "What picks the member a frame goes out on"}}
+  - {name: vtp_version, title: {ja: VTP の版, en: VTP version}, type: enum, values: ["1", "2", "3"]}
+  - {name: vtp_password, title: {ja: VTP のパスワード, en: VTP password}, type: secret}
+  - {name: vtp_pruning, title: {ja: VTP プルーニング, en: VTP pruning}, type: bool}
+  - {name: errdisable_recovery_causes, title: {ja: 自動で戻す停止の原因, en: Errdisable recovery causes}, type: "list<string>", note: {ja: "止まったポートを自動で戻す原因（機器の語。bpduguard、psecure-violation など。all = すべて）", en: "The causes a stopped port comes back from by itself (words of the device: bpduguard, psecure-violation ...; all)"}}
+  - {name: errdisable_recovery_interval, title: {ja: 自動で戻すまでの時間（秒）, en: Errdisable recovery interval (s)}, type: int, min: 30, max: 86400}
+  - {name: udld, title: {ja: 片方向リンクの検出（UDLD）, en: UDLD}, type: enum, values: [enable, aggressive], note: {ja: "光のポート全体の既定", en: "The default of all fibre ports"}}
+  - {name: udld_message_time, title: {ja: UDLD の送信間隔（秒）, en: UDLD message time (s)}, type: int, min: 1, max: 90}
+  - {name: cdp, title: {ja: CDP, en: CDP}, type: bool, note: {ja: "機器全体の有効・無効。空 = 機器の既定", en: "On or off for the device. Empty = the default of the device"}}
+  - {name: cdp_timer, title: {ja: CDP の送信間隔（秒）, en: CDP timer (s)}, type: int}
+  - {name: cdp_holdtime, title: {ja: CDP の保持時間（秒）, en: CDP hold time (s)}, type: int}
+  - {name: lldp, title: {ja: LLDP, en: LLDP}, type: bool, note: {ja: "機器全体の有効・無効。空 = 機器の既定", en: "On or off for the device. Empty = the default of the device"}}
+  - {name: lldp_timer, title: {ja: LLDP の送信間隔（秒）, en: LLDP timer (s)}, type: int}
+  - {name: lldp_holdtime, title: {ja: LLDP の保持時間（秒）, en: LLDP hold time (s)}, type: int}
+  - {name: lldp_reinit, title: {ja: LLDP の再初期化の待ち（秒）, en: LLDP reinit delay (s)}, type: int}
+  - {name: dhcp_snooping_vlans, title: {ja: DHCP スヌーピングの VLAN, en: DHCP snooping VLANs}, type: "list<string>", note: {ja: "例 10,20,30-40", en: "e.g. 10,20,30-40"}}
+  - {name: dhcp_snooping_option82, title: {ja: DHCP スヌーピングの option 82, en: DHCP snooping option 82}, type: bool, note: {ja: "有効・無効のどちらも書ける（無効 = 中継情報を付けない）", en: "Both on and off can be written (off = no relay information is added)"}}
+  - {name: arp_inspection_vlans, title: {ja: ARP 検査の VLAN, en: ARP inspection VLANs}, type: "list<string>"}
+  - {name: mac_aging_time, title: {ja: MAC アドレスを忘れるまでの時間（秒）, en: MAC address aging time (s)}, type: int, min: 0, max: 1000000, note: {ja: "0 = 忘れない", en: "0 = never"}}
+  - {name: vlan_internal_allocation, title: {ja: 内部 VLAN の振り方, en: Internal VLAN allocation}, type: enum, values: [ascending, descending], note: {ja: "L3 のポートのために機器が内部で使う VLAN を、小さい番号から（ascending）か大きい番号から（descending）振る", en: "The VLANs the device uses inside for routed ports: from the low numbers (ascending) or from the high ones (descending)"}}
+  - {name: system_mtu, title: {ja: スイッチ全体の MTU, en: System MTU}, type: int}
+  - {name: loop_detect_threshold, title: {ja: ループとみなす回数, en: Loop detection threshold}, type: int, min: 1, max: 10000}
+  - {name: loop_detect_window, title: {ja: ループ検出の窓の大きさ, en: Loop detection window size}, type: int, min: 1, max: 5}
+  - {name: bvi_count, title: {ja: BVI の数, en: Number of BVIs}, type: int, min: 1, max: 64, note: {ja: "機器が持つ BVI の数を変える（対応する機器だけ）", en: "Changes how many BVIs the device has (only where it can)"}}

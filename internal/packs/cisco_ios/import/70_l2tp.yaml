@@ -1,0 +1,254 @@
+# L2TP (appendix A 3.21): L2TPv3 pseudowires, and the VPDN groups of an LNS
+# or a LAC. Syntax: Wide-Area Networking Command Reference (l2tp-class,
+# pseudowire-class, xconnect), VPDN Command Reference (vpdn-group) and Dial
+# Technologies Command Reference (peer default ip address, ppp ipcp dns,
+# ip local pool); README.md names the books. The lines under an interface
+# ("xconnect", and the lines of a Virtual-Template) are read in
+# 20_interfaces.yaml and joined here.
+rules:
+  # ---- L2TPv3: the control channel ----
+  # The name of the class is read and not kept: the template gives the class
+  # the name of the pseudowire class. "password 7 ..." (the encrypted form),
+  # "digest", "hidden", "cookie size" and "retransmit" have no column.
+  - id: l2tp.class
+    match: '^l2tp-class (?P<cls>\S+)$'
+    row: {table: x_l2tp_class, key: {name: "{{ cls }}"}}
+    children:
+      - id: l2tp.class.auth
+        match: '^authentication$'
+        set: {auth: "true"}
+      - id: l2tp.class.password
+        match: '^password (?:0 )?(?P<pw>\S+)$'
+        set: {password: "{{ pw }}"}
+      - id: l2tp.class.hostname
+        match: '^hostname (?P<h>\S+)$'
+        set: {local_name: "{{ h }}"}
+      - id: l2tp.class.hello
+        match: '^hello (?P<s>\d+)$'
+        set: {hello: "{{ s }}"}
+
+  # ---- L2TPv3: the pseudowire class ----
+  # "ip tos", "ip ttl" and "ip protocol" have no column.
+  - id: l2tp.pw
+    match: '^pseudowire-class (?P<pw>\S+)$'
+    row: {table: x_pw_class, key: {name: "{{ pw }}"}}
+    children:
+      - id: l2tp.pw.encap
+        match: '^encapsulation l2tpv3$'
+        set: {encap: l2tpv3}
+      - id: l2tp.pw.protocol
+        match: '^protocol (?P<proto>l2tpv3|none)(?: (?P<cls>\S+))?$'
+        set: {protocol: "{{ proto }}", class: "{{ cls }}"}
+      - id: l2tp.pw.source
+        match: '^ip local interface (?P<ifn>[A-Za-z]\S*)$'
+        set: {local_if: "{{ ifn | ifname }}"}
+      - id: l2tp.pw.pmtu
+        match: '^ip pmtu$'
+        set: {pmtu: "true"}
+      - id: l2tp.pw.df
+        match: '^ip dfbit set$'
+        set: {df_bit: "true"}
+      - id: l2tp.pw.sequencing
+        match: '^sequencing (?P<dir>transmit|receive|both)$'
+        set: {sequencing: "{{ dir }}"}
+
+  # ---- VPDN: an LNS (accept-dialin) or a LAC (request-dialin) ----
+  - id: vpdn.enable
+    match: '^vpdn enable$'
+    emit:
+      - table: x_vpdn_on
+        key: {}
+        set: {"on": "true"}
+
+  # The lines of the two subgroups stand one step deeper than the lines of
+  # the group. A second "initiate-to", and the forms with "limit" or
+  # "priority", stay unknown.
+  - id: vpdn.group
+    match: '^vpdn-group (?P<grp>\S+)$'
+    row: {table: x_vpdn, key: {name: "{{ grp }}"}}
+    children:
+      - id: vpdn.accept
+        match: '^accept-dialin$'
+        set: {accept: "true"}
+        children:
+          - id: vpdn.accept.protocol
+            match: '^protocol l2tp$'
+            set: {protocol: l2tp}
+          - id: vpdn.accept.template
+            match: '^virtual-template (?P<n>\d+)$'
+            set: {vt: "{{ n }}"}
+      - id: vpdn.request
+        match: '^request-dialin$'
+        set: {request: "true"}
+        children:
+          - id: vpdn.request.protocol
+            match: '^protocol l2tp$'
+            set: {protocol: l2tp}
+          - id: vpdn.request.domain
+            match: '^domain (?P<dom>\S+)$'
+            emit:
+              - table: x_vpdn_domain
+                key: {group: "{{ grp }}", domain: "{{ dom }}"}
+      - id: vpdn.terminate
+        match: '^terminate-from hostname (?P<h>\S+)$'
+        set: {peer_name: "{{ h }}"}
+      - id: vpdn.initiate
+        match: '^initiate-to ip (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+        when: "not lookup('x_vpdn', name=grp).peer_address"
+        set: {peer_address: "{{ addr }}"}
+      - id: vpdn.name
+        match: '^local name (?P<h>\S+)$'
+        set: {local_name: "{{ h }}"}
+      - id: vpdn.password
+        match: '^l2tp tunnel password (?:0 )?(?P<pw>\S+)$'
+        set: {password: "{{ pw }}"}
+      # The switch-off of what is on by default (VPDN Command Reference).
+      - id: vpdn.noauth
+        match: '^no l2tp tunnel authentication$'
+        set: {tunnel_auth: "false"}
+
+  # The addresses an LNS hands out. One range: a second line of the same
+  # pool, and the forms with "group" and so on, stay unknown.
+  - id: l2tp.pool
+    match: '^ip local pool (?P<pool>\S+) (?P<lo>\d+\.\d+\.\d+\.\d+) (?P<hi>\d+\.\d+\.\d+\.\d+)$'
+    when: "rows('x_local_pool', name=pool) | length == 0"
+    row: {table: x_local_pool, key: {name: "{{ pool }}"}}
+    set: {start: "{{ lo }}", end: "{{ hi }}"}
+
+derive:
+  # ---- L2TPv3 ----
+  # The interface names a pseudowire class; that names the class of the
+  # control channel ("protocol l2tpv3 <class>"), or, set by hand, the
+  # interface names it for the keepalive ("l2tp hello <class>"). A password
+  # and "authentication" come together. Without a "protocol" line the row is
+  # not made (what the device does then was not confirmed).
+  - id: l2tpv3.row
+    for: x_xconnect
+    as: x
+    let:
+      pw: "lookup('x_pw_class', name=x.pw)"
+      cname: "x.hello_class if x.manual else pw.class"
+      cls: "lookup('x_l2tp_class', name=cname)"
+      byhand: "pw.protocol == 'none' and x.manual and x.local_session_id and not pw.class and not cls.auth and not cls.password and not cls.local_name"
+      dynamic: "pw.protocol == 'l2tpv3' and not x.manual and not x.local_session_id and not x.local_cookie and not x.remote_cookie and not x.hello_class and ((cls.auth == 'true') == (cls.password != ''))"
+    when: "pw.encap == 'l2tpv3' and pw.local_if and (byhand or dynamic) and (cls.name or not cname)"
+    row: {table: l2tpv3, key: {if_name: "{{ x.if_name }}"}}
+    set:
+      peer_address: "{{ x.peer }}"
+      vc_id: "{{ x.vc_id }}"
+      profile: "{{ x.pw }}"
+      local_if: "{{ pw.local_if }}"
+      signaling: "{{ 'manual' if x.manual else 'dynamic' }}"
+      password: "{{ cls.password }}"
+      local_name: "{{ cls.local_name }}"
+      hello: "{{ cls.hello }}"
+      local_session_id: "{{ x.local_session_id }}"
+      remote_session_id: "{{ x.remote_session_id }}"
+      local_cookie: "{{ x.local_cookie }}"
+      remote_cookie: "{{ x.remote_cookie }}"
+      sequencing: "{{ pw.sequencing }}"
+      pmtu: "{{ pw.pmtu }}"
+      df_bit: "{{ pw.df_bit }}"
+
+  # ---- VPDN ----
+  # A group is an LNS or a LAC, not both. The Virtual-Template of an LNS
+  # holds what the callers are asked for and the pool they get addresses
+  # from; the pool is found by its name.
+  - id: l2tp.group
+    for: x_vpdn
+    as: g
+    let:
+      sw: "lookup('x_vpdn_on')"
+      vt: "lookup('x_vt', if_name='Virtual-Template' ~ g.vt)"
+      pool: "lookup('x_local_pool', name=vt.pool)"
+    when: "sw.on and g.protocol == 'l2tp' and ((g.accept and not g.request and g.vt) or (g.request and not g.accept and not g.vt)) and (pool.start or not vt.pool)"
+    row: {table: l2tp_groups, key: {name: "{{ g.name }}"}}
+    set:
+      role: "{{ 'lns' if g.accept else 'lac' }}"
+      peer_address: "{{ g.peer_address }}"
+      peer_name: "{{ g.peer_name }}"
+      local_name: "{{ g.local_name }}"
+      tunnel_auth: "{{ g.tunnel_auth }}"
+      password: "{{ g.password }}"
+      auth: "{{ vt.auth }}"
+      pool_start: "{{ pool.start }}"
+      pool_end: "{{ pool.end }}"
+    append:
+      logical_ifs: "{{ ('Virtual-Template' ~ g.vt) if g.vt else '' }}"
+      dns_servers: "{{ vt.dns }}"
+
+  # The device does not point at IPsec from a VPDN group: the crypto map of
+  # the outside interface protects the callers. The row of an LNS names the
+  # row of IPsec that does so (appendix A 3.21): an entry for the peers
+  # whose address is not known, in transport mode; the first one by its
+  # name.
+  - id: l2tp.lns.ipsec
+    for: l2tp_groups
+    as: g
+    let:
+      sec: "first('ipsec_tunnels', style='policy', peer_address='any', ipsec_mode='transport', sort='name')"
+    when: "g.role == 'lns' and sec.name"
+    row: {table: l2tp_groups, key: {name: "{{ g.name }}"}}
+    set: {ipsec_policy: "{{ sec.name }}"}
+
+  - id: l2tp.group.domain
+    for: x_vpdn_domain
+    as: d
+    let:
+      g: "lookup('l2tp_groups', name=d.group)"
+    when: "g.role == 'lac'"
+    row: {table: l2tp_groups, key: {name: "{{ d.group }}"}}
+    append: {domains: "{{ d.domain }}"}
+
+  # ---- the users of an LNS ----
+  # The device keeps the callers of an LNS with its own users ("username").
+  # On a device that has an LNS, a user written with "password" and without
+  # a privilege is taken as a caller (appendix A 3.21): CHAP needs the
+  # password itself, which "secret" does not keep. The first LNS by its name
+  # gets them.
+  - id: l2tp.user
+    for: x_user_password
+    as: u
+    let:
+      lns: "first('l2tp_groups', role='lns', sort='name')"
+      usr: "lookup('users', name=u.name)"
+    when: "lns.name and not u.privilege and usr.secret"
+    row: {table: l2tp_users, key: {group: "{{ lns.name }}", name: "{{ u.name }}"}}
+    set: {password: "{{ usr.secret }}"}
+  # Every other user written with "password" stays a user of the device.
+  - id: l2tp.user.kept
+    for: x_user_password
+    as: u
+    let:
+      moved: "first('l2tp_users', name=u.name)"
+      priv: "u.privilege"
+    when: "not moved.name"
+    row: {table: users, key: {name: "{{ u.name }}"}}
+  - id: l2tp.user.taken
+    for: users
+    as: u
+    let:
+      moved: "first('l2tp_users', name=u.name)"
+      mark: "lookup('x_user_password', name=u.name)"
+    when: "moved.name and mark.name and not u.privilege"
+    remove: true
+
+  # ---- a PPPoE server under a LAC (appendix A 3.26) ----
+  # The port names a group of PPPoE; the group names a Virtual-Template.
+  # The device does not tie the group to a VPDN group: with one LAC on the
+  # device the ports are its PPPoE interfaces.
+  - id: pppoe.server
+    for: x_bba_if
+    as: b
+    let:
+      grp: "lookup('x_bba', name=b.group)"
+      lacs: "rows('l2tp_groups', role='lac')"
+      lac: "lacs | first"
+      vt: "lookup('x_vt', if_name='Virtual-Template' ~ grp.vt)"
+      vtif: "'Virtual-Template' ~ grp.vt"
+    when: "grp.vt and lacs | length == 1 and not vt.pool and not vt.dns"
+    row: {table: l2tp_groups, key: {name: "{{ lac.name }}"}}
+    set: {auth: "{{ vt.auth }}"}
+    append:
+      access_ifs: "{{ b.if_name }}"
+      logical_ifs: "{{ vtif if vtif not in lac.logical_ifs else '' }}"

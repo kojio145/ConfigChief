@@ -1,0 +1,10 @@
+table: stp_instances
+title: {ja: MSTP のインスタンス, en: MSTP instances}
+since: M7
+key: [device, instance]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: instance, title: {ja: インスタンス番号, en: Instance}, type: int, min: 0, max: 4094, required: true, note: {ja: "0 は共通の木（CIST）。VLAN を割り当てない", en: "0 is the common tree (CIST), which takes no VLANs"}}
+  - {name: vlans, title: {ja: VLAN, en: VLANs}, type: "list<string>", note: {ja: "このインスタンスに割り当てる VLAN。10,20,30-40 の形", en: "The VLANs mapped to the instance: 10,20,30-40"}}
+  - {name: priority, title: {ja: 優先度, en: Priority}, type: int, min: 0, max: 65535}
+  - {name: root, title: {ja: ルートブリッジの指定, en: Root bridge}, type: enum, values: [primary, secondary], note: {ja: "primary・secondary（優先度を機器が決める）", en: "primary, secondary (the device picks the priority)"}}

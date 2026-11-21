@@ -1,0 +1,50 @@
+table: switchports
+title: {ja: スイッチポート, en: Switch ports}
+since: M7
+key: [device, if_name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: if_name, title: {ja: IF 名, en: Interface}, type: ifname, required: true, note: {ja: "ポート、または LAG の IF", en: "A port, or the interface of a LAG"}}
+  - {name: mode, title: {ja: モード, en: Mode}, type: enum, values: [access, trunk, dynamic_auto, dynamic_desirable, routed, hybrid, pvlan_host, pvlan_promiscuous], note: {ja: "access = 1 つの VLAN にタグなしで入る。trunk = 複数の VLAN をタグ付きで通す。routed = L3 のポートとして使う。空 = 機器の既定", en: "access = in one VLAN, untagged. trunk = several VLANs, tagged. routed = used as a layer-3 port. Empty = what the device does by default"}}
+  - {name: access_vlan, title: {ja: アクセス VLAN, en: Access VLAN}, type: int, min: 1, max: 4094}
+  - {name: native_vlan, title: {ja: ネイティブ VLAN, en: Native VLAN}, type: int, min: 1, max: 4094, note: {ja: "トランクでタグを付けずに通す VLAN。空 = 機器の既定（ふつう 1）", en: "The VLAN a trunk carries without a tag. Empty = the default of the device (usually 1)"}}
+  - {name: allowed_vlans, title: {ja: 許可 VLAN, en: Allowed VLANs}, type: "list<string>", note: {ja: "トランクで通す VLAN。例 10,20,30-40。all = すべて、none = なし。空 = 機器の既定（ふつう すべて）", en: "The VLANs a trunk carries, e.g. 10,20,30-40. all, none. Empty = the default of the device (usually all)"}}
+  - {name: trunk_encapsulation, title: {ja: トランクのタグ方式, en: Trunk encapsulation}, type: enum, values: [dot1q, isl, negotiate], note: {ja: "方式を選べる機器だけ", en: "Only where the device lets it be chosen"}}
+  - {name: nonegotiate, title: {ja: モードの自動交渉を止める, en: No negotiation}, type: bool}
+  - {name: voice_vlan, title: {ja: 音声 VLAN, en: Voice VLAN}, type: int, min: 1, max: 4094}
+  - {name: stp_edge, title: {ja: すぐ転送にする（エッジポート）, en: Edge port (PortFast)}, type: enum, values: ["on", trunk, "off"], note: {ja: "on = 端末をつなぐポートとして、つないですぐ転送にする（PortFast）。trunk = トランクでも同じにする。off = 全体の既定を、このポートでは止める", en: "on = forwards at once, for a port to a host (PortFast). trunk = the same on a trunk. off = switches the global default off on this port"}}
+  - {name: stp_bpdu_guard, title: {ja: BPDU ガード, en: BPDU guard}, type: bool, note: {ja: "BPDU を受けたらポートを止める", en: "Stops the port when a BPDU comes in"}}
+  - {name: storm_broadcast, title: {ja: ストーム制御・ブロードキャスト（%）, en: Storm control broadcast (%)}, type: string, note: {ja: "帯域に対する割合。例 10.00。速さで書くときは 500pps（1 秒あたりのパケット数）、64kbps、1500bps", en: "Share of the bandwidth, e.g. 10.00. As a rate: 500pps (packets a second), 64kbps, 1500bps"}}
+  - {name: storm_multicast, title: {ja: ストーム制御・マルチキャスト（%）, en: Storm control multicast (%)}, type: string}
+  - {name: storm_unicast, title: {ja: ストーム制御・ユニキャスト（%）, en: Storm control unicast (%)}, type: string}
+  - {name: storm_action, title: {ja: ストームのときの動作, en: Storm action}, type: enum, values: [shutdown, trap], note: {ja: "空 = 超えた分を捨てるだけ", en: "Empty = only drops what is over"}}
+  - {name: port_security, title: {ja: ポートセキュリティ, en: Port security}, type: bool}
+  - {name: port_security_max, title: {ja: 覚える MAC の数, en: Maximum MAC addresses}, type: int, min: 1}
+  - {name: port_security_violation, title: {ja: 違反のときの動作, en: Violation action}, type: enum, values: [protect, restrict, shutdown]}
+  - {name: port_security_sticky, title: {ja: 覚えた MAC を設定に残す, en: Sticky MAC addresses}, type: bool}
+  - {name: hybrid_tagged, title: {ja: タグ付きで通す VLAN（hybrid）, en: Tagged VLANs (hybrid)}, type: "list<string>", note: {ja: "モードが hybrid のポートが、タグ付きで通す VLAN。10,20,30-40 の形", en: "The VLANs a hybrid port carries with a tag: 10,20,30-40"}}
+  - {name: hybrid_untagged, title: {ja: タグなしで通す VLAN（hybrid）, en: Untagged VLANs (hybrid)}, type: "list<string>", note: {ja: "モードが hybrid のポートが、タグなしで通す VLAN。入ってくるタグなしのフレームの VLAN は「ネイティブ VLAN」", en: "The VLANs a hybrid port carries without a tag. Untagged frames coming in go to the native VLAN"}}
+  - {name: stp_enabled, title: {ja: スパニングツリー（ポート）, en: Spanning tree on the port}, type: bool, note: {ja: "無効 = このポートではスパニングツリーを止める。空 = 機器の既定（有効）", en: "false = no spanning tree on this port. Empty = the default of the device (on)"}}
+  - {name: stp_guard, title: {ja: ガード, en: Guard}, type: enum, values: [root, loop, none], note: {ja: "root = 上位の BPDU を受けたら止める（ルートガード）。loop = BPDU が来なくなっても転送にしない（ループガード）。none = 全体の既定のガードを、このポートでは止める", en: "root = root guard, loop = loop guard"}}
+  - {name: stp_cost, title: {ja: パスコスト, en: Path cost}, type: int, min: 1}
+  - {name: stp_port_priority, title: {ja: ポートの優先度, en: Port priority}, type: int, min: 0, max: 240}
+  - {name: loop_detect_vlans, title: {ja: ループ検出をする VLAN, en: Loop detection VLANs}, type: "list<string>", note: {ja: "このポートでループ検出をする VLAN。10,20,30-40 の形か all", en: "The VLANs loop detection watches on this port: 10,20,30-40 or all"}}
+  - {name: loop_detect_action, title: {ja: ループのときの動作, en: Action on a loop}, type: enum, values: [block, no_learning, shutdown], note: {ja: "空 = 記録するだけ。block = 止める、no_learning = MAC を覚えない、shutdown = ポートを落とす", en: "Empty = a log only. block, no_learning (no MAC learning), shutdown"}}
+  - {name: dhcp_snooping_trust, title: {ja: DHCP スヌーピングで信頼する, en: DHCP snooping trust}, type: bool, note: {ja: "有効 = DHCP サーバのいる側のポート", en: "true = the port towards the DHCP server"}}
+  - {name: voice_vlan_mode, title: {ja: 音声 VLAN の伝え方, en: Voice VLAN mode}, type: enum, values: [dot1p, "none", untagged], note: {ja: "番号を使わないとき: dot1p = 優先度だけのタグ。untagged = タグなし。none = 電話機に何も伝えない", en: "Without a number: dot1p = a priority tag only. untagged = no tag. none = the phone is told nothing"}}
+  - {name: storm_broadcast_low, title: {ja: ストーム制御・ブロードキャストの下限, en: Storm control broadcast (falling)}, type: string, note: {ja: "ここまで下がったら通信を戻す値。上の値と同じ書き方（10.00、500pps、64kbps）で、同じ単位にする", en: "Traffic comes back when it falls to this. Written as the rising value (10.00, 500pps, 64kbps), in the same unit"}}
+  - {name: storm_multicast_low, title: {ja: ストーム制御・マルチキャストの下限, en: Storm control multicast (falling)}, type: string}
+  - {name: storm_unicast_low, title: {ja: ストーム制御・ユニキャストの下限, en: Storm control unicast (falling)}, type: string}
+  - {name: port_security_macs, title: {ja: 許可する MAC アドレス, en: Secure MAC addresses}, type: "list<string>", note: {ja: "手で決めた MAC アドレス。0000.5e00.5301 の形。VLAN を限るときは 0000.5e00.5301/10（トランクの VLAN 10）、0000.5e00.5301/access、0000.5e00.5301/voice", en: "Addresses set by hand, as 0000.5e00.5301. For one VLAN: 0000.5e00.5301/10 (VLAN 10 of a trunk), 0000.5e00.5301/access, 0000.5e00.5301/voice"}}
+  - {name: port_security_sticky_macs, title: {ja: 覚えた MAC アドレス, en: Learnt MAC addresses}, type: "list<string>", note: {ja: "機器が覚えて設定に残したアドレス。書き方は「許可する MAC アドレス」と同じ", en: "Addresses the device learnt and kept in its configuration; written as the secure ones"}}
+  - {name: port_security_aging_time, title: {ja: MAC を忘れるまでの時間（分）, en: Port security aging (min)}, type: int, min: 0, max: 1440, note: {ja: "0 = 忘れない", en: "0 = never"}}
+  - {name: port_security_aging_type, title: {ja: MAC の忘れ方, en: Port security aging type}, type: enum, values: [absolute, inactivity], note: {ja: "absolute = 覚えてからの時間。inactivity = 通信が無くなってからの時間", en: "absolute = since it was learnt. inactivity = since it was last seen"}}
+  - {name: port_security_aging_static, title: {ja: 手で決めた MAC も忘れる, en: Aging of static addresses}, type: bool}
+  - {name: protected, title: {ja: 保護ポート, en: Protected port}, type: bool, note: {ja: "保護ポートどうしは、同じ VLAN でも通信させない", en: "Protected ports do not talk to each other, even in one VLAN"}}
+  - {name: stp_bpdu_filter, title: {ja: BPDU フィルタ, en: BPDU filter}, type: bool, note: {ja: "BPDU を送らず、受けても捨てる。有効・無効のどちらも書ける", en: "Sends no BPDUs and drops those that come in. Both on and off can be written"}}
+  - {name: stp_link_type, title: {ja: スパニングツリーのリンクの種類, en: Spanning tree link type}, type: enum, values: [point_to_point, shared], note: {ja: "空 = 二重から機器が決める", en: "Empty = the device takes it from the duplex"}}
+  - {name: pvlan_primary, title: {ja: プライベート VLAN のプライマリ, en: Private VLAN primary}, type: int, min: 1, max: 4094, note: {ja: "モードが pvlan_host・pvlan_promiscuous のポートが属するプライマリの VLAN", en: "The primary VLAN of a port in the mode pvlan_host or pvlan_promiscuous"}}
+  - {name: pvlan_secondaries, title: {ja: プライベート VLAN のセカンダリ（ポート）, en: Private VLAN secondaries (port)}, type: "list<string>", note: {ja: "pvlan_host は 1 つ。pvlan_promiscuous は並び（501-503）", en: "One for pvlan_host; a list for pvlan_promiscuous (501-503)"}}
+  - {name: udld, title: {ja: 片方向リンクの検出（UDLD）, en: UDLD}, type: enum, values: [enable, aggressive, disable], note: {ja: "enable・aggressive = このポートで使う。disable = 全体の設定を、このポートでは止める", en: "enable, aggressive = on this port. disable = the global setting is off on this port"}}
+  - {name: dhcp_snooping_rate, title: {ja: DHCP の受信の上限（毎秒）, en: DHCP snooping rate limit (pps)}, type: int, min: 1}
+  - {name: arp_inspection_trust, title: {ja: ARP 検査の信頼ポート, en: ARP inspection trust}, type: bool}

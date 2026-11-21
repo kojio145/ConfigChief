@@ -1,0 +1,8 @@
+hostname ix-c05
+!
+interface GigaEthernet1.0
+  pppoe l2tp interface GigaEthernet2.0 url-list lac-sample-b
+  no shutdown
+!
+interface GigaEthernet2.0
+  ip address 198.51.100.129/25

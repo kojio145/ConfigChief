@@ -1,0 +1,22 @@
+table: l2tp_groups
+title: {ja: L2TP, en: L2TP}
+since: M7
+key: [device, name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: 名前, en: Name}, type: string, required: true, note: {ja: "Cisco は vpdn-group の名前。NEC IX は、lns なら PPP プロファイル、lac なら URL リストの名前", en: "The VPDN group (Cisco); the PPP profile of an LNS or the URL list of a LAC (NEC IX)"}}
+  - {name: role, title: {ja: 役割, en: Role}, type: enum, values: [lns, lac], required: true, note: {ja: "lns = 受ける側（リモートアクセスの受け口・回線を受ける側）。lac = PPP を LNS へ運ぶ側", en: "lns = the side that accepts (remote access, or the lines a LAC brings). lac = the side that carries PPP to the LNS"}}
+  - {name: logical_ifs, title: {ja: 受け口の IF, en: Logical interfaces}, type: "list<ifname>", note: {ja: "lns: つないだ相手が乗る IF（Cisco は Virtual-Template を 1 つ、NEC IX はトンネル IF を同時につなぐ数だけ）。lac（NEC IX）: LNS へのトンネル IF", en: "lns: the interfaces the callers come up on (one Virtual-Template on Cisco, a tunnel interface per caller on NEC IX). lac (NEC IX): the tunnel interface to the LNS"}}
+  - {name: access_ifs, title: {ja: PPPoE を受ける IF, en: Access interfaces}, type: "list<ifname>", note: {ja: "lac（NEC IX）: 配下の PPPoE を受けて L2TP へ渡す IF", en: "lac (NEC IX): the interfaces whose PPPoE sessions are carried over L2TP"}}
+  - {name: peer_address, title: {ja: 相手アドレス, en: Peer address}, type: string, note: {ja: "lac のとき必須: LNS のアドレス", en: "Needed for lac: the address of the LNS"}}
+  - {name: peer_name, title: {ja: 相手の名前, en: Peer name}, type: string, note: {ja: "lns: 受け付ける相手（LAC）の名前", en: "lns: the name of the LAC that is accepted"}}
+  - {name: local_name, title: {ja: 自分の名前, en: Local name}, type: string, note: {ja: "トンネルで名乗る名前", en: "The name this side gives for the tunnel"}}
+  - {name: tunnel_auth, title: {ja: トンネルの認証, en: Tunnel authentication}, type: bool, explicit: true, note: {ja: "無効 = トンネルを張るときに相手を確かめない", en: "Off = the peer is not authenticated when the tunnel comes up"}}
+  - {name: password, title: {ja: トンネルのパスワード, en: Tunnel password}, type: secret}
+  - {name: domains, title: {ja: 運ぶドメイン, en: Domains}, type: "list<string>", note: {ja: "lac: 接続 ID の @ の後ろがこの名前の PPP を運ぶ", en: "lac: PPP whose user name ends in @ and this name is carried"}}
+  - {name: auth, title: {ja: 利用者の認証, en: User authentication}, type: enum, values: [chap, pap, chap_pap, mschap_v2], note: {ja: "lns: つないできた利用者に求める認証", en: "lns: what a caller is asked for"}}
+  - {name: pool_start, title: {ja: 払い出すアドレスの先頭, en: Pool start}, type: ip4, note: {ja: "lns: 利用者に配るアドレスの範囲", en: "lns: the addresses handed to the callers"}}
+  - {name: pool_end, title: {ja: 払い出すアドレスの末尾, en: Pool end}, type: ip4}
+  - {name: dns_servers, title: {ja: 配る DNS サーバ, en: DNS servers}, type: "list<ip4>", note: {ja: "lns。2 つまで", en: "lns. Two at most"}}
+  - {name: ipsec_policy, title: {ja: IPsec の設定名, en: IPsec policy}, type: ref, ref: ipsec_tunnels.name, note: {ja: "lns: この受け口を守る IPsec の行の名前（IPsec のシート。相手が any で、モードが transport の行）", en: "lns: the name of the IPsec row that protects the callers (a row with the peer any and the mode transport)"}}
+  - {name: idle_timeout, title: {ja: 無通信で切る時間（秒）, en: Idle timeout (s)}, type: int, min: 1}

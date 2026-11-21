@@ -1,0 +1,43 @@
+hostname ix-n05
+!
+ip route default 203.0.113.46
+ip route 198.51.100.64/26 203.0.113.46
+ip route 198.51.100.128/26 203.0.113.46
+!
+watch-group 1 10
+  event 10 ip unreach-host 198.51.100.1 source GigaEthernet0.0
+  probe-counter variance 3
+  probe-counter restorer 2
+  probe-timer variance 10
+  action 10 ip shutdown-route 198.51.100.64/26 203.0.113.46
+!
+network-monitor 1 enable
+!
+watch-group 10 10
+  event 10 ip unreach-host 198.51.100.1 source GigaEthernet0.0
+  event 20 ip unreach-host 198.51.100.2
+  probe-counter variance 3
+  probe-counter restorer 2
+  probe-timer variance 10
+  action 10 ip shutdown-route 0.0.0.0/0 203.0.113.46
+!
+network-monitor 10 enable
+!
+watch-group 20 10
+  event 10 sub 10 ip unreach-host 198.51.100.2
+  event 10 sub 20 interface-down GigaEthernet1.0
+  probe-counter variance 3
+  probe-counter restorer 2
+  probe-timer variance 10
+  action 10 ip shutdown-route 198.51.100.128/26 203.0.113.46
+!
+network-monitor 20 enable
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.45/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 192.0.2.129/25
+  no shutdown
+!

@@ -7,15 +7,24 @@ tables:
     - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.9/30}
     - {name: Tunnel1, enabled: true, ipv4: 192.0.2.209/30}
     - {name: Tunnel2, enabled: true, ipv4: 192.0.2.213/30}
+    - {name: Tunnel3, enabled: true, ipv4: 192.0.2.217/30}
+    - {name: Tunnel4, enabled: true, ipv4: 192.0.2.221/30}
   tunnels:
     - {if_name: Tunnel1, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.20}
     - {if_name: Tunnel2, type: gre, source: GigabitEthernet0/0, destination: 203.0.113.30}
+    - {if_name: Tunnel3, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.60}
+    - {if_name: Tunnel4, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.60}
   ipsec_tunnels:
     - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: 203.0.113.20, psk: dummy-psk-sample-a, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
-    # IKE version 2; another proposal of IKE; the tunnel is a GRE tunnel.
-    - {name: Tunnel2, style: tunnel_if, tunnel_if: Tunnel2, peer_address: 203.0.113.30, psk: dummy-psk-sample-b, ike_version: 2, ike_encryption: aes128, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
+    # Another proposal of IKE than the row above; a key in hexadecimal with version 1; the tunnel is a GRE tunnel.
+    - {name: Tunnel2, style: tunnel_if, tunnel_if: Tunnel2, peer_address: 203.0.113.30, psk: dummy-psk-sample-b, psk_form: hex, ike_version: 1, ike_encryption: aes128, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
     # Not "<map>/<number>".
     - {name: vpn-sample-c, style: policy, local_if: GigabitEthernet0/0, peer_address: 203.0.113.40, psk: dummy-psk-sample-c, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
     # No selector; the peer is not an address; the interface is not on the sheet.
     - {name: CMAP-SAMPLE/10, style: policy, local_if: GigabitEthernet0/9, peer_address: any, psk: dummy-psk-sample-d, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
-findings: [G-601]
+    # IKE version 1 with an identity the ISAKMP profile cannot hold (keyid), and a name that is not the one of the device.
+    - {name: CMAP-SAMPLE/20, style: policy, local_if: GigabitEthernet0/0, peer_address: 203.0.113.50, local_id: "fqdn:rt-x99.example.com", remote_id: "keyid:sample-site-b", psk: dummy-psk-sample-e, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
+    # IKE version 2: a watch of the peer without the retry interval and the mode; the same peer on two rows; a proposal of which a part is empty.
+    - {name: Tunnel3, style: tunnel_if, tunnel_if: Tunnel3, peer_address: 203.0.113.60, psk: dummy-psk-sample-f, ike_version: 2, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600, dpd_interval: 30}
+    - {name: Tunnel4, style: tunnel_if, tunnel_if: Tunnel4, peer_address: 203.0.113.60, psk: dummy-psk-sample-f, ike_version: 2, ike_encryption: aes256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
+findings: [G-601, G-606]

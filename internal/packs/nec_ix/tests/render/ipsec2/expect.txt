@@ -1,0 +1,119 @@
+hostname ix-c01
+!
+ikev2 authentication psk id keyid sample-site-a key char dummy-psk-v2-a
+ikev2 authentication psk id keyid sample-site-c key char dummy-psk-v2-c
+ikev2 authentication psk id ipv4 203.0.113.9 key char dummy-psk-v2-d
+ikev2 authentication psk id ipv4 203.0.113.40 key char dummy-psk-v2-d
+ikev2 authentication psk id rfc822-addr netops@example.com key hex 64756d6d792d6b65792d61
+ikev2 authentication psk id fqdn ix-c05.example.com key hex 64756d6d792d6b65792d62
+ikev2 authentication psk id fqdn ix-c06.example.com key char dummy-psk-v2-e
+!
+ip access-list sec-0 permit ip src any dest any
+ike proposal ike-prop-0 encryption aes-256 hash sha2-256 group 2048-bit lifetime 28800
+ike policy ike-0 peer-fqdn-ipv4 ix-c02.example.com key 64756d6d792d6b65792d61 key-type hex mode aggressive ike-prop-0
+ike local-id ike-0 fqdn ix-c01.example.com
+ike remote-id ike-0 user-fqdn netops@example.com
+ike keepalive ike-0 30 5
+ike nat-traversal policy ike-0 keepalive 30 force
+ipsec autokey-proposal ipsec-prop-0 esp-aes-256 esp-sha2-512 ah-sha2-256 lifetime both 3600 100000
+ipsec autokey-map ipsec-0 sec-0 peer-fqdn-ipv4 ix-c02.example.com pfs 2048-bit ipsec-prop-0
+!
+ip access-list sec-1 permit ip src any dest any
+ike proposal ike-prop-1 encryption aes-256 hash sha2-256 group 2048-bit lifetime 28800
+ike policy ike-1 peer any key dummy-psk-v1-b mode aggressive ike-prop-1
+ike remote-id ike-1 keyid sample-site-b
+ipsec autokey-proposal ipsec-prop-1 esp-aes esp-sha lifetime time 7200
+ipsec dynamic-map ipsec-1 sec-1 ike ike-1 ipsec-prop-1
+!
+ikev2 profile ikev2-2
+  child-lifetime 28800
+  child-pfs 2048-bit
+  child-proposal enc aes-cbc-256
+  child-proposal integrity sha2-256
+  dpd interval 20
+  local-authentication psk id keyid sample-site-a
+  retransmit count 5 interval 10
+  sa-lifetime 86400
+  sa-proposal dh 2048-bit
+  sa-proposal enc aes-cbc-256
+  sa-proposal integrity sha2-256
+  sa-proposal prf sha2-384
+!
+ikev2 profile ikev2-3
+  child-lifetime 7200
+  child-pfs off
+  child-proposal enc aes-cbc-256
+  child-proposal integrity sha2-256
+  ipsec-mode transport
+  local-authentication psk
+  nat-traversal keepalive 30 force
+  sa-lifetime 43200
+  sa-proposal dh 2048-bit
+  sa-proposal enc aes-gcm-256-16
+  sa-proposal integrity sha2-256
+  sa-proposal prf sha2-384
+!
+ikev2 profile ikev2-4
+  child-lifetime 28800
+  dpd interval 60
+  local-authentication psk id rfc822-addr netops@example.com
+  nat-traversal off
+  retransmit count 4 interval backoff
+  sa-lifetime 86400
+!
+ikev2 profile ikev2-5
+  child-lifetime 28800
+  local-authentication psk id keyid sample-site-a
+  sa-lifetime 86400
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.9/29
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.1/24
+  no shutdown
+!
+interface Tunnel0.0
+  ip unnumbered GigaEthernet1.0
+  tunnel mode ipsec
+  ipsec policy tunnel ipsec-0 out
+  no shutdown
+!
+interface Tunnel1.0
+  ip unnumbered GigaEthernet1.0
+  tunnel mode ipsec
+  ipsec policy tunnel ipsec-1 out
+  no shutdown
+!
+interface Tunnel2.0
+  ip unnumbered GigaEthernet1.0
+  tunnel mode ipsec-ikev2
+  ikev2 binding ikev2-2
+  ikev2 connect-type auto
+  ikev2 peer 203.0.113.30 authentication psk id keyid sample-site-c
+  no shutdown
+!
+interface Tunnel3.0
+  ip unnumbered GigaEthernet1.0
+  tunnel mode ipsec-ikev2
+  ikev2 binding ikev2-3
+  ikev2 peer 203.0.113.40 authentication psk
+  ikev2 source-address GigaEthernet0.0
+  no shutdown
+!
+interface Tunnel4.0
+  ip unnumbered GigaEthernet1.0
+  tunnel mode ipsec-ikev2
+  ikev2 binding ikev2-4
+  ikev2 connect-type trigger
+  ikev2 peer-fqdn-ipv4 ix-c05.example.com authentication psk
+  no shutdown
+!
+interface Tunnel5.0
+  ip unnumbered GigaEthernet1.0
+  tunnel mode ipsec-ikev2
+  ikev2 binding ikev2-5
+  ikev2 peer any authentication psk id fqdn ix-c06.example.com
+  no shutdown
+!

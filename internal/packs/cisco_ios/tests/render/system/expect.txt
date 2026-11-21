@@ -1,0 +1,57 @@
+hostname rt-d02
+!
+service timestamps debug uptime
+service timestamps log datetime msec localtime show-timezone year
+service password-encryption
+!
+ip name-server vrf VRF-SAMPLE-M 192.0.2.53
+ip name-server vrf VRF-SAMPLE-M 192.0.2.54
+!
+username admin privilege 15 secret 5 $1$dummy$SampleHashForTestsOnly444
+username example-user password 7 dummy7sample0A1B2C3D
+username operator privilege 1 secret 0 dummy-operator-password
+username sample-user password 0 dummy-chap-password
+!
+vrf definition VRF-SAMPLE-M
+ address-family ipv4
+ exit-address-family
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.9 255.255.255.252
+ ip ospf 1 area 0
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 7 dummy7sample0E1F2A3B
+ no shutdown
+!
+interface GigabitEthernet0/1
+ ip address 198.51.100.1 255.255.255.0
+ ip ospf 1 area 0
+ ip ospf authentication
+ ip ospf authentication-key 7 dummy7sample4C5D
+ no shutdown
+!
+router ospf 1
+!
+logging buffered 65536 informational
+!
+banner motd #
+sample motd banner
+#
+!
+banner login #
+sample login banner
+#
+!
+banner exec #
+sample exec banner
+#
+!
+line con 0
+ exec-timeout 5 30
+line vty 0 4
+ exec-timeout 9 30
+ password 7 dummy7sample6E7F
+ login
+ transport input telnet
+!
+end

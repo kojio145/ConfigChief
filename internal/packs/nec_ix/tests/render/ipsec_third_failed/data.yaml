@@ -1,0 +1,29 @@
+# Rows of the third round of IPsec the pack cannot write (made-up values):
+# each tells why.
+tables:
+  devices:
+    - hostname: ix-v03
+      vendor: nec_ix
+  vrfs:
+    - {name: wan-a}
+    - {name: cust-a}
+  l2_settings:
+    - {bridge_irb: true}
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.9/29}
+    - {name: GigaEthernet1.0, enabled: true, bridge_group: 1}
+    - {name: Tunnel0.0, enabled: true, ipv4: "unnumbered:GigaEthernet0.0"}
+    - {name: Tunnel1.0, enabled: true, bridge_group: 1}
+  tunnels:
+    - {if_name: Tunnel0.0, type: ipsec}
+    - {if_name: Tunnel1.0, type: etherip}
+  ipsec_tunnels:
+    # An outer VRF; a key in the saved form of another vendor; no ESP authentication with IKE version 1.
+    - {name: Tunnel0.0, style: tunnel_if, tunnel_if: Tunnel0.0, peer_address: 203.0.113.20, ike_version: 1, psk: "6 DUMMYENCSAMPLEAAAA", ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: none, pfs: none, ipsec_lifetime: 28800, outer_vrf: wan-a}
+    # EtherIP protected in tunnel mode.
+    - {name: Tunnel1.0, style: tunnel_if, tunnel_if: Tunnel1.0, peer_address: 203.0.113.30, ike_version: 1, psk: dummy-psk-sample-b, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha256, pfs: none, ipsec_lifetime: 28800}
+    # An inner VRF on a row without a tunnel interface.
+    - {name: sample-policy-c, style: policy, local_if: GigaEthernet0.0, peer_address: 203.0.113.40, ike_version: 1, psk: dummy-psk-sample-c, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha256, pfs: none, ipsec_lifetime: 28800, inner_vrf: cust-a}
+  ipsec_selectors:
+    - {tunnel: sample-policy-c, seq: 10, local_net: 192.0.2.0/25, remote_net: 198.51.100.128/25, protocol: ip}
+findings: [G-601]

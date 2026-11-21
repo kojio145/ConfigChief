@@ -10,7 +10,7 @@ rules:
     match: '^device (?P<dev>[A-Za-z][A-Za-z-]*\d+)$'
     children:
       - id: device.speed
-        match: '^speed (?P<v>10|100|1000|10000|auto)$'
+        match: '^speed (?P<v>10|100|1000|2500|5000|10000|auto)$'
         emit:
           - table: x_device
             key: {name: "{{ dev }}"}
@@ -21,6 +21,107 @@ rules:
           - table: x_device
             key: {name: "{{ dev }}"}
             set: {duplex: "{{ v }}"}
+      # The description of the port (CRM, chapter 3), apart from the one of an
+      # interface.
+      - id: device.description
+        match: '^description (?P<v>.+)$'
+        emit:
+          - table: x_device
+            key: {name: "{{ dev }}"}
+            set: {description: "{{ v }}"}
+
+      # ---- the ports of the built-in switch (README, "VLAN とスイッチ") ----
+      # A port is not an interface of the device. The pack gives it a name,
+      # "<device>:port<number>", and a row of its own: "port 1" of
+      # GigaEthernet2 is GigaEthernet2:port1.
+      - id: device.vlan_group
+        match: '^vlan-group (?P<g>\d+) port (?P<ports>\d+(?: \d+)*)$'
+        emit:
+          - table: x_vlan_group
+            key: {hub: "{{ dev }}", group: "{{ g }}"}
+            set: {ports: "{{ ports }}"}
+      - id: device.port.speed
+        match: '^port (?P<p>\d+) speed (?P<v>10|100|1000|auto)$'
+        emit:
+          - table: interfaces
+            key: {name: "{{ dev }}:port{{ p }}"}
+            set: {speed: "{{ v }}"}
+      - id: device.port.duplex
+        match: '^port (?P<p>\d+) duplex (?P<v>full|half|auto)$'
+        emit:
+          - table: interfaces
+            key: {name: "{{ dev }}:port{{ p }}"}
+            set: {duplex: "{{ v }}"}
+      - id: device.port.shutdown
+        match: '^port (?P<p>\d+) shutdown$'
+        emit:
+          - table: interfaces
+            key: {name: "{{ dev }}:port{{ p }}"}
+            set: {enabled: false}
+      # Static only: the device has no LACP (FD p.2-20).
+      - id: device.port.lag
+        match: '^port (?P<p>\d+) link-aggregation (?P<lag>\d+)$'
+        emit:
+          - table: interfaces
+            key: {name: "{{ dev }}:port{{ p }}"}
+          - table: lags
+            key: {if_name: "{{ dev }}:port{{ p }}"}
+            set: {group: "{{ lag }}", mode: "on"}
+      # ---- the rest of the built-in switch (appendix A 3.22, 2026-11-21;
+      # CRM p.3-11 to 3-13) ----
+      - id: device.mdi
+        match: '^mdi-mdix (?P<v>mdi|mdix)$'
+        emit:
+          - table: x_device
+            key: {name: "{{ dev }}"}
+            set: {mdi: "{{ v }}"}
+      - id: device.scheduler
+        match: '^qos scheduler (?P<v>strict|wfq)$'
+        emit:
+          - table: x_device
+            key: {name: "{{ dev }}"}
+            set: {scheduler: "{{ v }}"}
+      - id: device.router_port
+        match: '^router-port qos default-priority (?P<n>[0-7])$'
+        emit:
+          - table: x_device
+            key: {name: "{{ dev }}"}
+            set: {router_priority: "{{ n }}"}
+      - id: device.port.mdi
+        match: '^port (?P<p>\d+) mdi-mdix (?P<v>mdi|mdix)$'
+        emit:
+          - table: interfaces
+            key: {name: "{{ dev }}:port{{ p }}"}
+            set: {mdi: "{{ v }}"}
+      - id: device.port.priority
+        match: '^port (?P<p>\d+) qos default-priority (?P<n>[0-7])$'
+        emit:
+          - table: interfaces
+            key: {name: "{{ dev }}:port{{ p }}"}
+            set: {qos_default_priority: "{{ n }}"}
+      # "port 1 mirror-port 4 both": what port 1 sends and receives ("out":
+      # sends) goes out on port 4 as well. The device has no sessions: the
+      # number of the port that takes the copy stands for one.
+      - id: device.port.mirror
+        match: '^port (?P<p>\d+) mirror-port (?P<to>\d+) both$'
+        row: {table: mirror_sessions, key: {session: "{{ to }}"}}
+        set: {destination_if: "{{ dev }}:port{{ to }}"}
+        append: {sources_both: "{{ dev }}:port{{ p }}"}
+        emit:
+          - table: interfaces
+            key: {name: "{{ dev }}:port{{ p }}"}
+          - table: interfaces
+            key: {name: "{{ dev }}:port{{ to }}"}
+      - id: device.port.mirror.out
+        match: '^port (?P<p>\d+) mirror-port (?P<to>\d+) out$'
+        row: {table: mirror_sessions, key: {session: "{{ to }}"}}
+        set: {destination_if: "{{ dev }}:port{{ to }}"}
+        append: {sources_tx: "{{ dev }}:port{{ p }}"}
+        emit:
+          - table: interfaces
+            key: {name: "{{ dev }}:port{{ p }}"}
+          - table: interfaces
+            key: {name: "{{ dev }}:port{{ to }}"}
 
   # ---- interfaces ----
   - id: if
@@ -55,6 +156,175 @@ rules:
         match: '^ipv6 address (?P<addr>[0-9A-Fa-f:]+/\d+)$'
         append: {ipv6: "{{ addr | lower }}"}
 
+      # ---- IPv6 (appendix A 3.23). A fixed address stays in the row of the
+      # interface (above); how IPv6 works on the interface has a table of its
+      # own. Syntax: CRM chapter 9. ----
+      - id: if.ipv6.enable
+        match: '^ipv6 enable$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {enabled: true}
+      - id: if.ipv6.eui64
+        match: '^ipv6 address (?P<p>[0-9A-Fa-f:]+/\d+) eui-64$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        append: {eui64: "{{ p | network }}"}
+      - id: if.ipv6.anycast
+        match: '^ipv6 address (?P<addr>[0-9A-Fa-f:]+/\d+) anycast$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        append: {anycast: "{{ addr }}"}
+      - id: if.ipv6.autoconfig
+        match: '^ipv6 address autoconfig(?P<def> receive-default)?$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {autoconfig: true, autoconfig_default: "{{ 'true' if def else '' }}"}
+      - id: if.ipv6.mtu
+        match: '^ipv6 mtu (?P<n>\d+)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {mtu: "{{ n }}"}
+      # Several lists may stand on an interface, each with a number (as with
+      # the IPv4 filters): they are put in order in 40_policy.yaml.
+      # CRM 9-19.
+      - id: if.ipv6.tcp_mss
+        match: '^ipv6 tcp adjust-mss (?P<n>\d+|auto)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {tcp_mss: "{{ n }}"}
+      - id: if.ipv6.policy_route
+        match: '^ipv6 policy route-map (?P<map>\S+)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {policy_route: "{{ map }}"}
+      - id: if.ipv6.filter
+        match: '^ipv6 filter (?P<acl>\S+) (?P<n>\d+) (?P<dir>in|out)$'
+        emit:
+          - table: x_filter6
+            key: {if_name: "{{ parent.name | ifname }}", dir: "{{ dir }}", n: "{{ n }}"}
+            set: {acl: "{{ acl }}"}
+      # Router advertisements: not sent unless the line switches them on.
+      - id: if.ipv6.ra
+        match: '^(?P<no>no )?ipv6 nd ra enable$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra: "{{ 'off' if no else 'send' }}"}
+      - id: if.ipv6.ra.interval
+        match: '^ipv6 nd ra max-interval (?P<n>\d+)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_interval: "{{ n }}"}
+      - id: if.ipv6.ra.interval.min
+        match: '^ipv6 nd ra min-interval (?P<n>\d+)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_interval_min: "{{ n }}"}
+      - id: if.ipv6.ra.lifetime
+        match: '^ipv6 nd ra lifetime (?P<n>\d+)$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_lifetime: "{{ n }}"}
+      - id: if.ipv6.ra.managed
+        match: '^ipv6 nd ra managed-config-flag$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_managed: true}
+      - id: if.ipv6.ra.other
+        match: '^ipv6 nd ra other-config-flag$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_other: true}
+      - id: if.ipv6.ra.dns
+        match: '^ipv6 nd ra dns-server (?P<a>[0-9A-Fa-f]*:[0-9A-Fa-f:]+)(?: (?P<b>[0-9A-Fa-f]*:[0-9A-Fa-f:]+))?(?: (?P<sec>\d+))?$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {ra_dns_lifetime: "{{ sec }}"}
+        append: {ra_dns: "{{ a }} {{ b }}"}
+      # With "expire" the line stays unknown. The prefix is joined by its
+      # name in 70_ipv6.yaml.
+      - id: if.ipv6.ra.prefix
+        match: '^ipv6 nd ra prefix-advertisement (?P<pn>\S+)$'
+        emit:
+          - table: x_ra_adv
+            key: {if_name: "{{ parent.name | ifname }}", name: "{{ pn }}"}
+      # The line stands on the WAN interface and names the LAN interface.
+      - id: if.ipv6.nd_proxy
+        match: '^ipv6 nd proxy (?P<ifn>[A-Za-z][A-Za-z-]*\d+(?::\d+)?\.\d+|BVI\d+)(?: (?P<acl>\S+))?$'
+        row: {table: ipv6_interfaces, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {nd_proxy: "{{ ifn | ifname }}", nd_proxy_acl: "{{ acl }}"}
+      # DHCPv6: the profile is joined by its name in 70_ipv6.yaml.
+      - id: if.ipv6.dhcp.client
+        match: '^ipv6 dhcp client (?P<profile>\S+)$'
+        emit:
+          - table: x_dhcp6c_bind
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {profile: "{{ profile }}"}
+      - id: if.ipv6.dhcp.server
+        match: '^ipv6 dhcp server (?P<profile>\S+)$'
+        emit:
+          - table: x_dhcp6s_bind
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {profile: "{{ profile }}"}
+      # ---- RIP and RIPng (appendix A 3.27; CRM chapter 10): kept aside
+      # until "ip rip enable" / "ipv6 rip enable" is seen (72_rip.yaml) ----
+      - id: if.rip.enable
+        match: '^(?P<fam>ip|ipv6) rip enable$'
+        emit:
+          - table: x_rip_if
+            key: {family: "{{ 'ipv4' if fam == 'ip' else 'ipv6' }}", if_name: "{{ parent.name | ifname }}"}
+            set: {enabled: "true"}
+      - id: if.rip.send
+        match: '^(?P<no>no )?(?P<fam>ip|ipv6) rip (?P<dir>send|receive)$'
+        emit:
+          - table: x_rip_if
+            key: {family: "{{ 'ipv4' if fam == 'ip' else 'ipv6' }}", if_name: "{{ parent.name | ifname }}"}
+            set: {"{{ dir }}": "{{ 'false' if no else 'true' }}"}
+      # "compatible" is version 2 sent by broadcast.
+      - id: if.rip.send_version
+        match: '^ip rip send version (?P<v>1|2|1 2|compatible)$'
+        emit:
+          - table: x_rip_if
+            key: {family: ipv4, if_name: "{{ parent.name | ifname }}"}
+            set: {send_version: "{{ '2' if v == 'compatible' else v }}", v2_broadcast: "{{ 'true' if v == 'compatible' else '' }}"}
+      - id: if.rip.receive_version
+        match: '^ip rip receive version (?P<v>1|2|1 2)$'
+        emit:
+          - table: x_rip_if
+            key: {family: ipv4, if_name: "{{ parent.name | ifname }}"}
+            set: {receive_version: "{{ v }}"}
+      - id: if.rip.auth
+        match: '^ip rip authentication text (?P<key>\S+)$'
+        emit:
+          - table: x_rip_if
+            key: {family: ipv4, if_name: "{{ parent.name | ifname }}"}
+            set: {auth_key: "{{ key }}"}
+      - id: if.rip.offset
+        match: '^(?P<fam>ip|ipv6) rip metric-offset (?P<n>\d+)$'
+        emit:
+          - table: x_rip_if
+            key: {family: "{{ 'ipv4' if fam == 'ip' else 'ipv6' }}", if_name: "{{ parent.name | ifname }}"}
+            set: {metric_offset: "{{ n }}"}
+      - id: if.rip.split
+        match: '^(?P<fam>ip|ipv6) rip split-type (?P<kind>split-horizon|poisoned-reverse|none)$'
+        emit:
+          - table: x_rip_if
+            key: {family: "{{ 'ipv4' if fam == 'ip' else 'ipv6' }}", if_name: "{{ parent.name | ifname }}"}
+            set: {split_horizon: "{{ kind | replace('-', '_') }}"}
+      # "send-all" has no column.
+      - id: if.rip.summary
+        match: '^(?P<fam>ip|ipv6) rip summary-address (?P<p>[0-9A-Fa-f:.]+/\d+)$'
+        when: "(fam == 'ipv6') == (':' in p)"
+        emit:
+          - table: x_rip_if_summary
+            key: {family: "{{ 'ipv4' if fam == 'ip' else 'ipv6' }}", if_name: "{{ parent.name | ifname }}", prefix: "{{ p | network }}"}
+      # A next hop of the advertised default route has no column.
+      - id: if.rip.default
+        match: '^(?P<fam>ip|ipv6) rip originate-default(?: (?P<metric>\d+))?$'
+        emit:
+          - table: x_rip_if
+            key: {family: "{{ 'ipv4' if fam == 'ip' else 'ipv6' }}", if_name: "{{ parent.name | ifname }}"}
+            set: {default_originate: "true", default_originate_metric: "{{ metric }}"}
+      # Only the routes are filtered ("gateway" has no column).
+      - id: if.rip.filter
+        match: '^(?P<fam>ip|ipv6) rip distribute-list prefix (?P<pl>\S+) (?P<dir>in|out)$'
+        emit:
+          - table: x_rip_if
+            key: {family: "{{ 'ipv4' if fam == 'ip' else 'ipv6' }}", if_name: "{{ parent.name | ifname }}"}
+            set: {"prefix_list_{{ dir }}": "{{ pl }}"}
+      # OSPFv3 on the interface: kept aside, put together in 70_ipv6.yaml.
+      - id: if.ospf3.number
+        match: '^ipv6 ospf (?P<what>cost|priority|hello-interval|dead-interval) (?P<n>\d+)$'
+        emit:
+          - table: x_ospf3_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {"{{ what | replace('-interval', '') }}": "{{ n }}"}
+
       # An interface shows one of the two forms (cmdref 3.4).
       - id: if.shutdown
         match: '^(?P<no>no )?shutdown$'
@@ -69,28 +339,60 @@ rules:
       - id: if.encap.vlan
         match: '^encapsulation dot1q (?P<vlan>\d+)$'
         set: {encap_vlan: "{{ vlan }}"}
+      # The tag protocol ID is hexadecimal, without "0x" (CRM p.3-4).
+      - id: if.encap.vlan.tpid
+        match: '^encapsulation dot1q (?P<vlan>\d+) tpid (?P<tpid>[0-9A-Fa-f]{3,4})$'
+        set: {encap_vlan: "{{ vlan }}", encap_tpid: "{{ tpid | lower }}"}
+      # The plain form; "permanent-address", "port-protected" and
+      # "port-table-size" stay unknown.
+      - id: if.bridge_group
+        match: '^bridge-group (?P<g>\d+)$'
+        set: {bridge_group: "{{ g }}"}
+      # The options of a bridged interface (CRM p.6-5, 6-6), loop detection
+      # (CRM p.20-3) and the least length of a tagged frame (CRM p.3-10).
+      - id: if.bridge_group.protected
+        match: '^bridge-group (?P<g>\d+) port-protected$'
+        set: {bridge_protected: true}
+      - id: if.bridge_group.table
+        match: '^bridge-group (?P<g>\d+) port-table-size (?P<n>\d+)$'
+        set: {bridge_table_size: "{{ n }}"}
+      - id: if.loop
+        match: '^loop-detection enable$'
+        set: {loop_detect: true}
+      - id: if.loop.action
+        match: '^loop-detection action (?P<how>shutdown|none)(?: restore-time (?P<n>\d+))?$'
+        set: {loop_detect_action: "{{ how }}", loop_detect_restore: "{{ n }}"}
+      - id: if.dot1q.min
+        match: '^dot1q min-frame-size (?P<n>\d+)$'
+        set: {dot1q_min_frame: "{{ n }}"}
       - id: if.ip_mtu
         match: '^ip mtu (?P<n>\d+)$'
         set: {ip_mtu: "{{ n }}"}
-      # "auto" has no form in the dataset (the column is a number).
+      # kbps, for the metrics and the MIB only (CRM, "bandwidth").
+      - id: if.bandwidth
+        match: '^bandwidth (?P<n>\d+)$'
+        set: {bandwidth: "{{ n }}"}
+      # A number, or "auto" (CRM p.8-16).
       - id: if.mss
-        match: '^ip tcp adjust-mss (?P<n>\d+)$'
+        match: '^ip tcp adjust-mss (?P<n>\d+|auto)$'
         set: {tcp_mss: "{{ n }}"}
-      # The device takes several lists on an interface, each with a number; the
-      # dataset has one per direction. The first is kept, the others stay
-      # unknown.
-      - id: if.filter.in
-        match: '^ip filter (?P<acl>\S+) (?P<n>\d+) in$'
-        when: "not lookup('interfaces', name=parent.name | ifname).acl_in"
-        set: {acl_in: "{{ acl }}"}
-      - id: if.filter.out
-        match: '^ip filter (?P<acl>\S+) (?P<n>\d+) out$'
-        when: "not lookup('interfaces', name=parent.name | ifname).acl_out"
-        set: {acl_out: "{{ acl }}"}
+      # The device takes several lists on an interface, each with a number:
+      # they are put in the order of the numbers in 40_policy.yaml.
+      # "suppress-logging" has no column: such a line stays unknown.
+      - id: if.filter
+        match: '^ip filter (?P<acl>\S+) (?P<n>\d+) (?P<dir>in|out)$'
+        emit:
+          - table: x_filter
+            key: {if_name: "{{ parent.name | ifname }}", dir: "{{ dir }}", n: "{{ n }}"}
+            set: {acl: "{{ acl }}"}
       # With a list of addresses the line stays unknown.
       - id: if.proxy_arp
         match: '^ip proxy-arp$'
         set: {proxy_arp: true}
+      # Policy routing: the route policy for what comes in here (CRM 8-12).
+      - id: if.policy_route
+        match: '^ip policy route-map (?P<map>\S+)$'
+        set: {policy_route: "{{ map }}"}
       - id: if.relay
         match: '^ip dhcp-relay server (?P<server>\d+\.\d+\.\d+\.\d+)$'
         emit:
@@ -171,13 +473,79 @@ rules:
           - table: x_vrrp
             key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}
             set: {auth_key: "{{ key }}"}
+      # IPv6 VRRP (version 3; appendix A 3.23, "IPv6 の VRRP"; CRM p.16-4,
+      # FD 2.27.1): one line for each virtual address, a link-local one
+      # among them. The other lines of the group are those of IPv4, told
+      # apart by the number (a number is used once on the device).
+      - id: if.vrrp.ipv6
+        match: '^vrrp (?P<group>\d+) ipv6 (?P<ip>[0-9A-Fa-f]*:[0-9A-Fa-f:]+)$'
+        emit:
+          - table: x_vrrp6
+            key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}", addr: "{{ ip | lower }}"}
+            set: {seen: "true"}
+      # Centiseconds: version 3 only (version 2 rounds them up to seconds,
+      # CRM p.16-5).
+      - id: if.vrrp.timers.csec
+        match: '^vrrp (?P<group>\d+) timers advertisement csec (?P<n>\d+)$'
+        emit:
+          - table: x_vrrp
+            key: {if_name: "{{ parent.name | ifname }}", group: "{{ group }}"}
+            set: {advert_csec: "{{ n }}"}
 
       # ---- tunnels ----
       # Only the two modes whose meaning was confirmed.
       - id: if.tunnel.mode
-        match: '^tunnel mode (?P<mode>gre|ipsec)$'
+        match: '^tunnel mode (?P<mode>gre|ipsec|ipsec-ikev2)$'
         row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
         set: {type: "{{ mode | unlex('tunnel_mode') }}"}
+      # Tunnels that carry IPv4 over IPv6 and the like (appendix A 3.23; CRM
+      # p.12-5). The other words of "tunnel mode" stay unknown.
+      # EtherIP (FD 2.10.1; CRM p.12-5): the tunnel carries the frames of its
+      # bridge group, over IPv4 or over IPv6 (the destination says which).
+      - id: if.tunnel.mode.etherip
+        match: '^tunnel mode ether-ip (?:ip|ipv6)$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {type: etherip}
+      # EtherIP that IPsec protects, in transport mode (FD 2.10.1, "IPsec"; the
+      # examples of the vendor for IKE version 2): the row of the tunnel is
+      # made with the row of IPsec (50_services.yaml), so that the line stays
+      # unknown where that row cannot be made.
+      - id: if.tunnel.mode.etherip.sec
+        match: '^tunnel mode ether-ip (?P<sec>ipsec|ipsec-ikev2)$'
+        emit:
+          - table: x_etherip_mode
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {sec: "{{ 'v2' if sec == 'ipsec-ikev2' else 'v1' }}"}
+      - id: if.tunnel.mode.v6
+        match: '^tunnel mode (?P<mode>4-over-6|6-over-4)$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {type: "{{ mode | unlex('tunnel_mode') }}"}
+      - id: if.tunnel.mode.map_e
+        match: '^tunnel mode map-e(?: (?P<prov>jpix|ocn|ocn-fixed)(?: hostname (?P<host>\S+))?)?$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {type: map_e, provider: "{{ prov | replace('-', '_') }}", provider_host: "{{ host }}"}
+      - id: if.tunnel.mode.v6pv
+        match: '^tunnel mode v6pv (?P<pv>ds-lite|ipip)$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {type: "{{ 'auto_ds_lite' if pv == 'ds-lite' else 'auto_ipip' }}"}
+      # The address of such a tunnel comes from the carrier: the line says
+      # what the mode says, and the template writes it with the mode.
+      - id: if.tunnel.address.map_e
+        match: '^ip address map-e$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {type: map_e}
+      - id: if.tunnel.address.v6pv
+        match: '^ip address v6pv lan (?P<ifn>[A-Za-z]\S*)$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {lan_if: "{{ ifn | ifname }}"}
+      - id: if.tunnel.destination.v6
+        match: '^tunnel destination (?P<dst>[0-9A-Fa-f]*:[0-9A-Fa-f:]+)$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {destination_v6: "{{ dst }}"}
+      - id: if.tunnel.destination.fqdn
+        match: '^tunnel destination fqdn (?P<dst>\S+)$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {destination_fqdn: "{{ dst }}"}
       - id: if.tunnel.source
         match: '^tunnel source (?P<src>\S+)$'
         row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
@@ -195,6 +563,159 @@ rules:
         match: '^tunnel keepalive period (?P<period>\d+) retries (?P<retries>\d+)$'
         row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
         set: {keepalive_interval: "{{ period }}", keepalive_retry: "{{ retries }}"}
+      # ---- IPsec with IKE version 2: the tunnel names its peer ----
+      # The peer: an address, "any" or a name; how it proves itself (a
+      # pre-shared key only) and what it calls itself. The address of the
+      # peer is the destination of the tunnel, and the address or the
+      # interface the tunnel sends from is its source.
+      - id: if.ikev2.peer
+        match: '^ikev2 (?:peer (?P<peer>\d+\.\d+\.\d+\.\d+|any)|peer-fqdn-ipv4 (?P<host>[A-Za-z][\w.\-]*))(?: authentication(?: psk)?(?: id (?P<kind>fqdn|keyid|ipv4|rfc822-addr) (?P<v>\S+))?)?$'
+        emit:
+          - table: x_ikev2_peer
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {peer: "{{ peer or host }}", remote_id: "{{ ((kind | replace('ipv4', 'address') | replace('rfc822-addr', 'email')) ~ ':' ~ v) if kind else '' }}"}
+          - table: tunnels
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {destination: "{{ peer if (peer and peer != 'any') else '' }}"}
+      - id: if.ikev2.source
+        match: '^ikev2 source-address (?P<src>\S+)$'
+        row: {table: tunnels, key: {if_name: "{{ parent.name | ifname }}"}}
+        set: {source: "{{ src | ifname }}"}
+      - id: if.ikev2.binding
+        match: '^ikev2 binding (?P<prof>\S+)$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {binding: "{{ prof }}"}
+      # "auto" keeps the tunnel up; "trigger" brings it up when traffic comes.
+      - id: if.ikev2.connect
+        match: '^ikev2 connect-type (?P<how>auto|trigger)$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {always_on: "{{ 'true' if how == 'auto' else 'false' }}"}
+      # What a profile holds can stand on the tunnel itself (50_services.yaml,
+      # "ikev2.profile": the same lines with "ikev2" before them).
+      - id: if.ikev2.self
+        match: '^ikev2 local-authentication psk(?: id (?P<kind>fqdn|keyid|ipv4|rfc822-addr) (?P<v>\S+))?$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {local_auth: psk, local_id: "{{ ((kind | replace('ipv4', 'address') | replace('rfc822-addr', 'email')) ~ ':' ~ v) if kind else '' }}"}
+      - id: if.ikev2.sa.enc
+        match: '^ikev2 sa-proposal enc (?P<enc>3des-cbc|aes-cbc-128|aes-cbc-192|aes-cbc-256|aes-gcm-128-16|aes-gcm-256-16)(?P<more>(?: (?:3des-cbc|aes-cbc-128|aes-cbc-192|aes-cbc-256|aes-gcm-128-16|aes-gcm-256-16))*)$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {ike_enc: "{{ enc | unlex('ikev2_encryption') }}", ike_enc_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_encryption') | join(' ')) if (more | trim) else '' }}"}
+      - id: if.ikev2.sa.integrity
+        match: '^ikev2 sa-proposal integrity (?P<hash>md5|sha1|sha2-256|sha2-384|sha2-512)(?P<more>(?: (?:md5|sha1|sha2-256|sha2-384|sha2-512))*)$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {ike_hash: "{{ hash | unlex('ikev2_hash') }}", ike_hash_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_hash') | join(' ')) if (more | trim) else '' }}"}
+      - id: if.ikev2.sa.prf
+        match: '^ikev2 sa-proposal prf (?P<hash>md5|sha1|sha2-256|sha2-384|sha2-512)(?P<more>(?: (?:md5|sha1|sha2-256|sha2-384|sha2-512))*)$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {ike_prf: "{{ hash | unlex('ikev2_hash') }}", ike_prf_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_hash') | join(' ')) if (more | trim) else '' }}"}
+      - id: if.ikev2.sa.dh
+        match: '^ikev2 sa-proposal dh (?P<g>768-bit|1024-bit|1536-bit|2048-bit|3072-bit)(?P<more>(?: (?:768-bit|1024-bit|1536-bit|2048-bit|3072-bit))*)$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {ike_dh: "{{ g | unlex('ikev2_dh') }}", ike_dh_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_dh') | join(' ')) if (more | trim) else '' }}"}
+      - id: if.ikev2.sa.lifetime
+        match: '^ikev2 sa-lifetime (?P<s>\d+)$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {ike_lifetime: "{{ s }}"}
+      - id: if.ikev2.child.enc
+        match: '^ikev2 child-proposal enc (?P<enc>3des-cbc|aes-cbc-128|aes-cbc-192|aes-cbc-256|aes-gcm-128-16|aes-gcm-256-16|null)(?P<more>(?: (?:3des-cbc|aes-cbc-128|aes-cbc-192|aes-cbc-256|aes-gcm-128-16|aes-gcm-256-16|null))*)$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {esp_enc: "{{ enc | unlex('ikev2_encryption') }}", esp_enc_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_encryption') | join(' ')) if (more | trim) else '' }}"}
+      - id: if.ikev2.child.integrity
+        match: '^ikev2 child-proposal integrity (?P<hash>md5|sha1|sha2-256|sha2-384|sha2-512)(?P<more>(?: (?:md5|sha1|sha2-256|sha2-384|sha2-512))*)$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {esp_hash: "{{ hash | unlex('ikev2_hash') }}", esp_hash_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_hash') | join(' ')) if (more | trim) else '' }}"}
+      - id: if.ikev2.child.integrity.off
+        match: '^ikev2 child-proposal integrity off$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {esp_hash: none}
+      - id: if.ikev2.child.pfs
+        match: '^ikev2 child-pfs (?P<g>off|768-bit|1024-bit|1536-bit|2048-bit|3072-bit)(?P<more>(?: (?:768-bit|1024-bit|1536-bit|2048-bit|3072-bit))*)$'
+        when: "g != 'off' or not (more | trim)"
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {pfs: "{{ 'none' if g == 'off' else (g | unlex('ikev2_dh')) }}", pfs_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_dh') | join(' ')) if (more | trim) else '' }}"}
+      - id: if.ikev2.child.lifetime
+        match: '^ikev2 child-lifetime (?P<s>\d+)$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {esp_lifetime: "{{ s }}"}
+      # Without the seconds the device asks every 10 seconds.
+      - id: if.ikev2.dpd
+        match: '^ikev2 dpd(?: interval (?P<s>\d+)| (?P<off>off))?$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {dpd: "{{ 'off' if off else (s if s else '10') }}"}
+      # How often and how long apart a message is sent again. "backoff"
+      # (longer each time) is what the device does by itself.
+      - id: if.ikev2.retransmit
+        match: '^ikev2 retransmit count (?P<n>\d+) interval (?:(?P<s>\d+)|backoff)$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {retry: "{{ n }}", retry_interval: "{{ s }}"}
+      - id: if.ikev2.nat
+        match: '^ikev2 nat-traversal(?: (?P<f1>force))?(?: keepalive (?P<s>\d+))?(?: (?P<f2>force))?(?: (?P<off>off))?$'
+        when: "not (f1 and f2) and not (off and (f1 or f2 or s))"
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {nat: "{{ 'off' if off else 'on' }}", nat_keepalive: "{{ s }}", nat_force: "{{ 'true' if (f1 or f2) else '' }}"}
+      - id: if.ikev2.mode
+        match: '^ikev2 ipsec-mode (?P<mode>tunnel|transport)$'
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {mode: "{{ mode }}"}
+      # The traffic the tunnel proposes (the same lines as in a profile).
+      - id: if.ikev2.local_ts
+        match: '^ikev2 local-ts ipv4(?: protocol (?P<proto>tcp|udp|6|17))?(?: address (?P<net>\d+\.\d+\.\d+\.\d+/\d+))?(?: port (?P<p1>\d+) (?P<p2>\d+))?$'
+        when: "(proto or net) and (not p1 or (p1 == p2 and proto))"
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {lts: "{{ net if net else '0.0.0.0/0' }}", lts_proto: "{{ proto | replace('17', 'udp') | replace('6', 'tcp') }}", lts_port: "{{ p1 }}"}
+      - id: if.ikev2.remote_ts
+        match: '^ikev2 remote-ts ipv4(?: protocol (?P<proto>tcp|udp|6|17))?(?: address (?P<net>\d+\.\d+\.\d+\.\d+/\d+))?(?: port (?P<p1>\d+) (?P<p2>\d+))?$'
+        when: "(proto or net) and (not p1 or (p1 == p2 and proto))"
+        emit:
+          - table: x_ikev2_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {rts: "{{ net if net else '0.0.0.0/0' }}", rts_proto: "{{ proto | replace('17', 'udp') | replace('6', 'tcp') }}", rts_port: "{{ p1 }}"}
+      # The map of an EtherIP tunnel, in transport mode. "with-id-payload"
+      # (the identities of the second phase are sent, which transport mode
+      # does not do by itself) is what the vendor asks for with EtherIP (FD
+      # 2.35.6): it is read here, and written for every such tunnel.
+      - id: if.tunnel.policy.transport
+        match: '^ipsec policy transport (?P<map>\S+) with-id-payload$'
+        emit:
+          - table: x_tunnel_policy
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {map: "{{ map }}", transport: "true"}
       # With "in", "out" or another option there is no column.
       - id: if.tunnel.policy
         match: '^ipsec policy tunnel (?P<map>\S+)(?: out)?$'
@@ -218,6 +739,52 @@ rules:
           - table: x_napt_list
             key: {if_name: "{{ parent.name | ifname }}"}
             set: {acl: "{{ acl }}"}
+      # A second translation of the interface: these sources go out with
+      # the address after "outside" (CRM 8-37).
+      - id: if.napt.list.outside
+        match: '^ip napt inside list (?P<acl>\S+) outside (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+        emit:
+          - table: x_nat
+            key: {name: "nat{{ rows('x_nat') | length + 1 }}"}
+            set: {kind: pat_addr, if_name: "{{ parent.name | ifname }}", acl: "{{ acl }}", global_ip: "{{ addr }}"}
+      # The address to translate to, where it is not the address of the
+      # interface (CRM 8-36). The form with an interface stays unknown.
+      - id: if.napt.address
+        match: '^ip napt address (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+        emit:
+          - table: x_napt_addr
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {addr: "{{ addr }}"}
+      # A server inside is reached at a port outside (CRM 8-37): the name,
+      # the server, the port inside ("none" = the same port), the protocol
+      # and the port outside. The name is read and not kept. A range of
+      # ports, "any" and icmp stay unknown.
+      - id: if.napt.service
+        match: '^ip napt service (?P<svc>\S+) (?P<addr>\d+\.\d+\.\d+\.\d+) (?P<tr>\d+|none) (?P<proto>tcp|udp) (?P<port>\d+)$'
+        emit:
+          - table: x_nat
+            key: {name: "nat{{ rows('x_nat') | length + 1 }}"}
+            set:
+              kind: service
+              if_name: "{{ parent.name | ifname }}"
+              local_ip: "{{ addr }}"
+              protocol: "{{ proto }}"
+              port: "{{ port }}"
+              local_port: "{{ port if tr == 'none' else tr }}"
+      # The reserved names stand for a protocol and a port; the rest of the
+      # line may be left out, and the port is then not changed (CRM 8-38).
+      - id: if.napt.service.wellknown
+        match: '^ip napt service (?P<svc>dns|http|https|snmp|ssh|telnet) (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+        emit:
+          - table: x_nat
+            key: {name: "nat{{ rows('x_nat') | length + 1 }}"}
+            set:
+              kind: service
+              if_name: "{{ parent.name | ifname }}"
+              local_ip: "{{ addr }}"
+              protocol: "{{ 'udp' if svc in ['dns', 'snmp'] else 'tcp' }}"
+              port: "{{ {'dns': 53, 'http': 80, 'https': 443, 'snmp': 161, 'ssh': 22, 'telnet': 23}[svc] }}"
+              local_port: "{{ {'dns': 53, 'http': 80, 'https': 443, 'snmp': 161, 'ssh': 22, 'telnet': 23}[svc] }}"
       # One port; a range of ports, a protocol number and the form with an
       # interface stay unknown.
       - id: if.napt.static
@@ -247,6 +814,27 @@ rules:
               if_name: "{{ parent.name | ifname }}"
               local_ip: "{{ lip }}"
               global_ip: "{{ gip }}"
+      # One to one for a whole network: both sides have the same length.
+      - id: if.nat.static.network
+        match: '^ip nat static network (?P<lip>\d+\.\d+\.\d+\.\d+)/(?P<llen>\d+) (?P<gip>\d+\.\d+\.\d+\.\d+)/(?P<glen>\d+)$'
+        when: "llen == glen"
+        emit:
+          - table: x_nat
+            key: {name: "nat{{ rows('x_nat') | length + 1 }}"}
+            set:
+              kind: static_network
+              if_name: "{{ parent.name | ifname }}"
+              local_ip: "{{ lip }}"
+              global_ip: "{{ gip }}"
+              prefix: "{{ llen }}"
+      # Many to many: the sources of the list take an address of the pool
+      # (CRM 8-30). The pool stands outside the interfaces (40_policy.yaml).
+      - id: if.nat.dynamic
+        match: '^ip nat dynamic list (?P<acl>\S+) pool (?P<pool>\S+)$'
+        emit:
+          - table: x_nat
+            key: {name: "nat{{ rows('x_nat') | length + 1 }}"}
+            set: {kind: dynamic, if_name: "{{ parent.name | ifname }}", acl: "{{ acl }}", pool: "{{ pool }}"}
 
       # ---- PPPoE and DHCP: the profile is bound by its name ----
       - id: if.ppp.binding
@@ -261,6 +849,43 @@ rules:
           - table: x_ppp_bind
             key: {if_name: "{{ parent.name | ifname }}"}
             set: {service_name: "{{ svc }}"}
+      # ---- PPPoE: how the line is kept up, and the server side (CRM 3-3,
+      # 3-4, 7-27; appendix A 3.26). The lines count only on an interface
+      # bound to a PPP profile. "auto-connect" is what a PPPoE interface
+      # does by itself; "encapsulation pppoe" is what a sub-interface is by
+      # itself (the templates write both for a PPPoE server, as the examples
+      # of the vendor do). ----
+      - id: if.pppoe.auto
+        match: '^auto-connect$'
+        emit:
+          - table: x_ppp_bind
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {auto: "true"}
+      - id: if.pppoe.on_demand
+        match: '^no auto-connect$'
+        emit:
+          - table: x_ppp_bind
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {on_demand: "true"}
+      - id: if.pppoe.encap
+        match: '^encapsulation pppoe$'
+        emit:
+          - table: x_ppp_bind
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {encap: "pppoe"}
+      # Both directions; the forms with "inbound" / "outbound" stay unknown.
+      - id: if.pppoe.idle
+        match: '^idle-time (?P<s>\d+)$'
+        emit:
+          - table: x_ppp_bind
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {idle: "{{ s }}"}
+      - id: if.pppoe.server
+        match: '^pppoe server$'
+        emit:
+          - table: x_ppp_bind
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {server: "true"}
       - id: if.dhcp.binding
         match: '^ip dhcp binding (?P<profile>\S+)$'
         emit:
@@ -281,6 +906,13 @@ rules:
           - table: qos_bindings
             key: {if_name: "{{ parent.name | ifname }}", direction: "{{ dir }}"}
             set: {policy: "{{ p }}"}
+      # The policy the device has for NGN (CRM, chapter 14): output only.
+      - id: if.qos.policy.ngn
+        match: '^service-policy output default-policy-map-ngn$'
+        emit:
+          - table: qos_bindings
+            key: {if_name: "{{ parent.name | ifname }}", direction: output}
+            set: {ngn_default: true}
       # Without a word the rate is in bps (CRM 14-5).
       - id: if.qos.shape
         match: '^traffic-shape rate (?:(?P<u>kbps|mbps) )?(?P<cir>\d+)(?: (?P<bc>\d+)(?: (?P<be>\d+))?)?$'
@@ -292,7 +924,100 @@ rules:
               shape_bc: "{{ bc }}"
               shape_be: "{{ be }}"
 
+      # ---- L2TP (appendix A 3.21): joined in import/70_l2tp.yaml ----
+      # The two modes of L2TP (CRM p.12-5). "l2tp ipsec" is how the LNS mode
+      # was shown up to version 9.6 (FD 2.36).
+      - id: if.l2tp.mode
+        match: '^tunnel mode (?P<mode>l2tp-lns ipsec|l2tp ipsec|l2tp-lac ip)$'
+        emit:
+          - table: x_l2tp_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {mode: "{{ 'lac' if mode == 'l2tp-lac ip' else 'lns' }}"}
+      # The LNS by its address or by its name is a line of the tunnels, above
+      # ("tunnel destination <address>", "tunnel destination fqdn <name>"):
+      # 70_l2tp.yaml takes it from there.
+      # The form "secret" (the encrypted one; CRM p.12-12) is kept as the
+      # device shows it: "secret <value>" (appendix A 3.26).
+      - id: if.l2tp.password
+        match: '^l2tp password plain (?P<pw>\S+)$'
+        emit:
+          - table: x_l2tp_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {password: "{{ pw }}"}
+      - id: if.l2tp.password.secret
+        match: '^l2tp password secret (?P<pw>\S+)$'
+        emit:
+          - table: x_l2tp_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {password: "secret {{ pw }}"}
+      - id: if.l2tp.idle
+        match: '^l2tp session idle-time (?P<s>\d+)$'
+        emit:
+          - table: x_l2tp_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {idle: "{{ s }}"}
+      # IPsec in transport mode under the tunnel of an LNS: the name only.
+      - id: if.l2tp.transport
+        match: '^ipsec policy transport (?P<map>\S+)$'
+        emit:
+          - table: x_l2tp_if
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {ipsec: "{{ map }}"}
+      # A PPPoE interface of a LAC: the tunnel, and the list of the domains.
+      - id: if.l2tp.access
+        match: '^pppoe l2tp interface (?P<tun>[A-Za-z]\S*) url-list (?P<list>\S+)$'
+        emit:
+          - table: x_l2tp_access
+            key: {if_name: "{{ parent.name | ifname }}"}
+            set: {tunnel: "{{ tun | ifname }}", list: "{{ list }}"}
+
   # ---- switches for the whole device ----
+  # ---- bridge groups, loop detection and the numbers of interfaces
+  # (appendix A 3.22, 2026-11-21; CRM p.2-7, 2-8, 6-3, 6-6, 20-3, 20-4) ----
+  - id: bridge.aging
+    match: '^bridge (?P<g>\d+) aging-time (?P<n>\d+)$'
+    row: {table: bridge_groups, key: {group: "{{ g }}"}}
+    set: {aging_time: "{{ n }}"}
+  - id: bridge.table
+    match: '^bridge (?P<g>\d+) table-size (?P<n>\d+|unlimited)$'
+    row: {table: bridge_groups, key: {group: "{{ g }}"}}
+    set: {table_size: "{{ n }}"}
+  - id: bridge.protocol
+    match: '^(?P<no>no )?bridge (?P<g>\d+) bridge (?P<what>ip|ipv6)$'
+    row: {table: bridge_groups, key: {group: "{{ g }}"}}
+    set: {"bridge_{{ what }}": "{{ 'false' if no else 'true' }}"}
+  - id: bridge.only
+    match: '^bridge (?P<g>\d+) bridge-only pppoe$'
+    row: {table: bridge_groups, key: {group: "{{ g }}"}}
+    set: {bridge_only_pppoe: true}
+  - id: loop.interval
+    match: '^loop-detection interval-time (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {loop_detect_interval: "{{ n }}"}
+  - id: loop.threshold
+    match: '^loop-detection threshold (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {loop_detect_threshold: "{{ n }}"}
+  - id: loop.window
+    match: '^loop-detection window-size (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {loop_detect_window: "{{ n }}"}
+  - id: system.bvi
+    match: '^system interfaces bvi (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {bvi_count: "{{ n }}"}
+  - id: system.subif
+    match: '^system subinterfaces (?P<dev>[A-Za-z][A-Za-z-]*\d+) (?P<n>\d+)$'
+    emit:
+      - table: x_subif_max
+        key: {name: "{{ dev }}"}
+        set: {max: "{{ n }}"}
+
+  - id: bridge.irb
+    match: '^bridge irb enable$'
+    row: {table: l2_settings, key: {}}
+    set: {bridge_irb: true}
+
   - id: vrrp.enable
     match: '^vrrp enable$'
     emit:
@@ -315,7 +1040,15 @@ derive:
       i: "lookup('interfaces', name=d.name ~ '.0')"
     when: "i.name"
     row: {table: interfaces, key: {name: "{{ d.name }}.0"}}
-    set: {speed: "{{ d.speed }}", duplex: "{{ d.duplex }}"}
+    set: {speed: "{{ d.speed }}", duplex: "{{ d.duplex }}", port_description: "{{ d.description }}", mdi: "{{ d.mdi }}", switch_qos_scheduler: "{{ d.scheduler }}", switch_router_priority: "{{ d.router_priority }}"}
+  - id: device.subif_max
+    for: x_subif_max
+    as: d
+    let:
+      i: "lookup('interfaces', name=d.name ~ '.0')"
+    when: "i.name"
+    row: {table: interfaces, key: {name: "{{ d.name }}.0"}}
+    set: {max_subinterfaces: "{{ d.max }}"}
 
   - id: relay.each
     for: x_relay
@@ -341,3 +1074,70 @@ derive:
       advert_interval: "{{ v.advert_interval }}"
       auth_type: "{{ 'simple' if v.auth_key else '' }}"
       auth_key: "{{ v.auth_key }}"
+
+  # IPv6 VRRP (appendix A 3.23): the first link-local address is the one the
+  # group needs; a second one has no column (it stays unknown). The global
+  # addresses are listed. The priority and the rest come from the lines the
+  # group shares with IPv4 (a group without an IPv4 address).
+  - id: vrrp6.link_local
+    for: x_vrrp6
+    as: a
+    let:
+      en: "lookup('x_enable')"
+      lls: "rows('x_vrrp6', if_name=a.if_name, group=a.group) | selectattr('addr', 'startingwith', 'fe8') | map(attribute='addr') | list"
+    when: "en.vrrp and lls and lls[0] == a.addr and a.seen"
+    row: {table: ipv6_fhrp, key: {if_name: "{{ a.if_name }}", group: "{{ a.group }}"}}
+    set: {link_local: "{{ a.addr }}"}
+  - id: vrrp6.address
+    for: x_vrrp6
+    as: a
+    let:
+      en: "lookup('x_enable')"
+    when: "en.vrrp and not (a.addr | in_net('fe80::/10')) and a.seen"
+    row: {table: ipv6_fhrp, key: {if_name: "{{ a.if_name }}", group: "{{ a.group }}"}}
+    append: {addresses: "{{ a.addr }}"}
+  - id: vrrp6.group
+    for: x_vrrp
+    as: v
+    let:
+      en: "lookup('x_enable')"
+    when: "en.vrrp and not v.ip and rows('x_vrrp6', if_name=v.if_name, group=v.group)"
+    row: {table: ipv6_fhrp, key: {if_name: "{{ v.if_name }}", group: "{{ v.group }}"}}
+    set:
+      priority: "{{ v.priority }}"
+      preempt: "{{ v.preempt }}"
+      advert_interval: "{{ (v.advert_interval | int) * 1000 if v.advert_interval else ((v.advert_csec | int) * 10 if v.advert_csec else '') }}"
+
+  # ---- the built-in switch (README, "VLAN とスイッチ") ----
+  # A port of a VLAN group is an access port of the group; the number of the
+  # group stands where another vendor has the number of the VLAN.
+  - id: vlan_group.port
+    for: x_vlan_group
+    as: g
+    each: {p: "g.ports | split(' ')"}
+    row: {table: switchports, key: {if_name: "{{ g.hub }}:port{{ p }}"}}
+    set: {mode: access, access_vlan: "{{ g.group }}"}
+  - id: vlan_group.port.row
+    for: x_vlan_group
+    as: g
+    each: {p: "g.ports | split(' ')"}
+    row: {table: interfaces, key: {name: "{{ g.hub }}:port{{ p }}"}}
+  # "<device>:<group>.0" is the layer-3 interface of the group.
+  - id: vlan_group.interface
+    for: x_vlan_group
+    as: g
+    let:
+      i: "lookup('interfaces', name=g.hub ~ ':' ~ g.group ~ '.0')"
+    when: "i.name"
+    row: {table: interfaces, key: {name: "{{ g.hub }}:{{ g.group }}.0"}}
+    set: {vlan_id: "{{ g.group }}"}
+  # A port that is named and stands in no group belongs to the base
+  # interface of the device ("<device>.0"): a routed port.
+  - id: port.routed
+    for: interfaces
+    as: i
+    let:
+      sp: "lookup('switchports', if_name=i.name)"
+    when: "':port' in i.name and not sp.if_name"
+    row: {table: switchports, key: {if_name: "{{ i.name }}"}}
+    set: {mode: routed}

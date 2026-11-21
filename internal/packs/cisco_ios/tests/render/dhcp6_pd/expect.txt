@@ -1,0 +1,28 @@
+hostname rt-w02
+!
+ipv6 unicast-routing
+!
+ipv6 local pool PD-pool-sample-pd 2001:db8:1000::/40 56
+!
+ipv6 dhcp pool pool-sample-pd
+ address prefix 2001:db8:0:10::/64
+ prefix-delegation pool PD-pool-sample-pd lifetime 1800 600
+ dns-server 2001:db8::53
+ sntp address 2001:db8::123
+!
+ipv6 local pool PD-pool-sample-inf 2001:db8:4000::/36 48
+!
+ipv6 dhcp pool pool-sample-inf
+ prefix-delegation pool PD-pool-sample-inf
+!
+interface GigabitEthernet0/0
+ ipv6 address 2001:db8:0:1::1/64
+ ipv6 dhcp server pool-sample-pd
+ no shutdown
+!
+interface GigabitEthernet0/1
+ ipv6 address 2001:db8:0:2::1/64
+ ipv6 dhcp server pool-sample-inf
+ no shutdown
+!
+end

@@ -164,7 +164,7 @@ func (e *Env) Customer(write bool, now time.Time) (*CustomerOutcome, error) {
 		return nil, err
 	}
 	if len(rules) == 0 {
-		return nil, fmt.Errorf("mappings/ に列対応ファイル（.yaml）がありません。画面の「お客様の一覧」か customer --draft で作ってください")
+		return nil, fmt.Errorf("mappings/ に列対応ファイル（.yaml）がありません。画面の「外部一覧」か customer --draft で作ってください")
 	}
 	inputs, err := e.Proj.Inputs("customer")
 	if err != nil {
@@ -297,7 +297,7 @@ func (e *Env) Customer(write bool, now time.Time) (*CustomerOutcome, error) {
 		}
 		for _, x := range res.OnlyA {
 			ref, ev := e.rowRef(x.Row)
-			f := srcFinding("S-501", x.Device, ref, "お客様の一覧にあって、パラメータブックにない行です", ev...)
+			f := srcFinding("S-501", x.Device, ref, "外部一覧にあって、パラメータブックにない行です", ev...)
 			out.OnlyList = append(out.OnlyList, RowFinding{x, f})
 			findings = append(findings, f)
 		}
@@ -310,7 +310,7 @@ func (e *Env) Customer(write bool, now time.Time) (*CustomerOutcome, error) {
 			if t := e.Schema.Table(x.Table); t != nil {
 				ref, col = check.RefOf(t, x.ARow, x.Column), t.Column(x.Column)
 			}
-			f := srcFinding("S-503", x.Device, ref, "お客様の一覧とパラメータブックで値が違います",
+			f := srcFinding("S-503", x.Device, ref, "外部一覧とパラメータブックで値が違います",
 				model.KV{Name: "一覧", Value: check.Shown(col, x.A)}, model.KV{Name: "ブック", Value: check.Shown(col, x.B)})
 			f.At = check.CellAt(x.BRow, x.Column)
 			out.Cells = append(out.Cells, CellFinding{x, f})
@@ -321,7 +321,7 @@ func (e *Env) Customer(write bool, now time.Time) (*CustomerOutcome, error) {
 				continue
 			}
 			ref, ev := e.rowRef(x.Row)
-			f := srcFinding("S-502", x.Device, ref, "パラメータブックにあって、お客様の一覧にない行です", ev...)
+			f := srcFinding("S-502", x.Device, ref, "パラメータブックにあって、外部一覧にない行です", ev...)
 			f.At = check.CellAt(x.Row, "")
 			out.OnlyBook = append(out.OnlyBook, RowFinding{x, f})
 			findings = append(findings, f)
@@ -350,7 +350,7 @@ func (e *Env) Customer(write bool, now time.Time) (*CustomerOutcome, error) {
 		}
 		seen[l.File] = true
 		if old, ok := marks[l.File]; ok && old.SHA256 != l.SHA256 {
-			f := srcFinding("S-505", "", model.Ref{}, "お客様の一覧のファイルが、前回の読み込み（"+old.At+"）から変わりました", model.KV{Name: "ファイル", Value: l.File})
+			f := srcFinding("S-505", "", model.Ref{}, "外部一覧のファイルが、前回の読み込み（"+old.At+"）から変わりました", model.KV{Name: "ファイル", Value: l.File})
 			out.Changed = append(out.Changed, f)
 			findings = append(findings, f)
 		}

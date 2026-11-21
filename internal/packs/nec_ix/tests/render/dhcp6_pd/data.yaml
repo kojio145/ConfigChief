@@ -1,0 +1,25 @@
+# What a DHCPv6 server hands out besides DNS (appendix A 3.23; made-up
+# values): prefixes cut from a fixed pool, and from a part of the prefix
+# the WAN side received (the pool has the name of the server).
+tables:
+  devices:
+    - hostname: ix-w02
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true}
+    - {name: GigaEthernet1.0, enabled: true}
+    - {name: GigaEthernet2.0, enabled: true}
+    - {name: GigaEthernet2.1, enabled: true, encap_vlan: 10}
+  ipv6_interfaces:
+    - {if_name: GigaEthernet0.0, enabled: true, pd_request: pd-sample, dhcp_request: [dns]}
+    - if_name: GigaEthernet1.0
+      enabled: true
+      dhcp_server: pd-sample-lan1
+      dhcp_dns: ["2001:db8::53"]
+      dhcp_ntp: ["2001:db8::123", dhcp]
+      dhcp_pd_pool: "2001:db8::/40"
+      dhcp_pd_length: 56
+      dhcp_pd_valid: 1200
+      dhcp_pd_preferred: infinite
+    - {if_name: GigaEthernet2.0, enabled: true, dhcp_server: pd-sample-lan2, dhcp_pd_from: pd-sample, dhcp_pd_pool: "::/56", dhcp_pd_length: 60}
+    - {if_name: GigaEthernet2.1, enabled: true, dhcp_server: pd-sample-lan3, dhcp_pd_pool: "2001:db8:4000::/48", dhcp_pd_length: 48}

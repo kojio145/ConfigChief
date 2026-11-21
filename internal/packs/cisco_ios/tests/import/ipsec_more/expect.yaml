@@ -1,0 +1,16 @@
+# More candidates than one (appendix A 3.20, made-up values): the second and
+# the third IKE policy go to every row of IKE version 1, the second and the
+# third transform set to the row of their profile or map.
+tables:
+  ipsec_tunnels:
+    - {name: Tunnel1, style: tunnel_if, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, esp_encryption: aes256, esp_hash: sha1}
+    - {name: CMAP-SAMPLE/10, style: policy, ike_version: 1, ike_encryption: aes256, esp_encryption: aes256, esp_hash: sha1}
+  ipsec_proposals:
+    - {tunnel: Tunnel1, phase: ike, seq: 20, encryption: aes128, hash: sha1, dh: dh14, lifetime: 28800}
+    - {tunnel: Tunnel1, phase: ike, seq: 30, encryption: 3des, hash: sha1, dh: dh2, lifetime: ""}
+    - {tunnel: Tunnel1, phase: ipsec, seq: 20, encryption: aes128, hash: sha1, ah_hash: ""}
+    - {tunnel: CMAP-SAMPLE/10, phase: ike, seq: 20, encryption: aes128, hash: sha1, dh: dh14, lifetime: 28800}
+    - {tunnel: CMAP-SAMPLE/10, phase: ike, seq: 30, encryption: 3des}
+    - {tunnel: CMAP-SAMPLE/10, phase: ipsec, seq: 20, encryption: aes128, hash: sha1}
+    - {tunnel: CMAP-SAMPLE/10, phase: ipsec, seq: 30, encryption: 3des, hash: "", ah_hash: sha1}
+unknown: []

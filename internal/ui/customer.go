@@ -214,6 +214,25 @@ func (s *Session) ListSave(path string, r listimport.Rule) (string, error) {
 	return e.SaveMapping(path, &r)
 }
 
+// ListDelete takes a column mapping out of mappings/ (it is moved to
+// state/backup) and gives the path of the copy.
+func (s *Session) ListDelete(path string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, err := s.begin()
+	if err != nil {
+		return "", err
+	}
+	return e.DeleteMapping(path, s.now())
+}
+
+// ListTrace runs the steps of a field over a value and gives the value after
+// each step (the editor shows them under the steps). It reads nothing of the
+// case, and takes no lock: it is asked at every key.
+func (s *Session) ListTrace(v string, steps []listimport.Step) []string {
+	return strs(listimport.TraceSteps(v, steps))
+}
+
 // CustomerView is the outcome of reading the lists of the customer and
 // comparing them with the book. A row of a list is tied to its finding
 // (S-501 to S-505) by the fingerprint in its last column.

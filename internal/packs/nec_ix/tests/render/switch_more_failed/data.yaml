@@ -1,0 +1,34 @@
+# What the pack refuses to write of the rest of the built-in switch (made-up
+# values): a mirror that is not between ports of one switch or takes what
+# comes in only, a VLAN group with more than 8 subinterfaces, and options
+# that stand on another row.
+tables:
+  devices:
+    - hostname: ix-m03
+      vendor: nec_ix
+  l2_settings:
+    - {bridge_irb: true}
+  bridge_groups:
+    - {group: 1, bridge_only_pppoe: false}                   # "off" is no line
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.2/30}
+    - {name: GigaEthernet0.1, enabled: true, encap_vlan: 10, max_subinterfaces: 64, bridge_protected: true, loop_detect_restore: 100}   # on the base interface; needs a bridge group; needs an action
+    - {name: "GigaEthernet2:1.0", enabled: true, vlan_id: 1}
+    - {name: "GigaEthernet2:1.1", enabled: true, encap_vlan: 11, bridge_group: 11}
+    - {name: "GigaEthernet2:1.2", enabled: true, encap_vlan: 12, bridge_group: 12}
+    - {name: "GigaEthernet2:1.3", enabled: true, encap_vlan: 13, bridge_group: 13}
+    - {name: "GigaEthernet2:1.4", enabled: true, encap_vlan: 14, bridge_group: 14}
+    - {name: "GigaEthernet2:1.5", enabled: true, encap_vlan: 15, bridge_group: 15}
+    - {name: "GigaEthernet2:1.6", enabled: true, encap_vlan: 16, bridge_group: 16}
+    - {name: "GigaEthernet2:1.7", enabled: true, encap_vlan: 17, bridge_group: 17}
+    - {name: "GigaEthernet2:1.8", enabled: true, encap_vlan: 18, bridge_group: 18}
+    - {name: "GigaEthernet2:1.9", enabled: true, encap_vlan: 19, bridge_group: 19}   # the ninth
+    - {name: "GigaEthernet2:port1", enabled: true, speed: 2500}
+    - {name: "GigaEthernet2:port2", enabled: true}
+  switchports:
+    - {if_name: "GigaEthernet2:port1", mode: access, access_vlan: 1}
+    - {if_name: "GigaEthernet2:port2", mode: access, access_vlan: 1}
+  mirror_sessions:
+    - {session: 1, sources_both: [GigaEthernet0.0], sources_rx: ["GigaEthernet2:port1"], destination_if: "GigaEthernet2:port2"}   # not a port of the switch; no "in"
+    - {session: 2, sources_both: ["GigaEthernet2:port2"], destination_if: GigaEthernet0.0}        # not on the same switch
+findings: [G-601, G-606]

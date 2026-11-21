@@ -1,0 +1,14 @@
+table: vlans
+title: {ja: VLAN, en: VLANs}
+since: M7
+key: [device, vlan_id]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: vlan_id, title: {ja: VLAN 番号, en: VLAN ID}, type: int, min: 1, max: 4094, required: true}
+  - {name: name, title: {ja: VLAN 名, en: Name}, type: string, note: {ja: "1〜32 字", en: "1 to 32 characters"}}
+  - {name: description, title: {ja: 説明, en: Description}, type: string, note: {ja: "VLAN の説明の行を持つ機器だけ（名前とは別の文）", en: "Only where the device has a description line for a VLAN, apart from its name"}}
+  - {name: state, title: {ja: 状態, en: State}, type: enum, values: [active, suspend], note: {ja: "active = 使う。suspend = 定義は残して通信を止める。空 = 機器の既定（active）", en: "active = in use. suspend = defined, but carries nothing. Empty = the default of the device (active)"}}
+  - {name: shutdown, title: {ja: この機器で止める, en: Shut down}, type: bool, note: {ja: "この機器の中でだけ、VLAN の通信を止める", en: "Stops the VLAN on this device only"}}
+  - {name: remote_span, title: {ja: 遠隔ミラー用, en: Remote SPAN}, type: bool, note: {ja: "ポートミラーの通信を、別のスイッチへ運ぶための VLAN", en: "A VLAN that carries mirrored traffic to another switch"}}
+  - {name: private_vlan, title: {ja: プライベート VLAN の種類, en: Private VLAN type}, type: enum, values: [primary, isolated, community]}
+  - {name: private_vlan_secondaries, title: {ja: プライベート VLAN のセカンダリ, en: Private VLAN secondaries}, type: "list<string>", note: {ja: "primary の VLAN に結び付けるセカンダリの VLAN。例 501-503", en: "The secondary VLANs of a primary one, e.g. 501-503"}}

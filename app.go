@@ -6,6 +6,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"github.com/kojio145/configchief/internal/book"
 	"github.com/kojio145/configchief/internal/listimport"
 	"github.com/kojio145/configchief/internal/ui"
 )
@@ -84,6 +85,9 @@ func (a *App) Close() ui.State                                 { return a.s.Clos
 func (a *App) Forget(dir string) ui.State                      { return a.s.Forget(dir) }
 func (a *App) Home() (*ui.Home, error)                         { return a.s.Home() }
 func (a *App) Import(source string) (*ui.ImportView, error)    { return a.s.Import(source) }
+func (a *App) ChooseFile(source, path string) (*ui.ImportView, error) {
+	return a.s.ChooseFile(source, path)
+}
 func (a *App) Lines(source, path string) (*ui.LinesView, error) {
 	return a.s.Lines(source, path)
 }
@@ -124,6 +128,35 @@ func (a *App) Judge(source, group, devices, verdict, reason, by string) (*ui.Jud
 }
 func (a *App) Cancel() { a.s.Cancel() }
 
+// The table over the parameter book (spec 14.6).
+
+func (a *App) EditSheets() (*ui.EditListView, error)    { return a.s.EditSheets() }
+func (a *App) EditSheet(id string) (*book.View, error)  { return a.s.EditSheet(id) }
+func (a *App) EditDraft(p book.DraftSheet) (int, error) { return a.s.EditDraft(p) }
+func (a *App) EditDiscard(sheet string) (int, error)    { return a.s.EditDiscard(sheet) }
+func (a *App) EditCheck(sheet, column string, values []string) ([]string, error) {
+	return a.s.EditCheck(sheet, column, values)
+}
+func (a *App) EditSave(choice map[string]string) (*ui.EditSavedView, error) {
+	return a.s.EditSave(choice)
+}
+func (a *App) EditColumn(sheet, title string, headings []string) (string, error) {
+	return a.s.EditColumn(sheet, title, headings)
+}
+func (a *App) EditFind(query string, opt book.FindOptions) ([]book.FindCount, error) {
+	return a.s.EditFind(query, opt)
+}
+func (a *App) EditReplace(query, with string, opt book.FindOptions, skip string) (*ui.EditReplacedView, error) {
+	return a.s.EditReplace(query, with, opt, skip)
+}
+func (a *App) EditPrefs() map[string]ui.GridPref    { return a.s.EditPrefs() }
+func (a *App) EditPref(sheet string, p ui.GridPref) { a.s.EditPref(sheet, p) }
+
+// ClipboardGet and ClipboardSet read and write the clipboard of the system
+// as text: the table copies to Excel and pastes from it.
+func (a *App) ClipboardGet() (string, error)  { return runtime.ClipboardGetText(a.ctx) }
+func (a *App) ClipboardSet(text string) error { return runtime.ClipboardSetText(a.ctx, text) }
+
 // The lists of the customer (spec 14.3).
 
 func (a *App) Customer() (*ui.CustomerView, error)    { return a.s.Customer() }
@@ -144,4 +177,8 @@ func (a *App) ListSample(r listimport.Rule) (*ui.SampleView, error) {
 func (a *App) ListTry(r listimport.Rule) (*ui.TryView, error) { return a.s.ListTry(r) }
 func (a *App) ListSave(path string, r listimport.Rule) (string, error) {
 	return a.s.ListSave(path, r)
+}
+func (a *App) ListDelete(path string) (string, error) { return a.s.ListDelete(path) }
+func (a *App) ListTrace(v string, steps []listimport.Step) []string {
+	return a.s.ListTrace(v, steps)
 }

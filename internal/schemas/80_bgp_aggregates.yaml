@@ -1,0 +1,10 @@
+table: bgp_aggregates
+title: {ja: BGP 集約経路, en: BGP aggregates}
+since: M7
+key: [device, vrf, prefix]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name, note: {ja: "空 = VRF なし（全体の経路表）", en: "Empty = no VRF (the global table)"}}
+  - {name: prefix, title: {ja: 集約した経路, en: Prefix}, type: net4, required: true, note: {ja: "中に入る経路が BGP の表に 1 つでもあれば、この経路を広告する", en: "Advertised while the BGP table holds a route inside it"}}
+  - {name: summary_only, title: {ja: 細かい経路を広告しない, en: Summary only}, type: bool, note: {ja: "有効 = 集約した経路だけを広告する", en: "On = only the aggregate is advertised"}}
+  - {name: as_set, title: {ja: 元の経路の AS を残す, en: AS set}, type: bool, note: {ja: "有効 = 集約した経路に、元の経路が通ってきた AS の集まりを付ける", en: "On = the aggregate carries the set of the AS numbers its routes came through"}}

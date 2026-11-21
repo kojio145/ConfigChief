@@ -1,0 +1,13 @@
+# A watch of an IPv6 address written the Cisco way (made-up values): the
+# source is an interface and the output interface is empty. The pack writes
+# the address of the interface and the interface of the route to the target.
+tables:
+  devices:
+    - {hostname: ix-v03, vendor: nec_ix}
+  interfaces:
+    - {name: GigaEthernet1.0, enabled: true, ipv6: ["2001:db8:0:2::1/64"]}
+  ipv6_routes:
+    - {prefix: "2001:db8:ff::/48", out_if: GigaEthernet1.0, next_hop: "fe80::1"}
+  tracks:
+    - {id: wg-v6, type: icmp, target: "2001:db8:ff::10", source_if: GigaEthernet1.0, interval: 5, fail_count: 6}
+findings: [G-614, G-614]

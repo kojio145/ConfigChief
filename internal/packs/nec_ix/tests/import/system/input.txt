@@ -1,0 +1,46 @@
+hostname ix-d01
+timezone +09 00
+!
+logging buffered 100000 one-time
+logging subsystem all notice
+logging subsystem ppp debug
+logging subsystem ike info
+logging subsystem bgp include 1 2 3
+logging timestamp timeofday
+service password-encryption
+!
+username admin password plain 1 dummy-admin-secret-sample administrator
+username operator password plain dummy-operator-secret-sample operator
+!
+ip ufs-cache enable
+ip name-server vrf vrf-sample-m 192.0.2.53
+ip name-server vrf vrf-sample-m 192.0.2.54
+ip name-server 192.0.2.55
+!
+ntp ip enable
+ntp server 192.0.2.123
+!
+syslog ip host 192.0.2.50
+syslog ip source 192.0.2.1
+syslog vrf vrf-sample-m ip host 198.51.100.50
+syslog vrf vrf-sample-m ip source 198.51.100.1
+!
+device GigaEthernet0
+  description sample uplink port
+!
+device GigaEthernet1
+  description sample lan port
+  speed 1000
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.21/30
+  ip tcp adjust-mss auto
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip vrf forwarding vrf-sample-m
+  ip address 198.51.100.1/24
+  no shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.1/32

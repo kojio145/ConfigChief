@@ -1,0 +1,85 @@
+#
+ sysname l3-q31
+#
+local-user admin class manage
+ password simple Example-Secret-1
+ service-type terminal ssh telnet
+ authorization-attribute user-role network-admin
+#
+ stp global enable
+ stp mode pvst
+ port-security enable
+#
+vlan 10
+ name sample-office
+#
+vlan 20
+ name sample-voice
+#
+acl basic 2010
+ rule 10 permit source 192.0.2.0 0.0.0.127
+#
+acl advanced 3010
+ rule 20 permit tcp source 192.0.2.0 0.0.0.127 destination-port eq 80
+ rule 20 comment sample office in
+ rule 30 permit icmp icmp-type echo
+ rule 35 deny ip
+#
+nqa entry track 1
+ type icmp-echo
+  destination ip 192.0.2.126
+  frequency 5000
+  reaction 1 checked-element probe-fail threshold-type consecutive 1 action-type trigger-only
+#
+ nqa schedule track 1 start-time now lifetime forever
+ track 1 nqa entry track 1 reaction 1
+#
+interface GigabitEthernet1/0/1
+ description office desk
+ port link-type access
+ port access vlan 10
+ voice-vlan 20 enable
+ port-security max-mac-count 3
+ port-security port-mode autolearn
+ port-security intrusion-mode blockmac
+#
+interface GigabitEthernet1/0/24
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20
+#
+interface Vlan-interface10
+ description sample office
+ ip address 192.0.2.2 255.255.255.128
+ packet-filter 3010 inbound
+ vrrp version 3
+ vrrp vrid 10 virtual-ip 192.0.2.1
+ vrrp vrid 10 priority 120
+ vrrp vrid 10 preempt-mode
+ vrrp vrid 10 timer advertise 100
+#
+ ip route-static 0.0.0.0 0 192.0.2.126 track 1
+#
+ info-center loghost 192.0.2.20 facility local7
+#
+ snmp-agent
+ snmp-agent community read example-ro acl 2010
+ snmp-agent sys-info version v2c
+#
+ ntp-service enable
+ ntp-service unicast-server 192.0.2.10
+#
+ header motd %sample notice: authorized use only%
+#
+line aux 0
+ idle-timeout 5 30
+#
+ ssh server enable
+ ssh server acl 2010
+#
+line vty 0 63
+ authentication-mode scheme
+ protocol inbound ssh
+ idle-timeout 10
+#
+return

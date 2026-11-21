@@ -1,0 +1,13 @@
+table: lags
+title: {ja: LAG のメンバー, en: LAG members}
+since: M7
+key: [device, if_name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: if_name, title: {ja: IF 名, en: Interface}, type: ifname, required: true, note: {ja: "束ねるポート", en: "The member port"}}
+  - {name: group, title: {ja: LAG の番号, en: LAG number}, type: int, min: 1, required: true, note: {ja: "同じ番号のポートを 1 本に束ねる。LAG の IF（Cisco は Port-channel<番号>）の設定は、インタフェースとスイッチポートの表に書く", en: "Ports with the same number make one link. The settings of the interface of the LAG (Cisco: Port-channel<number>) stand in the interfaces and switch ports tables"}}
+  - {name: mode, title: {ja: 束ね方, en: Mode}, type: enum, values: ["on", active, passive, auto, desirable], note: {ja: "on = 固定。active・passive = LACP。auto・desirable = PAgP（Cisco）", en: "on = static. active, passive = LACP. auto, desirable = PAgP (Cisco)"}}
+  - {name: lacp_short, title: {ja: LACP の短いタイムアウト, en: LACP short timeout}, type: bool, note: {ja: "有効 = 相手に 1 秒ごとの送信を求める", en: "true = asks the peer to send every second"}}
+  - {name: non_silent, title: {ja: PAgP を黙らない相手として扱う, en: PAgP non-silent}, type: bool, note: {ja: "束ね方が auto・desirable のときだけ（Cisco の non-silent）", en: "Only with the modes auto and desirable (Cisco: non-silent)"}}
+  - {name: protocol, title: {ja: 束ねる手順の指定, en: Channel protocol}, type: enum, values: [lacp, pagp], note: {ja: "ポートで使う手順を先に決める（Cisco の channel-protocol）", en: "Fixes the protocol of the port beforehand (Cisco: channel-protocol)"}}
+  - {name: lacp_port_priority, title: {ja: LACP のポート優先度, en: LACP port priority}, type: int, min: 1, max: 65535}

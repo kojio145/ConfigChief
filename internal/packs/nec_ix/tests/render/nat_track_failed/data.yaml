@@ -8,11 +8,17 @@ tables:
     - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.45/30}
     - {name: GigaEthernet1.0, enabled: true, ipv4: 192.0.2.129/25}
   tracks:
-    - {id: wg-sample-route, type: route, target: 198.51.100.0/24}
+    # A slow answer cannot count as down. The members of a list take the
+    # name of the list with a number: the pack makes that copy itself, but
+    # not when a row of that name is there already.
+    - {id: wg-sample-slow, type: icmp, target: 198.51.100.1, up_when: within_threshold, interval: 10, fail_count: 3}
+    - {id: wg-sample-list, type: list, list_rule: all_up, members: [wg-sample-x]}
+    - {id: wg-sample-x, type: icmp, target: 198.51.100.2, interval: 10, fail_count: 3}
+    - {id: wg-sample-list-1, type: icmp, target: 198.51.100.3, interval: 10, fail_count: 3}
   nat_rules:
     # No interface outside.
     - {name: nat1, type: static, local_ip: 192.0.2.130, global_ip: 198.51.100.130}
-    # A pool.
+    # A pool of several addresses for a translation of ports.
     - {name: nat2, type: pat_pool, pool_start: 198.51.100.17, pool_end: 198.51.100.22, pool_prefix: 29, outside_if: GigaEthernet0.0}
     # A forwarded port without the switch, to another address, to another port.
     - {name: nat3, type: static_port, protocol: tcp, local_ip: 192.0.2.131, local_port: 8080, global_ip: 198.51.100.131, global_port: 80, outside_if: GigaEthernet1.0}

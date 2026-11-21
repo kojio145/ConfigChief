@@ -1,6 +1,8 @@
 hostname ix-c01
 timezone +09 00
 !
+logging subsystem all warn
+!
 username admin password plain dummy-admin-secret-sample administrator
 username backup password plain dummy-backup-secret-sample
 username monitor password plain dummy-monitor-secret-sample monitor
@@ -25,6 +27,7 @@ ntp source Loopback0.0
 !
 syslog ip host 192.0.2.50
 syslog ip host 192.0.2.51
+syslog ip source 192.0.2.9
 syslog facility local6
 !
 ssh-server ip enable
@@ -43,6 +46,7 @@ device GigaEthernet1
 interface GigaEthernet0.0
   description to rt-c02
   ip address 203.0.113.9/30
+  bandwidth 100000
   no shutdown
 !
 interface GigaEthernet1.0

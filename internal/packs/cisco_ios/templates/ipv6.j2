@@ -1,0 +1,257 @@
+{# IPv6, what stands behind the interfaces (appendix A 3.23): static routes,
+   OSPFv3, prefix lists and access lists. Syntax: Cisco IOS IPv6 Command
+   Reference (README). The name of a route is one word. #}
+{% for r in t.ipv6_routes %}
+{% if ' ' in r.description %}
+{{ fail('IPv6 の経路 ' ~ r.prefix ~ ' の説明に空白があります（Cisco の経路の名前は 1 語です）') }}
+{% endif %}
+{% if r.gateway_from %}
+{{ fail('IPv6 の経路 ' ~ r.prefix ~ ': 「ネクストホップの決め方」（' ~ r.gateway_from ~ '）は Cisco では書けません（セルを空にしてください。RA からのデフォルト経路は、シート「IPv6 インタフェース」の「RA の送り元をデフォルト経路にする」で書けます）') }}
+{% endif %}
+{% if not r.next_hop and not r.out_if %}
+{{ fail('IPv6 の経路 ' ~ r.prefix ~ ' に、ネクストホップも出力 IF もありません') }}
+{% endif %}
+ipv6 route{{ ' vrf ' ~ r.vrf if r.vrf else '' }} {{ r.prefix }}{{ ' ' ~ r.out_if if r.out_if else '' }}{{ ' ' ~ r.next_hop if r.next_hop else '' }}{{ ' ' ~ r.distance if r.distance != '' else '' }}{{ ' name ' ~ r.description if r.description else '' }}
+{% endfor %}
+{% if t.ipv6_routes %}
+!
+{% endif %}
+{# OSPFv3, in the form "ipv6 router ospf". #}
+{% for p in t.ospfv3_processes %}
+ipv6 router ospf {{ p.process_id }}
+{% if p.router_id %}
+ router-id {{ p.router_id }}
+{% endif %}
+{% for a in t.ospfv3_areas %}
+{% if a.process_id == p.process_id %}
+{% if a.type in ['stub', 'totally_stub'] %}
+ area {{ a.area }} stub{{ ' no-summary' if a.type == 'totally_stub' else '' }}
+{% elif a.type in ['nssa', 'totally_nssa'] %}
+ area {{ a.area }} nssa{{ ' no-summary' if a.type == 'totally_nssa' else '' }}
+{% endif %}
+{% if a.default_cost != '' %}
+ area {{ a.area }} default-cost {{ a.default_cost }}
+{% endif %}
+{% for g in a.ranges %}
+ area {{ a.area }} range {{ g }}
+{% endfor %}
+{% for g in a.ranges_hidden %}
+ area {{ a.area }} range {{ g }} not-advertise
+{% endfor %}
+{% if a.auth_hash or a.auth_spi != '' or a.auth_key %}
+ area {{ a.area }} authentication ipsec spi {{ a.auth_spi | required('OSPFv3 エリア ' ~ a.area ~ ' の認証の SPI') }} {{ a.auth_hash | required('OSPFv3 エリア ' ~ a.area ~ ' の認証のアルゴリズム') }} {{ a.auth_key | required('OSPFv3 エリア ' ~ a.area ~ ' の認証の鍵') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if p.passive_default == true %}
+ passive-interface default
+{% endif %}
+{% for o in t.ospfv3_interfaces %}
+{% if o.process_id == p.process_id %}
+{% if o.passive == true and p.passive_default != true %}
+ passive-interface {{ o.if_name }}
+{% elif o.passive == false and p.passive_default == true %}
+ no passive-interface {{ o.if_name }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if p.default_originate == 'always' %}
+ default-information originate always{{ ' metric ' ~ p.default_metric if p.default_metric != '' else '' }}
+{% elif p.default_originate == 'when_present' %}
+ default-information originate{{ ' metric ' ~ p.default_metric if p.default_metric != '' else '' }}
+{% elif p.default_metric != '' %}
+{{ fail('OSPFv3 ' ~ p.process_id ~ ': 「広告のメトリック」は、「デフォルト経路の広告」を書いたときだけ書けます') }}
+{% endif %}
+{% for s in p.redistribute %}
+{# What the kind is redistributed with: the row of the options. #}
+{% set opt = namespace(v='') %}
+{% for o in t.ospfv3_redistribute %}
+{% if o.process_id == p.process_id and o.source == s %}
+{% set opt.v = (' metric ' ~ o.metric if o.metric != '' else '') ~ (' metric-type ' ~ o.metric_type if o.metric_type else '') ~ (' tag ' ~ o.tag if o.tag != '' else '') ~ (' route-map ' ~ o.filter if o.filter else '') %}
+{% endif %}
+{% endfor %}
+{% if s == 'bgp' %}
+{% if not t.bgp_processes %}
+{{ fail('OSPFv3 ' ~ p.process_id ~ ' の再配布の元 bgp は、BGP の表に行（AS 番号）があるときだけ書けます') }}
+{% else %}
+ redistribute bgp {{ t.bgp_processes[0].asn }}{{ opt.v }}
+{% endif %}
+{% elif s == 'rip' %}
+{{ fail('OSPFv3 ' ~ p.process_id ~ ' の再配布の元 rip は書けません（Cisco は RIP のプロセスの名前が要ります。追加コンフィグに書いてください）') }}
+{% else %}
+ redistribute {{ s }}{{ opt.v }}
+{% endif %}
+{% endfor %}
+{% for o in t.ospfv3_redistribute %}
+{% if o.process_id == p.process_id and o.source not in p.redistribute %}
+{{ fail('OSPFv3 ' ~ p.process_id ~ ' の再配布の指定（' ~ o.source ~ '）は、OSPFv3 の表の「再配布する経路」に ' ~ o.source ~ ' があるときだけ書けます') }}
+{% endif %}
+{% endfor %}
+!
+{% endfor %}
+{% for o in t.ospfv3_interfaces %}
+{% set n = namespace(seen=false) %}
+{% for p in t.ospfv3_processes %}
+{% if p.process_id == o.process_id %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('OSPFv3 インタフェース ' ~ o.if_name ~ ' のプロセス ' ~ o.process_id ~ ' の行が、OSPFv3 の表にありません') }}
+{% endif %}
+{% endfor %}
+{% for a in t.ospfv3_areas %}
+{% set n = namespace(seen=false) %}
+{% for p in t.ospfv3_processes %}
+{% if p.process_id == a.process_id %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('OSPFv3 エリア ' ~ a.area ~ ' のプロセス ' ~ a.process_id ~ ' の行が、OSPFv3 の表にありません') }}
+{% endif %}
+{% endfor %}
+{# BGP for IPv6 is written inside "router bgp" (bgp_ipv6.j2). #}
+{% if not t.bgp_processes %}
+{% for n in t.bgp_ipv6_neighbors %}
+{{ fail('BGP IPv6 ネイバー ' ~ n.neighbor ~ ' は、BGP の表に VRF が空の行（AS 番号）が要ります') }}
+{% endfor %}
+{% endif %}
+{% for p in t.ipv6_prefix_lists %}
+ipv6 prefix-list {{ p.name }} seq {{ p.seq }} {{ p.action }} {{ p.prefix }}{{ ' ge ' ~ p.ge if p.ge != '' else '' }}{{ ' le ' ~ p.le if p.le != '' else '' }}
+{% endfor %}
+{% if t.ipv6_prefix_lists %}
+!
+{% endif %}
+{# Access lists. The entries of a list numbered 10, 20, 30 ... are written
+   without their numbers; any other numbering is written out at the end of
+   every line ("sequence <n>"), which a remark cannot carry. #}
+{% set cur = namespace(name='', i=0, plain=true) %}
+{% for x in t.ipv6_acl_entries %}
+{% if x.acl != cur.name %}
+{% if cur.name %}
+!
+{% endif %}
+{% set cur.name = x.acl %}
+{% set cur.i = 0 %}
+{% set cur.plain = true %}
+{% set k = namespace(i=0) %}
+{% for y in t.ipv6_acl_entries %}
+{% if y.acl == x.acl %}
+{% set k.i = k.i + 1 %}
+{% if y.seq != k.i * 10 %}
+{% set cur.plain = false %}
+{% endif %}
+{% endif %}
+{% endfor %}
+ipv6 access-list {{ x.acl }}
+{% endif %}
+{% set cur.i = cur.i + 1 %}
+{% set what = 'IPv6 フィルタ ' ~ x.acl ~ ' の ' ~ x.seq ~ ' 番' %}
+{% set no = '' if cur.plain else ' sequence ' ~ x.seq %}
+{% if x.action == 'remark' %}
+{% if x.seq != cur.i * 10 %}
+{{ fail(what ~ ': 注記（remark）の行には番号を書けません。注記の行の順番を、上から 10 刻みで数えた番号（この行は ' ~ (cur.i * 10) ~ '）にしてください') }}
+{% endif %}
+ remark {{ x.remark | required(what ~ 'の注記') }}
+{% else %}
+{% set ad = namespace(s='', d='') %}
+{% for side in ['s', 'd'] %}
+{% set v = x.src if side == 's' else x.dst %}
+{% set w = '' %}
+{% if v == 'any' %}
+{% set w = 'any' %}
+{% elif v is cidr and ':' in v %}
+{% set w = v %}
+{% elif v and (v ~ '/128') is cidr %}
+{% set w = 'host ' ~ v %}
+{% elif v %}
+{{ fail(what ~ 'のアドレス「' ~ v ~ '」は書けません（any、2001:db8::1、2001:db8:1::/64 の形で書きます）') }}
+{% endif %}
+{% if side == 's' %}
+{% set ad.s = w %}
+{% else %}
+{% set ad.d = w %}
+{% endif %}
+{% endfor %}
+{% set proto = x.protocol | required(what ~ 'のプロトコル') %}
+{% if proto == 'ip' %}
+{% set proto = 'ipv6' %}
+{% elif proto == 'ah' %}
+{% set proto = 'ahp' %}
+{% endif %}
+{% if not (proto in ['ipv6', 'tcp', 'udp', 'icmp', 'esp', 'ahp'] or proto is digits) %}
+{{ fail(what ~ 'のプロトコル「' ~ x.protocol ~ '」は書けません（ip tcp udp icmp esp ah か番号で書きます）') }}
+{% endif %}
+{% set pt = namespace(s='', d='') %}
+{% if proto in ['tcp', 'udp'] %}
+{% for side in ['s', 'd'] %}
+{% set p = x.src_port if side == 's' else x.dst_port %}
+{% set w = '' %}
+{% if p %}
+{% set op = ' eq ' %}
+{% if '-' in p %}
+{% set op = ' range ' %}
+{% elif '>' in p %}
+{% set op = ' gt ' %}
+{% elif '<' in p %}
+{% set op = ' lt ' %}
+{% elif '!' in p %}
+{% set op = ' neq ' %}
+{% endif %}
+{% set nums = p | replace('>', '') | replace('<', '') | replace('!', '') | split('-') %}
+{% for one in nums %}
+{% if not (one is digits) %}
+{{ fail(what ~ 'のポート「' ~ p ~ '」は書けません（80、1000-2000、>1023、<1024、!80 の形で、番号で書きます）') }}
+{% endif %}
+{% endfor %}
+{% set w = op ~ (nums | join(' ')) %}
+{% endif %}
+{% if side == 's' %}
+{% set pt.s = w %}
+{% else %}
+{% set pt.d = w %}
+{% endif %}
+{% endfor %}
+{% elif x.src_port or x.dst_port %}
+{{ fail(what ~ ': ポートは、プロトコルが tcp か udp の行にだけ書けます') }}
+{% endif %}
+{% set tail = namespace(v='') %}
+{% if x.icmp_type %}
+{% if proto != 'icmp' %}
+{{ fail(what ~ ': 「ICMPv6 の種類」は、プロトコルが icmp の行にだけ書けます') }}
+{% endif %}
+{% set tail.v = ' ' ~ (x.icmp_type if x.icmp_type is digits else x.icmp_type | lex('icmp6_type')) %}
+{% endif %}
+{% if x.dscp != '' %}
+{% set tail.v = tail.v ~ ' dscp ' ~ x.dscp %}
+{% endif %}
+{% set tcpf = namespace(n=0) %}
+{% for f in ['ack', 'fin', 'psh', 'rst', 'syn', 'urg'] %}
+{% if f in x.flags %}
+{% set tcpf.n = tcpf.n + 1 %}
+{% endif %}
+{% endfor %}
+{% if tcpf.n > 1 %}
+{{ fail(what ~ ': TCP のフラグ（ack fin psh rst syn urg）は、1 行に 1 つだけ書けます（行を分けてください）') }}
+{% endif %}
+{% if 'log' in x.flags and 'log_input' in x.flags %}
+{{ fail(what ~ ': log と log_input は、どちらか 1 つだけ書きます') }}
+{% endif %}
+{% for f in ['established', 'ack', 'fin', 'psh', 'rst', 'syn', 'urg', 'fragments', 'log', 'log_input'] %}
+{% if f in x.flags %}
+{% if f in ['established', 'ack', 'fin', 'psh', 'rst', 'syn', 'urg'] and proto != 'tcp' %}
+{{ fail(what ~ 'の ' ~ f ~ ' は、プロトコルが tcp の行にだけ書けます') }}
+{% endif %}
+{% if f == 'fragments' and proto in ['tcp', 'udp'] and (pt.s or pt.d) %}
+{{ fail(what ~ 'の fragments は、ポートを書いた行には書けません') }}
+{% endif %}
+{% set tail.v = tail.v ~ ' ' ~ (f | replace('_', '-')) %}
+{% endif %}
+{% endfor %}
+ {{ x.action }} {{ proto }} {{ ad.s | required(what ~ 'の送信元') }}{{ pt.s }} {{ ad.d | required(what ~ 'の宛先') }}{{ pt.d }}{{ tail.v }}{{ no }}
+{% endif %}
+{% endfor %}
+{% if t.ipv6_acl_entries %}
+!
+{% endif %}

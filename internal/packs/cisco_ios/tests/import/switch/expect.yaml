@@ -1,0 +1,31 @@
+# A Catalyst-type switch (made-up values): VLANs, spanning tree, a stack,
+# access and trunk ports, port security, storm control and a LAG.
+tables:
+  stack_members:
+    - {member: 1, provision: sample-48p}
+    - {member: 2, provision: sample-48p}
+  l2_settings:
+    - {ip_routing: true, vtp_domain: sample-domain, vtp_mode: transparent, stp_mode: rapid_pvst, stp_edge_default: true, stp_bpdu_guard_default: true, stp_extend_system_id: true, default_gateway: 192.0.2.126}
+  stp_vlans:
+    - {vlans: "10,20", priority: 4096}
+    - {vlans: "30", priority: 8192, hello_time: 2}
+  vlans:
+    - {vlan_id: 10, name: sample-office}
+    - {vlan_id: 20, name: sample-voice}
+    - {vlan_id: 30}
+    - {vlan_id: 40}
+  interfaces:
+    - {name: Port-channel1, kind: lag, description: to sw-b01}
+    - {name: GigabitEthernet1/0/3, ipv4: 198.51.100.1/30}
+    - {name: Vlan10, kind: vlan, vlan_id: 10}
+  switchports:
+    - {if_name: Port-channel1, mode: trunk, native_vlan: 99, allowed_vlans: [10, 20, 30]}
+    - {if_name: GigabitEthernet1/0/1, mode: access, access_vlan: 10, voice_vlan: 20, port_security: true, port_security_max: 3, port_security_violation: restrict, port_security_sticky: true, storm_broadcast: "5.00", storm_multicast: "10", storm_action: shutdown, stp_edge: "on", stp_bpdu_guard: true}
+    - {if_name: GigabitEthernet1/0/2, mode: access, access_vlan: 20, stp_edge: "off", stp_bpdu_guard: false, storm_broadcast: "500pps"}
+    - {if_name: GigabitEthernet1/0/3, mode: routed}
+    - {if_name: GigabitEthernet1/0/47, mode: trunk, stp_edge: trunk}
+    - {if_name: GigabitEthernet2/0/48, mode: dynamic_desirable}
+  lags:
+    - {if_name: GigabitEthernet1/0/47, group: 1, mode: active}
+    - {if_name: GigabitEthernet2/0/47, group: 1, mode: active}
+unknown: []

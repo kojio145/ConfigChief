@@ -18,6 +18,9 @@
 {% endif %}
 {% for n in nats %}
 {% set what = 'NAT ' ~ n.name %}
+{% if n.extendable == true and (n.type not in ['static', 'static_port', 'static_network'] or n.global_ip == 'interface') %}
+{{ fail(what ~ ' の「複数の外側アドレスに対応させる」は、外側アドレスを書いた static・static_port・static_network の行にだけ書けます') }}
+{% endif %}
 {% set acl = '' %}
 {% set oif = '' %}
 {% if n.type in ['pat_interface', 'pat_pool', 'dynamic_pool'] %}
@@ -43,9 +46,14 @@ ip nat inside source list {{ acl }} pool {{ n.name }}{{ ' overload' if n.type ==
 {% if n.global_ip == 'interface' %}
 {{ fail(what ~ ' の外側アドレス「interface」は、種類が static_port の行にだけ書けます') }}
 {% endif %}
-ip nat inside source static {{ n.local_ip | required(what ~ ' の内側アドレス') }} {{ n.global_ip | required(what ~ ' の外側アドレス') }}
+ip nat inside source static {{ n.local_ip | required(what ~ ' の内側アドレス') }} {{ n.global_ip | required(what ~ ' の外側アドレス') }}{{ ' extendable' if n.extendable == true else '' }}
+{% elif n.type == 'static_network' %}
+{% if n.global_ip == 'interface' %}
+{{ fail(what ~ ' の外側アドレス「interface」は、種類が static_port の行にだけ書けます') }}
+{% endif %}
+ip nat inside source static network {{ n.local_ip | required(what ~ ' の内側アドレス') }} {{ n.global_ip | required(what ~ ' の外側アドレス') }} /{{ n.pool_prefix | required(what ~ ' の範囲のプレフィックス長') }}{{ ' extendable' if n.extendable == true else '' }}
 {% elif n.type == 'static_port' %}
-ip nat inside source static {{ n.protocol | required(what ~ ' のプロトコル') }} {{ n.local_ip | required(what ~ ' の内側アドレス') }} {{ n.local_port | required(what ~ ' の内側ポート') }} {{ 'interface ' ~ oif if n.global_ip == 'interface' else (n.global_ip | required(what ~ ' の外側アドレス')) }} {{ n.global_port | required(what ~ ' の外側ポート') }}
+ip nat inside source static {{ n.protocol | required(what ~ ' のプロトコル') }} {{ n.local_ip | required(what ~ ' の内側アドレス') }} {{ n.local_port | required(what ~ ' の内側ポート') }} {{ 'interface ' ~ oif if n.global_ip == 'interface' else (n.global_ip | required(what ~ ' の外側アドレス')) }} {{ n.global_port | required(what ~ ' の外側ポート') }}{{ ' extendable' if n.extendable == true and n.global_ip != 'interface' else '' }}
 {% else %}
 {{ fail(what ~ ' の種類「' ~ n.type ~ '」は書けません') }}
 {% endif %}

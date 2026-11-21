@@ -165,6 +165,9 @@ func Lint(p *Pack, sc *schema.Set) *LintResult {
 				problem("%s: clear でキーの列 %s は空にできません", where, c)
 			}
 		}
+		if d.Drop != nil {
+			key(where, table(where, d.Drop.Table), d.Drop.Key)
+		}
 		if d.Row == nil {
 			continue
 		}
@@ -172,6 +175,7 @@ func Lint(p *Pack, sc *schema.Set) *LintResult {
 		key(where, t, d.Row.Key)
 		values(where, t, d.Set, false)
 		values(where, t, d.Append, true)
+		values(where, t, d.Replace, true)
 	}
 
 	for _, d := range p.Defaults {
@@ -285,6 +289,7 @@ func (p *Pack) exprs() []expr {
 	for _, d := range p.Derives {
 		where := "derive " + d.ID
 		add(where, d.When)
+		add(where, d.OnlyIf)
 		if d.Remove {
 			pairs(where, d.Let)
 			continue

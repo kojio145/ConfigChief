@@ -1,0 +1,36 @@
+# The rest of the route maps and of OSPF (appendix A 3.19, the part added
+# on 2026-11-21). One distance for every OSPF route is written kind by kind
+# (the same thing; nothing is told). Made-up values.
+tables:
+  devices:
+    - hostname: ix-m02
+      vendor: nec_ix
+      local_policy_route_v6: rm-m-pbr6
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.1/29}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.1/24, ipv6: ["2001:db8:0:10::1/64"]}
+  ipv6_interfaces:
+    - {if_name: GigaEthernet1.0, tcp_mss: auto, policy_route: rm-m-pbr6}
+  ospf_processes:
+    - {process_id: 1, router_id: 192.0.2.1, distance_intra: 100, distance_inter: 105, distance_external: 120, filter_in_prefix_list: pl-m-ospf, default_originate: always, default_metric: 50, default_metric_type: "1", default_filter: rm-m-def}
+    - {process_id: 2, router_id: 192.0.2.2, filter_in_policy: rm-m-def, distance: 115}
+  ospf_interfaces:
+    - {process_id: 1, if_name: GigaEthernet1.0, area: "0", hello: 10, dead: 40}
+  ospf_virtual_links:
+    - {process_id: 1, area: "1", router_id: 192.0.2.9}
+    - {process_id: 1, area: "2", router_id: 192.0.2.10, hello: 5, dead: 20}
+  ospfv3_processes:
+    - {process_id: 5, router_id: 192.0.2.1, redistribute: [connected, static]}
+  ospfv3_redistribute:
+    - {process_id: 5, source: static, metric: 20, metric_type: "1", tag: 30, filter: rm-m-def}
+  prefix_lists:
+    - {name: pl-m-ospf, seq: 5, action: permit, prefix: 198.51.100.0/24, le: 28}
+  ipv6_prefix_lists:
+    - {name: pl6-m, seq: 5, action: permit, prefix: "2001:db8:100::/48", le: 64}
+  ipv6_acl_entries:
+    - {acl: acl6-m-pbr, seq: 10, action: permit, protocol: ip, src: "2001:db8:0:10::/64", dst: any}
+  route_policies:
+    - {name: rm-m-def, seq: 10, action: permit}
+    - {name: rm-m-more, seq: 10, action: permit, match_ipv6_prefix_list: [pl6-m], set_community_delete: ["64497:100", "64497:200"]}
+    - {name: rm-m-more, seq: 20, action: permit, set_community: ["64496:60"], set_community_additive: true, set_community_delete: ["64497:300", no-export]}
+    - {name: rm-m-pbr6, seq: 10, action: permit, match_ipv6_acl: [acl6-m-pbr], set_ipv6_next_hop: ["2001:db8:0:1::2"], set_ipv6_default_next_hop: ["2001:db8:0:1::9"]}

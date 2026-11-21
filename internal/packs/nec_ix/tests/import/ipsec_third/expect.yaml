@@ -1,0 +1,10 @@
+# IPsec, the third round (made-up values; appendix A 3.20 and 3.26): keys
+# the device saved encrypted ("key-type secret 1" of IKE version 1, "key
+# secret" of version 2: kept as "secret <value>"), and a proposal of
+# version 2 without ESP authentication ("child-proposal integrity off":
+# the ESP hash "none").
+tables:
+  ipsec_tunnels:
+    - {name: Tunnel0.0, style: tunnel_if, tunnel_if: Tunnel0.0, peer_address: 203.0.113.20, ike_version: 1, psk: "secret DUMMYENCSAMPLEAAAA", psk_form: ""}
+    - {name: Tunnel1.0, style: tunnel_if, tunnel_if: Tunnel1.0, peer_address: 203.0.113.30, ike_version: 2, psk: "secret DUMMYENCSAMPLEBBBB", psk_remote: "secret DUMMYENCSAMPLECCCC", esp_encryption: aes256, esp_hash: none}
+unknown: []

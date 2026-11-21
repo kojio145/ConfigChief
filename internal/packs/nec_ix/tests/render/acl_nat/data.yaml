@@ -1,0 +1,66 @@
+# The rest of the access lists, NAT, the static routes, line monitoring and
+# DHCP (appendix A 3.25; made-up values). expect.txt is the configuration
+# the tables must turn into.
+tables:
+  devices:
+    - hostname: ix-f02
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: dhcp, bandwidth: 100000, acl_in: acl-f-mgmt, acl_in_more: [acl-f-wan, acl-f-lan], acl_out: acl-f-lan, acl_out_more: [acl-f-mgmt]}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.1/24}
+    - {name: GigaEthernet2.0, enabled: true, ipv4: 192.0.2.129/25}
+    - {name: GigaEthernet2.1, kind: subif, encap_vlan: 10, enabled: true, ipv4: 192.0.2.1/25}
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: dhcp, out_if: GigaEthernet0.0}
+    - {prefix: 192.0.2.64/26, next_hop: 203.0.113.2, track: wg-f-host}
+    - {prefix: 198.18.20.0/24, next_hop: 203.0.113.6, track: wg-f-or}
+  remote_access:
+    - {protocols: [telnet, ssh], acl_telnet: acl-f-mgmt, acl_ssh: acl-f-ssh}
+  acls:
+    - {name: acl-f-wan, type: extended}
+    - {name: acl-f-lan, type: extended, seq_step: 100}
+    - {name: acl-f-mgmt, type: extended}
+    - {name: acl-f-ssh, type: extended}
+    - {name: acl-f-nat, type: extended}
+    - {name: acl-f-nat2, type: extended}
+  acl_entries:
+    - {acl: acl-f-wan, seq: 10, action: permit, protocol: tcp, src: any, dst: any, flags: [established]}
+    - {acl: acl-f-wan, seq: 20, action: permit, protocol: tcp, src: any, dst: 203.0.113.10, dst_port: "443", flags: [syn]}
+    - {acl: acl-f-wan, seq: 30, action: permit, protocol: tcp, src: any, src_port: 1024-65535, dst: 203.0.113.10, dst_port: "25"}
+    - {acl: acl-f-wan, seq: 40, action: permit, protocol: udp, src: any, src_port: "53", dst: any, dst_port: 67-68}
+    - {acl: acl-f-wan, seq: 50, action: permit, protocol: icmp, src: any, dst: any, icmp_type: echo-reply}
+    - {acl: acl-f-wan, seq: 60, action: permit, protocol: icmp, src: any, dst: any, icmp_type: "3", icmp_code: 4}
+    - {acl: acl-f-wan, seq: 70, action: permit, protocol: esp, src: any, dst: 203.0.113.1}
+    - {acl: acl-f-wan, seq: 80, action: permit, protocol: gre, src: any, dst: 203.0.113.1}
+    - {acl: acl-f-wan, seq: 90, action: deny, protocol: udp, src: any, dst: any, tos: 4, flags: [fragments]}
+    - {acl: acl-f-wan, seq: 100, action: deny, protocol: ip, src: any, dst: any}
+    - {acl: acl-f-lan, seq: 100, action: permit, protocol: ip, src: 198.51.100.0/24, dst: any}
+    - {acl: acl-f-lan, seq: 200, action: deny, protocol: ip, src: any, dst: any}
+    - {acl: acl-f-mgmt, seq: 10, action: permit, protocol: ip, src: 192.0.2.0/25, dst: any}
+    - {acl: acl-f-ssh, seq: 10, action: permit, protocol: ip, src: 192.0.2.128/25, dst: any}
+    - {acl: acl-f-nat, seq: 10, action: permit, protocol: ip, src: 198.51.100.0/25, dst: any}
+    - {acl: acl-f-nat2, seq: 10, action: permit, protocol: ip, src: 198.51.100.128/25, dst: any}
+  nat_rules:
+    - {name: nat1, type: pat_interface, outside_if: GigaEthernet0.0, match_acl: acl-f-nat}
+    - {name: nat2, type: pat_pool, outside_if: GigaEthernet0.0, match_acl: acl-f-nat2, pool_start: 203.0.113.20, pool_end: 203.0.113.20}
+    - {name: nat3, type: static_port, outside_if: GigaEthernet0.0, protocol: tcp, local_ip: 198.51.100.21, local_port: 443, global_port: 443}
+    - {name: web-f, type: static_port, outside_if: GigaEthernet0.0, protocol: tcp, local_ip: 198.51.100.22, local_port: 8080, global_port: 80}
+    - {name: pool-f-a, type: dynamic_pool, outside_if: GigaEthernet0.0, match_acl: acl-f-nat, pool_start: 203.0.113.33, pool_end: 203.0.113.38}
+    - {name: nat6, type: static_network, outside_if: GigaEthernet0.0, local_ip: 198.51.100.64, global_ip: 203.0.113.64, pool_prefix: 26}
+    - {name: nat7, type: pat_pool, outside_if: GigaEthernet2.0, pool_start: 203.0.113.50, pool_end: 203.0.113.50}
+  fhrp:
+    - {if_name: GigaEthernet1.0, group: 1, protocol: vrrp, virtual_ip: 198.51.100.254, priority: 100, preempt: true, advert_interval: 1, track: wg-f-host, track_decrement: 30}
+  tracks:
+    - {id: wg-f-host, type: icmp, target: 203.0.113.2, via_if: GigaEthernet0.0, via_next_hop: 203.0.113.1, source_if: GigaEthernet1.0, interval: 10, restore_interval: 30, fail_count: 3, shutdown_ifs: [GigaEthernet2.0]}
+    - {id: wg-f-or, type: list, list_rule: all_up, members: [wg-f-or-1, wg-f-or-2, wg-f-or-3]}
+    - {id: wg-f-or-1, type: icmp, target: 203.0.113.6, interval: 5, fail_count: 2}
+    - {id: wg-f-or-2, type: route, target: 198.18.10.0/24, via_next_hop: 203.0.113.6, interval: 5, fail_count: 2}
+    - {id: wg-f-or-3, type: interface, target: GigaEthernet2.0, interval: 5, fail_count: 2}
+    - {id: wg-f-and, type: list, list_rule: any_up, members: [wg-f-and-1, wg-f-and-2], shutdown_ifs: [GigaEthernet2.0]}
+    - {id: wg-f-and-1, type: icmp, target: 203.0.113.9, interval: 5, fail_count: 6}
+    - {id: wg-f-and-2, type: icmp, target: 203.0.113.10, interval: 5, fail_count: 6}
+  dhcp_pools:
+    - {name: dhcp-f-a, network: 198.51.100.0/24, range_start: 198.51.100.100, range_end: 198.51.100.199, default_router: 198.51.100.1, lease: 90m}
+    - {name: dhcp-f-b, network: 192.0.2.128/25, lease: infinite}
+    - {name: dhcp-f-c, network: 192.0.2.0/25, lease: 100s}
+findings: []

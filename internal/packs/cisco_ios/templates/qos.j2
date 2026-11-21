@@ -4,7 +4,24 @@
    "shape-<interface>" with the policy of the binding as its child (README).
    Where these lines stand in the text of a device is not known: they are
    written before the interfaces that name the policies. #}
+{# A class that names another class ("match class-map") stands after the
+   class it names: the classes with no such condition first, then those that
+   name only such classes, then the rest. #}
+{% set refs = namespace(names=[]) %}
+{% for m in t.qos_class_matches %}
+{% if m.class_ref and m.class not in refs.names %}
+{% set refs.names = refs.names + [m.class] %}
+{% endif %}
+{% endfor %}
+{% for pass in [0, 1, 2] %}
 {% for c in t.qos_classes %}
+{% set depth = namespace(v=0) %}
+{% for m in t.qos_class_matches %}
+{% if m.class == c.name and m.class_ref %}
+{% set depth.v = 2 if (m.class_ref in refs.names or depth.v == 2) else 1 %}
+{% endif %}
+{% endfor %}
+{% if depth.v == pass %}
 class-map match-{{ c.match | required('QoS のクラス ' ~ c.name ~ ' の合わせ方') }} {{ c.name }}
 {% set k = namespace(i=0) %}
 {% for m in t.qos_class_matches %}
@@ -14,24 +31,51 @@ class-map match-{{ c.match | required('QoS のクラス ' ~ c.name ~ ' の合わ
 {% if m.seq != k.i * 10 %}
 {{ fail(what ~ ': 順番が 10 刻みではありません（コンフィグには番号を書かず、上から順に書きます。順番を 10、20、30… に振り直してください。評価の順は変わりません）') }}
 {% endif %}
-{% set kinds = (1 if m.acl else 0) + (1 if m.dscp else 0) + (1 if m.precedence else 0) %}
+{% if m.ipv6_acl or m.local_generated == true or m.rtp_port_start != '' or m.rtp_port_range != '' or m.ngn_if %}
+{{ fail(what ~ ': IPv6 の ACL・機器自身が出す通信・RTP のポート・NGN のトンネル IF の条件は、Cisco の書き方を確かめていません（条件を書き直すか、追加コンフィグに書いてください）') }}
+{% endif %}
+{% set kinds = (1 if m.acl else 0) + (1 if m.dscp else 0) + (1 if m.precedence else 0) + (1 if m.input_if else 0) + (1 if m.cos else 0) + (1 if m.qos_group != '' else 0) + (1 if m.protocol else 0) + (1 if m.class_ref else 0) %}
+{% set neg = 'not ' if m.negate == true else '' %}
 {% if kinds > 1 %}
-{{ fail(what ~ ': ACL・DSCP・precedence は 1 行に 1 つだけ書きます（行を分けてください）') }}
+{{ fail(what ~ ': 条件（ACL・DSCP・precedence・受信 IF・CoS・QoS グループ・プロトコル・ほかのクラス）は 1 行に 1 つだけ書きます（行を分けてください）') }}
 {% elif m.acl %}
- match access-group {{ '' if m.acl is digits else 'name ' }}{{ m.acl }}
+ match {{ neg }}access-group {{ '' if m.acl is digits else 'name ' }}{{ m.acl }}
 {% elif m.dscp %}
 {% if m.dscp | length > 8 %}
 {{ fail(what ~ ': DSCP は 1 行に 8 つまでです（行を分けてください）') }}
 {% endif %}
- match dscp {{ m.dscp | join(' ') }}
+ match {{ neg }}dscp {{ m.dscp | join(' ') }}
 {% elif m.precedence %}
 {% if m.precedence | length > 4 %}
 {{ fail(what ~ ': precedence は 1 行に 4 つまでです（行を分けてください）') }}
 {% endif %}
- match precedence {{ m.precedence | join(' ') }}
+ match {{ neg }}precedence {{ m.precedence | join(' ') }}
+{% elif m.input_if %}
+ match {{ neg }}input-interface {{ m.input_if }}
+{% elif m.cos %}
+{% if m.cos | length > 4 %}
+{{ fail(what ~ ': CoS は 1 行に 4 つまでです（行を分けてください）') }}
+{% endif %}
+ match {{ neg }}cos {{ m.cos | join(' ') }}
+{% elif m.qos_group != '' %}
+{% if m.qos_group > 99 %}
+{{ fail(what ~ ': QoS グループは、Cisco では 0〜99 です') }}
+{% endif %}
+ match {{ neg }}qos-group {{ m.qos_group }}
+{% elif m.protocol %}
+ match {{ neg }}protocol {{ m.protocol }}
+{% elif m.class_ref %}
+{% if m.class_ref == c.name %}
+{{ fail(what ~ ': 「ほかのクラス」に自分自身は書けません') }}
+{% endif %}
+ match {{ neg }}class-map {{ m.class_ref }}
+{% elif neg %}
+{{ fail(what ~ ': 「条件を逆にする」は、条件を書いた行にだけ書けます') }}
 {% else %}
  match any
 {% endif %}
+{% endif %}
+{% endfor %}
 {% endif %}
 {% endfor %}
 {% endfor %}
@@ -50,6 +94,8 @@ policy-map {{ first.policy }}
 {% set what = 'QoS のポリシー ' ~ r.policy ~ ' のクラス ' ~ r.class %}
 {% if r.class == 'local' %}
 {{ fail(what ~ ': 機器自身が出す通信のクラス（local）は Cisco にありません（行を消すか、追加コンフィグに書いてください）') }}
+{% elif r.class == 'dynamic' %}
+{{ fail(what ~ ': ダイナミック QoS のクラス（dynamic）は Cisco にありません（行を消してください）') }}
 {% endif %}
  class {{ 'class-default' if r.class == 'default' else r.class }}
 {% set bw = (1 if r.bandwidth_kbps != '' else 0) + (1 if r.bandwidth_percent != '' else 0) + (1 if r.bandwidth_remaining != '' else 0) %}
@@ -87,16 +133,22 @@ policy-map {{ first.policy }}
   bandwidth remaining percent {{ r.bandwidth_remaining }}
 {% endif %}
 {% endif %}
-{% if r.shape_bps != '' %}
+{% set smode = r.shape_mode if r.shape_mode else 'average' %}
+{% if r.shape_percent != '' %}
+{% if r.shape_bps != '' or r.shape_bc != '' or r.shape_be != '' %}
+{{ fail(what ~ ': 「上限・遅らせる（%）」と、bps の上限・バーストは一緒に書けません（どちらかにしてください）') }}
+{% endif %}
+  shape {{ smode }} percent {{ r.shape_percent }}
+{% elif r.shape_bps != '' %}
 {% if r.shape_be != '' and r.shape_bc == '' %}
 {{ fail(what ~ ': 超過バーストは、通常バーストを書いたときだけ書けます') }}
 {% endif %}
-  shape average {{ r.shape_bps }}{{ ' ' ~ r.shape_bc if r.shape_bc != '' else '' }}{{ ' ' ~ r.shape_be if r.shape_be != '' else '' }}
-{% elif r.shape_bc != '' or r.shape_be != '' %}
-{{ fail(what ~ ': 遅らせる側のバーストは、「上限・遅らせる」を書いたときだけ書けます') }}
+  shape {{ smode }} {{ r.shape_bps }}{{ ' ' ~ r.shape_bc if r.shape_bc != '' else '' }}{{ ' ' ~ r.shape_be if r.shape_be != '' else '' }}
+{% elif r.shape_bc != '' or r.shape_be != '' or r.shape_mode %}
+{{ fail(what ~ ': 遅らせ方・遅らせる側のバーストは、「上限・遅らせる」を書いたときだけ書けます') }}
 {% endif %}
-{% if r.police_bps != '' %}
-{% if r.police_be != '' and r.police_bc == '' %}
+{% if r.police_bps != '' or r.police_percent != '' %}
+{% if r.police_be != '' and r.police_bc == '' and r.police_pir_bps == '' %}
 {{ fail(what ~ ': 超過バーストは、通常バーストを書いたときだけ書けます') }}
 {% endif %}
 {% set ex = r.police_exceed if r.police_exceed else 'drop' %}
@@ -105,9 +157,23 @@ policy-map {{ first.policy }}
 {% elif r.police_exceed_value != '' %}
 {{ fail(what ~ ': 「超えたときに付ける値」は、超えたときが set_dscp か set_precedence のときだけ書けます') }}
 {% endif %}
-  police cir {{ r.police_bps }}{{ ' bc ' ~ r.police_bc if r.police_bc != '' else '' }}{{ ' be ' ~ r.police_be if r.police_be != '' else '' }} conform-action transmit exceed-action {{ ex }}
-{% elif r.police_bc != '' or r.police_be != '' or r.police_exceed or r.police_exceed_value != '' %}
-{{ fail(what ~ ': 捨てる側のバースト・超えたときの動作は、「上限・捨てる」を書いたときだけ書けます') }}
+{% set vx = r.police_violate %}
+{% if vx in ['set_dscp', 'set_precedence'] %}
+{% set vx = ('set-dscp-transmit ' if vx == 'set_dscp' else 'set-prec-transmit ') ~ (r.police_violate_value | required(what ~ ' の「最大を超えたときに付ける値」')) %}
+{% elif r.police_violate_value != '' %}
+{{ fail(what ~ ': 「最大を超えたときに付ける値」は、最大を超えたときが set_dscp か set_precedence のときだけ書けます') }}
+{% endif %}
+{% set tail = ' conform-action transmit exceed-action ' ~ ex ~ (' violate-action ' ~ vx if vx else '') %}
+{% if r.police_percent != '' %}
+{% if r.police_bps != '' or r.police_bc != '' or r.police_be != '' or r.police_pir_bps != '' %}
+{{ fail(what ~ ': 「上限・捨てる（%）」と、bps の上限・バースト・最大の速さは一緒に書けません（どちらかにしてください）') }}
+{% endif %}
+  police cir percent {{ r.police_percent }}{{ tail }}
+{% else %}
+  police cir {{ r.police_bps }}{{ ' bc ' ~ r.police_bc if r.police_bc != '' else '' }}{{ ' pir ' ~ r.police_pir_bps if r.police_pir_bps != '' else '' }}{{ ' be ' ~ r.police_be if r.police_be != '' else '' }}{{ tail }}
+{% endif %}
+{% elif r.police_bc != '' or r.police_be != '' or r.police_exceed or r.police_exceed_value != '' or r.police_pir_bps != '' or r.police_violate or r.police_violate_value != '' %}
+{{ fail(what ~ ': 捨てる側のバースト・最大の速さ・超えたときの動作は、「上限・捨てる」を書いたときだけ書けます') }}
 {% endif %}
 {% if r.set_dscp != '' and r.set_precedence != '' %}
 {{ fail(what ~ ': 付ける DSCP と precedence は、どちらか 1 つだけ書きます') }}
@@ -116,13 +182,30 @@ policy-map {{ first.policy }}
 {% elif r.set_precedence != '' %}
   set precedence {{ r.set_precedence }}
 {% endif %}
+{% if r.set_cos != '' %}
+  set cos {{ r.set_cos }}
+{% endif %}
+{% if r.set_qos_group != '' %}
+{% if r.set_qos_group > 99 %}
+{{ fail(what ~ ': 付ける QoS グループは、Cisco では 0〜99 です') }}
+{% endif %}
+  set qos-group {{ r.set_qos_group }}
+{% endif %}
 {% if r.queue_limit | length > 1 %}
 {{ fail(what ~ ': キューの長さは 1 つだけ書けます（high・medium・normal・low の 4 つを並べる形は Cisco にありません）') }}
 {% elif r.queue_limit %}
-  queue-limit {{ r.queue_limit[0] }} packets
+{% if r.random_detect %}
+{{ fail(what ~ ': キューの長さと「混む前に間引く」は一緒に書けません（どちらかにしてください）') }}
+{% endif %}
+  queue-limit {{ r.queue_limit[0] }} {{ r.queue_limit_unit if r.queue_limit_unit else 'packets' }}
+{% elif r.queue_limit_unit %}
+{{ fail(what ~ ': キューの長さの単位は、キューの長さを書いたときだけ書けます') }}
 {% endif %}
 {% if r.fair_queue %}
   fair-queue
+{% endif %}
+{% if r.random_detect %}
+  random-detect{{ ' dscp-based' if r.random_detect == 'dscp' else (' prec-based' if r.random_detect == 'precedence' else '') }}
 {% endif %}
 {% endif %}
 {% endfor %}

@@ -12,6 +12,8 @@ ike keepalive ike-0 30
 ipsec autokey-proposal ipsec-prop-0 esp-aes-256 esp-sha lifetime time 3600
 ipsec autokey-map ipsec-0 sec-0 peer 203.0.113.20 pfs 2048-bit ipsec-prop-0
 !
+ike nat-traversal
+!
 ppp profile Dialer1
   authentication myname sample-w@example.com
   authentication password sample-w@example.com dummy-pppoe-secret-w

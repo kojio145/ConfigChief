@@ -1,0 +1,26 @@
+# What this vendor cannot write of RIP (made-up values): MD5 authentication,
+# a key longer than 16 characters, version 2 by broadcast without "sends
+# version 2", BGP into RIPng, timers of RIPng, a version on RIPng.
+tables:
+  devices:
+    - hostname: ix-r03
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 192.0.2.1/30}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 192.0.2.129/25}
+    - {name: GigaEthernet2.0, enabled: true, ipv4: 198.51.100.1/24}
+  bgp_processes:
+    - {vrf: "", asn: 64496, router_id: 203.0.113.1}
+  ipv6_interfaces:
+    - {if_name: GigaEthernet0.0, enabled: true}
+  rip_processes:
+    - {family: ipv4}
+    - {family: ipv6, timer_update: 10, timer_invalid: 60, timer_flush: 80}
+  rip_interfaces:
+    - {family: ipv4, if_name: GigaEthernet0.0, auth_mode: md5, auth_key: Example-Rip-0, auth_key_id: 5}
+    - {family: ipv4, if_name: GigaEthernet1.0, auth_mode: text, auth_key: Example-Rip-Sample-Too-Long}
+    - {family: ipv4, if_name: GigaEthernet2.0, v2_broadcast: true, send_version: ["1", "2"]}
+    - {family: ipv6, if_name: GigaEthernet0.0, receive_version: ["2"]}
+  rip_redistribute:
+    - {family: ipv6, source: bgp}
+findings: [G-601, G-601, G-601, G-601, G-601, G-601]

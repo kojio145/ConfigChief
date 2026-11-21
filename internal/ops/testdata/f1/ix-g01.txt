@@ -1,0 +1,45 @@
+hostname ix-g01
+!
+ip access-list acl-g-nat permit ip src 198.51.100.0/25 dest any
+ip access-list acl-g-pool permit ip src 198.51.100.128/25 dest any
+ip access-list acl-g-mgmt permit ip src 192.0.2.0/25 dest any
+ip access-list acl-g-wan permit tcp established src any dest any
+ip access-list acl-g-wan permit tcp src any dest 203.0.113.1/32 dport eq 80
+ip access-list acl-g-wan permit udp src any sport eq 53 dest any dport range 1024 65535
+ip access-list acl-g-wan permit icmp echo-reply src any dest any
+!
+ip route default 203.0.113.2
+ip dhcp enable
+!
+ip nat pool pool-g-a 203.0.113.17 203.0.113.22
+!
+watch-group 1 10
+  event 10 ip unreach-host 203.0.113.2 source GigaEthernet0.0
+  probe-timer variance 5
+  probe-timer restorer 30
+  action 10 ip shutdown-route 0.0.0.0/0 203.0.113.2
+!
+network-monitor 1 enable
+!
+ip dhcp profile dhcp-g-lan
+  default-gateway 198.51.100.1
+  lease-time 5400
+!
+interface GigaEthernet0.0
+  description sample wan
+  ip address 203.0.113.1/27
+  ip filter acl-g-mgmt 10 in
+  ip filter acl-g-wan 20 in
+  ip napt enable
+  ip napt inside list acl-g-nat
+  ip napt service web-g 198.51.100.10 8080 tcp 80
+  ip nat enable
+  ip nat dynamic list acl-g-pool pool pool-g-a
+  no shutdown
+!
+interface GigaEthernet1.0
+  description sample lan
+  ip address 198.51.100.1/24
+  ip dhcp binding dhcp-g-lan
+  no shutdown
+!

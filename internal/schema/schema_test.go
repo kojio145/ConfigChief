@@ -35,6 +35,8 @@ columns:
   - {name: addr, title: {ja: アドレス, en: Address}, type: cidr4}
   - {name: v6, title: {ja: IPv6, en: IPv6}, type: cidr6}
   - {name: key, title: {ja: 鍵, en: Key}, type: secret}
+  - {name: peer, title: {ja: 相手, en: Peer}, type: ip}
+  - {name: summary, title: {ja: 集約, en: Summary}, type: net}
 `
 
 func TestLoad(t *testing.T) {
@@ -96,6 +98,26 @@ func TestNormalize(t *testing.T) {
 		{"next_hop", "IF:Tunnel1", "if:Tunnel1", ""},
 		{"next_hop", "if:", "", "IPv4 アドレス"},
 		{"key", " example-key ", " example-key ", ""},
+		// Either family: an IPv4 value comes out as an ip4 / net4 column
+		// writes it, so widening a key column changes no key.
+		{"peer", "192.0.2.1", "192.0.2.1", ""},
+		{"peer", "2001:DB8::1", "2001:db8::1", ""},
+		{"peer", "192.0.2.300", "", "IPv4 アドレスでも IPv6 アドレスでも"},
+		{"peer", "fe80::1%eth0", "", "IPv4 アドレスでも IPv6 アドレスでも"},
+		{"peer", "192.0.2.0/24", "", "IPv4 アドレスでも IPv6 アドレスでも"},
+		{"summary", "192.0.2.0/24", "192.0.2.0/24", ""},
+		{"summary", "2001:DB8:0:10::/64", "2001:db8:0:10::/64", ""},
+		{"summary", "192.0.2.1/24", "", "192.0.2.0/24 と書きます"},
+		{"summary", "2001:db8::1/64", "", "2001:db8::/64 と書きます"},
+		{"summary", "192.0.2.0", "", "アドレス/長さ"},
+	}
+	// The same value normalizes the same way in an ip4 and in an ip column.
+	for _, v := range []string{"192.0.2.1", "192.000.2.1", " 198.51.100.7 ", "0.0.0.0"} {
+		a, errA := r.Column("next_hop").Normalize(v)
+		b, errB := r.Column("peer").Normalize(v)
+		if a != b || (errA == nil) != (errB == nil) {
+			t.Errorf("%q: ip4 gives %q (%v), ip gives %q (%v)", v, a, errA, b, errB)
+		}
 	}
 	for _, c := range cases {
 		got, err := r.Column(c.col).Normalize(c.in)

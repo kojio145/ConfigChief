@@ -1,0 +1,59 @@
+hostname ix-l01
+!
+ip route default 203.0.113.10
+!
+ip access-list sec-sample-ra permit ip src any dest any
+!
+ike nat-traversal
+!
+ike proposal ike-prop-sample-ra encryption aes-256 hash sha2-256 group 2048-bit
+ike policy ike-sample-ra peer any key dummy-psk-sample-ra ike-prop-sample-ra
+!
+ipsec autokey-proposal ipsec-prop-sample-ra esp-aes-256 esp-sha
+ipsec dynamic-map ipsec-sample-ra sec-sample-ra ipsec-prop-sample-ra
+!
+url-list lac-sample permit domain *example.com
+!
+ppp profile lns-sample
+  authentication request chap
+  authentication password example-user dummy-l2tp-user-secret-1
+  authentication password sample-user dummy-l2tp-user-secret-2
+  lcp pfc
+  lcp acfc
+  ipcp ip-compression
+  ipcp provide-static-ip-address example-user 192.0.2.130
+  ipcp provide-ip-address range 192.0.2.131 192.0.2.190
+  ipcp provide-remote-dns 192.0.2.53 192.0.2.54
+!
+interface GigaEthernet0.0
+  description sample-wan
+  ip address 203.0.113.9/30
+  no shutdown
+!
+interface GigaEthernet2.0
+  description sample-access
+  ip address 198.51.100.129/25
+  no shutdown
+!
+interface GigaEthernet2.1
+  pppoe l2tp interface Tunnel2.0 url-list lac-sample
+  ip unnumbered GigaEthernet2.0
+  no shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.129/25
+!
+interface Tunnel0.0
+  ppp binding lns-sample
+  tunnel mode l2tp-lns ipsec
+  ip unnumbered Loopback0.0
+  ipsec policy transport ipsec-sample-ra
+  no shutdown
+!
+interface Tunnel2.0
+  l2tp session idle-time 120
+  l2tp password plain dummy-l2tp-secret-c
+  tunnel mode l2tp-lac ip
+  tunnel destination 198.51.100.1
+  no ip address
+  no shutdown

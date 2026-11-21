@@ -1,0 +1,52 @@
+hostname ix-f02
+!
+ikev2 authentication psk id keyid sample-site-a key char dummy-psk-sample-a
+ikev2 authentication psk id keyid sample-site-b key char dummy-psk-sample-b
+!
+ip access-list sec-0 permit ip src any dest any
+ike proposal ike-prop-0 encryption aes-256 hash sha2-256 group 2048-bit lifetime 28800
+ike policy ike-0 peer 203.0.113.65 key dummy-psk-sample-eip mode aggressive ike-prop-0
+ike local-id ike-0 keyid sample-eip
+ipsec autokey-proposal ipsec-prop-0 esp-aes-256 esp-sha2-256 lifetime time 3600
+ipsec autokey-map ipsec-0 sec-0 peer 203.0.113.65 pfs off ipsec-prop-0
+ipsec local-id ipsec-0 192.0.2.2
+!
+ikev2 profile ikev2-1
+  child-lifetime 28800
+  ipsec-mode transport
+  local-authentication psk id keyid sample-site-a
+  sa-lifetime 86400
+!
+bridge irb enable
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.61/30
+  ipv6 address 2001:db8:0:61::1/64
+  no shutdown
+!
+interface GigaEthernet1.0
+  bridge-group 1
+  no shutdown
+!
+interface Tunnel0.0
+  tunnel mode ether-ip ipsec
+  ipsec policy transport ipsec-0 with-id-payload
+  bridge-group 1
+  no shutdown
+!
+interface Tunnel1.0
+  tunnel mode ether-ip ipsec-ikev2
+  ikev2 binding ikev2-1
+  ikev2 connect-type auto
+  ikev2 peer 203.0.113.69 authentication psk id keyid sample-site-b
+  ikev2 source-address GigaEthernet0.0
+  bridge-group 1
+  no shutdown
+!
+interface Tunnel2.0
+  tunnel mode ether-ip ipv6
+  tunnel source 2001:db8:0:61::1
+  tunnel destination 2001:db8:0:65::1
+  bridge-group 1
+  no shutdown
+!

@@ -1,0 +1,56 @@
+!
+hostname rt-e11
+!
+vpdn enable
+!
+bba-group pppoe bba-sample-lac
+ virtual-template 1
+ sessions max limit 100
+!
+vpdn-group lac-sample
+ request-dialin
+  protocol l2tp
+  domain example.net
+ initiate-to ip 203.0.113.50
+ no l2tp tunnel authentication
+!
+interface GigabitEthernet0/0
+ no ip address
+ pppoe enable group global
+ pppoe-client dial-pool-number 1 dial-on-demand restart 30 service-name "sample service a" mac-override
+!
+interface GigabitEthernet0/1
+ no ip address
+ pppoe enable group global
+ pppoe-client dial-pool-number 2 service-name sample-b
+!
+interface GigabitEthernet0/2
+ no ip address
+ pppoe enable group bba-sample-lac
+!
+interface Virtual-Template1
+ no ip address
+ ppp authentication chap
+!
+interface Dialer1
+ ip address negotiated
+ encapsulation ppp
+ dialer pool 1
+ dialer-group 1
+ ppp authentication chap
+ ppp chap hostname example-user@example.net
+ ppp chap password 7 dummy7sample1A2B3C
+!
+interface Dialer2
+ ip address negotiated
+ encapsulation ppp
+ dialer pool 2
+ dialer-group 2
+ ppp authentication pap callin
+ ppp pap sent-username sample-user@example.net password 0 dummy-ppp-password-b
+!
+access-list 10 permit 198.51.100.0 0.0.0.255
+dialer-list 1 protocol ip permit
+dialer-list 2 protocol ip list 10
+!
+end

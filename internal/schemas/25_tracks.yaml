@@ -5,8 +5,8 @@ key: [device, id]
 columns:
   - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
   - {name: id, title: {ja: 番号・名前, en: ID}, type: string, required: true}
-  - {name: type, title: {ja: 監視の方法, en: Type}, type: enum, values: [icmp, interface, route], required: true}
-  - {name: target, title: {ja: 監視先, en: Target}, type: string, or_ifname: true, note: {ja: "icmp はアドレス、interface は IF 名、route はネットワーク", en: "An address for icmp, an interface for interface, a network for route"}}
+  - {name: type, title: {ja: 監視の方法, en: Type}, type: enum, values: [icmp, interface, route, list], required: true, note: {ja: "icmp = 相手に届くか、interface = IF が上がっているか、route = 経路表に宛先があるか、list = ほかの監視をまとめる", en: "icmp = the target answers, interface = the interface is up, route = the route is in the table, list = other tracks together"}}
+  - {name: target, title: {ja: 監視先, en: Target}, type: string, or_ifname: true, note: {ja: "icmp はアドレス、interface は IF 名、route はネットワーク（アドレスとネットワークは IPv4 か IPv6）", en: "An address for icmp, an interface for interface, a network for route (IPv4 or IPv6)"}}
   - {name: source_if, title: {ja: 送信元 IF, en: Source interface}, type: ifname}
   - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name}
   - {name: interval, title: {ja: 間隔（秒）, en: Interval (s)}, type: int, explicit: true}
@@ -15,3 +15,12 @@ columns:
   - {name: restore_count, title: {ja: 復旧と判断する回数, en: Restore count}, type: int}
   - {name: down_delay, title: {ja: 断の反映待ち（秒）, en: Down delay (s)}, type: int}
   - {name: up_delay, title: {ja: 復旧の反映待ち（秒）, en: Up delay (s)}, type: int}
+  - {name: source_ip, title: {ja: 送信元アドレス, en: Source address}, type: ip, note: {ja: "送信元 IF とどちらか 1 つ。監視先と同じ種類（IPv4 か IPv6）", en: "This or the source interface. The same family as the target"}}
+  - {name: via_if, title: {ja: 監視の出口の IF, en: Probe out interface}, type: ifname, note: {ja: "経路表によらず、この IF から確かめる（NEC IX）", en: "The probe leaves by this interface whatever the routes say (NEC IX)"}}
+  - {name: via_next_hop, title: {ja: 監視の出口のネクストホップ, en: Probe next hop}, type: ip, note: {ja: "NEC IX。監視先と同じ種類（IPv4 か IPv6）", en: "NEC IX. The same family as the target"}}
+  - {name: threshold, title: {ja: しきい値（ミリ秒）, en: Threshold (ms)}, type: int, note: {ja: "応答がこれより遅いと「遅い」とみなす（Cisco）", en: "An answer slower than this counts as slow (Cisco)"}}
+  - {name: up_when, title: {ja: 正常とみなす条件, en: Up when}, type: enum, values: [reachable, within_threshold], note: {ja: "空・reachable = 届けば正常。within_threshold = しきい値より遅い応答も断とみなす", en: "Empty or reachable = up while the target answers. within_threshold = a slow answer counts as down"}}
+  - {name: restore_interval, title: {ja: 断の間の監視間隔（秒）, en: Interval while down (s)}, type: int, note: {ja: "NEC IX", en: "NEC IX"}}
+  - {name: members, title: {ja: まとめる監視, en: Members}, type: "list<ref>", ref: tracks.id, note: {ja: "監視の方法が list の行だけ。まとめる行の「番号・名前」", en: "Rows of the type list only: the IDs of the rows it holds"}}
+  - {name: list_rule, title: {ja: まとめ方, en: List rule}, type: enum, values: [all_up, any_up], note: {ja: "all_up = 全部が正常のときだけ正常。any_up = 1 つでも正常なら正常", en: "all_up = up while every member is up. any_up = up while one member is up"}}
+  - {name: shutdown_ifs, title: {ja: 断のとき止める IF, en: Interfaces shut on down}, type: "list<ifname>", note: {ja: "NEC IX", en: "NEC IX"}}

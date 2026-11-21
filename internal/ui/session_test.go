@@ -87,7 +87,7 @@ func TestCases(t *testing.T) {
 	if h.Case.Name != "site-a" || h.Case.Kind != "新規" || h.Case.Book != "parameters.xlsx" || h.Old != 0 || h.New != 0 || h.HasBook || h.LastOut != "" {
 		t.Errorf("home = %+v", h)
 	}
-	if len(h.Packs) != 2 || h.Packs[0].ID != "cisco_ios" || h.Packs[0].Version == "" {
+	if len(h.Packs) != 3 || h.Packs[0].ID != "cisco_ios" || h.Packs[0].Version == "" {
 		t.Errorf("packs = %+v", h.Packs)
 	}
 	noNull(t, "home", h)
@@ -194,7 +194,7 @@ func TestImport(t *testing.T) {
 	if !a.Imported || a.Device != "rt-a01" || a.Pack != "cisco_ios" || a.Version == "" || a.Chosen || a.NeedsPack || a.Total == 0 || a.Total != a.Taken+a.Ignored+a.Blank+a.Unknown || a.Ratio == "" {
 		t.Errorf("the file that was read = %+v", a)
 	}
-	if d.Imported || !d.NeedsPack || len(d.Candidates) != 2 || !strings.Contains(d.Err, "メーカーを判定できません") || d.Mark != "warn" {
+	if d.Imported || !d.NeedsPack || len(d.Candidates) != 3 || !strings.Contains(d.Err, "メーカーを判定できません") || d.Mark != "warn" {
 		t.Errorf("the file that was not read = %+v", d)
 	}
 	var names []string

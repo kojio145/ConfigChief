@@ -1,0 +1,20 @@
+# What the pack tells without changing anything (G-614): a policy puts
+# communities on the routes for a neighbor, and the neighbor is not sent
+# communities. The second neighbor is: nothing is told for it. Taking the
+# communities off ("none") needs no sending either. Made-up values.
+tables:
+  devices:
+    - hostname: rt-r07
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.1/29}
+  bgp_processes:
+    - {asn: 64496, router_id: 192.0.2.1}
+  bgp_neighbors:
+    - {neighbor: 203.0.113.2, remote_as: 64497, filter_out: RM-SAMPLE-MARK}
+    - {neighbor: 203.0.113.3, remote_as: 64498, filter_out: RM-SAMPLE-MARK, send_community: true}
+    - {neighbor: 203.0.113.4, remote_as: 64499, filter_out: RM-SAMPLE-CLEAN}
+  route_policies:
+    - {name: RM-SAMPLE-MARK, seq: 10, action: permit, set_community: ["64496:100"], set_community_additive: true}
+    - {name: RM-SAMPLE-CLEAN, seq: 10, action: permit, set_community: [none]}
+findings: [G-614]

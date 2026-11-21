@@ -1,0 +1,14 @@
+# L2 extension by EtherIP, appendix A 3.26 (made-up values): the tunnel and
+# the interface it extends are in the same bridge group.
+tables:
+  l2_settings:
+    - {bridge_irb: true}
+  interfaces:
+    - {name: GigaEthernet1.0, bridge_group: 1}
+    - {name: Tunnel0.0, kind: tunnel, bridge_group: 1}
+  tunnels:
+    - {if_name: Tunnel0.0, type: etherip, source: 203.0.113.61, destination: 203.0.113.65}
+# EtherIP with IPsec has no row yet.
+unknown:
+  - "tunnel mode ether-ip ipsec"
+ignored_min: 0

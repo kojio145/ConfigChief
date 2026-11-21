@@ -46,14 +46,14 @@ func TestJudgeCommand(t *testing.T) {
 	}
 	wants(t, "the list", list,
 		"未対応の行（旧コンフィグ）: 未判定 12 行、保留 0 行、手動で対応 0 行、対応不要 0 行。かたまり 3 個",
-		"  未判定  2 台  3 行  cisco_ios  interface GigabitEthernet<n> > no cdp enable",
+		"  未判定  2 台  3 行  cisco_ios  interface GigabitEthernet<n> > no mop enabled",
 		"  未判定  2 台  3 行（下に 4 行）  cisco_ios  ip sla <n>",
 	)
 	if _, err := os.Stat(filepath.Join(dir, "state", "judgments.yaml")); err == nil {
 		t.Error("the list wrote the judgments")
 	}
 	sla := groupID(t, list, "ip sla <n>")
-	policy := groupID(t, list, "interface GigabitEthernet<n> > no cdp enable")
+	policy := groupID(t, list, "interface GigabitEthernet<n> > no mop enabled")
 	schedule := groupID(t, list, "ip sla schedule <n> life forever start-time now")
 
 	for _, c := range []struct {

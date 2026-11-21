@@ -13,6 +13,6 @@ columns:
   - {name: dead, title: {ja: Dead 間隔（秒）, en: Dead interval (s)}, type: int, explicit: true}
   - {name: network_type, title: {ja: 網の種類, en: Network type}, type: enum, values: [broadcast, point_to_point, nbma, point_to_multipoint], explicit: true}
   - {name: passive, title: {ja: 受動, en: Passive}, type: bool}
-  - {name: auth_type, title: {ja: 認証, en: Authentication}, type: enum, values: [none, simple, md5], explicit: true}
+  - {name: auth_type, title: {ja: 認証, en: Authentication}, type: enum, values: [none, simple, md5, hmac_md5], explicit: true, note: {ja: "hmac_md5 は、md5 と別の語として持つ機器だけ（NEC QX の hmac-md5）", en: "hmac_md5 only for a device that keeps it apart from md5 (hmac-md5 of NEC QX)"}}
   - {name: auth_key_id, title: {ja: 鍵番号, en: Key ID}, type: int}
   - {name: auth_key, title: {ja: 鍵, en: Key}, type: secret}

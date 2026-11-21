@@ -27,7 +27,7 @@
 <nav><a href="index.html">ConfigChief</a><a href="manual.html">使い方</a><a href="tables.html">シートと列</a><a href="checks.html">チェック</a><a href="pack-guide.html">パックの書き方</a><a href="https://github.com/kojio145/ConfigChief">GitHub</a></nav>
 <h1>メーカーパックの書き方</h1>
 <p>ConfigChief の本体は、メーカーを知りません。コンフィグの読み方・書き方・語の対応は、すべて「メーカーパック」というフォルダ（YAML とテンプレートのテキスト）にあります。新しいメーカーや新しい設定は、パックを足す・直すことで対応します。プログラムは直しません。</p>
-<p>同梱のパック（<code>internal/packs/cisco_ios</code>・<code>internal/packs/nec_ix</code>）が、いちばんの見本です。このページと並べて読んでください。</p>
+<p>同梱のパック（<code>internal/packs/cisco_ios</code>・<code>internal/packs/nec_ix</code>・<code>internal/packs/nec_qx</code>）が、いちばんの見本です。このページと並べて読んでください。</p>
 <h2>1. はじめに決まりを 4 つ</h2>
 <ol>
 <li><b>確かめていない書き方は、規則にしない。</b> 読めない行は「未対応」として人に見えます。誤って読むより安全です。メーカーが公開しているコマンドリファレンスで構文を確かめ、資料の名前と版を README に書きます</li>
@@ -45,6 +45,7 @@
   render.yaml      コンフィグを書く順番
   templates/*.j2   テンプレート
   adapt.yaml       このメーカーの書き方への置き換え（要るときだけ）
+  models.yaml      機種とポートの並び（IF 対応の案に使う。無くてもよい）
   errors.yaml      機器のエラーメッセージの形（投入ログのチェック用）
   words.txt        コマンドの語（未対応の行の持ち出し用レポートで残す語。無くてもよい）
   tests/import/&lt;名前&gt;/input.txt, expect.yaml
@@ -85,6 +86,7 @@ session:                        # 端末ログから、設定の部分だけを�
   pager: [&#39;--More--&#39;]</code></pre>
 <ul>
 <li><b>判定</b>: 文面の先頭 500 行に <code>detect</code> を当てます。合計が 3 点未満か、1 位と 2 位の差が 2 点未満なら、人が選びます</li>
+<li><b>区切りの行で階層を閉じる</b>: <code>comment_closes: true</code> と書くと、<code>comment_prefixes</code> で始まる行が、開いている階層をすべて閉じます（区切りの次の行は、字下げがあっても一番上の階層）。設定の部分ごとに <code>#</code> の行で区切り、機器全体の 1 行の設定を 1 字下げて保存するメーカー（同梱の <code>nec_qx</code>）のためのものです。字下げのある区切りの行（<code> #</code>）は、その字下げと同じか、それより深い階層だけを閉じます。書かなければ、区切りの行は階層に関わりません</li>
 <li><b>IF 名</b>: フィルタ <code>ifname</code> が省略形を正式な名前に直します。<code>Null</code>・<code>on</code>・<code>yes</code>・<code>no</code> のような名前は、YAML が別の値として読むので引用符で囲みます（<code>name: &#34;Null&#34;</code>）</li>
 <li><b>端末ログ</b>: <code>show_config</code> は行の終わり（<code>$</code>）まで書きます（<code>show running-config interface …</code> のような一部の表示を、全体として拾わないため）。<code>pager</code> は跡そのものだけを書きます</li>
 </ul>
@@ -150,6 +152,11 @@ session:                        # 端末ログから、設定の部分だけを�
 <li><code>lookup(表, 列=値, …)</code> は 1 行、<code>first(表, …)</code> は最初の 1 行、<code>rows(表, …)</code> はすべての行を返します。<code>covering(表, 列, アドレス)</code> は、アドレスを含むいちばん細かいネットワークの行を返します</li>
 <li><b>どの derive にも使われなかった作業用の行は、元の行が「未対応」に戻ります。</b> 使われなかった値も同じです。作業用の表に入れただけでは「取り込み済み」になりません</li>
 <li><code>remove: true</code> の derive は、別の表に写し終えた行を表から外します（例: IPsec が通信を選ぶためだけに使うアクセスリスト）。<code>when</code> に「写し終えたこと」と「ほかの設定が使っていないこと」を必ず書きます</li>
+<li><code>each: {名前: 式}</code> を書くと、式が返す並びの 1 つずつについて行を作ります（1 行から複数の行。例: <code>each: {p: &#34;g.ports | split(&#39; &#39;)&#34;}</code>）。並びの中身は <code>名前</code>、1 から数えた順番は <code>名前_n</code> で読めます。<code>let</code> は先に 1 度だけ実行されます（<code>let</code> から <code>名前</code> は読めません）。書けるのは 1 組だけで、<code>remove</code> の手順には書けません</li>
+<li>値を並べる列を <code>列=値</code> で引くと、並びの中にその値を持つ行に当たります（<code>rows(&#39;tracks&#39;, members=&#39;5&#39;)</code>）。行が無いときに <code>lookup(…).列</code> を式の中でじかに読むと誤りになるので、<code>let</code> に受けるか、<code>rows(…) | length</code> で数えます</li>
+<li><code>let</code> の値が空（行が見つからない）なら、その列を読んでも空の文字です。<code>when</code> があって <code>each</code> が無い手順では、<code>when</code> が読む <code>let</code> だけが先に評価され、<code>when</code> が偽ならそこで終わります</li>
+<li><b><code>only_if: 式</code></b>: その手順を、機器ごとに 1 度だけ聞き、偽ならその機器ではまるごと飛ばします（<code>for</code> の表の行を 1 つも見ません）。行の多い表（アクセスリストの行など）を回る手順を、関係する設定の無い機器で動かさないための、速さのための指定です。例: <code>only_if: &#34;rows(&#39;x_crypto_map&#39;) or rows(&#39;x_tunnel_protection&#39;)&#34;</code>。式から見えるのは <code>device</code> と、行を引く関数（<code>rows</code>・<code>lookup</code>・<code>first</code>・<code>covering</code>）だけです。<b>手順が動く機器での結果を変えてはいけません</b>（<code>when</code> が必ず偽になる機器を先に見分けるだけで、<code>when</code> の代わりではありません）。derive にも adapt にも書けます</li>
+<li>決まった書き方でしか意味を持たない行（Cisco の <code>ip sla schedule 1 life forever start-time now</code> など）は、作業用の表の列に入れて <code>when</code> で読みます。その行が欠けた設定では行を作らず、関係する行がすべて「未対応」に戻ります</li>
 </ul>
 <h3>4.3 既定値（defaults.yaml）</h3>
 <pre><code>defaults:
@@ -187,7 +194,11 @@ interface {{ i.name }}
 <tr><th>フィルタ・関数</th><th>内容</th></tr>
 <tr><td>ip / mask / wildcard / prefixlen / network / broadcast</td><td><code>192.0.2.1/30</code> から、アドレス・マスク・ワイルドカード・長さ・ネットワーク・ブロードキャスト</td></tr>
 <tr><td>with_mask(m) / with_wildcard(w)</td><td>アドレスとマスク（ワイルドカード）から <code>アドレス/長さ</code> を作る</td></tr>
+<tr><td>host(n) / in_net(n)</td><td>n 番目のアドレス（<code>192.0.2.0/30 | host(2)</code> → <code>192.0.2.2</code>）／ネットワークに含まれるか</td></tr>
+<tr><td>version_ge(版)</td><td>版の比較（<code>device.os_version | version_ge(&#39;16.9&#39;)</code>）</td></tr>
 <tr><td>ifname / ifshort</td><td>IF 名を正式な形／省略形にする</td></tr>
+<tr><td>natural / natural(attribute=&#39;列&#39;)</td><td>番号を数として並べる／行の並びをその列の値で並べる</td></tr>
+<tr><td>ranges</td><td><code>10,20,30-32</code> の形の文字（またはその並び）を、番号の並びにする</td></tr>
 <tr><td>lex(種類) / unlex(種類)</td><td>語の対応</td></tr>
 <tr><td>required(文)</td><td>空ならエラーにする（G-606）。例 <code>{{ r.outside_if | required(&#39;外側 IF&#39;) }}</code></td></tr>
 <tr><td>fail(文)</td><td>エラーにして止める（G-601）。文には、理由と直し方を書きます</td></tr>
@@ -214,11 +225,69 @@ interface {{ i.name }}
     clear: [bandwidth_remaining]
     note: &#34;「帯域（残りの %）」はこの機種に無いので、「帯域（%）」として書きます&#34;</code></pre>
 <ul>
-<li>書き方は derive と同じです。足したのは <code>clear</code>（<code>for</code> の行の列を空にする）と <code>note</code>（知らせる文。必須。空の文になった回は知らせません）</li>
+<li>書き方は derive と同じです（<code>for</code>・<code>as</code>・<code>let</code>・<code>when</code>・<code>each</code>・<code>only_if</code>・<code>row</code>・<code>set</code>・<code>append</code>・<code>remove</code>）。adapt だけの項目は次のとおりです<ul><li><code>note</code>: 知らせる文（必須）。空の文になった回は知らせません（<code>note: &#34;{{ &#39;&#39; }}&#34;</code>）。知らせずに置き換えてよいのは、置き換えた後も設定の意味が何も変わらず、人が確かめることも無い場合だけです</li><li><code>clear: [列, …]</code>: <code>for</code> の行の列を空にします。<code>row</code> も <code>remove</code> も無い手順は、<code>clear</code> だけ、または知らせるだけの手順になります</li><li><code>replace: {列: 値}</code>: <code>row</code> の行の、値を並べる列の中身を入れ替えます（区切りは <code>append</code> と同じ。空の値なら列が空になります）。並びの中の 1 つの名前を付け替えるときに使います。<code>row</code> のある手順にだけ書けます</li><li><code>drop: {table: 表, key: {…}}</code>: 手順の終わりに、その行を設計データから外します（行が無ければ何もしません）。<code>row</code> も <code>remove</code> も無い手順にだけ書けます。<code>each</code> で並びを回しながら、並びの名前が指す行を外すときに使います。外すのは、別の行に写し終えて、どこからも指されていない行だけです（<code>when</code> に書きます）</li><li><code>remove: true</code>: <code>for</code> の行を外します（derive と同じ）</li></ul></li>
+<li>置き換えができない組み合わせは、式の中で <code>fail(&#39;文&#39;)</code> を呼んで知らせます（その手順は行を作らず、文が G-601 のエラーになります）</li>
+<li>見えるのは、その機器の行（<code>*</code>・<code>@グループ</code>・共通値を当てた後）だけです。作業用の表は使えません</li>
+<li>値のチェック（V）と対向のチェック（X）は、置き換える前の行（パラメータブックの値）を見ます。テンプレート・G-602・往復の確認は、置き換えた後の行を見ます</li>
+<li>足した行は表の終わりに付きます。並びが要るテンプレートは <code>t.interfaces | natural(attribute=&#39;name&#39;)</code> のように自分で並べます</li>
 <li>扱えるのは設計データの表だけです。パラメータブックは変えません。テンプレートと往復の確認は、置き換えた後の行を見ます</li>
 <li><b>書けない値を黙って落とすためには使いません。</b> 動きが変わる置き換えは、使う人が「それでよい」と言ったものだけにします</li>
 </ul>
-<h2>6. 試験</h2>
+<h3>5.2 機器が暗号化して保存した値</h3>
+<p>機器が暗号化して保存した秘密の値（Cisco の <code>7 &lt;値&gt;</code>・<code>6 &lt;値&gt;</code>、NEC IX の <code>secret &lt;値&gt;</code>、NEC QX の <code>cipher &lt;値&gt;</code> など）は、機器が出したとおりに「種別 値」と空白で区切って、秘密の値の列に入れます（「形」の列は足しません。「ユーザ」と「機器」の表だけは、値を入れて「パスワードの形」を encrypted にします）。平文の値に空白は入らないので、空白のある値は暗号化した形だと分かります。</p>
+<ul>
+<li>取り込み: 機器の形のまま、空白を含めて列に入れます。平文に直しません</li>
+<li>書き出し: <b>自分のメーカーの形で、取り込みが読める列だけ</b>を、そのまま書き戻します</li>
+<li>ほかの形（別メーカーの形、自分の形でも書き戻せない列）は、adapt の手順で <code>fail</code> を呼んで止めます（G-601。「平文を入れ直してください」と知らせます）。例:</li>
+</ul>
+<pre><code>  - id: secret.form.ospf
+    for: ospf_interfaces
+    as: x
+    when: &#34;&#39; &#39; in x.auth_key&#34;
+    note: &#34;{{ fail(x.if_name ~ &#39; の OSPF の鍵は、機器が暗号化した形です（平文を入れ直してください）&#39;) }}&#34;</code></pre>
+<h3>5.3 表の定義で、知っておくこと</h3>
+<p>表と列の定義はプログラムの側にあり、パックからは変えません（<a href="tables.html">tables.md</a>）。規則とテンプレートを書くときに効く指定は次のとおりです。</p>
+<table>
+<tr><th>列の指定</th><th>意味</th></tr>
+<tr><td><code>auto_name</code></td><td>取り込みでパックが振る名前（コンフィグに書かれていない名前。NAT の規則・PPPoE・IPsec の行の名前など）。往復の確認と比較は、名前ではなく中身で行を突き合わせます。その名前を指すほかの表の行も、指している行が同じなら同じとみなします。だから、パックは別メーカーの形の名前の行を、自分の決まりの名前で書いてかまいません</td></tr>
+<tr><td><code>order_only</code></td><td>行の順番を決めるだけの番号（IPsec の追加の提案の順番）。コンフィグに番号そのものが無いので、往復の確認と比較は「何番目か」で行を突き合わせます。書き出しは、番号の小さい順に並べるだけで、番号は書きません</td></tr>
+<tr><td><code>compare: false</code></td><td>比較で見ない列（人だけが書く列。インタフェースの対向の機器・IF）。コンフィグからは分からないので、取り込みの規則は書きません</td></tr>
+<tr><td><code>generate: false</code></td><td>生成に使わない列（管理のための列）。G-602 と往復の確認の対象になりません</td></tr>
+<tr><td>「明示」の列</td><td>空のとき、書き出し先のパックの既定値（<code>defaults.yaml</code>）を埋めて必ず書く列</td></tr>
+</table>
+<h2>6. 機種の定義（models.yaml）と IF 対応の案</h2>
+<p><code>models.yaml</code> に機種のポートの並びを書くと、「機器対応」の「新機種」にその ID を書いた機器について、IF 対応の新 IF 名の案を、機種のポートから作ります。無くてもパックは動きます（案が入らないだけです）。</p>
+<pre><code>models:
+  - id: sample-2wan-8sw            # 機種の ID。製品の名前ではなく、ポートの並びを言う名前にする
+    title: {ja: &#34;WAN×2 ＋ スイッチ×8&#34;, en: &#34;2 WAN ports and an 8-port switch&#34;}
+    family: ios-xe                 # 書かなくてもよい（families を書いたパックだけ）
+    ports:                         # 割り当てに使う順に並べる
+      - {name: GigabitEthernet0/0/0, role: wan}
+      - {name: GigabitEthernet0/0/1, role: wan}
+      - {range: &#34;GigabitEthernet0/1/[0-7]&#34;, role: switch}
+    logical:
+      loopback: &#34;Loopback{n}&#34;
+      tunnel:   &#34;Tunnel{n}&#34;
+      subif:    &#34;{parent}.{vlan}&#34;
+      pppoe:    &#34;Dialer{i}&#34;
+      vlan:     &#34;Vlan{vlan}&#34;
+      lag:      &#34;Port-channel{n}&#34;</code></pre>
+<ul>
+<li><code>ports</code>: <code>name</code> は 1 つのポート、<code>range</code> は終わりの <code>[a-b]</code> を番号に広げた並び。<code>role</code> は <code>wan</code>・<code>lan</code>・<code>switch</code>（内蔵スイッチのポート）</li>
+<li>ポートの指定 <code>sub</code>: サブ IF の親としての名前（NEC IX の <code>GigaEthernet0.0</code> のサブ IF は <code>GigaEthernet0.1</code> なので <code>sub: GigaEthernet0</code>）。<code>vlan_if</code>: 内蔵スイッチのポートで、そのポートがいちばん若いアクセスポートである VLAN の IF の名前（<code>range</code> では <code>{p}</code> がポートの番号。NEC IX の <code>&#34;GigaEthernet2:{p}.0&#34;</code>）</li>
+<li><code>logical</code> の印: <code>{n}</code>（旧 IF 名の番号）、<code>{parent}</code>（親のポートの新しい名前）、<code>{vlan}</code>（VLAN の番号）、<code>{i}</code>（1 から、まだ使っていない番号）、<code>{j}</code>（0 から、まだ使っていない番号）。印の値が決まらないときは、案を出しません</li>
+<li>テンプレートからは <code>model.id</code>・<code>model.family</code>・<code>model.ports</code>・<code>model.limits.名前</code> で読めます。機種が空か定義に無い機器では、どれも空です。機種が分かるときだけ確かめる書き方にします（<code>{% if model.ports %}</code>）</li>
+<li>ID の重なり、空の <code>ports</code>、<code>range</code> の形、知らない <code>role</code>・<code>logical</code> の名前は、パックの検査で誤りになります</li>
+<li>同梱のパックの機種は、それぞれの README の「機種の定義」の節にあります。案件フォルダのパックに <code>models.yaml</code> を置けば、機種を足せます</li>
+</ul>
+<p>案の作り方:</p>
+<ol>
+<li>物理ポート: 旧機器の使っているポート（「有効」が無効でないもの）を名前の順に並べ、新しい機種の <code>ports</code> の順に割り当てます。旧機器のポートは「内蔵スイッチのポート」と「L3 のポート」に分け、スイッチのポートは <code>role: switch</code> のポートへ、L3 のポートはそれ以外へ割り当てます。新しい機種に同じ名前のポートがあれば、その名前のままにします。無効のポートは <code>-</code>（持っていかない）です。新しい機種に <code>role: switch</code> のポートしか無いとき（スイッチ本体）は、分けずに全部を名前の順に割り当てます</li>
+<li>PPPoE の論理 IF・サブ IF・ループバック・トンネル・LAG の IF は <code>logical</code> の形で作ります</li>
+<li>VLAN の IF は、その VLAN がどのトランクにも通っておらず、アクセスポートがあり、その新しいポートのうちいちばん若いものに <code>vlan_if</code> があれば、その名前。そうでなければ <code>logical.vlan</code> の形です</li>
+<li>ポートが足りない、当たる形が無いときは、空のままにします</li>
+</ol>
+<h2>7. 試験</h2>
 <pre><code># tests/import/basic/expect.yaml
 tables:
   interfaces:
@@ -237,7 +306,7 @@ findings: []             # 出るはずの指摘の ID（例 [G-601]）。書か
 <li>書き出しの試験は、<code>data.yaml</code> から作った文面が <code>expect.txt</code> と同じであること、読み直した結果が表と同じであることを確かめます</li>
 <li>うまく書けないときの形（<code>fail</code> で止まること）も、試験にしておきます</li>
 </ul>
-<h2>7. パックの検査</h2>
+<h2>8. パックの検査</h2>
 <p><code>pack test</code> と起動のときに、次を確かめます。誤りがあるパックは読み込みません。</p>
 <ul>
 <li>YAML として読める。正規表現が読める（<code>^</code> <code>$</code> の無い規則は警告）</li>
@@ -247,7 +316,7 @@ findings: []             # 出るはずの指摘の ID（例 [G-601]）。書か
 <li>規則と derive の ID が重なっていない</li>
 <li>入れる規則があるのに、どこからも使われない作業用の表がない</li>
 </ul>
-<h2>8. README に書くこと</h2>
+<h2>9. README に書くこと</h2>
 <p>使う人が「取り込み済み」の意味を確かめられるように、次を書きます。</p>
 <ul>
 <li>対応の一覧（読める行と、入る表）。取り込みだけで書き出せないものは、そう書く</li>

@@ -1,0 +1,102 @@
+{# L2TP (appendix A 3.21). Syntax: CRM chapter 7 (PPP profile), chapter 12
+   (tunnel mode, L2TP) and chapter 13 (url-list); the shape of an LNS and of
+   a LAC: FD 2.36 and 2.37. The lines under an interface are written by
+   interfaces.j2. #}
+{# The device has no L2TPv3 (FD, the list of what is not supported). #}
+{% for x in t.l2tpv3 %}
+{{ fail('L2 延伸（L2TPv3）の ' ~ x.if_name ~ '（相手 ' ~ x.peer_address ~ '、回線番号 ' ~ x.vc_id ~ '、設定名 ' ~ x.profile ~ '、送信元 IF ' ~ x.local_if ~ '、張り方 ' ~ x.signaling ~ '）は書けません（NEC IX は L2TPv3 に対応していません。L2 をつなぐなら、相手の機器とそろえて別の方式（EtherIP など）を追加コンフィグに書き、この行を消してください）') }}
+{% endfor %}
+{% for g in t.l2tp_groups %}
+{% set what = 'L2TP ' ~ g.name %}
+{% if ' ' in g.name or g.name | length > 31 %}
+{{ fail(what ~ ' の名前は書けません（NEC IX では PPP プロファイルか URL リストの名前になります。空白のない 31 字までにしてください）') }}
+{% endif %}
+{% if (' ' in g.password and not g.password is startingwith('secret ')) or (not ' ' in g.password and g.password | length > 31) %}
+{{ fail(what ~ ' のトンネルのパスワードは書けません（空白のない 31 字までです）') }}
+{% endif %}
+{% if g.tunnel_auth == true and not g.password %}
+{{ fail(what ~ ' は「トンネルの認証」が有効ですが、「トンネルのパスワード」がありません（NEC IX は、パスワードを書いたトンネルだけを認証します。パスワードを書くか、「トンネルの認証」を無効にしてください）') }}
+{% elif g.tunnel_auth == false and g.password %}
+{{ fail(what ~ ' は「トンネルの認証」が無効ですが、「トンネルのパスワード」があります（どちらかを直してください）') }}
+{% endif %}
+{% set n = namespace(seen=0) %}
+{% for i in t.interfaces %}
+{% if i.name in g.logical_ifs %}
+{% set n.seen = n.seen + 1 %}
+{% endif %}
+{% endfor %}
+{% if n.seen != g.logical_ifs | length %}
+{{ fail(what ~ ' の受け口の IF（' ~ (g.logical_ifs | join('、')) ~ '）に、インタフェースの表にないものがあります') }}
+{% endif %}
+{% if g.role == 'lns' %}
+{# ---- LNS: the PPP profile the tunnel interfaces are bound to. ---- #}
+{% if not g.logical_ifs %}
+{{ fail(what ~ ' の受け口の IF がありません（NEC IX は、同時につなぐ数だけトンネル IF が要ります。インタフェースの表にトンネル IF の行を足し、「受け口の IF」に並べてください）') }}
+{% endif %}
+ppp profile {{ g.name }}
+  authentication request {{ g.auth | required(what ~ ' の利用者の認証') | lex('ppp_auth') }}
+{% for u in t.l2tp_users %}
+{% if u.group == g.name %}
+{% if ' ' in u.name or ' ' in u.password %}
+{{ fail('L2TP 接続ユーザ ' ~ u.name ~ ' の接続 ID か接続パスワードに、空白があります') }}
+{% endif %}
+  authentication password {{ u.name }} {{ u.password | required('L2TP 接続ユーザ ' ~ u.name ~ ' の接続パスワード') }}
+{% endif %}
+{% endfor %}
+  lcp pfc
+  lcp acfc
+  ipcp ip-compression
+{% for u in t.l2tp_users %}
+{% if u.group == g.name and u.address %}
+  ipcp provide-static-ip-address {{ u.name }} {{ u.address }}
+{% endif %}
+{% endfor %}
+{% if g.pool_start or g.pool_end %}
+  ipcp provide-ip-address range {{ g.pool_start | required(what ~ ' の払い出すアドレスの先頭') }} {{ g.pool_end | required(what ~ ' の払い出すアドレスの末尾') }}
+{% endif %}
+{% if g.dns_servers | length > 2 %}
+{{ fail(what ~ ' の配る DNS サーバは 2 つまでです') }}
+{% elif g.dns_servers %}
+  ipcp provide-remote-dns {{ g.dns_servers | join(' ') }}
+{% endif %}
+!
+{% else %}
+{# ---- LAC: the list of the domains; the tunnel and the PPPoE interfaces
+   name it. ---- #}
+{% if g.logical_ifs | length != 1 %}
+{{ fail(what ~ ' の受け口の IF は、LNS へのトンネル IF 1 つです（インタフェースの表にトンネル IF の行を足し、「受け口の IF」にその名前を書いてください）') }}
+{% endif %}
+{% if not g.domains %}
+{{ fail(what ~ ' の運ぶドメインがありません（NEC IX の LAC は、接続 ID のドメインで運ぶ相手を決めます）') }}
+{% endif %}
+{% if not g.access_ifs %}
+{{ fail(what ~ ' の PPPoE を受ける IF がありません（NEC IX の LAC は、PPPoE を受ける IF から L2TP のトンネルを指します。配下の PPPoE を受ける IF を書いてください。その IF の PPPoE サーバの設定は追加コンフィグに書きます）') }}
+{% endif %}
+{% for d in g.domains %}
+url-list {{ g.name }} permit domain *{{ d }}
+{% endfor %}
+!
+{# The profile of the PPPoE server on the interfaces under the LAC
+   (appendix A 3.26): what the callers are asked for. The LNS knows the
+   callers; the profile has none. #}
+{% if g.auth %}
+{% if g.name | length > 25 %}
+{{ fail(what ~ ' の名前は、PPPoE サーバを書くときは 25 字までです（PPP プロファイルの名前が「<名前>-pppoe」になります）') }}
+{% endif %}
+ppp profile {{ g.name }}-pppoe
+  authentication request {{ g.auth | lex('ppp_auth') }}
+!
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for u in t.l2tp_users %}
+{% set n = namespace(seen=false) %}
+{% for g in t.l2tp_groups %}
+{% if g.name == u.group and g.role == 'lns' %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('L2TP 接続ユーザ ' ~ u.name ~ ' の L2TP の名前「' ~ u.group ~ '」が、L2TP の表に役割 lns の行としてありません') }}
+{% endif %}
+{% endfor %}

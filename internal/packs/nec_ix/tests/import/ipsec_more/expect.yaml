@@ -1,0 +1,13 @@
+# More candidates than one (appendix A 3.20, made-up values): the second and
+# the third proposal that the IKE policy and the map name. A proposal with
+# nothing written is a row with nothing but its key (what the device offers
+# by itself).
+tables:
+  ipsec_tunnels:
+    - {name: Tunnel0.0, style: tunnel_if, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, esp_encryption: aes256, esp_hash: sha1, ipsec_lifetime: 3600}
+  ipsec_proposals:
+    - {tunnel: Tunnel0.0, phase: ike, seq: 20, encryption: aes128, hash: sha1, dh: dh14, lifetime: 28800}
+    - {tunnel: Tunnel0.0, phase: ike, seq: 30, encryption: "", hash: "", dh: "", lifetime: ""}
+    - {tunnel: Tunnel0.0, phase: ipsec, seq: 20, encryption: aes128, hash: sha1, lifetime: 7200, lifetime_kb: 100000}
+    - {tunnel: Tunnel0.0, phase: ipsec, seq: 30, encryption: 3des, hash: "", ah_hash: sha1}
+unknown: []

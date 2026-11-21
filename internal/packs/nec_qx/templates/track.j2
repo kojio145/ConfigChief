@@ -1,0 +1,63 @@
+{# Track entries (README, "回線監視"). A row that pings becomes an NQA
+   operation ("nqa entry track <id>"), its schedule and the track entry that
+   watches it; the names of the operation are the pack's. #}
+{% for k in t.tracks %}
+{% set what = '回線監視 ' ~ k.id %}
+{% if k.id is not digits %}
+{{ fail(what ~ ': 番号・名前は、QX では数（1〜1024）で書きます') }}
+{% endif %}
+{% if k.type == 'icmp' %}
+nqa entry track {{ k.id }}
+ type icmp-echo
+  destination ip {{ k.target | required(what ~ ' の監視先') }}
+  frequency {{ (k.interval | required(what ~ ' の間隔（秒）')) * 1000 }}
+{% if k.via_next_hop %}
+  next-hop ip {{ k.via_next_hop }}
+{% endif %}
+{% if k.timeout != '' %}
+  probe timeout {{ k.timeout }}
+{% endif %}
+  reaction 1 checked-element probe-fail threshold-type consecutive {{ k.fail_count | required(what ~ ' の「断と判断する回数」') }} action-type trigger-only
+{% if k.source_if and k.source_ip %}
+{{ fail(what ~ ': 送信元 IF と送信元アドレスは、どちらか片方だけを書きます') }}
+{% endif %}
+{% if k.source_if %}
+  source interface {{ k.source_if }}
+{% endif %}
+{% if k.source_ip %}
+  source ip {{ k.source_ip }}
+{% endif %}
+{% if k.vrf %}
+  vpn-instance {{ k.vrf }}
+{% endif %}
+#
+{% if k.down_delay != '' or k.up_delay != '' %}
+{{ fail(what ~ ': 「断の反映の待ち」「復旧の反映の待ち」は、QX では監視の方法が interface の行にだけ書けます') }}
+{% endif %}
+{% elif k.type == 'interface' %}
+{% elif k.type %}
+{{ fail(what ~ ': 監視の方法 ' ~ k.type ~ ' は、このパックでは書けません（icmp か interface です）') }}
+{% endif %}
+{% endfor %}
+{% set any = namespace(line=false) %}
+{% for k in t.tracks %}
+{% if k.type == 'icmp' %}
+ nqa schedule track {{ k.id }} start-time now lifetime forever
+{% set any.line = true %}
+{% endif %}
+{% endfor %}
+{% for k in t.tracks %}
+{% if k.type == 'icmp' %}
+ track {{ k.id }} nqa entry track {{ k.id }} reaction 1
+{% set any.line = true %}
+{% elif k.type == 'interface' %}
+{% if k.source_if or k.source_ip or k.vrf or k.interval != '' or k.timeout != '' or k.fail_count != '' or k.via_next_hop %}
+{{ fail('回線監視 ' ~ k.id ~ ': 監視の方法が interface の行には、監視先（IF 名）と反映の待ちだけを書きます') }}
+{% endif %}
+ track {{ k.id }} interface {{ k.target | required('回線監視 ' ~ k.id ~ ' の監視先') }}{{ ' delay' if k.down_delay != '' or k.up_delay != '' else '' }}{{ ' negative ' ~ k.down_delay if k.down_delay != '' else '' }}{{ ' positive ' ~ k.up_delay if k.up_delay != '' else '' }}
+{% set any.line = true %}
+{% endif %}
+{% endfor %}
+{% if any.line %}
+#
+{% endif %}

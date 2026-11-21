@@ -1,0 +1,31 @@
+# What the device cannot write of a route policy: each is told with what to
+# do about it (made-up values).
+tables:
+  devices:
+    - hostname: rt-r05
+      vendor: cisco_ios
+  prefix_lists:
+    - {name: PL-SAMPLE-NH, seq: 5, action: permit, prefix: 203.0.113.0/24, ge: 32}
+  as_path_lists:
+    - {name: AS-SAMPLE, seq: 10, action: permit, regex: "^64497_"}                                    # a list has a number here
+    - {name: "30", seq: 5, action: permit, regex: "^$"}                                               # not numbered by tens
+  community_lists:
+    - {name: "120", seq: 10, action: permit, type: standard, communities: ["64497:100"]}              # 100 and above are expanded lists
+    - {name: CL-SAMPLE-BOTH, seq: 10, action: permit, type: expanded, communities: ["64497:100"], regex: "64497:.*"}
+    - {name: CL-SAMPLE-BOTH, seq: 20, action: deny, type: expanded, regex: ".*"}
+  route_policies:
+    - {name: RM-SAMPLE-F, seq: 10, action: permit, match_next_hop_prefix_list: PL-SAMPLE-NH}           # only an access list is in the reference
+    - {name: RM-SAMPLE-F, seq: 20, action: permit, match_as_path: AS-SAMPLE}
+    - {name: RM-SAMPLE-F, seq: 30, action: permit, match_community: ["64497:100"], match_community_list: CL-SAMPLE-BOTH}
+    - {name: RM-SAMPLE-F, seq: 40, action: permit, match_community_exact: true}
+    - {name: RM-SAMPLE-F, seq: 50, action: permit, set_metric: "+10"}                                   # the meaning of the sign is not in the reference
+    - {name: RM-SAMPLE-F, seq: 60, action: permit, set_community: [none, "64496:1"]}
+    - {name: RM-SAMPLE-F, seq: 70, action: permit, set_community_additive: true}
+    - {name: RM-SAMPLE-F, seq: 80, action: permit, set_next_hop: [self, 203.0.113.2]}
+  static_routes:
+    - {prefix: 192.0.2.64/26, next_hop: 203.0.113.2, permanent: true, track: "5"}                      # one of the two
+  tracks:
+    - {id: "5", type: interface, target: GigabitEthernet0/0}
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.1/30}
+findings: [G-601]

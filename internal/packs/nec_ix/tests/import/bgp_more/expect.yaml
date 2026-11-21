@@ -1,0 +1,23 @@
+# The rest of BGP (appendix A 3.19, the part added on 2026-11-21): the
+# timers and distances of the process, aggregates, and peer groups (every
+# member takes what its group sets and it does not set itself; the dataset
+# has no groups). Made-up values.
+tables:
+  bgp_processes:
+    - {vrf: "", asn: 64496, router_id: 192.0.2.1, keepalive: 20, holdtime: 60, default_local_preference: 150, distance_ebgp: 30, distance_ibgp: 190, distance_local: ""}
+  bgp_neighbors:
+    - {neighbor: 203.0.113.2, remote_as: 64497, advertisement_interval: 15, route_reflector_client: ""}
+    - {neighbor: 192.0.2.4, remote_as: 64496, route_reflector_client: true}
+    - {neighbor: 192.0.2.2, remote_as: 64496, keepalive: 10, holdtime: 30, update_source: Loopback0.0, password: dummy-pg-secret, ebgp_multihop: 5, advertisement_interval: 20, route_reflector_client: true, prefix_list_in: pl-b-in, filter_out: rm-b-out, next_hop_self: true, default_originate: true}
+    - {neighbor: 192.0.2.3, remote_as: 64498, keepalive: 5, holdtime: 15, update_source: Loopback0.0, password: dummy-pg-secret, ebgp_multihop: 5, advertisement_interval: 20, route_reflector_client: true, prefix_list_in: pl-b-in, filter_out: rm-b-out, next_hop_self: true, default_originate: true}
+  bgp_networks:
+    - {vrf: "", prefix: 198.51.100.0/24}
+  bgp_aggregates:
+    - {vrf: "", prefix: 198.51.100.0/23, summary_only: true, as_set: ""}
+    - {vrf: "", prefix: 192.0.2.0/24, summary_only: true, as_set: true}
+unknown:
+  # No column: a range of neighbors (and the group that has nothing else),
+  # the default route of the process.
+  - "peer-group pg-b-range remote-as 64499"
+  - "listen range 198.51.100.0/24 alternate-as 64500"
+  - "originate-default"

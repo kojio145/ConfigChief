@@ -1,0 +1,26 @@
+# Access lists and line monitoring as another vendor has them (made-up
+# values): a list whose entries are not numbered 10, 20, 30 ..., and a probe
+# with a source address. adapt.yaml rewrites them and tells it (G-614). What
+# the device has no line for is told as a value that is not written (G-602).
+tables:
+  devices:
+    - hostname: ix-f03
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.1/30, acl_in: acl-f-num}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.1/24}
+  ospf_processes:
+    - {process_id: 1, router_id: 192.0.2.1, log_adjacency: detail}
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: 203.0.113.2, track: "1"}
+    - {prefix: 192.0.2.64/26, next_hop: 203.0.113.2, multicast: true}
+  acls:
+    - {name: acl-f-num, type: extended}
+  acl_entries:
+    - {acl: acl-f-num, seq: 5, action: permit, protocol: tcp, src: any, dst: any, dst_port: "80"}
+    - {acl: acl-f-num, seq: 15, action: deny, protocol: ip, src: any, dst: any}
+  tracks:
+    - {id: "1", type: icmp, target: 203.0.113.2, source_ip: 198.51.100.1, interval: 10, fail_count: 3}
+  dhcp_pools:
+    - {name: dhcp-f-a, network: 198.51.100.0/24, default_router: 198.51.100.1, default_routers_more: [198.51.100.2], lease: 1d}
+findings: [G-602, G-614]

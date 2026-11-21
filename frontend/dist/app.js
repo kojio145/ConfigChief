@@ -32,6 +32,7 @@
     logs: newLogs(),
     exp: { mask: "show", view: null },
     nb: { from: "", to: "", said: [] },
+    edit: { list: null, want: null, msg: "", prefs: {}, find: { open: false, replace: false, q: "", r: "", cs: false, whole: false, scope: "sheet", onlySel: false, range: null, said: "", all: 0, focus: false } }, // as newEdit() makes it
     filters: {},
   };
 
@@ -219,6 +220,8 @@
     st.logs = newLogs();
     st.exp = { mask: "show", view: null };
     st.nb = { from: "", to: "", said: [] };
+    st.edit = newEdit();
+    G = null;
     st.filters = {};
   }
 
@@ -229,7 +232,21 @@
     st.page = "home";
   }
 
+  // go shows a page. The table of the book keeps what is being typed, and
+  // its draft, before it goes out of sight.
   function go(page) {
+    if (st.page === "edit" && G) {
+      gLeave().then(() => goTo(page));
+      return;
+    }
+    goTo(page);
+  }
+
+  function goTo(page) {
+    if (page === "edit") {
+      openEdit(null);
+      return;
+    }
     if (page === "home") {
       run("案件を読んでいます", async () => {
         st.home = await api().Home();
@@ -266,7 +283,8 @@
       item("import", "取り込み", true),
       item("judge", "未対応の行", true),
       item("mapping", "対応", true),
-      item("customer", "お客様の一覧", true),
+      item("edit", "表の編集", true),
+      item("customer", "外部一覧", true),
       item("result", "結果", true),
       item("logs", "ログ", true),
       item("compare", "比較", false),
@@ -284,7 +302,7 @@
     if (st.error) {
       main.appendChild(h("div", { class: "box error" }, button("閉じる", () => { st.error = ""; render(); }, { class: "link close" }), st.error));
     }
-    const pages = { cases: casesPage, home: homePage, import: importPage, judge: judgePage, mapping: mappingPage, customer: customerPage, result: resultPage, logs: logsPage, compare: comparePage };
+    const pages = { cases: casesPage, home: homePage, import: importPage, judge: judgePage, mapping: mappingPage, edit: editPage, customer: customerPage, result: resultPage, logs: logsPage, compare: comparePage };
     afterDraw = [];
     add(main, [pages[st.page]()]);
     main.scrollTop = same ? top : 0;
@@ -438,11 +456,13 @@
       h("p", null, `種類: ${m.case.kind}`),
       h("div", { class: "row" }, h("span", { class: "path" }, m.case.dir), button("案件フォルダを開く", () => show(""))),
       boxes("warn", m.problems),
+      draftNote(),
       input("old", m.old),
       h("div", { class: "card" },
         h("h2", null, `パラメータブック（${m.case.book}）`),
-        h("p", null, m.hasBook ? `あります（最後に書かれた時刻: ${m.bookTime}）。` : "まだありません。旧コンフィグを取り込むと作られます。"),
+        h("p", null, m.hasBook ? `あります（最後に書かれた時刻: ${m.bookTime}）。値は、画面の表（「表で編集」）でも、Excel でも直せます。` : "まだありません。旧コンフィグを取り込むと作られます。"),
         h("div", { class: "row" },
+          button("表で編集", () => openEdit(null), { disabled: !m.hasBook, id: "edit-book" }),
           button("Excel で開く", () => show(m.case.book), { disabled: !m.hasBook }),
           button("対応を見る", () => go("mapping")),
           m.hasBook ? null : button("空のブックを作る（新規構築）", newBook, { id: "new-book" })),
@@ -534,7 +554,7 @@
         v.files.some((f) => f.unknown) ? button("未対応の行に判定を付ける", toJudge) : null,
         s === "new" ? button("新コンフィグからパラメータブックを作る", () => makeBook("new", false)) : null),
       st.map.book && st.map.book.from === "new" && s === "new" ? bookResult(st.map.book) : null,
-      needPacks(s, v));
+      needPacks(s, v), needFiles(s, v));
 
     const tab = im.tab[s] || "files";
     const lv = im.lines[s];
@@ -575,6 +595,39 @@
       }));
   }
 
+  // needFiles lists the host names that two or more files have: a person
+  // chooses the file to take (and can choose again later).
+  function needFiles(s, v) {
+    const groups = new Map();
+    for (const f of v.files) {
+      if (!f.same || f.same.length < 2) continue;
+      if (!groups.has(f.device)) groups.set(f.device, { device: f.device, files: f.same, open: false, used: "" });
+      const g = groups.get(f.device);
+      if (f.needsFile) g.open = true;
+      if (f.imported) g.used = f.path;
+    }
+    if (!groups.size) return null;
+    const im = st.imp;
+    const list = [...groups.values()];
+    const open = list.some((g) => g.open);
+    return h("div", { class: open ? "box warn" : "box" },
+      h("div", null, open
+        ? "同じホスト名のファイルが 2 つ以上あります。どれを取り込むか選んでください（選ぶまで、そのホスト名はどれも取り込みません。選んだ結果は案件に残ります）。"
+        : "同じホスト名のファイルがあります。取り込むファイルは選んであります（選び直せます）。"),
+      list.map((g) => {
+        const key = s + "/use/" + g.device;
+        if (!im.pick[key] || !g.files.includes(im.pick[key])) im.pick[key] = g.used || g.files[0];
+        const choose = () => run(`${g.device} のファイルを選んでいます`, async () => {
+          im.views[s] = await api().ChooseFile(s, im.pick[key]);
+          delete im.lines[s];
+        }, true);
+        return h("div", { class: "row" },
+          h("span", { class: "path" }, g.device),
+          select(g.files.map((p) => [p, p + (p === g.used ? "（今これを取り込んでいます）" : "")]), im.pick[key], (x) => { im.pick[key] = x; }),
+          button("このファイルを取り込む", choose));
+      }));
+  }
+
   function filesTable(s, v) {
     const im = st.imp;
     const files = im.onlyBad ? v.files.filter((f) => f.mark) : v.files;
@@ -583,7 +636,7 @@
     header.push("指摘");
     const t = { name: "ファイル", lead: "", header, code: [], marks: files.map((f) => f.mark), rows: files.map((f) => {
       const pack = f.pack ? `${f.pack} ${f.version}${f.chosen ? "（人が選んだ）" : ""}` : "";
-      const told = f.err ? [f.err] : f.warnings.concat(f.notes);
+      const told = f.err ? [f.err] : f.left ? [f.left] : f.warnings.concat(f.notes);
       const row = [f.path, f.device, pack];
       if (f.imported) row.push(String(f.total), String(f.taken), String(f.ignored), String(f.blank), String(f.unknown), String(f.open), f.ratio);
       else row.push("", "", "", "", "", "", "");
@@ -594,7 +647,7 @@
     const pick = (i) => {
       const f = files[i];
       if (!f.imported) {
-        st.error = `${f.path} は取り込めていません: ${f.err}`;
+        st.error = f.left ? `${f.path}: ${f.left}` : `${f.path} は取り込めていません: ${f.err}`;
         render();
         return;
       }
@@ -896,10 +949,13 @@
     const v = mp.view;
     const out = [
       h("h1", null, "対応"),
-      h("p", { class: "dim" }, "機器対応と IF 対応は、パラメータブックを Excel で開いて書きます。この画面では、まだ決まっていないところを確かめ、決まったら旧コンフィグの値をパラメータブックに書きます。"),
+      h("p", { class: "dim" }, "機器対応と IF 対応は、画面の表か Excel で書きます（「機器対応を表で編集」「IF 対応を表で編集」か、「Excel で開く」）。この画面では、まだ決まっていないところを確かめ、決まったら旧コンフィグの値をパラメータブックに書きます。"),
       h("div", { class: "row" },
         button("読み直す", loadMapping),
+        button("機器対応を表で編集", () => openEdit({ sheet: "@devices" }), { disabled: !v || !v.hasBook, id: "edit-devices" }),
+        button("IF 対応を表で編集", () => openEdit({ sheet: "@ifs" }), { disabled: !v || !v.hasBook, id: "edit-ifs" }),
         button("Excel で開く", () => show(st.cas.book), { disabled: !v || !v.hasBook })),
+      draftNote(),
     ];
     if (!v) return out;
     out.push(boxes("warn", v.notes));
@@ -928,7 +984,7 @@
           h("label", null, h("input", { type: "checkbox", checked: mp.replace, onchange: (e) => { mp.replace = e.target.checked; } }),
             " 設計データのシートを空にしてから書く（作り直し）")),
         h("div", { class: "row" }, button("対応を当ててパラメータブックに書く", async () => {
-          if (mp.replace && !(await ask("作り直しますか", "設計データのシートを空にしてから書きます。Excel で手で直した値は消えます（書く前の控えは残ります）。機器対応・IF 対応のシートは変えません。", "作り直す"))) return;
+          if (mp.replace && !(await ask("作り直しますか", "設計データのシートを空にしてから書きます。画面の表や Excel で手で直した値は消えます（書く前の控えは残ります）。機器対応・IF 対応のシートは変えません。", "作り直す"))) return;
           makeBook("old", mp.replace);
         }, { class: "primary" }))),
       mp.book && mp.book.from === "old" ? bookResult(mp.book) : null);
@@ -994,6 +1050,7 @@
       h("h2", null, v.title),
       v.message ? h("div", { class: "box info" }, v.message) : null,
       v.notice ? h("div", { class: "box warn" }, v.notice) : null,
+      draftNote(),
       counts(v.counts),
       boxes("warn", v.notes),
       h("div", { class: "row" },
@@ -1002,8 +1059,9 @@
         v.changes.has ? button("変更一覧を Excel で開く", () => show(v.changes.report.xlsx)) : null,
         v.changes.has ? button("変更一覧をブラウザで開く", () => show(v.changes.report.html)) : null,
         button("出力フォルダを開く", () => show(v.dir)),
+        button("パラメータブックを表で編集", () => openEdit(null)),
         button("パラメータブックを Excel で開く", () => show(st.cas.book))),
-      h("div", { class: "row" }, h("span", { class: "dim small" }, "パラメータブックを直したら、もう一度:"), again),
+      h("div", { class: "row" }, h("span", { class: "dim small" }, "パラメータブックを直したら（画面の表なら「保存」をしてから）、もう一度:"), again),
       h("p", { class: "dim small" }, "画面では、秘密の列の値をいつも伏せて出します。書き出したコンフィグのファイルには、値がそのまま入っています。"),
       h("div", { class: "row", id: "tabs" }, seg(tabs, rs.tab, (x) => { rs.tab = x; render(); })),
     ];
@@ -1092,8 +1150,9 @@
       h("dt", null, "重大度と状態"), h("dd", null, h("span", { class: "tag sev-" + f.severity }, f.word), " ", f.stateWord),
       h("dt", null, "機器"), h("dd", null, f.device || "（案件全体）"),
       place ? [h("dt", null, "場所"), h("dd", null, place)] : null,
-      f.at ? [h("dt", null, "パラメータブックのセル"), h("dd", { class: "code" }, f.at)] : null,
+      f.at ? [h("dt", null, "パラメータブックのセル"), h("dd", { class: "code" }, f.at, " ", button("このセルを表で開く", () => openEditAt(f.at), { class: "link open-cell" }))] : null,
       h("dt", null, "内容"), h("dd", null, f.message),
+      f.fix ? [h("dt", null, "直し方"), h("dd", null, f.fix)] : null,
       f.evidence.length ? [h("dt", null, "根拠"), f.evidence.map((p) => h("dd", { class: "code" }, `${p.label}: ${p.value}`))] : null,
       f.line ? [h("dt", null, `コンフィグの ${f.line} 行目`), h("dd", { class: "code" }, f.text)] : null,
       f.state === "approved" ? [
@@ -1104,8 +1163,10 @@
     if (f.state === "approved") {
       out.push(h("div", { class: "row" }, button("この承認を取り消す", () => (o.unapprove || unapprove)(f.approval))));
     } else if (f.state === "fix") {
-      out.push(h("div", { class: "box warn" }, "この指摘は承認できません。パラメータブックの値（またはテンプレート・追加コンフィグ）を直して、もう一度チェックしてください。"),
-        h("div", { class: "row" }, button("パラメータブックを Excel で開く", () => show(st.cas.book))));
+      out.push(h("div", { class: "box warn" }, "この指摘は承認できません。パラメータブックの値（またはテンプレート・追加コンフィグ）を、画面の表か Excel で直して、もう一度チェックしてください。"),
+        h("div", { class: "row" },
+          f.at ? button("このセルを表で開く", () => openEditAt(f.at)) : button("パラメータブックを表で編集", () => openEdit(null)),
+          button("パラメータブックを Excel で開く", () => show(st.cas.book))));
     } else if (f.state === "open") {
       const what = [f.rule, f.table && `表「${f.table}」`, o.migration && f.column && `列「${f.column}」`].filter(Boolean).join("・");
       const scopes = [["", "この指摘だけ"]];
@@ -1232,7 +1293,7 @@
 
   // ---- 比較 ----
 
-  // ---- お客様の一覧 ----
+  // ---- 外部一覧 ----
 
   const OPS = { empty: "が空", notempty: "が空でない", contains: "が次を含む", notcontains: "が次を含まない", equals: "が次と同じ", notequals: "が次と違う" };
   const STEPS = {
@@ -1259,8 +1320,8 @@
       render();
     };
     return [
-      h("h1", null, "お客様の一覧"),
-      h("p", { class: "dim" }, "お客様からもらった一覧（input/customer/）を、列対応ファイル（mappings/）のとおりに読んで、パラメータブックと比べます。"),
+      h("h1", null, "外部一覧"),
+      h("p", { class: "dim" }, "他のシステムなどが出力した一覧（input/customer/）を、列対応ファイル（mappings/）のとおりに読んで、パラメータブックと比べます。"),
       h("div", { class: "row" },
         seg([["compare", "比べる"], ["maps", "列対応"]], cu.tab, pickTab),
         button("input/customer を開く", () => show("input/customer")),
@@ -1313,7 +1374,7 @@
 
   // reflect writes the values of the lists into the book, after asking.
   async function reflect(keys, rule, n, again) {
-    const text = `お客様の一覧の値を、パラメータブックに書きます（${n} 件）。書く前に、今のブックの控えを state/backup に取ります。Excel でブックを開いているときは、先に閉じてください。`;
+    const text = `外部一覧の値を、パラメータブックに書きます（${n} 件）。書く前に、今のブックの控えを state/backup に取ります。Excel でブックを開いているときは、先に閉じてください。`;
     if (!(await ask("パラメータブックに反映しますか", text, "反映する"))) return;
     run("パラメータブックに反映して、比べ直しています", async () => {
       st.mig.msg = await api().Reflect(keys, rule);
@@ -1325,7 +1386,7 @@
     const cu = st.cus;
     const v = cu.view;
     const again = async () => { cu.view = await api().Customer(); };
-    const read = () => run("お客様の一覧を読んで、パラメータブックと比べています", async () => {
+    const read = () => run("外部一覧を読んで、パラメータブックと比べています", async () => {
       cu.view = null;
       st.mig.msg = "";
       st.mig.sel = "";
@@ -1406,6 +1467,9 @@
       for (const f of tg.columns) {
         const src = srcOf(f);
         delete f._src;
+        delete f._try;
+        delete f._tryFrom;
+        f.fallback = (f.fallback || []).filter((x) => x);
         if (src !== "column") { f.column = ""; f.fallback = []; }
         if (src !== "template") f.template = "";
         if (src !== "value") f.value = "";
@@ -1469,6 +1533,17 @@
     };
     const cs = cu.create || (cu.create = { file: m.files[0] || "" });
     if (!m.files.includes(cs.file)) cs.file = m.files[0] || "";
+    const dl = cu.del || (cu.del = { path: "" });
+    if (!m.mappings.some((x) => x.path === dl.path)) dl.path = m.mappings.length ? m.mappings[0].path : "";
+    const removeMap = async () => {
+      const path = dl.path;
+      if (!(await ask("この列対応ファイルを消しますか", `${path} を mappings から外します（state/backup に移すので、戻せます）。`, "消す"))) return;
+      run("列対応ファイルを消しています", async () => {
+        const kept = await api().ListDelete(path);
+        cu.msg = `消しました: ${path}（控え: ${kept}）`;
+        cu.maps = await api().Mappings();
+      });
+    };
     return [
       boxes("info", cu.msg ? [cu.msg] : []),
       h("h2", null, "列対応ファイル"),
@@ -1479,13 +1554,17 @@
           else { st.error = `${m.mappings[i].path} は、列対応ファイルとして読めません。テキストエディタで直してください:\n${m.mappings[i].problems.join("\n")}`; render(); }
         } })
         : h("p", { class: "dim" }, "まだありません。"),
-      h("div", { class: "row" }, button("読み直す", loadMaps)),
+      h("div", { class: "row" }, button("読み直す", loadMaps),
+        m.mappings.length ? [
+          h("span", { class: "dim" }, "消すファイル"),
+          select(m.mappings.map((x) => [x.path, x.path]), dl.path, (x) => { dl.path = x; }),
+          button("消す", removeMap, { id: "map-delete-listed" })] : null),
       h("h2", null, "新しく作る"),
       m.files.length
         ? h("div", { class: "row" },
           h("span", null, "一覧のファイル"), select(m.files.map((f) => [f, f]), cs.file, (x) => { cs.file = x; }),
           button("この一覧の列対応を作る", () => newMap(cs.file), { class: "primary", id: "map-new" }))
-        : h("p", { class: "dim" }, "input/customer にファイルがありません。「input/customer を開く」で、お客様の一覧（xlsx・xls・csv）を置いてから「読み直す」を押してください。"),
+        : h("p", { class: "dim" }, "input/customer にファイルがありません。「input/customer を開く」で、外部一覧（xlsx・xls・csv）を置いてから「読み直す」を押してください。"),
     ];
   }
 
@@ -1502,6 +1581,40 @@
       const opts = [["", "（選ぶ）"]].concat(headers.map((x) => [x, x]));
       if (value && !headers.includes(value)) opts.push([value, value + "（一覧にありません）"]);
       return select(opts, value || "", onpick);
+    };
+    // firstValue is the first value the list has for a field: what the
+    // steps are tried on. The values of a secret column are not shown.
+    const firstValue = (f, secret) => {
+      if (!sm || secret || srcOf(f) !== "column") return "";
+      const hd = sm.headers.find((x) => x.name === f.column);
+      if (!hd) return "";
+      for (let i = Number(r.headerRow) || 0; i < sm.grid.length; i++) {
+        const v = (sm.grid[i] || [])[hd.col - 1];
+        if (v) return v;
+      }
+      return "";
+    };
+    // fallbacks are the columns read in turn while the column is empty.
+    const fallbacks = (f) => {
+      f.fallback = f.fallback || [];
+      return [
+        f.fallback.map((fb, i) => h("div", { class: "fallback" },
+          h("span", { class: "dim small" }, "空のときは →"),
+          headerSelect(fb, (x) => { f.fallback[i] = x; }),
+          button("消す", () => { f.fallback.splice(i, 1); render(); }, { class: "link" }))),
+        f.column && f.fallback.length < 10
+          ? button("空のときの別の列を足す", () => { f.fallback.push(""); render(); }, { class: "link small" })
+          : null,
+      ];
+    };
+    const remove = async () => {
+      if (!(await ask("この列対応ファイルを消しますか", `${ed.path} を mappings から外します（state/backup に移すので、戻せます）。保存していない変更は消えます。`, "消す"))) return;
+      run("列対応ファイルを消しています", async () => {
+        const kept = await api().ListDelete(ed.path);
+        cu.msg = `消しました: ${ed.path}（控え: ${kept}）`;
+        cu.edit = null;
+        cu.maps = await api().Mappings();
+      });
     };
     const close = async () => {
       if (!(await ask("列対応を閉じますか", "保存していない変更は消えます。", "閉じる"))) return;
@@ -1521,7 +1634,8 @@
       h("div", { class: "row" },
         button("試しに読む", tryIt, { id: "map-try-button" }),
         button("保存", save, { class: "primary", id: "map-save" }),
-        button("閉じる", close)),
+        button("閉じる", close),
+        ed.path ? button("このファイルを消す", remove, { class: "link", id: "map-delete" }) : null),
       boxes("error", ed.err ? [ed.err] : []),
 
       h("h3", null, "一覧のどこを読むか"),
@@ -1582,7 +1696,7 @@
           h("td", null, select(colOpts, f.to, (x) => { f.to = x; resample(); })),
           h("td", null, select(SOURCES, src, (x) => { f._src = x; render(); })),
           h("td", null, src === "column"
-            ? headerSelect(f.column, (x) => { f.column = x; if (c.secret) resample(); })
+            ? [headerSelect(f.column, (x) => { f.column = x; if (c.secret) resample(); else render(); }), fallbacks(f)]
             : src === "template"
               ? text(f, "template", { placeholder: "{見出し}/{見出し}" })
               : text(f, "value", { placeholder: c.values && c.values.length ? c.values.join(" | ") : "" })),
@@ -1591,7 +1705,7 @@
             button(ed.open === id ? "たたむ" : "直す", () => { ed.open = ed.open === id ? "" : id; render(); }, { class: "link" })),
           h("td", null, text(f, "default")),
           h("td", null, c.key ? null : button("消す", () => { tg.columns.splice(fi, 1); ed.open = ""; render(); }, { class: "link" }))));
-        if (ed.open === id) rows.push(h("tr", { class: "steps" }, h("td", { colspan: "6" }, stepEditor(f), c.note ? h("p", { class: "dim small" }, `列「${c.title}」（${c.type}）: ${c.note}`) : null)));
+        if (ed.open === id) rows.push(h("tr", { class: "steps" }, h("td", { colspan: "6" }, stepEditor(f, !!c.secret, firstValue(f, c.secret)), c.note ? h("p", { class: "dim small" }, `列「${c.title}」（${c.type}）: ${c.note}`) : null)));
       });
       const free = t ? t.columns.filter((x) => !used.has(x.name)) : [];
       out.push(h("div", { class: "target-card" },
@@ -1615,8 +1729,12 @@
   }
 
   // stepEditor edits the processing of one field.
-  function stepEditor(f) {
+  function stepEditor(f, secret, first) {
     const m = st.cus.maps;
+    // The value the steps are tried on: the first one of the list, until the
+    // column changes or a person types another.
+    if (f._try == null || f._tryFrom !== f.column) { f._try = first; f._tryFrom = f.column; }
+    const shown = (v) => (v === "" ? "（空）" : secret ? "●".repeat(Math.min(v.length, 12)) : v);
     const text = (obj, key, placeholder) => h("input", { type: "text", value: obj[key] || "", placeholder, oninput: (e) => { obj[key] = e.target.value; } });
     const params = (s) => {
       switch (s.type) {
@@ -1644,16 +1762,40 @@
       return [];
     };
     const add = { type: m.steps[0] };
-    return h("div", { class: "steps-box" },
+    const box = h("div", { class: "steps-box" },
+      h("div", { class: "row" },
+        h("span", { class: "dim" }, "試す値"),
+        h("input", { type: secret ? "password" : "text", class: "try-value", value: f._try || "", placeholder: "ここに値を打つと、下に 1 段ごとの結果が出ます", oninput: (e) => { f._try = e.target.value; } })),
       f.steps.map((s, i) => h("div", { class: "row" },
         h("span", { class: "dim" }, `${i + 1}.`),
         select(m.steps.map((x) => [x, STEPS[x] || x]), s.type, (x) => { f.steps[i] = { type: x, rows: [] }; render(); }),
         params(s),
-        button("消す", () => { f.steps.splice(i, 1); render(); }, { class: "link" }))),
+        button("消す", () => { f.steps.splice(i, 1); render(); }, { class: "link" }),
+        h("span", { class: "after", "data-after": String(i) }))),
       h("div", { class: "row" },
         select(m.steps.map((x) => [x, STEPS[x] || x]), add.type, (x) => { add.type = x; }),
         button("加工を足す", () => { f.steps.push({ type: add.type, rows: [] }); render(); })),
-      h("p", { class: "dim small" }, "上から順に当てます。結果は「試しに読む」で確かめます。"));
+      h("div", { class: "row" }, h("span", { class: "dim" }, "結果"), h("span", { class: "after", "data-result": "1" })),
+      h("p", { class: "dim small" }, "上から順に当てます。「→」の後ろが、その段の後の値です。結果が空なら「空のときの値」になります。一覧の全部の行は「試しに読む」で確かめます。"));
+    // trace asks for the value after each step and writes it in place (a
+    // render would take the caret out of the box being typed in).
+    let seq = 0;
+    const trace = async () => {
+      const my = ++seq;
+      const v = f._try || "";
+      let vals = [];
+      try { vals = (await api().ListTrace(v, f.steps)) || []; } catch (e) { vals = []; }
+      if (my !== seq) return;
+      box.querySelectorAll("[data-after]").forEach((el) => {
+        const x = vals[Number(el.getAttribute("data-after"))];
+        el.textContent = "→ " + shown(x === undefined ? "" : x);
+      });
+      box.querySelector("[data-result]").textContent = shown(vals.length ? vals[vals.length - 1] : v);
+    };
+    box.addEventListener("input", trace);
+    box.addEventListener("change", trace);
+    trace();
+    return box;
   }
 
   function tryView(v) {
@@ -1893,6 +2035,2750 @@
       h("div", { class: "diff" }, lines));
   }
 
+  // ---- 表の編集 ----
+  //
+  // A sheet of the parameter book as a table that is edited the way a sheet
+  // of Excel is (spec 14.6; the model is the table of the device list of
+  // PalaTerm): select, type, Ctrl+C / Ctrl+V to and from Excel, Ctrl+D, undo,
+  // rows put in between, a sort and filters over what is seen, search and
+  // replace, the fill handle. Nothing reaches the book until 保存: until then
+  // the changes are a draft the tool keeps in the case folder, written after
+  // every change. The page knows no table and no column: both come with the
+  // sheet.
+  //
+  // Two numbers name a column: its place among all the columns of the sheet
+  // (ci: G.cols, the cells of a row) and its place among the ones that are
+  // shown (c: G.vc, the selection, the cells that are drawn). G.vc[c] = ci.
+
+  const G_PAD = 20; // the empty rows under the table, to type or paste into
+  const G_ROWS = 1000; // rows of the book drawn at once
+  const G_UNDO = 200;
+  const G_RH = 58; // the width of the row numbers
+  const G_VALUES = 1000; // the values a list to filter by shows
+  const G_ARROWS = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+  let G = null; // the open table
+  let gUid = 0;
+  let gDrag = null; // what the mouse drags: { mode: "cell" | "row" | "col" | "fill" | "rz", … }
+  const gSorter = new Intl.Collator("ja", { numeric: true });
+
+  // newFind is the bar of search and replace with nothing in it. It outlives
+  // the sheet: a search goes on in the next one.
+  function newFind() {
+    return { open: false, replace: false, q: "", r: "", cs: false, whole: false, scope: "sheet", onlySel: false, range: null, said: "", all: 0, focus: false };
+  }
+
+  function newEdit() {
+    return { list: null, want: null, msg: "", prefs: {}, find: newFind() };
+  }
+
+  // dialog asks with any content and any buttons; it gives the id of the
+  // button that was pressed.
+  function dialog(title, body, buttons) {
+    return new Promise((resolve) => {
+      const ov = h("div", { class: "overlay g-dialog" },
+        h("div", { class: "dialog wide" },
+          h("div", { class: "dialog-title" }, title),
+          h("div", { class: "dialog-body" }, body),
+          h("div", { class: "dialog-buttons" }, buttons.map((b) => button(b.label, () => { ov.remove(); resolve(b.id); }, { class: b.cls || null })))));
+      document.body.appendChild(ov);
+    });
+  }
+
+  const gDialogOpen = () => !!document.querySelector(".g-dialog") || !$("ask").hidden || !$("busy").hidden;
+
+  // askText asks for one line of text; null = given up.
+  function askText(title, text, value, yes) {
+    const input = h("input", { type: "text", value: value || "", class: "g-ask" });
+    const body = h("div", null, h("p", null, text), input);
+    const answer = dialog(title, body, [{ id: "cancel", label: "キャンセル" }, { id: "ok", label: yes, cls: "primary" }]);
+    input.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === "Enter") {
+        e.preventDefault();
+        body.closest(".overlay").querySelector("button.primary").click();
+      }
+    });
+    setTimeout(() => { input.focus(); input.select(); }, 0);
+    return answer.then((c) => (c === "ok" ? input.value : null));
+  }
+
+  // ---- rows and columns ----
+
+  function gRowOf(r) {
+    return {
+      uid: ++gUid, row: r.row, sum: r.sum, base: r.base.slice(), cells: r.cells.slice(), formula: new Set(r.formula),
+      theirs: Object.assign({}, r.theirs), bad: Object.assign({}, r.bad), gone: r.gone, del: r.deleted, clash: r.clash,
+    };
+  }
+
+  function gNewRow() {
+    return { uid: ++gUid, row: 0, sum: "", base: G.cols.map(() => ""), cells: G.cols.map(() => ""), formula: new Set(), theirs: {}, bad: {}, gone: false, del: false, clash: false };
+  }
+
+  // A new row nobody typed into is not saved. (The cells of a column that
+  // was taken out do not count: G.live is the columns that are there.)
+  const gBlank = (r) => r.row === 0 && G.live.every((i) => r.cells[i] === "");
+  const gDirty = (r) => G.live.some((i) => r.cells[i] !== r.base[i]);
+  const gColAt = (c) => G.cols[G.vc[c]];
+  const gSorted = () => G.sort.ci >= 0;
+
+  function gPad() {
+    let n = 0;
+    for (let i = G.rows.length - 1; i >= 0 && gBlank(G.rows[i]); i--) n++;
+    for (; n < G_PAD; n++) G.rows.push(gNewRow());
+  }
+
+  // gLayout works out which columns are there (not taken out) and which are
+  // shown (not hidden; the ones that tell the rows apart always are), and
+  // where the first of them stand still when the table is scrolled sideways.
+  function gLayout() {
+    G.live = [];
+    G.vc = [];
+    G.cols.forEach((c, i) => {
+      if (c.dropped) return;
+      G.live.push(i);
+      if (c.isKey || !G.pref.hidden.has(c.key)) G.vc.push(i);
+    });
+    G.lefts = [G_RH];
+    while (G.lefts.length <= 3 && G.lefts.length <= G.vc.length && gColAt(G.lefts.length - 1).isKey) G.lefts.push(G.lefts[G.lefts.length - 1] + gColWidth(gColAt(G.lefts.length - 1)));
+  }
+
+  function gCounts() {
+    const c = { rows: 0, cells: 0, added: 0, deleted: 0, moved: 0, bad: 0, clash: 0, cols: 0, unseen: 0 };
+    const seen = new Set(G.vc);
+    for (const r of G.rows) {
+      if (gBlank(r)) continue;
+      c.rows++;
+      if (r.row === 0) c.added++;
+      else if (r.del) {
+        c.deleted++;
+        if (r.clash) c.clash++;
+      } else {
+        if (!r.gone && G.moved.has(r.uid)) c.moved++;
+        let any = false;
+        for (const i of G.live) {
+          if (r.cells[i] === r.base[i]) continue;
+          c.cells++;
+          any = true;
+          if (i in r.theirs) {
+            c.clash++;
+            if (!seen.has(i)) c.unseen++;
+          }
+        }
+        if (r.gone && any) c.clash++;
+      }
+      if (!r.del) {
+        for (const k in r.bad) {
+          if (!G.cols[k] || G.cols[k].dropped) continue;
+          c.bad++;
+          if (!seen.has(+k)) c.unseen++;
+        }
+      }
+    }
+    for (const col of G.cols) {
+      if (col.added ? !col.dropped : col.dropped || col.was) c.cols++;
+    }
+    c.all = c.cells + c.added + c.deleted + c.moved + c.cols;
+    return c;
+  }
+
+  // gMovedRows tells which rows of the book stand at another place than in
+  // the book: all but the longest run of rows whose numbers still go up (the
+  // fewest rows that have to move to get the order of the table).
+  function gMovedRows() {
+    const out = new Set(), seq = [];
+    let sorted = true;
+    for (const r of G.rows) {
+      if (r.row === 0 || r.gone) continue;
+      if (seq.length && r.row < seq[seq.length - 1].row) sorted = false;
+      seq.push(r);
+    }
+    if (sorted) return out;
+    const tails = [], prev = [];
+    for (let i = 0; i < seq.length; i++) {
+      let lo = 0, hi = tails.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (seq[tails[mid]].row < seq[i].row) lo = mid + 1;
+        else hi = mid;
+      }
+      prev[i] = lo > 0 ? tails[lo - 1] : -1;
+      tails[lo] = i;
+    }
+    const stay = new Set();
+    for (let i = tails[tails.length - 1]; i >= 0; i = prev[i]) stay.add(i);
+    seq.forEach((r, i) => { if (!stay.has(i)) out.add(r.uid); });
+    return out;
+  }
+
+  // gPart is the draft of this sheet: what was changed, with the values the
+  // cells had when the table read them. A new row above a row of the book
+  // is to go in there (before); the ones under the last row go to the end.
+  // A row of the book that was moved goes to its place the same way (from).
+  function gPart() {
+    const p = { sheet: G.id, changed: [], added: [], deleted: [], columns: [] };
+    for (const col of G.cols) {
+      if (col.added) {
+        if (!col.dropped) p.columns.push({ op: "add", title: col.title, to: "" });
+      } else if (col.dropped) p.columns.push({ op: "drop", title: col.was || col.title, to: "" });
+      else if (col.was) p.columns.push({ op: "rename", title: col.was, to: col.title });
+    }
+    const keyOf = (r) => {
+      const k = {};
+      G.cols.forEach((c, i) => { if (c.isKey) k[c.key] = r.base[i]; });
+      return k;
+    };
+    let above = [];
+    for (const r of G.rows) {
+      if (r.row === 0) {
+        if (gBlank(r)) continue;
+        const cells = {};
+        for (const i of G.live) if (r.cells[i] !== "") cells[G.cols[i].key] = r.cells[i];
+        const a = { cells, before: 0, beforeKey: null, from: 0, fromKey: null };
+        p.added.push(a);
+        above.push(a);
+        continue;
+      }
+      if (G.moved.has(r.uid)) {
+        // A row of the book that stands at another place than in the book
+        // goes there, like a new row; one that is deleted is deleted.
+        if (!r.gone && !r.del) {
+          const a = { cells: null, before: 0, beforeKey: null, from: r.row, fromKey: keyOf(r) };
+          p.added.push(a);
+          above.push(a);
+        }
+      } else if (!r.gone) {
+        for (const a of above) {
+          a.before = r.row;
+          a.beforeKey = keyOf(r);
+        }
+        above = [];
+      }
+      if (r.del) {
+        p.deleted.push({ row: r.row, key: keyOf(r), sum: r.sum });
+      } else if (gDirty(r)) {
+        const o = {}, n = {};
+        for (const i of G.live) {
+          if (r.cells[i] === r.base[i]) continue;
+          o[G.cols[i].key] = r.base[i];
+          n[G.cols[i].key] = r.cells[i];
+        }
+        p.changed.push({ row: r.row, key: keyOf(r), old: o, new: n });
+      }
+    }
+    return p;
+  }
+
+  const gPartCount = (p) => p.changed.reduce((m, r) => m + Object.keys(r.new).length, 0) + p.added.length + p.deleted.length + p.columns.length;
+
+  // ---- open, draft, save ----
+
+  async function gLoad(id) {
+    const v = await api().EditSheet(id);
+    const pref = st.edit.prefs[v.id] || {};
+    G = {
+      id: v.id, v, cols: v.columns, rows: v.rows.map(gRowOf), live: [], vc: [], lefts: [G_RH],
+      pref: { hidden: new Set(pref.hidden || []), widths: Object.assign({}, pref.widths || {}) },
+      sel: { ar: 0, ac: 0, fr: 0, fc: 0 }, edit: null, list: null, undo: [], redo: [], show: false,
+      filter: "", dev: "", colFilter: {}, hidden: null, sort: { ci: -1, dir: 1 }, rank: null,
+      shown: G_ROWS, full: [], view: [], total: 0, moved: new Set(), tds: [], painted: [], clip: null,
+      hadDraft: v.draft > 0, saveT: 0, savedAt: null, trouble: "", say: "", busy: false, scroll: [0, 0], tabC: null,
+    };
+    gLayout();
+    gPad();
+    gView();
+    st.edit.find.range = null;
+    st.edit.find.onlySel = false;
+    const c = gCounts();
+    if (c.all) G.say = `下書きを読み込みました（${c.all} 件）`;
+  }
+
+  // gReveal makes a row (by its place in G.rows) one of the rows that are
+  // drawn, drawing more rows if it lies beyond them, and gives its place in
+  // the view (-1 = a filter hides it).
+  function gReveal(ri) {
+    const vr = G.view.indexOf(ri);
+    if (vr >= 0) return vr;
+    const pos = G.full.indexOf(ri);
+    if (pos < 0) return -1;
+    let n = 0;
+    for (let p = 0; p <= pos; p++) if (G.rows[G.full[p]].row !== 0) n++;
+    G.shown = Math.ceil((n + 1) / G_ROWS) * G_ROWS;
+    gView();
+    return G.view.indexOf(ri);
+  }
+
+  // gJump puts the cursor on a cell of the sheet by its place in the book.
+  function gJump(row, col) {
+    const ci = G.cols.findIndex((c) => c.col === col && !c.dropped);
+    const ri = G.rows.findIndex((r) => r.row === row && !r.gone);
+    if (ri < 0) {
+      G.say = `${row} 行目は、このシートにありません（Excel 側で行が動いたか、消えています）`;
+      return;
+    }
+    // A cell a finding names is shown, whatever was hidden.
+    if (ci >= 0 && G.vc.indexOf(ci) < 0) {
+      G.pref.hidden.delete(G.cols[ci].key);
+      gSavePref();
+      gLayout();
+    }
+    const vr = gReveal(ri), c = Math.max(G.vc.indexOf(ci), 0);
+    G.sel = { ar: vr, ac: c, fr: vr, fc: c };
+    G.jumped = true;
+  }
+
+  // openEdit opens the page of the table: the sheet asked for (by its name in
+  // the file or its internal name), or the one that was open, or the first.
+  function openEdit(want) {
+    gLeave().then(() => openEditNow(want));
+  }
+
+  function openEditNow(want) {
+    st.page = "edit";
+    st.error = "";
+    run("パラメータブックを読んでいます", async () => {
+      const ed = st.edit;
+      ed.list = await api().EditSheets();
+      ed.prefs = await api().EditPrefs();
+      if (st.home) st.home.draft = ed.list.draft;
+      if (!ed.list.hasBook || !ed.list.sheets.length) {
+        G = null;
+        return;
+      }
+      const id = (want && want.sheet) || (G && G.id) || (ed.list.sheets.find((s) => !s.missing) || ed.list.sheets[0]).id;
+      await gLoad(id);
+      if (want && want.row) gJump(want.row, want.col);
+    });
+  }
+
+  // openEditAt opens the table at a cell a finding names ("シート!C5").
+  function openEditAt(at) {
+    const i = at.lastIndexOf("!");
+    const want = { sheet: i < 0 ? at : at.slice(0, i), row: 0, col: 0 };
+    const m = i < 0 ? null : /^([A-Z]+)(\d+)$/.exec(at.slice(i + 1));
+    if (m) {
+      want.row = +m[2];
+      want.col = [...m[1]].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+    }
+    openEdit(want);
+  }
+
+  function gScheduleSave() {
+    clearTimeout(G.saveT);
+    const g = G;
+    G.saveT = setTimeout(() => gSaveDraft(g), 200);
+  }
+
+  // gSaveDraft writes the draft of the sheet. A draft that cannot be written
+  // is told in the status line until one is.
+  async function gSaveDraft(g) {
+    g = g || G;
+    if (!g) return;
+    clearTimeout(g.saveT);
+    g.saveT = 0;
+    const part = gPartOf(g);
+    const n = part.changed.length + part.added.length + part.deleted.length + part.columns.length;
+    if (!n && !g.hadDraft) return;
+    try {
+      const all = await api().EditDraft(part);
+      g.hadDraft = n > 0;
+      g.trouble = "";
+      g.savedAt = new Date();
+      if (st.home) st.home.draft = all;
+      if (st.edit.list) {
+        st.edit.list.draft = all;
+        const e = st.edit.list.sheets.find((x) => x.id === g.id);
+        if (e) e.draft = gPartCount(part);
+      }
+    } catch (e) {
+      g.trouble = "下書きを保存できません: " + errText(e);
+    }
+    if (g === G) gStatus();
+  }
+
+  function gPartOf(g) {
+    const keep = G;
+    G = g;
+    try {
+      return gPart();
+    } finally {
+      G = keep;
+    }
+  }
+
+  // gLeave keeps what is being typed and writes the draft, before the table
+  // goes out of sight.
+  function gLeave() {
+    if (!G) return Promise.resolve();
+    gCommitEdit();
+    gCloseList();
+    gCloseMenus();
+    return gSaveDraft(G);
+  }
+
+  // gSwitch opens another sheet. then, if given, runs once the sheet is
+  // read and before it is drawn.
+  async function gSwitch(id, then) {
+    await gLeave();
+    await run("シートを読んでいます", async () => {
+      await gLoad(id);
+      if (then) then();
+    });
+  }
+
+  async function gReload() {
+    await gLeave();
+    openEdit({ sheet: G ? G.id : "" });
+  }
+
+  async function gDiscard() {
+    if (!G || G.busy) return;
+    gCommitEdit();
+    const c = gCounts();
+    if (!c.all && !G.hadDraft) {
+      gSay("捨てる変更はありません");
+      return;
+    }
+    if (!(await ask("下書きを捨てる", `シート「${G.v.name}」の保存していない変更（${c.all} 件）をすべて取り消し、パラメータブックの今の値に戻します。`, "捨てる"))) return;
+    clearTimeout(G.saveT);
+    const id = G.id;
+    run("下書きを捨てています", async () => {
+      const all = await api().EditDiscard(id);
+      if (st.home) st.home.draft = all;
+      st.edit.list = await api().EditSheets();
+      await gLoad(id);
+      G.say = "下書きを捨てました";
+    });
+  }
+
+  async function gClose() {
+    if (!G) {
+      go("home");
+      return;
+    }
+    await gLeave();
+    const n = st.edit.list ? st.edit.list.draft : gCounts().all;
+    if (n) {
+      const c = await dialog("表の編集を終える",
+        h("p", null, `保存していない変更が ${n} 件あります。下書きは残しておき、あとで「表の編集」から続けられます。「生成とチェック」などは、保存済みのパラメータブックで動きます。`),
+        [{ id: "cancel", label: "キャンセル" }, { id: "discard", label: "下書きを捨てて閉じる" }, { id: "keep", label: "下書きを残して閉じる", cls: "primary" }]);
+      if (c !== "keep" && c !== "discard") return;
+      if (c === "discard") {
+        try {
+          await api().EditDiscard("");
+        } catch (e) {
+          st.error = errText(e);
+          render();
+          return;
+        }
+      }
+    }
+    G = null;
+    st.edit = newEdit();
+    go("home");
+  }
+
+  // gSave writes the draft of every sheet into the book. A change that meets
+  // one made in Excel since is asked about first.
+  async function gSave() {
+    if (!G || G.busy) return;
+    await gLeave();
+    const n = st.edit.list ? st.edit.list.draft : gCounts().all;
+    if (!n) {
+      gSay("保存する変更はありません");
+      return;
+    }
+    if (!(await ask("パラメータブックに保存", `表の編集の下書き（${n} 件。すべてのシートの分）を、パラメータブック ${st.cas.book} に書きます。書く前に、今のブックの控えを state/backup に取ります。Excel でブックを開いているときは、先に閉じてください。`, "保存する"))) return;
+    const choice = {};
+    const id = G.id;
+    st.edit.msg = "";
+    for (;;) {
+      let res = null;
+      await run("パラメータブックに書いています", async () => { res = await api().EditSave(choice); });
+      if (!res) return; // what went wrong is shown; the draft stays
+      const open = res.conflicts.filter((c) => !(c.id in choice));
+      if (!res.saved && open.length) {
+        const picked = await gResolve(open);
+        if (!picked) return;
+        Object.assign(choice, picked);
+        continue;
+      }
+      await run("パラメータブックを読み直しています", async () => {
+        st.edit.msg = res.message;
+        st.edit.list = await api().EditSheets();
+        if (st.home) st.home = await api().Home();
+        await gLoad(id);
+      });
+      return;
+    }
+  }
+
+  // gResolve asks which side stays for each change that meets one made in
+  // Excel. It gives id → "mine" | "theirs", or null if the user gave up.
+  function gResolve(list) {
+    const picks = {};
+    const cards = list.map((c) => {
+      const what = { cell: "Excel 側で、同じセルが変わっています", gone: "Excel 側で、この行が消えたか、行を見分ける列が変わっています", deleted: "この表で消した行が、Excel 側で変わっています", sheet: "このシートは、もうパラメータブックにありません" }[c.kind];
+      const mine = { cell: "この画面の値で上書きする", gone: "この画面の値で行を足す", deleted: "消す" }[c.kind];
+      const theirs = { cell: "Excel の値を残す（この編集をやめる）", gone: "編集をやめる", deleted: "消すのをやめる", sheet: "このシートの編集をやめる" }[c.kind];
+      picks[c.id] = mine ? "mine" : "theirs";
+      const radio = (v, label) => {
+        const el = h("input", { type: "radio", name: "gc-" + c.id, checked: picks[c.id] === v, onchange: () => { picks[c.id] = v; } });
+        el.dataset.pick = v;
+        return h("label", { class: "g-pick" }, el, " " + label);
+      };
+      return h("div", { class: "card g-conflict" },
+        h("div", null, h("b", null, [c.sheet, c.row ? `${c.row} 行目` : "", c.label].filter(Boolean).join(" / ")), " ", h("span", { class: "dim small" }, what)),
+        c.kind === "cell" ? h("table", null,
+          h("thead", null, h("tr", null, ["列", "編集したときの値", "Excel の今の値", "この画面の値"].map((x) => h("th", null, x)))),
+          h("tbody", null, h("tr", null, [c.column, c.old, c.theirs, c.mine].map((x) => h("td", null, x || "（空）"))))) : null,
+        c.kind === "gone" && c.mine ? h("p", { class: "small" }, "この画面で直した値: " + c.mine) : null,
+        mine ? radio("mine", mine) : null,
+        radio("theirs", theirs));
+    });
+    const all = (v) => () => {
+      for (const c of list) if (v === "theirs" || c.kind !== "sheet") picks[c.id] = v;
+      body.querySelectorAll("input[type=radio]").forEach((el) => { el.checked = picks[el.name.slice(3)] === el.dataset.pick; });
+    };
+    const body = h("div", null,
+      h("p", { class: "dim" }, "表を開いてから、パラメータブックが Excel などで変わりました。どちらを残すかを選んでください（選ぶまで、ブックには何も書きません）。"),
+      list.length > 1 ? h("div", { class: "row" }, button("すべて、この画面の値にする", all("mine"), { class: "link" }), button("すべて、Excel の値を残す", all("theirs"), { class: "link" })) : null,
+      h("div", { class: "g-conflicts" }, cards));
+    return dialog(`Excel 側の変更とぶつかっています（${list.length} 件）`, body, [{ id: "cancel", label: "キャンセル" }, { id: "ok", label: "決定して保存", cls: "primary" }])
+      .then((c) => (c === "ok" ? picks : null));
+  }
+
+  // ---- what is shown ----
+
+  // gLabel is what a value shows as: a secret is masked until it is asked for.
+  const gLabel = (col, v) => (v && col.secret && !G.show ? "●●●●" : v || "");
+
+  // gShow is how a value shows in the table.
+  function gShow(col, v) {
+    if (!v) return "";
+    if (col.secret) return G.show ? v : "●●●●";
+    return v.indexOf("\n") < 0 ? v : v.replace(/\r?\n/g, " ⏎ ");
+  }
+
+  // The filters (the words, the device, the values picked for a column) are
+  // applied once, as Excel does: a row that is edited or added afterwards
+  // stays in sight until the filter changes.
+  function gRefilter() {
+    const words = G.filter.toLowerCase().split(/\s+/).filter(Boolean);
+    const byCol = Object.keys(G.colFilter).map((k) => [+k, G.colFilter[k]]).filter(([ci]) => G.cols[ci] && !G.cols[ci].dropped);
+    if (!words.length && !G.dev && !byCol.length) {
+      G.hidden = null;
+      return;
+    }
+    G.hidden = new Set();
+    for (const r of G.rows) {
+      if (r.row === 0) continue;
+      let ok = !G.dev || (G.v.device >= 0 && r.cells[G.v.device] === G.dev);
+      if (ok && words.length) {
+        const all = G.vc.map((i) => gShow(G.cols[i], r.cells[i])).join("\n").toLowerCase();
+        ok = words.every((w) => all.includes(w));
+      }
+      if (ok && byCol.length) ok = byCol.every(([ci, set]) => set.has(gLabel(G.cols[ci], r.cells[ci])));
+      if (!ok) G.hidden.add(r.uid);
+    }
+  }
+
+  const gFiltered = () => !!(G.filter.trim() || G.dev || Object.keys(G.colFilter).length);
+
+  // gResort fixes the order of the rows by the column that is sorted by. As
+  // with the filter, a row that is edited afterwards stays where it is, and
+  // the rows that are filled in later follow in the order of the table. Only
+  // what is seen changes: the rows of the book stay in their order.
+  function gResort() {
+    G.rank = null;
+    if (!gSorted() || !G.cols[G.sort.ci] || G.cols[G.sort.ci].dropped) {
+      G.sort = { ci: -1, dir: 1 };
+      return;
+    }
+    const ci = G.sort.ci, col = G.cols[ci], dir = G.sort.dir;
+    const order = [];
+    G.rows.forEach((r, i) => { if (!gBlank(r)) order.push(i); });
+    order.sort((a, b) => dir * gSorter.compare(gLabel(col, G.rows[a].cells[ci]), gLabel(col, G.rows[b].cells[ci])) || a - b);
+    G.rank = new Map(order.map((i, n) => [G.rows[i].uid, n]));
+  }
+
+  // gView lists the rows that are drawn (by their place in G.rows): the ones
+  // the filter leaves, in the order of the sheet or of the sort, the rows of
+  // the book up to the number drawn at once. G.full is the same without that
+  // limit (a search looks there).
+  function gView() {
+    G.moved = gMovedRows();
+    const idx = [];
+    G.rows.forEach((r, i) => { if (r.row === 0 || !G.hidden || !G.hidden.has(r.uid)) idx.push(i); });
+    if (G.rank) {
+      const big = G.rank.size, at = new Map();
+      for (const i of idx) {
+        const r = G.rows[i], x = G.rank.get(r.uid);
+        at.set(i, gBlank(r) ? Infinity : x !== undefined ? x : big + i);
+      }
+      idx.sort((a, b) => (at.get(a) === at.get(b) ? a - b : at.get(a) - at.get(b)));
+    }
+    G.full = idx;
+    let last = -1, total = 0;
+    idx.forEach((i, p) => {
+      if (G.rows[i].row === 0) return;
+      last = p;
+      total++;
+    });
+    G.total = total;
+    if (total <= G.shown) {
+      G.view = idx;
+      return;
+    }
+    // Beyond the limit only the rows under the last row of the book are
+    // drawn: the new ones, and the empty ones to type into.
+    const out = [];
+    let n = 0;
+    idx.forEach((i, p) => {
+      if (G.rows[i].row !== 0) n++;
+      if (n <= G.shown || p > last) out.push(i);
+    });
+    G.view = out;
+  }
+
+  const gRowAt = (vr) => G.rows[G.view[vr]];
+
+  // gKeepSel runs fn, which may change which rows and columns are shown and
+  // in what order, and brings the selection along: the cursor follows its
+  // row and its column. A range stays one only while it covers the same rows
+  // in the same order; otherwise it folds to one cell (after a sort the two
+  // ends lie far apart, with rows between them nobody selected).
+  function gKeepSel(fn) {
+    const s = G.sel;
+    const uidAt = (r) => (G.view[r] != null && G.rows[G.view[r]] ? G.rows[G.view[r]].uid : null);
+    const ua = uidAt(s.ar), uf = uidAt(s.fr), ka = G.vc[s.ac], kf = G.vc[s.fc];
+    const lo = Math.min(s.ar, s.fr), hi = Math.max(s.ar, s.fr);
+    const between = G.view.slice(lo, hi + 1).map((i) => G.rows[i].uid);
+    fn();
+    const at = (uid) => (uid == null ? -1 : G.view.findIndex((i) => G.rows[i].uid === uid));
+    const na = at(ua), nf = at(uf);
+    const nlo = Math.min(na, nf), nhi = Math.max(na, nf);
+    const same = na >= 0 && nf >= 0 && nhi - nlo === hi - lo && G.view.slice(nlo, nhi + 1).every((i, k) => G.rows[i].uid === between[k]);
+    if (same) {
+      s.ar = na;
+      s.fr = nf;
+    } else if (na >= 0) s.ar = s.fr = na;
+    else if (nf >= 0) s.ar = s.fr = nf;
+    else s.fr = s.ar;
+    const nac = ka == null ? -1 : G.vc.indexOf(ka), nfc = kf == null ? -1 : G.vc.indexOf(kf);
+    if (nac >= 0 && nfc >= 0) {
+      s.ac = nac;
+      s.fc = nfc;
+    } else if (nac >= 0) s.ac = s.fc = nac;
+    else if (nfc >= 0) s.ac = s.fc = nfc;
+    gClamp();
+  }
+
+  // gRedrawAll draws the table anew after the columns, the sort or a filter
+  // changed. The frame is made again, its scroll offset is kept.
+  function gRedrawAll() {
+    gCloseMenus();
+    gKeepSel(() => {
+      gLayout();
+      gRefilter();
+      gView();
+    });
+    render();
+  }
+
+  function gColWidth(c) {
+    if (G.pref.widths[c.key]) return G.pref.widths[c.key];
+    const byType = { ip4: 130, ip6: 220, cidr4: 150, cidr6: 240, net4: 150, net6: 240, bool: 80, int: 90, text: 220 };
+    const title = [...c.title].reduce((n, ch) => n + (ch.charCodeAt(0) > 255 ? 14 : 8), 46);
+    return Math.min(280, Math.max(byType[c.type] || (c.free ? 160 : 120), title));
+  }
+
+  function gColTip(c) {
+    const parts = [c.title];
+    if (c.added) parts.push("足した自由列です。保存すると、シートの右端に見出しを足します");
+    else if (c.free) parts.push("定義に無い列（自由列）");
+    else if (c.type) parts.push("型: " + (c.list ? `${c.type} の並び` : c.type));
+    if (c.was) parts.push(`保存すると、見出しを「${c.was}」から変えます`);
+    if (c.note) parts.push(c.note);
+    if (c.secret) parts.push("秘密の値（伏せて出します）");
+    if (c.col < 0 && !c.added) parts.push("シートに無い列です。値を入れて保存すると、シートの右端に見出しを足します");
+    return parts.join("\n");
+  }
+
+  // gSavePref keeps the hidden columns and the widths of this sheet with the
+  // settings of the user (not in the case).
+  function gSavePref() {
+    const pref = { hidden: [...G.pref.hidden], widths: Object.assign({}, G.pref.widths) };
+    st.edit.prefs[G.id] = pref;
+    api().EditPref(G.id, pref).catch(() => {});
+  }
+
+  function gRowEl(vr) {
+    const r = gRowAt(vr);
+    const blank = gBlank(r);
+    const dirty = !blank && gDirty(r);
+    const moved = !blank && r.row !== 0 && !r.del && !r.gone && G.moved.has(r.uid);
+    const mark = blank ? "" : r.row === 0 ? "新" : r.del ? "×" : r.gone ? "？" : moved ? "↕" : dirty ? "●" : "";
+    const tip = blank ? "" : r.row === 0 ? "新しい行（まだ保存していません。保存すると、この位置に入ります。表の下の行は、シートの末尾に入ります）"
+      : r.del ? (r.clash ? "消す行（Excel 側で変わっています。保存のときに選べます）" : "消す行（保存するまで、パラメータブックには残っています）")
+        : r.gone ? "Excel 側で消えたか、行を見分ける列が変わった行です（保存のときに選べます）"
+          : moved ? "動かした行（保存すると、シートのこの位置へ動きます。行番号は、今のブックの行番号です）" : dirty ? "直した行（まだ保存していません）" : "";
+    const th = h("th", { class: "g-rh", title: tip || null, "data-r": String(vr) }, mark ? h("span", { class: cls("g-mark", r.row === 0 && "new") }, mark) : null, r.row ? String(r.row) : "");
+    const tr = h("tr", { class: cls(blank && "g-blank", r.row === 0 && !blank && "g-new", r.del && "g-del", (r.gone || (r.del && r.clash)) && "g-conf") || null }, th);
+    for (let c = 0; c < G.vc.length; c++) {
+      const ci = G.vc[c], col = G.cols[ci];
+      const v = r.cells[ci];
+      const bad = !r.del && r.bad[ci];
+      const conf = !r.del && v !== r.base[ci] && ci in r.theirs;
+      const ro = r.formula.has(ci);
+      const td = document.createElement("td");
+      const k = cls(c < G.lefts.length - 1 && "g-stick", !blank && v !== r.base[ci] && "chg", bad && "err", conf && "conf", ro && "ro");
+      if (k) td.className = k;
+      if (c < G.lefts.length - 1) td.style.left = G.lefts[c] + "px";
+      const title = bad || (conf ? "Excel 側で変わっています（今の値: " + (col.secret ? "***" : r.theirs[ci] || "空") + "）。保存のときに、どちらを残すかを選べます" : ro ? "式の入ったセルです（この表では直せません）" : "");
+      if (title) td.title = title;
+      td.dataset.r = vr;
+      td.dataset.c = c;
+      td.textContent = gShow(col, v);
+      tr.appendChild(td);
+    }
+    return tr;
+  }
+
+  function gRenderBody() {
+    const body = $("g-body");
+    if (!body) return;
+    body.textContent = "";
+    const frag = document.createDocumentFragment();
+    for (let vr = 0; vr < G.view.length; vr++) frag.appendChild(gRowEl(vr));
+    body.appendChild(frag);
+    G.tds = [...body.rows].map((tr) => [...tr.cells].slice(1));
+    G.painted = [];
+    gPaintSel();
+    gStatus();
+  }
+
+  // gRedraw draws some rows again (by their place in the view).
+  function gRedraw(list) {
+    const body = $("g-body");
+    if (!body) return;
+    for (const vr of new Set(list)) {
+      if (vr < 0 || vr >= G.view.length || !body.rows[vr]) continue;
+      const tr = gRowEl(vr);
+      body.replaceChild(tr, body.rows[vr]);
+      G.tds[vr] = [...tr.cells].slice(1);
+    }
+    G.painted = [];
+    gPaintSel();
+    gStatus();
+  }
+
+  function gSay(text) {
+    G.say = text;
+    gStatus();
+  }
+
+  function gStatus() {
+    const el = $("g-status");
+    if (!el || !G) return;
+    const c = gCounts();
+    const parts = [`全 ${c.rows} 行`];
+    if (c.cells) parts.push(`変更 ${c.cells} セル`);
+    if (c.added) parts.push(`追加 ${c.added} 行`);
+    if (c.deleted) parts.push(`削除 ${c.deleted} 行`);
+    if (c.moved) parts.push(`移動 ${c.moved} 行`);
+    if (c.cols) parts.push(`自由列の変更 ${c.cols} 列`);
+    el.textContent = "";
+    add(el, [parts.join("・")]);
+    if (c.bad) add(el, ["・", h("span", { class: "g-bad" }, `型に合わない値 ${c.bad} 個（赤い枠。マウスを当てると理由が出ます）`)]);
+    if (c.clash) add(el, ["・", h("span", { class: "g-warn" }, `Excel 側の変更とぶつかり ${c.clash} 件（保存のときに選べます）`)]);
+    if (c.unseen) add(el, ["・", h("span", { class: "g-warn" }, `そのうち ${c.unseen} 個は、隠した列にあります `), button("列の表示", gColsDialog, { class: "link" })]);
+    if (G.total > G.shown) add(el, ["・", `${G.total} 行のうち ${G.shown} 行を出しています `, button("さらに表示", () => { gCommitEdit(); G.shown += G_ROWS; gView(); gRenderBody(); }, { class: "link" })]);
+    else if (G.hidden) add(el, ["・", `絞り込みで ${G.total} 行を出しています`]);
+    if (gFiltered()) add(el, [" ", button("絞り込みを解く", gClearFilters, { class: "link", id: "g-nofilter" })]);
+    if (gSorted()) add(el, ["・", `「${G.cols[G.sort.ci].title}」の${G.sort.dir > 0 ? "昇順" : "降順"}で並べています（見え方だけ。ブックの行の順は変わりません） `, button("並べ替えを解く", () => gSortBy(-1, 1), { class: "link", id: "g-nosort" })]);
+    const off = G.live.length - G.vc.length;
+    if (off) add(el, ["・", `${off} 列を隠しています `, button("列の表示", gColsDialog, { class: "link" })]);
+    if (G.trouble) add(el, ["・", h("span", { class: "g-bad" }, G.trouble)]);
+    else if (c.all) add(el, ["・", G.savedAt ? `下書きを自動保存 ${G.savedAt.toTimeString().slice(0, 8)}` : "下書きは自動で保存されます"]);
+    else add(el, ["・保存していない変更はありません"]);
+    if (G.say) add(el, ["・", h("b", null, G.say)]);
+    const u = $("g-undo"), rd = $("g-redo");
+    if (u) u.disabled = !G.undo.length;
+    if (rd) rd.disabled = !G.redo.length;
+    const del = $("g-del");
+    if (del) del.textContent = gSelRows().length && gSelRows().every((r) => r.del) ? "削除を取り消す" : "行を削除";
+  }
+
+  // ---- selection ----
+
+  function gRange() {
+    const s = G.sel;
+    return { r0: Math.min(s.ar, s.fr), r1: Math.max(s.ar, s.fr), c0: Math.min(s.ac, s.fc), c1: Math.max(s.ac, s.fc) };
+  }
+
+  function gClamp() {
+    const R = Math.max(0, G.view.length - 1), C = Math.max(0, G.vc.length - 1);
+    const s = G.sel;
+    s.ar = Math.min(Math.max(0, s.ar), R);
+    s.fr = Math.min(Math.max(0, s.fr), R);
+    s.ac = Math.min(Math.max(0, s.ac), C);
+    s.fc = Math.min(Math.max(0, s.fc), C);
+  }
+
+  // A cell's box in the pixels of the frame of the table (what left and top
+  // of a thing laid over the table take).
+  function gBox(el) {
+    const w = G.wrap, wr = w.getBoundingClientRect(), r = el.getBoundingClientRect();
+    const x = r.left - wr.left - w.clientLeft + w.scrollLeft;
+    const y = r.top - wr.top - w.clientTop + w.scrollTop;
+    return { left: x, top: y, right: x + r.width, bottom: y + r.height, width: r.width, height: r.height };
+  }
+
+  function gPaintSel(fillTo) {
+    if (!G.wrap) return;
+    for (const el of G.painted) el.classList.remove("in", "cur", "hl", "fillp");
+    G.painted = [];
+    const dd = $("g-dd"), fill = $("g-fill");
+    if (!G.view.length || !G.tds.length || !G.vc.length) {
+      if (dd) dd.hidden = true;
+      if (fill) fill.hidden = true;
+      return;
+    }
+    gClamp();
+    const g = gRange();
+    const mark = (el, k) => {
+      if (!el) return;
+      el.classList.add(k);
+      G.painted.push(el);
+    };
+    for (let r = g.r0; r <= g.r1; r++) for (let c = g.c0; c <= g.c1; c++) mark(G.tds[r] && G.tds[r][c], "in");
+    if (fillTo) {
+      for (let r = fillTo.r0; r <= fillTo.r1; r++) for (let c = fillTo.c0; c <= fillTo.c1; c++) {
+        const td = G.tds[r] && G.tds[r][c];
+        if (td && !td.classList.contains("in")) mark(td, "fillp");
+      }
+    }
+    const cur = G.tds[G.sel.fr] && G.tds[G.sel.fr][G.sel.fc];
+    mark(cur, "cur");
+    const head = G.wrap.querySelectorAll("thead th[data-c]");
+    for (let c = g.c0; c <= g.c1; c++) mark(head[c], "hl");
+    const body = $("g-body");
+    for (let r = g.r0; r <= g.r1; r++) mark(body.rows[r] && body.rows[r].cells[0], "hl");
+    const info = $("g-selinfo");
+    if (info) {
+      const nr = g.r1 - g.r0 + 1, nc = g.c1 - g.c0 + 1;
+      info.textContent = nr * nc > 1 ? `選択: ${nr} 行 × ${nc} 列` : "";
+    }
+    // The fill handle sits inside the bottom right corner of the selection
+    // (hanging over the edge, the one of the last row lay under the scroll bar).
+    const corner = G.tds[g.r1] && G.tds[g.r1][g.c1];
+    if (fill && corner && !G.edit) {
+      const b = gBox(corner);
+      fill.style.left = b.right - 9 + "px";
+      fill.style.top = b.bottom - 9 + "px";
+      fill.hidden = false;
+    } else if (fill) fill.hidden = true;
+    // The ▼ of a column with choices sits at the right end of the current cell.
+    const col = gColAt(G.sel.fc);
+    if (dd && cur && !G.edit && col.choices.length) {
+      const b = gBox(cur);
+      dd.style.left = b.right - 20 + "px";
+      dd.style.top = b.top + 1 + "px";
+      dd.style.height = Math.max(b.height - 2, 16) + "px";
+      dd.hidden = false;
+    } else if (dd) dd.hidden = true;
+    const del = $("g-del");
+    if (del) del.textContent = gSelRows().length && gSelRows().every((r) => r.del) ? "削除を取り消す" : "行を削除";
+  }
+
+  function gEnsureVisible(r, c) {
+    const td = G.tds[r] && G.tds[r][c];
+    if (!td) return;
+    const w = G.wrap, b = gBox(td);
+    const top = b.top - w.scrollTop, bottom = b.bottom - w.scrollTop, x0 = b.left - w.scrollLeft, x1 = b.right - w.scrollLeft;
+    const head = w.querySelector("thead").getBoundingClientRect().height;
+    const left = c < G.lefts.length - 1 ? G_RH : G.lefts[G.lefts.length - 1];
+    if (top < head) w.scrollTop -= head - top;
+    else if (bottom > w.clientHeight - 4) w.scrollTop += bottom - w.clientHeight + 4;
+    if (x0 < left) w.scrollLeft -= left - x0;
+    else if (x1 > w.clientWidth - 4) w.scrollLeft += x1 - w.clientWidth + 4;
+  }
+
+  function gSelect(ar, ac, fr, fc) {
+    G.sel = { ar, ac, fr: fr == null ? ar : fr, fc: fc == null ? ac : fc };
+    G.tabC = null;
+    gClamp();
+    gPaintSel();
+    const g = gRange();
+    // A whole row or column picked stays where it is.
+    if (!(g.c0 === 0 && g.c1 === G.vc.length - 1 && G.vc.length > 1) && !(g.r0 === 0 && g.r1 === G.view.length - 1 && G.view.length > 1)) gEnsureVisible(G.sel.fr, G.sel.fc);
+  }
+
+  function gMove(dr, dc, extend) {
+    const s = G.sel;
+    if (extend) {
+      s.fr += dr;
+      s.fc += dc;
+      gClamp();
+      gPaintSel();
+      gEnsureVisible(s.fr, s.fc);
+    } else gSelect(s.fr + dr, s.fc + dc);
+  }
+
+  // Tab … Tab, then Enter: as in Excel, Enter goes down and back to the
+  // column the Tabs started from.
+  function gTab(back) {
+    const c = G.tabC == null ? G.sel.fc : G.tabC;
+    gMove(0, back ? -1 : 1);
+    G.tabC = c;
+  }
+
+  function gEnterDown(up) {
+    const c = G.tabC;
+    if (c != null && !up) gSelect(G.sel.fr + 1, c);
+    else gMove(up ? -1 : 1, 0);
+  }
+
+  function gSelRows() {
+    if (!G.view.length) return [];
+    const g = gRange(), out = [];
+    for (let r = g.r0; r <= g.r1; r++) if (gRowAt(r)) out.push(gRowAt(r));
+    return out;
+  }
+
+  // ---- edits (every change goes through gMutate: undo, redraw, draft) ----
+
+  // gMutate runs fn, which changes the table with the calls of ops only, and
+  // keeps what it did for undo. It tells whether anything changed.
+  function gMutate(fn) {
+    if (G.busy) return false;
+    const tx = [];
+    const ops = {
+      // set puts a value into a cell (ci: its place among all the columns).
+      // A cell with a formula and a row that is to be deleted are left alone.
+      set(r, ci, v) {
+        if (!r || ci < 0 || ci >= G.cols.length) return false;
+        if (r.del || r.formula.has(ci)) {
+          ops.skipped++;
+          return false;
+        }
+        if (r.cells[ci] === v) return false;
+        // A new row under a table that shows one device belongs to it.
+        if (r.row === 0 && gBlank(r) && G.dev && G.v.device >= 0 && ci !== G.v.device && v !== "") ops.set(r, G.v.device, G.dev);
+        tx.push({ t: "c", r, ci, a: r.cells[ci], b: v });
+        r.cells[ci] = v;
+        return true;
+      },
+      del(r, on) {
+        if (r.del === on) return;
+        tx.push({ t: "d", r, a: r.del, b: on });
+        r.del = on;
+      },
+      insert(at, r) {
+        tx.push({ t: "i", r, at });
+        G.rows.splice(at, 0, r);
+      },
+      remove(r) {
+        const at = G.rows.indexOf(r);
+        if (at < 0) return;
+        tx.push({ t: "x", r, at });
+        G.rows.splice(at, 1);
+      },
+      // col changes what a free column is: its heading, whether it is there.
+      col(col, next) {
+        const a = {};
+        for (const k in next) a[k] = col[k];
+        tx.push({ t: "col", col, a, b: next });
+        Object.assign(col, next);
+      },
+      // parts notes a change made to the draft of other sheets (a
+      // replacement in every sheet): undo puts their parts back.
+      parts(before, after) {
+        tx.push({ t: "all", before, after });
+      },
+      skipped: 0,
+    };
+    fn(ops);
+    if (ops.skipped) G.say = `${ops.skipped} 個のセルは変えていません（式の入ったセルと、消す行のセル）`;
+    else G.say = "";
+    if (!tx.length) {
+      gStatus();
+      return false;
+    }
+    G.undo.push(tx);
+    while (G.undo.length > G_UNDO) G.undo.shift();
+    G.redo = [];
+    gAfter(tx);
+    return true;
+  }
+
+  // gAfter draws what a change touched, checks the new values and keeps the
+  // draft.
+  function gAfter(tx) {
+    const structural = tx.some((o) => o.t === "i" || o.t === "x");
+    const before = G.rows.length;
+    if (tx.some((o) => o.t === "col")) {
+      gKeepSel(gLayout);
+      gPad();
+      gView();
+      render();
+    } else {
+      gPad();
+      if (structural || G.rows.length !== before) {
+        gView();
+        gRenderBody();
+      } else {
+        const at = new Map(G.view.map((ri, vr) => [G.rows[ri].uid, vr]));
+        gRedraw(tx.map((o) => (o.r && at.has(o.r.uid) ? at.get(o.r.uid) : -1)));
+      }
+    }
+    gCheck(tx.filter((o) => o.t === "c"));
+    gScheduleSave();
+  }
+
+  function gUndo(redo) {
+    if (G.busy || G.edit) return;
+    const from = redo ? G.redo : G.undo, to = redo ? G.undo : G.redo;
+    if (!from.length) return;
+    const tx = from.pop();
+    const list = redo ? tx : tx.slice().reverse();
+    for (const o of list) {
+      if (o.t === "c") o.r.cells[o.ci] = redo ? o.b : o.a;
+      else if (o.t === "d") o.r.del = redo ? o.b : o.a;
+      else if (o.t === "col") Object.assign(o.col, redo ? o.b : o.a);
+      else if (o.t === "all") gPutParts(redo ? o.after : o.before);
+      else if ((o.t === "i") === redo) G.rows.splice(Math.min(o.at, G.rows.length), 0, o.r);
+      else G.rows.splice(G.rows.indexOf(o.r), 1);
+    }
+    to.push(tx);
+    G.say = "";
+    gAfter(tx);
+  }
+
+  // gPutParts puts parts of the draft of other sheets in place (the undo of
+  // a replacement in every sheet).
+  async function gPutParts(parts) {
+    const g = G;
+    try {
+      for (const p of parts) await api().EditDraft(p);
+      st.edit.list = await api().EditSheets();
+      if (st.home) st.home.draft = st.edit.list.draft;
+      if (g === G) gSheetLabels();
+    } catch (e) {
+      g.trouble = "ほかのシートの下書きを戻せません: " + errText(e);
+      if (g === G) gStatus();
+    }
+  }
+
+  // gCheck asks what is wrong with the values that were just put in (the
+  // check of the type that reading the book does), by column.
+  function gCheck(list) {
+    const g = G;
+    const byCol = new Map();
+    for (const o of list) {
+      const c = g.cols[o.ci];
+      if (!c.type || c.free) continue;
+      if (!byCol.has(o.ci)) byCol.set(o.ci, []);
+      byCol.get(o.ci).push(o.r);
+    }
+    for (const [ci, rows] of byCol) {
+      const values = rows.map((r) => r.cells[ci]);
+      api().EditCheck(g.id, g.cols[ci].key, values).then((said) => {
+        if (g !== G) return;
+        const touched = [];
+        const at = new Map(G.view.map((ri, vr) => [G.rows[ri].uid, vr]));
+        rows.forEach((r, i) => {
+          if (r.cells[ci] !== values[i]) return; // changed again since
+          const had = r.bad[ci] || "";
+          if (said[i]) r.bad[ci] = said[i];
+          else delete r.bad[ci];
+          if (had !== (said[i] || "") && at.has(r.uid)) touched.push(at.get(r.uid));
+        });
+        if (touched.length) gRedraw(touched);
+      }).catch((e) => {
+        g.trouble = "値を確かめられません: " + errText(e);
+        if (g === G) gStatus();
+      });
+    }
+  }
+
+  // gNorm is what typing or pasting puts into a cell: the text as it is; a
+  // line break stays only where the column takes several lines or values.
+  function gNorm(col, text) {
+    text = String(text == null ? "" : text).replace(/\r\n?/g, "\n");
+    if (col.secret || col.type === "text" || col.list || col.free) return text;
+    return text.replace(/\n/g, " ");
+  }
+
+  // gSetCells sets [viewRow, viewColumn, text] cells.
+  function gSetCells(list) {
+    return gMutate((ops) => {
+      for (const [vr, c, text] of list) ops.set(gRowAt(vr), G.vc[c], gNorm(gColAt(c), text));
+    });
+  }
+
+  // ---- the cell editor ----
+
+  function gBeginEdit(initial) {
+    if (G.edit || !G.view.length || G.busy) return;
+    const vr = G.sel.fr, c = G.sel.fc, ci = G.vc[c];
+    const col = G.cols[ci], r = gRowAt(vr), td = G.tds[vr] && G.tds[vr][c];
+    if (!col || !r || !td) return;
+    if (r.del) {
+      gSay("消す行です。直すには、先に「削除を取り消す」を押してください");
+      return;
+    }
+    if (r.formula.has(ci)) {
+      gSay("式の入ったセルは、この表では直せません（値で上書きすると式が消えるため。Excel で直してください）");
+      return;
+    }
+    gCloseList();
+    gEnsureVisible(vr, c);
+    const ta = h("textarea", { class: cls("g-editor", col.secret && !G.show && "g-masked"), spellcheck: "false", rows: "1", wrap: "off" });
+    ta.value = initial != null ? initial : r.cells[ci];
+    const b = gBox(td);
+    const lines = ta.value.split("\n").length;
+    ta.style.left = b.left + "px";
+    ta.style.top = b.top + "px";
+    ta.style.minWidth = Math.max(b.width, 140) + "px";
+    ta.style.height = Math.max(b.height, lines > 1 ? Math.min(lines, 8) * 20 + 8 : 0) + "px";
+    G.wrap.appendChild(ta);
+    G.edit = { ta, uid: r.uid, c, mode: initial != null ? "enter" : "edit" };
+    $("g-dd").hidden = true;
+    $("g-fill").hidden = true;
+    ta.focus();
+    if (initial == null) ta.setSelectionRange(ta.value.length, ta.value.length);
+    ta.addEventListener("keydown", gEditKey);
+    // Focus leaving the editor commits it, as in Excel. The window losing
+    // the focus is not that: the editor stays, and typing goes on later.
+    ta.addEventListener("blur", (ev) => {
+      if (!(G && G.edit && G.edit.ta === ta)) return;
+      if (!ev.relatedTarget && !document.hasFocus()) return;
+      gCommitEdit(null, false, ev.relatedTarget);
+    });
+  }
+
+  function gCommitEdit(move, all, focusTo) {
+    const e = G && G.edit;
+    if (!e) return;
+    G.edit = null;
+    const text = e.ta.value;
+    e.ta.remove();
+    const vr = G.view.findIndex((ri) => G.rows[ri].uid === e.uid);
+    if (all) {
+      // Ctrl+Enter: every selected cell takes the value; the empty rows
+      // under the table stay empty.
+      const g = gRange(), list = [], many = g.r1 > g.r0;
+      for (let r = g.r0; r <= g.r1; r++) {
+        const row = gRowAt(r);
+        if (!row || (many && row.uid !== e.uid && gBlank(row))) continue;
+        for (let c = g.c0; c <= g.c1; c++) list.push([r, c, text]);
+      }
+      gSetCells(list);
+    } else if (vr >= 0) gSetCells([[vr, e.c, text]]);
+    if (move) gMove(move[0], move[1]);
+    else gPaintSel();
+    const typing = focusTo && /^(INPUT|TEXTAREA|SELECT)$/.test(focusTo.tagName || "");
+    if (!typing && G.wrap) G.wrap.focus({ preventScroll: true });
+  }
+
+  function gCancelEdit() {
+    const e = G.edit;
+    if (!e) return;
+    G.edit = null;
+    e.ta.remove();
+    gPaintSel();
+    G.wrap.focus({ preventScroll: true });
+  }
+
+  function gEditKey(ev) {
+    ev.stopPropagation();
+    // Keys while the IME is converting are the IME's, not the table's.
+    if (ev.isComposing || ev.keyCode === 229) return;
+    const e = G.edit;
+    // As in Excel: started by typing, an arrow key enters the value and
+    // moves (F2 switches to moving within the text, and back).
+    if (ev.key === "F2") {
+      ev.preventDefault();
+      e.mode = e.mode === "enter" ? "edit" : "enter";
+      return;
+    }
+    if (e.mode === "enter" && G_ARROWS[ev.key] && !ev.shiftKey && !ev.ctrlKey && !ev.altKey) {
+      ev.preventDefault();
+      gCommitEdit(G_ARROWS[ev.key]);
+      return;
+    }
+    if (ev.key === "Enter" && ev.altKey) {
+      // A line break inside the cell, as in Excel.
+      ev.preventDefault();
+      const ta = e.ta, at = ta.selectionStart;
+      ta.value = ta.value.slice(0, at) + "\n" + ta.value.slice(ta.selectionEnd);
+      ta.setSelectionRange(at + 1, at + 1);
+      ta.style.height = Math.min(ta.value.split("\n").length, 8) * 20 + 8 + "px";
+      return;
+    }
+    if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
+      ev.preventDefault();
+      gCommitEdit(null, true);
+      return;
+    }
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      gCommitEdit(null);
+      gEnterDown(ev.shiftKey);
+      return;
+    }
+    if (ev.key === "Tab") {
+      ev.preventDefault();
+      const c = G.tabC == null ? G.sel.fc : G.tabC;
+      gCommitEdit(ev.shiftKey ? [0, -1] : [0, 1]);
+      G.tabC = c;
+      return;
+    }
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      gCancelEdit();
+      return;
+    }
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "s") {
+      ev.preventDefault();
+      gSave();
+    }
+  }
+
+  // ---- the list of a column with choices ----
+
+  function gOpenList() {
+    const col = gColAt(G.sel.fc), cur = G.tds[G.sel.fr] && G.tds[G.sel.fr][G.sel.fc], el = $("g-list");
+    if (!col || !col.choices.length || !cur || !el || G.edit) return;
+    const r = gRowAt(G.sel.fr);
+    const now = r ? r.cells[G.vc[G.sel.fc]] : "";
+    el.textContent = "";
+    const opts = [""].concat(col.choices);
+    opts.forEach((v, i) => {
+      const o = h("div", { class: cls("g-opt", v === now && "on"), "data-i": String(i) }, v === "" ? "（空にする）" : v);
+      el.appendChild(o);
+    });
+    const b = gBox(cur);
+    el.style.left = b.left + "px";
+    el.style.top = b.bottom + "px";
+    el.style.minWidth = Math.max(b.width, 120) + "px";
+    el.hidden = false;
+    G.list = { opts, at: Math.max(0, opts.indexOf(now)) };
+    gListHL();
+    el.focus({ preventScroll: true });
+  }
+
+  function gListHL() {
+    const el = $("g-list");
+    [...el.children].forEach((o, i) => o.classList.toggle("hl", i === G.list.at));
+    const o = el.children[G.list.at];
+    if (o) o.scrollIntoView({ block: "nearest" });
+  }
+
+  function gCloseList() {
+    if (!G || !G.list) return;
+    G.list = null;
+    const el = $("g-list");
+    if (el) el.hidden = true;
+  }
+
+  // gPickList puts the choice into every selected cell (the empty rows under
+  // the table stay empty when several rows are picked).
+  function gPickList(i) {
+    const v = G.list.opts[i];
+    gCloseList();
+    const g = gRange(), list = [], many = g.r1 > g.r0;
+    for (let r = g.r0; r <= g.r1; r++) {
+      if (many && gBlank(gRowAt(r))) continue;
+      for (let c = g.c0; c <= g.c1; c++) list.push([r, c, v]);
+    }
+    gSetCells(list);
+    G.wrap.focus({ preventScroll: true });
+  }
+
+  function gListKey(e) {
+    if (!G.list) return;
+    e.stopPropagation();
+    const n = G.list.opts.length;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      G.list.at = (G.list.at + (e.key === "ArrowDown" ? 1 : n - 1)) % n;
+      gListHL();
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      gPickList(G.list.at);
+    } else if (e.key === "Escape" || e.key === "Tab") {
+      e.preventDefault();
+      gCloseList();
+      G.wrap.focus({ preventScroll: true });
+    }
+  }
+
+  // ---- the clipboard (tab-separated, as Excel copies and pastes) ----
+
+  // A value that starts like a formula would run as one when pasted into
+  // Excel: it goes out with an apostrophe before it, and pasting back takes
+  // exactly one away.
+  const gCellOut = (v) => (v && "=+-@\t\r'".includes(v[0]) ? "'" + v : v);
+  const gCellIn = (v) => (v && v.length > 1 && v[0] === "'" && "=+-@\t\r'".includes(v[1]) ? v.slice(1) : v);
+
+  function gTSV(g) {
+    const lines = [];
+    for (let r = g.r0; r <= g.r1; r++) {
+      const row = gRowAt(r), vals = [];
+      for (let c = g.c0; c <= g.c1; c++) {
+        const col = gColAt(c);
+        // A secret value goes out only while the secrets are shown.
+        const v = gCellOut(col.secret && !G.show ? "" : row.cells[G.vc[c]]);
+        vals.push(/[\t\r\n"]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v);
+      }
+      lines.push(vals.join("\t"));
+    }
+    return lines.join("\r\n");
+  }
+
+  // gQuoteEnd: the index of the quote that closes a cell starting at i, or
+  // -1 when it is not a quoted cell.
+  function gQuoteEnd(text, i) {
+    for (let j = i + 1; j < text.length; j++) {
+      if (text[j] !== '"') continue;
+      if (text[j + 1] === '"') {
+        j++;
+        continue;
+      }
+      return j + 1 >= text.length || "\t\r\n".includes(text[j + 1]) ? j : -1;
+    }
+    return -1;
+  }
+
+  function gParseTSV(text) {
+    const rows = [];
+    let row = [], cur = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') {
+            cur += '"';
+            i++;
+          } else q = false;
+        } else cur += ch;
+        continue;
+      }
+      if (ch === '"' && cur === "" && gQuoteEnd(text, i) >= 0) {
+        q = true;
+        continue;
+      }
+      if (ch === "\t") {
+        row.push(cur);
+        cur = "";
+        continue;
+      }
+      if (ch === "\r" || ch === "\n") {
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        row.push(cur);
+        rows.push(row);
+        row = [];
+        cur = "";
+        continue;
+      }
+      cur += ch;
+    }
+    if (cur !== "" || row.length) {
+      row.push(cur);
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  const gClipText = (text) => (text.endsWith("\r\n") ? text.slice(0, -2) : text.endsWith("\n") ? text.slice(0, -1) : text);
+
+  async function gCopy(cut) {
+    if (!G.view.length) return;
+    const g = gRange();
+    const text = gTSV(g);
+    try {
+      await api().ClipboardSet(text);
+    } catch (e) {
+      gSay("コピーできませんでした: " + errText(e));
+      return;
+    }
+    // raw: the cells as they are (the secrets too, whatever is shown), so
+    // that a paste of this table's own copy writes the real values.
+    const raw = [];
+    for (let r = g.r0; r <= g.r1; r++) {
+      const row = gRowAt(r), vals = [];
+      for (let c = g.c0; c <= g.c1; c++) vals.push(row.cells[G.vc[c]]);
+      raw.push(vals);
+    }
+    G.clip = { text, raw };
+    const n = (g.r1 - g.r0 + 1) * (g.c1 - g.c0 + 1);
+    const masked = !G.show && G.vc.slice(g.c0, g.c1 + 1).some((i) => G.cols[i].secret);
+    if (cut) {
+      const list = [];
+      for (let r = g.r0; r <= g.r1; r++) for (let c = g.c0; c <= g.c1; c++) list.push([r, c, ""]);
+      gSetCells(list);
+    }
+    gSay(`${n} セルを${cut ? "切り取りました" : "コピーしました"}${masked ? "（秘密の値は、見せている間だけ Excel へコピーされます）" : ""}`);
+  }
+
+  async function gPaste() {
+    let text = "";
+    try {
+      text = await api().ClipboardGet();
+    } catch (e) {
+      text = "";
+    }
+    const own = G.clip && gClipText(G.clip.text) === gClipText(text || "");
+    if (!text && !own) {
+      gSay("クリップボードが空です");
+      return;
+    }
+    gPasteText(text || "");
+  }
+
+  function gPasteText(text) {
+    text = gClipText(text);
+    const own = G.clip && gClipText(G.clip.text) === text ? G.clip : null;
+    const data = own ? own.raw : gParseTSV(text).map((r) => r.map(gCellIn));
+    const g = G.view.length ? gRange() : { r0: 0, r1: 0, c0: 0, c1: 0 };
+    if (!data.length) {
+      // One empty cell copied in Excel is a line end alone: it empties the selection.
+      if (!own && text.trim() === "") gClear();
+      return;
+    }
+    const C = G.vc.length;
+    const hh = data.length, w = Math.max(...data.map((r) => r.length));
+    const over = g.c0 + w - C;
+    const sr = g.r1 - g.r0 + 1, sc = g.c1 - g.c0 + 1;
+    let endR = g.r0 + hh - 1, endC = Math.min(g.c0 + w - 1, C - 1);
+    let kept = 0;
+    gMutate((ops) => {
+      const list = [];
+      const many = sr > 1;
+      const skip = (r) => many && gBlank(gRowAt(r));
+      if (hh === 1 && w === 1 && (sr > 1 || sc > 1)) {
+        // One value into a selection: every selected cell gets it.
+        for (let r = g.r0; r <= g.r1; r++) {
+          if (skip(r)) continue;
+          for (let c = g.c0; c <= g.c1; c++) list.push([r, c, data[0][0]]);
+        }
+        endR = g.r1;
+        endC = g.c1;
+      } else if ((sr > hh || sc > w) && sr % hh === 0 && sc % w === 0) {
+        // A block into a selection it fits a whole number of times: tiled.
+        for (let r = 0; r < sr; r++) {
+          if (skip(g.r0 + r)) continue;
+          for (let c = 0; c < sc; c++) list.push([g.r0 + r, g.c0 + c, data[r % hh][c % w] == null ? "" : data[r % hh][c % w]]);
+        }
+        endR = g.r1;
+        endC = g.c1;
+      } else {
+        // Rows past the end become new rows, as in Excel.
+        for (let i = 0; i < hh; i++) {
+          const r = g.r0 + i;
+          if (r >= G.view.length) {
+            const nr = gNewRow();
+            ops.insert(G.rows.length, nr);
+            G.view.push(G.rows.length - 1);
+          }
+          for (let j = 0; j < w; j++) if (g.c0 + j < C) list.push([r, g.c0 + j, data[i][j] == null ? "" : data[i][j]]);
+        }
+      }
+      for (const [r, c, v] of list) {
+        const row = gRowAt(r), ci = G.vc[c], col = G.cols[ci];
+        // A secret column reads empty while the secrets are masked: an
+        // empty value pasted over a secret leaves it.
+        if (col.secret && !G.show && !own && v === "" && row && row.cells[ci]) {
+          kept++;
+          continue;
+        }
+        ops.set(row, ci, gNorm(col, v));
+      }
+    });
+    const said = [];
+    if (over > 0) said.push(`${over} 列は右端を超えるため貼り付けませんでした`);
+    if (kept) said.push(`秘密の値 ${kept} 個は伏せているため残しました（消すには Delete か「秘密の値を見せる」）`);
+    if (said.length) G.say = [G.say].concat(said).filter(Boolean).join("。");
+    G.sel = { ar: g.r0, ac: g.c0, fr: Math.min(endR, G.view.length - 1), fc: endC };
+    gPaintSel();
+    gEnsureVisible(G.sel.fr, G.sel.fc);
+    gStatus();
+  }
+
+  function gClear() {
+    if (!G.view.length) return;
+    const g = gRange(), list = [];
+    for (let r = g.r0; r <= g.r1; r++) for (let c = g.c0; c <= g.c1; c++) list.push([r, c, ""]);
+    gSetCells(list);
+  }
+
+  // gXfer is a value copied from one column into another: a secret is never
+  // written into a column that shows it in clear.
+  const gXfer = (src, dst, v) => (src && src.secret && dst && !dst.secret ? "" : v);
+
+  // Ctrl+D / Ctrl+R: the top row (left column) of the selection copied over
+  // the rest of it; with one row (column) selected, the one above (left).
+  function gFillDown(right) {
+    if (!G.view.length) return;
+    const g = gRange(), list = [];
+    const many = g.r1 > g.r0;
+    const skip = (r) => many && gBlank(gRowAt(r));
+    if (!right) {
+      const src = g.r0 === g.r1 ? g.r0 - 1 : g.r0;
+      if (src < 0) return;
+      for (let r = g.r0 === g.r1 ? g.r0 : g.r0 + 1; r <= g.r1; r++) {
+        if (skip(r)) continue;
+        for (let c = g.c0; c <= g.c1; c++) list.push([r, c, gRowAt(src).cells[G.vc[c]]]);
+      }
+    } else {
+      const src = g.c0 === g.c1 ? g.c0 - 1 : g.c0;
+      if (src < 0) return;
+      for (let c = g.c0 === g.c1 ? g.c0 : g.c0 + 1; c <= g.c1; c++) {
+        for (let r = g.r0; r <= g.r1; r++) {
+          if (!skip(r)) list.push([r, c, gXfer(gColAt(src), gColAt(c), gRowAt(r).cells[G.vc[src]])]);
+        }
+      }
+    }
+    gSetCells(list);
+  }
+
+  // ---- the fill handle (■): a series, or a copy ----
+
+  // gTail splits a value at the number a series counts on: the last number
+  // of the text, or the last part of an address that has a length after it
+  // (192.0.2.1/24 goes on with 192.0.2.2/24, not with /25).
+  function gTail(v) {
+    v = v || "";
+    let m = /^((?:\d{1,3}\.){3})(\d{1,3})(\/\d{1,2})?$/.exec(v);
+    if (m) return { head: m[1], num: m[2], tail: m[3] || "", max: 255, hex: false };
+    m = /^(.*:)([0-9a-fA-F]{1,4})(\/\d{1,3})?$/.exec(v);
+    if (m && (v.match(/:/g) || []).length >= 2) return { head: m[1], num: m[2], tail: m[3] || "", max: 0xffff, hex: true };
+    m = /^(.*?)(\d{1,15})$/.exec(v);
+    return m ? { head: m[1], num: m[2], tail: "", max: Number.MAX_SAFE_INTEGER, hex: false } : null;
+  }
+
+  // gSeries gives the n values that follow vals: text that ends in a number
+  // counts on (rt-a01 → rt-a02, 192.0.2.10 → 192.0.2.11), a number alone is
+  // copied as in Excel (Ctrl swaps the two), several values with one step
+  // between them go on with that step; anything else is copied.
+  function gSeries(vals, n, col, ctrl) {
+    const copy = () => Array.from({ length: n }, (_, i) => vals[i % vals.length]);
+    if (col.secret || col.choices.length || col.type === "bool") return copy();
+    const ps = vals.map(gTail);
+    if (ps.some((p) => !p) || ps.some((p) => p.head !== ps[0].head || p.tail !== ps[0].tail || p.hex !== ps[0].hex)) return copy();
+    const radix = ps[0].hex ? 16 : 10;
+    const nums = ps.map((p) => parseInt(p.num, radix));
+    let step = 1;
+    if (vals.length === 1) {
+      const pure = ps[0].head === "" && ps[0].tail === "";
+      if (pure !== !!ctrl) return copy();
+    } else {
+      step = nums[1] - nums[0];
+      if (nums.some((x, i) => i && x - nums[i - 1] !== step) || ctrl) return copy();
+    }
+    const last = ps[ps.length - 1].num;
+    const width = last.length > 1 && last.startsWith("0") ? last.length : 0;
+    const upper = /[A-F]/.test(last);
+    const out = [];
+    for (let i = 1; i <= n; i++) {
+      const x = nums[nums.length - 1] + step * i;
+      if (x < 0 || x > ps[0].max) return copy();
+      let s = x.toString(radix).padStart(width, "0");
+      if (upper) s = s.toUpperCase();
+      out.push(ps[0].head + s + ps[0].tail);
+    }
+    return out;
+  }
+
+  function gFillTarget(g, r, c) {
+    if (r > g.r1) return { dir: "down", t: { r0: g.r1 + 1, r1: r, c0: g.c0, c1: g.c1 } };
+    if (r < g.r0) return { dir: "up", t: { r0: r, r1: g.r0 - 1, c0: g.c0, c1: g.c1 } };
+    if (c > g.c1) return { dir: "right", t: { r0: g.r0, r1: g.r1, c0: g.c1 + 1, c1: c } };
+    if (c < g.c0) return { dir: "left", t: { r0: g.r0, r1: g.r1, c0: c, c1: g.c0 - 1 } };
+    return null;
+  }
+
+  // gFill fills the cells of ft.t from the selection g.
+  function gFill(g, ft, ctrl) {
+    const more = ft.t.r1 - (G.view.length - 1);
+    const list = [];
+    if (ft.dir === "down" || ft.dir === "up") {
+      const n = ft.t.r1 - ft.t.r0 + 1;
+      for (let c = g.c0; c <= g.c1; c++) {
+        const src = [];
+        for (let r = g.r0; r <= g.r1; r++) src.push(gRowAt(r).cells[G.vc[c]]);
+        if (ft.dir === "up") src.reverse();
+        gSeries(src, n, gColAt(c), ctrl).forEach((v, i) => list.push([ft.dir === "down" ? ft.t.r0 + i : ft.t.r1 - i, c, v]));
+      }
+    } else {
+      // Across columns each value lands in a column of another kind:
+      // counting on makes no sense there, so it is a copy.
+      const n = ft.t.c1 - ft.t.c0 + 1;
+      for (let r = g.r0; r <= g.r1; r++) {
+        const src = [];
+        for (let c = g.c0; c <= g.c1; c++) src.push([gColAt(c), gRowAt(r).cells[G.vc[c]]]);
+        if (ft.dir === "left") src.reverse();
+        for (let i = 0; i < n; i++) {
+          const c = ft.dir === "right" ? ft.t.c0 + i : ft.t.c1 - i;
+          const [sc, v] = src[i % src.length];
+          list.push([r, c, gXfer(sc, gColAt(c), v)]);
+        }
+      }
+    }
+    // One step to undo, the rows a fill past the end added included.
+    gMutate((ops) => {
+      for (let i = 0; i < more; i++) {
+        ops.insert(G.rows.length, gNewRow());
+        G.view.push(G.rows.length - 1);
+      }
+      for (const [r, c, text] of list) {
+        const row = gRowAt(r);
+        if (row) ops.set(row, G.vc[c], gNorm(gColAt(c), text));
+      }
+    });
+    G.sel = { ar: Math.min(g.r0, ft.t.r0), ac: Math.min(g.c0, ft.t.c0), fr: Math.max(g.r1, ft.t.r1), fc: Math.max(g.c1, ft.t.c1) };
+    gPaintSel();
+  }
+
+  // A double click on the fill handle: down to the last row of the table.
+  function gFillToEnd() {
+    const g = gRange();
+    let last = -1;
+    G.view.forEach((ri, r) => { if (!gBlank(G.rows[ri])) last = r; });
+    if (last <= g.r1) return;
+    gFill(g, { dir: "down", t: { r0: g.r1 + 1, r1: last, c0: g.c0, c1: g.c1 } }, false);
+  }
+
+  function gFillHint(text) {
+    const el = $("g-selinfo");
+    if (el && text) el.textContent = text;
+  }
+
+  // ---- rows ----
+
+  // gDeleteRows marks the selected rows of the book as to be deleted (they
+  // stay in sight, struck through, until the save) and takes the new rows
+  // away. With only rows that are marked selected, it takes the mark off.
+  function gDeleteRows() {
+    const rows = gSelRows().filter((r) => !gBlank(r));
+    if (!rows.length) return;
+    const g = gRange();
+    const undo = rows.every((r) => r.del);
+    gMutate((ops) => {
+      for (const r of rows) {
+        if (r.row === 0) ops.remove(r);
+        else ops.del(r, !undo);
+      }
+    });
+    gSelect(Math.min(g.r0, G.view.length - 1), g.c0, Math.min(g.r1, G.view.length - 1), g.c1);
+    const n = rows.filter((r) => r.row !== 0).length;
+    if (n) gSay(undo ? `${n} 行の削除を取り消しました` : `${n} 行を消す行にしました（保存するまで、パラメータブックには残っています。取り消すには、もう一度押すか Ctrl+Z）`);
+  }
+
+  // A row put in between shows where it was asked for only while the rows
+  // stand in the order of the sheet.
+  function gNotSorted() {
+    if (!gSorted()) return true;
+    gSay("並べ替えている間は、行を入れたり動かしたりできません（「並べ替えを解く」を押してから）");
+    return false;
+  }
+
+  // gSelectRows selects the rows given (the whole width when wide).
+  function gSelectRows(rows, c0, c1, wide) {
+    const idx = rows.map((r) => G.view.findIndex((i) => G.rows[i] === r)).filter((i) => i >= 0);
+    if (!idx.length) return;
+    gSelect(Math.min(...idx), wide ? 0 : c0, Math.max(...idx), wide ? G.vc.length - 1 : c1);
+  }
+
+  // gInsertAt puts empty rows in above (or below) the selected rows, as many
+  // as are selected. The save puts them into the sheet at that place.
+  function gInsertAt(below) {
+    if (G.busy || !G.view.length || !gNotSorted()) return;
+    gCommitEdit();
+    const g = gRange();
+    const at = below ? G.rows.indexOf(gRowAt(g.r1)) + 1 : G.rows.indexOf(gRowAt(g.r0));
+    const fresh = Array.from({ length: g.r1 - g.r0 + 1 }, gNewRow);
+    gMutate((ops) => fresh.forEach((r, i) => ops.insert(at + i, r)));
+    gSelectRows(fresh, g.c0, g.c1, true);
+    gSay(`${fresh.length} 行を入れました（打った行だけが、保存のときにこの位置に入ります）`);
+  }
+
+  // gDuplicateRows puts copies of the selected rows in right under them, as
+  // new rows.
+  function gDuplicateRows() {
+    const rows = gSelRows().filter((r) => !gBlank(r));
+    if (!rows.length || !gNotSorted()) return;
+    const at = G.rows.indexOf(rows[rows.length - 1]) + 1;
+    const copies = rows.map((r) => {
+      const n = gNewRow();
+      // The value a formula shows is not copied: the copy would hold it as text.
+      n.cells = r.cells.map((v, i) => (r.formula.has(i) || G.cols[i].dropped ? "" : v));
+      return n;
+    });
+    gMutate((ops) => copies.forEach((n, i) => ops.insert(at + i, n)));
+    gSelectRows(copies, 0, 0, true);
+    gCheck(copies.flatMap((r) => r.cells.map((v, ci) => ({ r, ci })).filter((o) => o.r.cells[o.ci] !== "")));
+    gSay(`${copies.length} 行を複製しました（すぐ下の新しい行。行を見分ける列を直してください）`);
+  }
+
+  // gMoveRows moves the selected rows one row up or down (past the row that
+  // is seen above or below them). The save moves the rows of the book.
+  function gMoveRows(dir) {
+    if (G.busy || !G.view.length || !gNotSorted()) return;
+    gCommitEdit();
+    const g = gRange(), sel = [];
+    for (let r = g.r0; r <= g.r1; r++) sel.push(gRowAt(r));
+    if (sel.some((r) => gBlank(r) || r.gone)) {
+      gSay("空の行と、Excel 側で消えた行は動かせません");
+      return;
+    }
+    const nb = dir < 0 ? gRowAt(g.r0 - 1) : gRowAt(g.r1 + 1);
+    if (!nb || gBlank(nb)) return;
+    gMutate((ops) => {
+      for (const r of sel) ops.remove(r);
+      const at = G.rows.indexOf(nb) + (dir > 0 ? 1 : 0);
+      sel.forEach((r, i) => ops.insert(at + i, r));
+    });
+    gSelectRows(sel, g.c0, g.c1, false);
+  }
+
+  // gToEnd moves the cursor to the first empty row under the table.
+  function gToEnd() {
+    let vr = -1;
+    for (let r = G.view.length - 1; r >= 0 && gBlank(gRowAt(r)); r--) vr = r;
+    if (vr >= 0) gSelect(vr, 0);
+    G.wrap.focus({ preventScroll: true });
+  }
+
+  // ---- sort and filters ----
+
+  function gSortBy(ci, dir) {
+    gCommitEdit();
+    G.sort = { ci, dir };
+    gResort();
+    gRedrawAll();
+  }
+
+  function gClearFilters() {
+    gCommitEdit();
+    G.filter = "";
+    G.dev = "";
+    G.colFilter = {};
+    G.shown = G_ROWS;
+    gRedrawAll();
+  }
+
+  // gFilterByCell leaves the rows that have the value of the current cell in
+  // its column.
+  function gFilterByCell() {
+    const r = gRowAt(G.sel.fr), ci = G.vc[G.sel.fc];
+    if (!r || ci == null) return;
+    G.colFilter[ci] = new Set([gLabel(G.cols[ci], r.cells[ci])]);
+    G.shown = G_ROWS;
+    gRedrawAll();
+  }
+
+  // ---- menus (the right click, the ▾ of a heading) ----
+
+  function gCloseMenus() {
+    document.querySelectorAll(".g-menu, .g-hpop").forEach((x) => x.remove());
+  }
+
+  function gPlace(el, x, y) {
+    document.body.appendChild(el);
+    el.style.left = Math.max(4, Math.min(x, window.innerWidth - el.offsetWidth - 8)) + "px";
+    el.style.top = Math.max(4, Math.min(y, window.innerHeight - el.offsetHeight - 8)) + "px";
+  }
+
+  const gFocusBack = () => { if (G && G.wrap && G.wrap.isConnected && !G.edit && !gDialogOpen()) G.wrap.focus({ preventScroll: true }); };
+
+  // gMenu shows a menu at a place of the window. items: [label, fn], or null
+  // for a line between them.
+  function gMenu(items, x, y) {
+    gCloseMenus();
+    const el = h("div", { class: "g-menu", tabindex: "-1" }, items.map((it) => (it
+      ? button(it[0], () => { gCloseMenus(); it[1](); gFocusBack(); }, { class: "g-mi" })
+      : h("div", { class: "g-msep" }))));
+    el.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      gCloseMenus();
+      gFocusBack();
+    });
+    el.addEventListener("contextmenu", (e) => e.preventDefault());
+    gPlace(el, x, y);
+    el.focus({ preventScroll: true });
+  }
+
+  function gContextMenu(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!G || G.busy) return;
+    if (G.edit) gCommitEdit();
+    gCloseList();
+    const at = e.target.closest(".g-corner") ? null : gCellAt(e.clientX, e.clientY);
+    if (at && at.r == null && at.c != null) {
+      gHeaderMenu(G.vc[at.c], e.clientX, e.clientY);
+      return;
+    }
+    const g = gRange();
+    if (at && at.r != null && at.c != null && !(at.r >= g.r0 && at.r <= g.r1 && at.c >= g.c0 && at.c <= g.c1)) gSelect(at.r, at.c);
+    else if (at && at.r != null && at.c == null && !(at.r >= g.r0 && at.r <= g.r1)) gSelect(at.r, 0, at.r, G.vc.length - 1);
+    gCellMenu(e.clientX, e.clientY);
+  }
+
+  function gCellMenu(x, y) {
+    const undo = gSelRows().length && gSelRows().every((r) => r.del);
+    const items = [
+      ["切り取り（Ctrl+X）", () => gCopy(true)],
+      ["コピー（Ctrl+C）", () => gCopy(false)],
+      ["貼り付け（Ctrl+V）", () => gPaste()],
+      null,
+      ["上に行を入れる（Ctrl+Shift++）", () => gInsertAt(false)],
+      ["下に行を入れる", () => gInsertAt(true)],
+      ["行を複製", gDuplicateRows],
+      ["行を上へ動かす（Alt+↑）", () => gMoveRows(-1)],
+      ["行を下へ動かす（Alt+↓）", () => gMoveRows(1)],
+      [undo ? "行の削除を取り消す" : "行を削除（Ctrl+－）", gDeleteRows],
+      null,
+      ["セルを空にする（Delete）", gClear],
+      ["上の値を下へ（Ctrl+D）", () => gFillDown(false)],
+      ["左の値を右へ（Ctrl+R）", () => gFillDown(true)],
+      null,
+      ["このセルの値で絞り込む", gFilterByCell],
+    ];
+    if (gFiltered()) items.push(["絞り込みを解く", gClearFilters]);
+    gMenu(items, x, y);
+  }
+
+  // gHeaderMenu is the menu of a column: sort, filter by value, hide; for a
+  // free column also its heading and taking it out.
+  function gHeaderMenu(ci, x, y) {
+    gCloseMenus();
+    gCommitEdit();
+    const col = G.cols[ci];
+    if (!col) return;
+    const counts = new Map();
+    for (const r of G.rows) {
+      if (gBlank(r) || r.row === 0) continue;
+      const l = gLabel(col, r.cells[ci]);
+      counts.set(l, (counts.get(l) || 0) + 1);
+    }
+    const all = [...counts.keys()].sort(gSorter.compare);
+    const vals = all.slice(0, G_VALUES);
+    const cur = G.colFilter[ci];
+    const item = (label, fn, id) => button(label, () => { gCloseMenus(); fn(); gFocusBack(); }, { class: "g-mi", "data-a": id });
+    const boxes = vals.map((v) => {
+      const b = h("input", { type: "checkbox", checked: !cur || cur.has(v) });
+      b.dataset.v = v;
+      return h("label", { class: "g-hv" }, b, " " + (v === "" ? "（空白）" : v) + " ", h("span", { class: "dim" }, String(counts.get(v))));
+    });
+    const checks = () => boxes.map((l) => l.firstChild);
+    const allBox = h("input", { type: "checkbox", checked: !cur, onchange: (e) => { for (const l of boxes) if (l.style.display !== "none") l.firstChild.checked = e.target.checked; } });
+    const search = h("input", { type: "text", class: "g-hq", placeholder: "値を探す", oninput: (e) => {
+      const q = e.target.value.toLowerCase();
+      for (const l of boxes) l.style.display = l.firstChild.dataset.v.toLowerCase().includes(q) ? "" : "none";
+    } });
+    const pop = h("div", { class: "g-hpop" },
+      item("昇順で並べ替え", () => gSortBy(ci, 1), "asc"),
+      item("降順で並べ替え", () => gSortBy(ci, -1), "desc"),
+      gSorted() ? item("並べ替えを解く", () => gSortBy(-1, 1), "nosort") : null,
+      h("div", { class: "g-msep" }),
+      h("div", { class: "g-hlabel" }, "値で絞り込み"),
+      search,
+      h("label", { class: "g-hv" }, allBox, " （すべて選択）"),
+      h("div", { class: "g-hlist" }, boxes),
+      all.length > vals.length ? h("div", { class: "dim small" }, `値が ${all.length} 種類あります。はじめの ${vals.length} 種類を出しています（上の絞り込みの欄も使えます）`) : null,
+      h("div", { class: "row" },
+        button("絞り込む", () => {
+          const on = checks().filter((b) => b.checked).map((b) => b.dataset.v);
+          if (on.length === vals.length) delete G.colFilter[ci];
+          else G.colFilter[ci] = new Set(on);
+          G.shown = G_ROWS;
+          gRedrawAll();
+        }, { class: "primary", "data-a": "ok" }),
+        button("この列の絞り込みを解く", () => { delete G.colFilter[ci]; G.shown = G_ROWS; gRedrawAll(); }, { "data-a": "clear" })),
+      h("div", { class: "g-msep" }),
+      col.isKey ? null : item("この列を隠す", () => gHideCols([ci]), "hide"),
+      col.free ? item("列の名前を変える…", () => gRenameCol(ci), "rename") : null,
+      col.free ? item("この列を消す…", () => gDropCol(ci), "drop") : null);
+    pop.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.isComposing || e.keyCode === 229 || e.key !== "Escape") return;
+      e.preventDefault();
+      gCloseMenus();
+      gFocusBack();
+    });
+    pop.addEventListener("contextmenu", (e) => e.preventDefault());
+    gPlace(pop, x, y);
+    search.focus();
+  }
+
+  // ---- columns: shown or hidden, their widths, the free ones ----
+
+  function gHideCols(list) {
+    for (const ci of list) {
+      const col = G.cols[ci];
+      if (col.isKey) continue;
+      G.pref.hidden.add(col.key);
+      // Hiding the column the rows are sorted by would leave a sort nobody sees.
+      if (G.sort.ci === ci) {
+        G.sort = { ci: -1, dir: 1 };
+        G.rank = null;
+      }
+      delete G.colFilter[ci];
+    }
+    gSavePref();
+    gRedrawAll();
+  }
+
+  // gEmptyCols lists the columns no row has a value in.
+  function gEmptyCols() {
+    const rows = G.rows.filter((r) => !gBlank(r));
+    return G.live.filter((i) => !G.cols[i].isKey && rows.every((r) => r.cells[i] === ""));
+  }
+
+  function gColsDialog() {
+    gCommitEdit();
+    gCloseMenus();
+    const boxes = G.live.map((ci) => {
+      const col = G.cols[ci];
+      const b = h("input", { type: "checkbox", checked: col.isKey || !G.pref.hidden.has(col.key), disabled: col.isKey });
+      b.dataset.ci = ci;
+      return h("label", { class: "g-hv", title: gColTip(col) }, b, " " + col.title + (col.free ? "（自由列）" : ""));
+    });
+    const apply = () => {
+      for (const l of boxes) {
+        const b = l.firstChild, col = G.cols[+b.dataset.ci];
+        if (b.disabled) continue;
+        if (b.checked) G.pref.hidden.delete(col.key);
+        else G.pref.hidden.add(col.key);
+      }
+      if (gSorted() && G.pref.hidden.has(G.cols[G.sort.ci].key)) {
+        G.sort = { ci: -1, dir: 1 };
+        G.rank = null;
+      }
+      gSavePref();
+      gRedrawAll();
+    };
+    for (const l of boxes) l.firstChild.addEventListener("change", apply);
+    const body = h("div", { id: "g-colsdlg" },
+      h("p", { class: "dim" }, "表に出す列を選びます。隠した列の値はそのまま残り、貼り付けや置換は隠した列に触りません。行を見分ける列は隠せません。選んだ内容と列幅は、この PC の設定に表ごとに覚えます（案件のファイルには書きません）。"),
+      h("div", { class: "row" },
+        button("空の列を隠す", () => {
+          const empty = new Set(gEmptyCols());
+          for (const l of boxes) if (empty.has(+l.firstChild.dataset.ci)) l.firstChild.checked = false;
+          apply();
+        }, { id: "gv-empty", title: "どの行にも値の無い列を、まとめて隠します" }),
+        button("すべて出す", () => { for (const l of boxes) l.firstChild.checked = true; apply(); }, { id: "gv-all" }),
+        button("列幅を元に戻す", () => { G.pref.widths = {}; gSavePref(); gRedrawAll(); }, { id: "gv-widths" })),
+      h("div", { class: "g-colgrid" }, boxes));
+    dialog("列の表示", body, [{ id: "ok", label: "閉じる", cls: "primary" }]).then(gFocusBack);
+  }
+
+  // gAutoFit makes a column as wide as its widest value among the rows drawn.
+  function gAutoFit(c) {
+    const col = gColAt(c);
+    if (!col) return;
+    const span = h("span", { style: "position:absolute;visibility:hidden;white-space:nowrap;font-size:13px" });
+    document.body.appendChild(span);
+    let w = 0;
+    for (const text of [col.title + "　　"].concat(G.view.map((ri) => gShow(col, G.rows[ri].cells[G.vc[c]])))) {
+      span.textContent = text;
+      w = Math.max(w, span.offsetWidth);
+    }
+    span.remove();
+    gSetWidth(c, Math.max(50, Math.min(600, w + 20)));
+  }
+
+  function gSetWidth(c, w) {
+    G.pref.widths[gColAt(c).key] = Math.round(w);
+    gSavePref();
+    // The columns that stand still lie at places that follow from the widths.
+    if (c < G.lefts.length - 1) {
+      gLayout();
+      render();
+      return;
+    }
+    const el = G.wrap.querySelectorAll("#g-table col")[c + 1];
+    if (el) el.style.width = Math.round(w) + "px";
+    gPaintSel();
+  }
+
+  const gHeadings = (but) => G.cols.filter((c) => !c.dropped && c !== but).map((c) => c.title).concat(G.cols.filter((c) => c.was && !c.dropped && c !== but).map((c) => c.was));
+  const gFilled = (ci) => G.rows.filter((r) => !gBlank(r) && !r.del && r.cells[ci] !== "").length;
+
+  // gAddCol adds a free column: a heading the definition does not have. The
+  // save writes the heading at the right end of the sheet.
+  async function gAddCol() {
+    if (G.busy) return;
+    gCommitEdit();
+    const title = await askText("列を足す", "足す列の見出しを書いてください（定義に無い列 = 自由列。メモや管理用の値を置けます。生成には使われません）。保存すると、シートの右端にできます。", "", "足す");
+    if (title == null) return gFocusBack();
+    let key = "";
+    try {
+      key = await api().EditColumn(G.id, title, gHeadings(null));
+    } catch (e) {
+      gSay("列を足せません: " + errText(e));
+      return gFocusBack();
+    }
+    const col = { key, title: title.trim(), col: -1, type: "", list: false, required: false, isKey: false, secret: false, free: true, choices: [], note: "", added: true, was: "", dropped: true };
+    G.cols.push(col);
+    for (const r of G.rows) {
+      r.cells.push("");
+      r.base.push("");
+    }
+    gMutate((ops) => ops.col(col, { dropped: false }));
+    const c = G.vc.indexOf(G.cols.indexOf(col));
+    if (c >= 0) {
+      gSelect(G.sel.fr, c);
+      gEnsureVisible(G.sel.fr, c);
+    }
+    gSay(`列「${col.title}」を足しました（保存すると、シートの右端にできます）`);
+  }
+
+  async function gRenameCol(ci) {
+    const col = G.cols[ci];
+    if (!col || !col.free || G.busy) return;
+    const n = gFilled(ci);
+    const title = await askText("列の名前を変える", `列「${col.title}」の新しい見出しを書いてください。${n ? `この列には値が ${n} 個入っています（値はそのまま残ります）。` : ""}保存すると、シートの見出しが変わります。`, col.title, "変える");
+    if (title == null || title.trim() === col.title) return gFocusBack();
+    let key = "";
+    try {
+      key = await api().EditColumn(G.id, title, gHeadings(col));
+    } catch (e) {
+      gSay("列の名前を変えられません: " + errText(e));
+      return gFocusBack();
+    }
+    // A column of the book keeps its name until the save (the cells of the
+    // draft go by it); one that was added here has no other name yet.
+    const was = col.added ? "" : col.was || col.title;
+    const next = { title: title.trim(), was: was === title.trim() ? "" : was };
+    if (col.added) next.key = key;
+    gMutate((ops) => ops.col(col, next));
+    gSay(`列の見出しを「${next.title}」にしました`);
+  }
+
+  async function gDropCol(ci) {
+    const col = G.cols[ci];
+    if (!col || !col.free || G.busy) return;
+    const n = gFilled(ci);
+    if (n && !(await ask("列を消す", `列「${col.title}」には値が ${n} 個入っています。列を消すと、保存のときに値も消えます（保存するまでは Ctrl+Z で戻せます）。`, "消す"))) return gFocusBack();
+    gMutate((ops) => ops.col(col, { dropped: true }));
+    gSay(`列「${col.title}」を消しました（保存すると、シートから消えます。Ctrl+Z で戻せます）`);
+  }
+
+  // ---- search and replace ----
+
+  function gFindOpen(replace) {
+    if (!G || G.busy) return;
+    gCommitEdit();
+    gCloseList();
+    const F = st.edit.find;
+    const g = gRange();
+    F.range = null;
+    if (G.view.length && (g.r1 > g.r0 || g.c1 > g.c0)) {
+      const uids = new Set(), cis = new Set();
+      for (let r = g.r0; r <= g.r1; r++) uids.add(gRowAt(r).uid);
+      for (let c = g.c0; c <= g.c1; c++) cis.add(G.vc[c]);
+      F.range = { uids, cis };
+    }
+    F.onlySel = !!F.range;
+    F.open = true;
+    F.replace = replace;
+    F.said = "";
+    gFindDraw(true);
+    gFit();
+  }
+
+  function gFindClose() {
+    st.edit.find.open = false;
+    gFindDraw(false);
+    gFit();
+    gFocusBack();
+  }
+
+  function gFindSay(text) {
+    st.edit.find.said = text;
+    const el = $("gf-info");
+    if (el) el.textContent = text;
+  }
+
+  function gFindDraw(focus) {
+    const bar = $("g-findbar"), F = st.edit.find;
+    if (!bar) return;
+    bar.textContent = "";
+    bar.hidden = !F.open;
+    if (!F.open) return;
+    const q = h("input", { type: "text", id: "gf-q", value: F.q, placeholder: "検索する文字", oninput: (e) => { F.q = e.target.value; } });
+    const rep = F.replace ? h("input", { type: "text", id: "gf-r", value: F.r, placeholder: "置換後の文字", oninput: (e) => { F.r = e.target.value; } }) : null;
+    const box = (id, label, key, off) => h("label", { class: "g-fopt" }, h("input", { type: "checkbox", id, checked: F[key] && !off, disabled: off, onchange: (e) => { F[key] = e.target.checked; } }), " " + label);
+    const scope = Object.assign(select([["sheet", "今のシート"], ["all", "全シート"]], F.scope, (v) => { F.scope = v; gFindDraw(true); }), { id: "gf-scope", title: "全シート: 「次へ」が今のシートの最後を過ぎると、次の当たったシートへ移ります" });
+    add(bar, [
+      q, rep, scope,
+      F.range ? box("gf-sel", "選択範囲のみ", "onlySel", F.scope === "all") : null,
+      box("gf-case", "大文字と小文字を区別", "cs"),
+      box("gf-whole", "セル全体が一致", "whole"),
+      button("前へ", () => gFindStep(-1), { id: "gf-prev" }),
+      button("次へ", () => gFindStep(1), { id: "gf-next" }),
+      F.replace ? [button("置換", gReplaceOne, { id: "gf-rep" }), button("すべて置換", gReplaceAll, { id: "gf-all" })] : button("置換…", () => gFindOpenKeep(true), { id: "gf-more", class: "link" }),
+      h("span", { class: "dim small", id: "gf-info" }, F.said),
+      button("×", gFindClose, { id: "gf-close", class: "link", title: "閉じる（Esc）" }),
+    ]);
+    bar.onkeydown = (e) => {
+      e.stopPropagation();
+      // Enter and Esc while the IME is converting are the IME's.
+      if (e.isComposing || e.keyCode === 229) return;
+      const lk = e.key.toLowerCase();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        gFindClose();
+      } else if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type === "text") {
+        e.preventDefault();
+        gFindStep(e.shiftKey ? -1 : 1);
+      } else if ((e.ctrlKey || e.metaKey) && (lk === "f" || lk === "h")) {
+        e.preventDefault();
+        gFindOpenKeep(lk === "h");
+      } else if ((e.ctrlKey || e.metaKey) && ["r", "d", "s", "p"].includes(lk)) e.preventDefault();
+    };
+    if (focus) {
+      q.focus();
+      q.select();
+    }
+  }
+
+  // gFindOpenKeep switches the bar between search and replace without
+  // touching the range it was opened for.
+  function gFindOpenKeep(replace) {
+    st.edit.find.replace = replace;
+    gFindDraw(true);
+    gFit();
+  }
+
+  function gFindOpts() {
+    const F = st.edit.find, hidden = {};
+    for (const k in st.edit.prefs) hidden[k] = st.edit.prefs[k].hidden || [];
+    return { case: F.cs, whole: F.whole, secrets: !!G.show, hidden };
+  }
+
+  function gHit(text) {
+    const F = st.edit.find;
+    const a = F.cs ? text : text.toLowerCase(), b = F.cs ? F.q : F.q.toLowerCase();
+    return F.whole ? a === b : a.includes(b);
+  }
+
+  // gMatches lists the cells of this sheet that hold the text: [place of the
+  // row in G.full, place of the column among the ones shown]. The rows a
+  // filter hides and the columns that are hidden are not searched; a secret
+  // column is searched only while the secrets are shown.
+  function gMatches() {
+    const F = st.edit.find;
+    if (!F.q) return [];
+    const only = F.scope === "sheet" && F.onlySel && F.range ? F.range : null;
+    const out = [];
+    G.full.forEach((ri, pos) => {
+      const r = G.rows[ri];
+      if (only && !only.uids.has(r.uid)) return;
+      for (let c = 0; c < G.vc.length; c++) {
+        const ci = G.vc[c], col = G.cols[ci];
+        if (only && !only.cis.has(ci)) continue;
+        if (col.secret && !G.show) continue;
+        if (gHit(r.cells[ci])) out.push([pos, c]);
+      }
+    });
+    return out;
+  }
+
+  // gFindGo puts the cursor on a match, drawing more rows if it lies beyond
+  // the ones that are drawn.
+  function gFindGo(m, i) {
+    const F = st.edit.find;
+    const ri = G.full[m[i][0]];
+    let vr = G.view.indexOf(ri);
+    if (vr < 0) {
+      vr = gReveal(ri);
+      gRenderBody();
+    }
+    G.sel = { ar: vr, ac: m[i][1], fr: vr, fc: m[i][1] };
+    gPaintSel();
+    gEnsureVisible(vr, m[i][1]);
+    gFindSay(`${m.length} 件中 ${i + 1} 件目` + (F.scope === "all" && F.all ? `（全シート ${F.all} 件）` : ""));
+  }
+
+  async function gFindStep(dir) {
+    const F = st.edit.find;
+    if (!G || G.busy) return;
+    if (!F.q) {
+      gFindSay("検索する文字を書いてください");
+      return;
+    }
+    gCommitEdit();
+    const m = gMatches();
+    const here = G.full.indexOf(G.view[G.sel.fr]);
+    const at = here * 1000 + G.sel.fc;
+    let i = dir > 0 ? m.findIndex(([p, c]) => p * 1000 + c > at) : m.map(([p, c]) => p * 1000 + c < at).lastIndexOf(true);
+    if (i < 0 && F.scope === "all" && (await gFindOther(dir))) return;
+    if (!m.length) {
+      gFindSay(F.scope === "all" ? "どのシートにも見つかりません" : "見つかりません");
+      return;
+    }
+    if (i < 0) i = dir > 0 ? 0 : m.length - 1;
+    gFindGo(m, i);
+  }
+
+  // gFindOther goes on with the search in the next sheet that holds the
+  // text. It tells whether it did.
+  async function gFindOther(dir) {
+    const F = st.edit.find;
+    await gSaveDraft(G);
+    let counts = [];
+    try {
+      counts = await api().EditFind(F.q, gFindOpts());
+    } catch (e) {
+      gFindSay(errText(e));
+      return true;
+    }
+    F.all = counts.reduce((n, c) => n + c.count, 0);
+    const ids = st.edit.list.sheets.map((s) => s.id), has = new Set(counts.map((c) => c.sheet));
+    const from = ids.indexOf(G.id), n = ids.length;
+    for (let k = 1; k < n; k++) {
+      const id = ids[(((from + dir * k) % n) + n) % n];
+      if (!has.has(id)) continue;
+      F.focus = true;
+      await gSwitch(id, () => {
+        const m = gMatches();
+        if (!m.length) return;
+        const i = dir > 0 ? 0 : m.length - 1;
+        const vr = gReveal(G.full[m[i][0]]);
+        G.sel = { ar: vr, ac: m[i][1], fr: vr, fc: m[i][1] };
+        G.jumped = true;
+        F.said = `シート「${G.v.name}」の ${m.length} 件中 ${i + 1} 件目（全シート ${F.all} 件）`;
+      });
+      return true;
+    }
+    return false;
+  }
+
+  // gReplaced is the value of a cell after the replacement, or null when the
+  // column has choices and the outcome is none of them: the cell is left.
+  function gReplaced(col, v) {
+    const F = st.edit.find;
+    let out;
+    if (F.whole) out = gNorm(col, F.r);
+    else {
+      const re = new RegExp(F.q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), F.cs ? "g" : "gi");
+      out = gNorm(col, v.replace(re, () => F.r));
+    }
+    if (col.choices.length && out !== "" && !col.choices.includes(out)) return null;
+    return out;
+  }
+
+  function gReplaceOne() {
+    const F = st.edit.find;
+    if (!G || G.busy || !F.q) return;
+    gCommitEdit();
+    const here = G.full.indexOf(G.view[G.sel.fr]);
+    const hit = gMatches().find(([p, c]) => p === here && c === G.sel.fc);
+    let left = "";
+    if (hit) {
+      const ci = G.vc[hit[1]], col = G.cols[ci], row = G.rows[G.full[hit[0]]];
+      const nv = gReplaced(col, row.cells[ci]);
+      if (nv === null) left = "置換後の値が選択肢に無いため飛ばしました。";
+      else gMutate((ops) => ops.set(row, ci, nv));
+    }
+    gFindStep(1).then(() => { if (left) gFindSay(left + st.edit.find.said); });
+  }
+
+  async function gReplaceAll() {
+    const F = st.edit.find;
+    if (!G || G.busy) return;
+    if (!F.q) {
+      gFindSay("検索する文字を書いてください");
+      return;
+    }
+    gCommitEdit();
+    const m = gMatches();
+    let other = null, rest = [];
+    if (F.scope === "all") {
+      await gSaveDraft(G);
+      try {
+        rest = (await api().EditFind(F.q, gFindOpts())).filter((c) => c.sheet !== G.id);
+      } catch (e) {
+        gFindSay(errText(e));
+        return;
+      }
+      const n = rest.reduce((k, c) => k + c.count, 0);
+      if (!m.length && !n) {
+        gFindSay("どのシートにも見つかりません");
+        return;
+      }
+      const where = rest.length ? `、ほかのシート ${rest.length} 枚の ${n} 件（${rest.map((c) => `${c.name} ${c.count}`).join("、")}）` : "";
+      if (!(await ask("全シートで置換", `「${F.q}」を「${F.r}」に置換します。このシートの ${m.length} 件${where}。\n置換は下書きに入ります（パラメータブックは「保存」まで変わりません）。ほかのシートの分は、シートを切り替えるまで Ctrl+Z で戻せます。`, "置換する"))) return;
+      if (n) {
+        try {
+          other = await api().EditReplace(F.q, F.r, gFindOpts(), G.id);
+        } catch (e) {
+          gFindSay(errText(e));
+          return;
+        }
+      }
+    } else if (!m.length) {
+      gFindSay("見つかりません");
+      return;
+    }
+    let done = 0, left = 0;
+    gMutate((ops) => {
+      for (const [pos, c] of m) {
+        const ci = G.vc[c], col = G.cols[ci], row = G.rows[G.full[pos]];
+        const nv = gReplaced(col, row.cells[ci]);
+        if (nv === null || row.del || row.formula.has(ci)) left++;
+        else if (ops.set(row, ci, nv)) done++;
+      }
+      if (other && other.after.length) ops.parts(other.before, other.after);
+    });
+    const said = [`${done} 件を置換しました`];
+    if (other) {
+      const n = other.counts.reduce((k, c) => k + c.count, 0);
+      left += other.counts.reduce((k, c) => k + c.skipped, 0);
+      said[0] = `このシートの ${done} 件と、ほかのシート ${other.after.length} 枚の ${n} 件を置換しました`;
+      try {
+        st.edit.list = await api().EditSheets();
+        if (st.home) st.home.draft = st.edit.list.draft;
+        gSheetLabels();
+      } catch (e) {
+        G.trouble = errText(e);
+      }
+    }
+    if (left) said.push(`${left} 件は飛ばしました（消す行・式のセル・置換後の値が選択肢に無いセル）`);
+    gFindSay(said.join("。"));
+    gStatus();
+  }
+
+  // ---- keys and the mouse ----
+
+  // gJumpTarget is where Ctrl+arrow lands, as in Excel.
+  function gJumpTarget(r, c, dr, dc) {
+    const R = G.view.length - 1, C = G.vc.length - 1;
+    const inside = (y, x) => y >= 0 && y <= R && x >= 0 && x <= C;
+    const filled = (y, x) => !!gRowAt(y).cells[G.vc[x]];
+    if (!inside(r + dr, c + dc)) return [r, c];
+    if (filled(r, c) && filled(r + dr, c + dc)) {
+      while (inside(r + dr, c + dc) && filled(r + dr, c + dc)) {
+        r += dr;
+        c += dc;
+      }
+      return [r, c];
+    }
+    r += dr;
+    c += dc;
+    while (inside(r + dr, c + dc) && !filled(r, c)) {
+      r += dr;
+      c += dc;
+    }
+    return [r, c];
+  }
+
+  function gKey(e) {
+    if (!G || G.edit || gDialogOpen() || e.target.closest(".g-editor")) return;
+    const k = e.key, ctrl = e.ctrlKey || e.metaKey, lk = k.toLowerCase();
+    const R = G.view.length - 1, C = G.vc.length - 1;
+    const done = () => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    if (ctrl) {
+      if (lk === "c") { done(); gCopy(false); return; }
+      if (lk === "x") { done(); gCopy(true); return; }
+      if (lk === "v") { done(); gPaste(); return; }
+      if (lk === "z" && e.shiftKey) { done(); gUndo(true); return; }
+      if (lk === "z") { done(); gUndo(false); return; }
+      if (lk === "y") { done(); gUndo(true); return; }
+      if (lk === "d") { done(); gFillDown(false); return; }
+      if (lk === "r") { done(); gFillDown(true); return; }
+      if (lk === "a") { done(); gSelect(0, 0, R, C); return; }
+      if (lk === "s") { done(); gSave(); return; }
+      if (lk === "f") { done(); gFindOpen(false); return; }
+      if (lk === "h") { done(); gFindOpen(true); return; }
+      if (k === "+" || (e.shiftKey && (k === "=" || k === ";"))) { done(); gInsertAt(false); return; }
+      if (k === "-") { done(); gDeleteRows(); return; }
+      if (k === "Home") { done(); if (e.shiftKey) gMove(-G.sel.fr, -G.sel.fc, true); else gSelect(0, 0); return; }
+      if (k === "End") {
+        done();
+        let last = 0;
+        G.view.forEach((ri, r) => { if (!gBlank(G.rows[ri])) last = r; });
+        if (e.shiftKey) gMove(last - G.sel.fr, C - G.sel.fc, true);
+        else gSelect(last, C);
+        return;
+      }
+      if (G_ARROWS[k]) {
+        done();
+        const [tr, tc] = gJumpTarget(G.sel.fr, G.sel.fc, G_ARROWS[k][0], G_ARROWS[k][1]);
+        gMove(tr - G.sel.fr, tc - G.sel.fc, e.shiftKey);
+        return;
+      }
+      if (k === " ") { done(); gSelect(0, G.sel.ac, R, G.sel.fc); return; }
+      return;
+    }
+    if (k === "ContextMenu" || (k === "F10" && e.shiftKey)) {
+      done();
+      const cur = G.tds[G.sel.fr] && G.tds[G.sel.fr][G.sel.fc];
+      const b = cur ? cur.getBoundingClientRect() : G.wrap.getBoundingClientRect();
+      gCellMenu(b.left + 12, b.bottom);
+      return;
+    }
+    if (k === " " && e.shiftKey) { done(); gSelect(G.sel.ar, 0, G.sel.fr, C); return; }
+    if (e.altKey && (k === "ArrowUp" || k === "ArrowDown")) { done(); gMoveRows(k === "ArrowUp" ? -1 : 1); return; }
+    if (G_ARROWS[k]) { done(); gMove(G_ARROWS[k][0], G_ARROWS[k][1], e.shiftKey); return; }
+    if (k === "Tab") { done(); gTab(e.shiftKey); return; }
+    if (k === "Enter") { done(); gEnterDown(e.shiftKey); return; }
+    if (k === "PageDown") { done(); gMove(20, 0, e.shiftKey); return; }
+    if (k === "PageUp") { done(); gMove(-20, 0, e.shiftKey); return; }
+    if (k === "Home") { done(); gMove(0, -G.sel.fc, e.shiftKey); return; }
+    if (k === "End") { done(); gMove(0, C - G.sel.fc, e.shiftKey); return; }
+    if (k === "F2") { done(); gBeginEdit(null); return; }
+    if ((k === " " || k === "F4") && gColAt(G.sel.fc).choices.length) { done(); gOpenList(); return; }
+    if (k === "Delete") { done(); gClear(); return; }
+    if (k === "Backspace") { done(); gBeginEdit(""); return; }
+    if (k === "Escape") { done(); gSelect(G.sel.fr, G.sel.fc); return; }
+    // Typing starts editing: the editor takes the focus during this
+    // keydown, so the key itself (or the composition of the IME) lands in it.
+    if ((k.length === 1 && !e.altKey) || k === "Process") {
+      e.stopPropagation();
+      gBeginEdit("");
+    }
+  }
+
+  function gCellAt(x, y) {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return null;
+    const td = el.closest("#g-body td[data-r]");
+    if (td) return { r: +td.dataset.r, c: +td.dataset.c };
+    const rh = el.closest("#g-body th.g-rh");
+    if (rh) return { r: +rh.dataset.r, c: null };
+    const ch = el.closest("#g-table thead th[data-c]");
+    if (ch) return { r: null, c: +ch.dataset.c };
+    return null;
+  }
+
+  function gMouseDown(e) {
+    if (e.button !== 0 || e.target.closest(".g-editor")) return;
+    const opt = e.target.closest(".g-opt");
+    if (opt) {
+      e.preventDefault();
+      gPickList(+opt.dataset.i);
+      return;
+    }
+    if (e.target.closest("#g-list")) {
+      e.preventDefault();
+      return;
+    }
+    if (e.target.id === "g-dd") {
+      e.preventDefault();
+      const open = !!G.list;
+      gCloseList();
+      if (!open) gOpenList();
+      else G.wrap.focus({ preventScroll: true });
+      return;
+    }
+    gCloseList();
+    if (G.edit) gCommitEdit();
+    const hm = e.target.closest(".g-hm");
+    if (hm) {
+      e.preventDefault();
+      const b = hm.getBoundingClientRect();
+      gHeaderMenu(G.vc[+hm.dataset.hm], b.left, b.bottom + 2);
+      return;
+    }
+    const rz = e.target.closest(".g-rz");
+    if (rz) {
+      const c = +rz.dataset.rz;
+      gDrag = { mode: "rz", c, x: e.clientX, w: G.wrap.querySelectorAll("#g-table col")[c + 1].getBoundingClientRect().width || gColWidth(gColAt(c)), nw: 0 };
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (e.target.id === "g-fill") {
+      gDrag = { mode: "fill", g: gRange(), ft: null };
+      e.preventDefault();
+      return;
+    }
+    const at = e.target.closest(".g-corner") ? { all: true } : gCellAt(e.clientX, e.clientY);
+    const R = G.view.length - 1, C = G.vc.length - 1;
+    if (!at) return;
+    if (at.all) gSelect(0, 0, R, C);
+    else if (at.r != null && at.c != null) {
+      if (e.shiftKey) {
+        G.sel.fr = at.r;
+        G.sel.fc = at.c;
+        gPaintSel();
+      } else gSelect(at.r, at.c);
+      gDrag = { mode: "cell" };
+    } else if (at.r != null) {
+      if (e.shiftKey) {
+        G.sel.fr = at.r;
+        G.sel.ac = 0;
+        G.sel.fc = C;
+        gPaintSel();
+      } else gSelect(at.r, 0, at.r, C);
+      gDrag = { mode: "row" };
+    } else {
+      if (e.shiftKey) {
+        G.sel.fc = at.c;
+        G.sel.ar = 0;
+        G.sel.fr = R;
+        gPaintSel();
+      } else gSelect(0, at.c, R, at.c);
+      gDrag = { mode: "col" };
+    }
+    G.wrap.focus({ preventScroll: true });
+    e.preventDefault();
+  }
+
+  function gMouseMove(e) {
+    if (!gDrag || !G || !G.wrap || !G.wrap.isConnected) return;
+    if (gDrag.mode === "rz") {
+      const w = Math.max(40, Math.min(600, gDrag.w + e.clientX - gDrag.x));
+      const col = G.wrap.querySelectorAll("#g-table col")[gDrag.c + 1];
+      if (col) col.style.width = w + "px";
+      gDrag.nw = w;
+      return;
+    }
+    const w = G.wrap.getBoundingClientRect();
+    // Dragging past the edge scrolls, as in Excel.
+    if (e.clientY > w.bottom - 16) G.wrap.scrollTop += 16;
+    else if (e.clientY < w.top + 30) G.wrap.scrollTop -= 16;
+    if (e.clientX > w.right - 16) G.wrap.scrollLeft += 24;
+    else if (e.clientX < w.left + 60) G.wrap.scrollLeft -= 24;
+    const at = gCellAt(Math.min(Math.max(e.clientX, w.left + 60), w.right - 4), Math.min(Math.max(e.clientY, w.top + 32), w.bottom - 4)) || {};
+    if (gDrag.mode === "fill") {
+      // Below the last row the fill goes on into new rows, as in Excel.
+      const last = G.tds.length && G.tds[G.tds.length - 1][0];
+      if (last && gDrag.g.r1 === G.view.length - 1 && !gSorted()) {
+        const lr = last.getBoundingClientRect();
+        if (e.clientY > lr.bottom) {
+          const extra = Math.min(500, Math.ceil((e.clientY - lr.bottom) / Math.max(lr.height, 1)));
+          gDrag.ft = { dir: "down", t: { r0: gDrag.g.r1 + 1, r1: gDrag.g.r1 + extra, c0: gDrag.g.c0, c1: gDrag.g.c1 } };
+          gPaintSel(gDrag.ft.t);
+          gFillHint(`下に ${extra} 行を足して埋めます`);
+          return;
+        }
+      }
+      if (at.r == null || at.c == null) return;
+      gDrag.ft = gFillTarget(gDrag.g, at.r, at.c);
+      gPaintSel(gDrag.ft ? gDrag.ft.t : null);
+      if (gDrag.ft) gFillHint(`${gDrag.ft.t.r1 - gDrag.ft.t.r0 + 1} 行 × ${gDrag.ft.t.c1 - gDrag.ft.t.c0 + 1} 列を埋めます（数字で終わる値は連番。Ctrl を押しながら離すと逆）`);
+      return;
+    }
+    if (gDrag.mode === "cell" && at.r != null && at.c != null) {
+      G.sel.fr = at.r;
+      G.sel.fc = at.c;
+    } else if (gDrag.mode === "row" && at.r != null) G.sel.fr = at.r;
+    else if (gDrag.mode === "col" && at.c != null) G.sel.fc = at.c;
+    else return;
+    gPaintSel();
+  }
+
+  function gMouseUp(e) {
+    const d = gDrag;
+    gDrag = null;
+    if (!d || !G || !G.wrap || !G.wrap.isConnected) return;
+    if (d.mode === "rz") {
+      if (d.nw) gSetWidth(d.c, d.nw);
+    } else if (d.mode === "fill") {
+      if (d.ft) gFill(d.g, d.ft, e.ctrlKey || e.metaKey);
+      else gPaintSel();
+    }
+  }
+
+  // gDocKey: while the table is on the screen, the keys that would open the
+  // search of the browser or load the page anew are the table's.
+  function gDocKey(e) {
+    if (st.page !== "edit" || !G || !G.wrap || !G.wrap.isConnected || !(e.target instanceof Element)) return;
+    if (e.key === "F5") {
+      e.preventDefault();
+      return;
+    }
+    const lk = e.key.toLowerCase();
+    if (!(e.ctrlKey || e.metaKey) || !["r", "f", "h", "p"].includes(lk)) return;
+    // The table and the bar of the search take them by themselves; the
+    // editor of a cell does not.
+    if (e.target.closest("#g-wrap, #g-findbar") && !e.target.closest(".g-editor")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if ((lk === "f" || lk === "h") && !gDialogOpen()) gFindOpen(lk === "h");
+  }
+
+  // gFit caps the table at the bottom edge of the window from where its top is.
+  function gFit() {
+    const w = G && G.wrap;
+    if (!w || !w.isConnected) return;
+    const hgt = Math.max(180, Math.floor(window.innerHeight - w.getBoundingClientRect().top - 20));
+    if (w.style.maxHeight !== hgt + "px") {
+      w.style.maxHeight = hgt + "px";
+      gPaintSel();
+    }
+  }
+
+  // ---- the page ----
+
+  // draftNote tells, on the screens that work on the saved book, that the
+  // table holds changes that are not in it yet.
+  function draftNote() {
+    const n = st.home ? st.home.draft : 0;
+    if (!n) return null;
+    return h("div", { class: "box warn", id: "draft-note" },
+      `保存していない変更が ${n} 件あります（表の編集の下書き）。「生成とチェック」などは、保存済みのパラメータブックで動きます。 `,
+      button("表の編集を開く", () => openEdit(null), { class: "link" }));
+  }
+
+  // gSheetLabels writes the names of the sheets to choose from anew (the
+  // number of changes of their drafts is in them).
+  function gSheetLabels() {
+    const sel = $("g-sheet");
+    if (!sel || !st.edit.list) return;
+    const by = new Map(st.edit.list.sheets.map((s) => [s.id, s]));
+    for (const o of sel.options) if (by.has(o.value)) o.textContent = gSheetLabel(by.get(o.value));
+  }
+
+  const gSheetLabel = (s) => (s.missing ? `${s.name}${s.draft ? `（下書き ${s.draft} 件）` : ""}` : `${s.name}（${s.rows} 行${s.draft ? `・下書き ${s.draft} 件` : ""}）`);
+
+  function editPage() {
+    const ed = st.edit;
+    const out = [h("h1", null, "表の編集")];
+    if (ed.msg) out.push(h("div", { class: "box info", id: "edit-msg" }, button("閉じる", () => { ed.msg = ""; render(); }, { class: "link close" }), ed.msg));
+    if (!ed.list) {
+      out.push(h("p", { class: "dim" }, "パラメータブックのシートを、表として開いて直します。"), h("div", { class: "row" }, button("開く", () => openEdit(null), { class: "primary" })));
+      return out;
+    }
+    if (!ed.list.hasBook || !G) {
+      out.push(h("div", { class: "box info" }, ed.list.hasBook ? `パラメータブック ${ed.list.book} に、表で開けるシートがありません。` : `パラメータブック ${ed.list.book} はまだありません。旧コンフィグを取り込むか、ホームの「空のブックを作る」で作られます。`),
+        h("div", { class: "row" }, button("ホームへ", () => go("home"))));
+      return out;
+    }
+    if (ed.list.lost.length) out.push(h("div", { class: "box warn" }, `下書きに、パラメータブックにもう無いシートの変更があります（${ed.list.lost.join("、")}）。保存のときに、その分をやめるかを聞きます。`));
+    const have = ed.list.sheets.filter((s) => !s.missing), lack = ed.list.sheets.filter((s) => s.missing);
+    const opt = (s) => h("option", { value: s.id }, gSheetLabel(s));
+    const sheets = h("select", { id: "g-sheet", onchange: (e) => gSwitch(e.target.value) },
+      have.map(opt), lack.length ? h("optgroup", { label: `まだシートが無い表（${lack.length}）`, id: "g-lack" }, lack.map(opt)) : null);
+    sheets.value = G.id;
+    const devs = new Set();
+    if (G.v.device >= 0) for (const r of G.rows) if (r.row !== 0 && r.cells[G.v.device]) devs.add(r.cells[G.v.device]);
+    const devOpts = [["", G.cols[G.v.device] ? `すべて（${G.cols[G.v.device].title}）` : "すべて"]].concat([...devs].sort().map((d) => [d, d]));
+    const refilter = () => {
+      gCommitEdit();
+      G.shown = G_ROWS;
+      gRefilter();
+      gView();
+      G.sel = { ar: 0, ac: G.sel.fc, fr: 0, fc: G.sel.fc };
+      gRenderBody();
+    };
+    const filter = h("input", { type: "text", id: "g-filter", value: G.filter, placeholder: "絞り込み（空白で区切ると、すべてを含む行）",
+      oninput: (e) => { if (e.isComposing) return; G.filter = e.target.value; refilter(); },
+      onkeydown: (e) => { if (!e.isComposing && (e.key === "Enter" || e.key === "Escape")) { e.preventDefault(); G.wrap.focus(); } } });
+    filter.addEventListener("compositionend", (e) => { G.filter = e.target.value; refilter(); });
+    const tool = (label, fn, props) => button(label, () => { fn(); gFocusBack(); }, props);
+    out.push(
+      h("div", { class: "row" },
+        h("span", null, "シート: "), sheets,
+        G.v.device >= 0 ? Object.assign(select(devOpts, G.dev, (d) => { G.dev = d; refilter(); }), { id: "g-dev" }) : null,
+        filter,
+        button("保存（パラメータブックに書く）", gSave, { class: "primary", id: "g-save", title: "Ctrl+S" }),
+        button("表の編集を終える", gClose, { id: "g-close" })),
+      h("div", { class: "row g-tools" },
+        tool("元に戻す", () => gUndo(false), { id: "g-undo", title: "Ctrl+Z" }),
+        tool("やり直す", () => gUndo(true), { id: "g-redo", title: "Ctrl+Y" }),
+        tool("上に行を入れる", () => gInsertAt(false), { id: "g-ins-above", title: "Ctrl+Shift++。選んだ行の数だけ、空の行を上に入れます。保存すると、シートのその位置に入ります" }),
+        tool("下に行を入れる", () => gInsertAt(true), { id: "g-ins-below", title: "選んだ行の数だけ、空の行を下に入れます" }),
+        tool("行を複製", gDuplicateRows, { id: "g-dup", title: "選んだ行の写しを、すぐ下の新しい行に作ります" }),
+        tool("上へ", () => gMoveRows(-1), { id: "g-up", title: "Alt+↑。選んだ行を 1 行上へ動かします。保存すると、シートの行が動きます" }),
+        tool("下へ", () => gMoveRows(1), { id: "g-down", title: "Alt+↓。選んだ行を 1 行下へ動かします" }),
+        tool("行を削除", gDeleteRows, { id: "g-del", title: "Ctrl+－。パラメータブックの行は、保存するまで消えません" }),
+        tool("新しい行へ", gToEnd, { id: "g-end", title: "表の下の空の行へ移ります。打つか貼ると、新しい行になります（保存すると、シートの末尾に入ります）" }),
+        button("検索と置換", () => gFindOpen(true), { id: "g-find", title: "Ctrl+F（検索）・Ctrl+H（置換）" }),
+        button("列の表示", gColsDialog, { id: "g-cols", title: "表に出す列を選びます（空の列をまとめて隠せます）" }),
+        button("列を足す", gAddCol, { id: "g-addcol", title: "定義に無い列（自由列）を足します" }),
+        tool(G.show ? "秘密の値を隠す" : "秘密の値を見せる", () => { gCommitEdit(); G.show = !G.show; gRedrawAll(); }, { id: "g-show", hidden: !G.cols.some((c) => c.secret) }),
+        button("下書きを捨てる", gDiscard, { id: "g-discard" }),
+        button("読み直す", gReload, { id: "g-reload", title: "Excel で直して保存した後に押すと、今のパラメータブックを読み直します（下書きは残ります）" }),
+        button("Excel で開く", () => show(st.cas.book))),
+      h("div", { class: "g-findbar", id: "g-findbar", hidden: true }),
+      G.v.missing ? h("div", { class: "box info", id: "g-missing" }, `シート「${G.v.name}」は、まだパラメータブックにありません。下の表に行を足して「保存」を押すと、ブックにこのシートを作ってから行を書きます（何も足さなければ、シートは作りません）。`) : null,
+      h("div", { class: "row" },
+        h("span", { class: "dim small", id: "g-status" }),
+        h("span", { class: "dim small", id: "g-selinfo" })),
+      h("p", { class: "dim small" }, "Excel と同じ操作です: セルを選んで打つ・Ctrl+C / Ctrl+V で Excel と相互にコピーと貼り付け・Ctrl+D で上の値を下へ・右下の ■ をドラッグして連番・Ctrl+F / Ctrl+H で検索と置換・右クリックでメニュー・見出しの ▾ で並べ替えと絞り込み・Ctrl+Z で元に戻す・Alt+Enter でセルの中の改行。行番号は、パラメータブックの行番号です。直した内容は下書きとして残り、「保存」を押すまでパラメータブックは変わりません。"));
+
+    const head = h("tr", null, h("th", { class: "g-corner g-rh", title: "すべて選択" }));
+    G.vc.forEach((ci, c) => {
+      const col = G.cols[ci];
+      const sorted = G.sort.ci === ci, filtered = !!G.colFilter[ci];
+      head.appendChild(h("th", { "data-c": String(c), class: cls(col.isKey && "g-key", col.free && "g-free", col.col < 0 && "g-nocol", c < G.lefts.length - 1 && "g-stick") || null,
+        style: c < G.lefts.length - 1 ? `left:${G.lefts[c]}px` : null, title: gColTip(col) },
+      col.title, col.required && !col.isKey ? h("span", { class: "g-req" }, " *") : null, col.secret ? h("span", { class: "g-req" }, " 🔒") : null,
+      h("button", { type: "button", class: cls("g-hm", (sorted || filtered) && "on"), "data-hm": String(c), tabindex: "-1", title: "並べ替え・絞り込み・列を隠す" }, (sorted ? (G.sort.dir > 0 ? "▲" : "▼") : "") + (filtered ? "⏷" : "▾")),
+      h("span", { class: "g-rz", "data-rz": String(c), title: "ドラッグで列幅を変えます（ダブルクリックで中身に合わせます）" })));
+    });
+    const wrap = h("div", { class: "grid-wrap", id: "g-wrap", tabindex: "0" },
+      h("table", { class: "grid", id: "g-table" },
+        h("colgroup", null, h("col", { style: `width:${G_RH}px` }), G.vc.map((ci) => h("col", { style: `width:${gColWidth(G.cols[ci])}px` }))),
+        h("thead", null, head),
+        h("tbody", { id: "g-body" })),
+      h("div", { class: "g-fill", id: "g-fill", hidden: true, title: "ドラッグで埋めます（数字で終わる値は連番。ダブルクリックで表の最後の行まで）" }),
+      h("button", { class: "g-dd", id: "g-dd", type: "button", tabindex: "-1", hidden: true, title: "一覧から選ぶ（Space・F4 でも開きます。複数のセルを選んでいれば、まとめて入ります）" }, "▼"),
+      h("div", { class: "g-list", id: "g-list", tabindex: "-1", hidden: true }));
+    out.push(wrap);
+
+    wrap.addEventListener("keydown", gKey);
+    wrap.addEventListener("mousedown", gMouseDown);
+    wrap.addEventListener("contextmenu", gContextMenu);
+    wrap.addEventListener("dblclick", (e) => {
+      if (e.target.id === "g-fill") {
+        gFillToEnd();
+        return;
+      }
+      const rz = e.target.closest(".g-rz");
+      if (rz) {
+        gAutoFit(+rz.dataset.rz);
+        return;
+      }
+      if (e.target.closest(".g-hm")) return;
+      const at = gCellAt(e.clientX, e.clientY);
+      if (!at || at.r == null || at.c == null) return;
+      gSelect(at.r, at.c);
+      gBeginEdit(null);
+    });
+    wrap.addEventListener("scroll", () => { G.scroll = [wrap.scrollLeft, wrap.scrollTop]; });
+    afterDraw.push(() => {
+      G.wrap = wrap;
+      G.edit = null;
+      G.list = null;
+      const list = $("g-list");
+      list.addEventListener("keydown", gListKey);
+      list.addEventListener("blur", () => setTimeout(() => { if (G && G.list && document.activeElement !== list) gCloseList(); }, 0));
+      const F = st.edit.find;
+      gFindDraw(false);
+      gRenderBody();
+      gFit();
+      wrap.scrollLeft = G.scroll[0];
+      wrap.scrollTop = G.scroll[1];
+      if (G.jumped) {
+        G.jumped = false;
+        gEnsureVisible(G.sel.fr, G.sel.fc);
+      }
+      gPaintSel();
+      if (gDialogOpen()) return;
+      if (F.open && F.focus && $("gf-q")) $("gf-q").focus();
+      else wrap.focus({ preventScroll: true });
+      F.focus = false;
+    });
+    return out;
+  }
+
   // ---- the start ----
 
   async function boot() {
@@ -1901,6 +4787,12 @@
       $("busy-text").textContent = "止めています…";
       api().Cancel();
     });
+    // The table of the book: dragging a selection, and its size.
+    document.addEventListener("mousemove", gMouseMove);
+    document.addEventListener("mouseup", gMouseUp);
+    document.addEventListener("mousedown", (e) => { if (!(e.target instanceof Element) || !e.target.closest(".g-menu, .g-hpop")) gCloseMenus(); }, true);
+    document.addEventListener("keydown", gDocKey, true);
+    window.addEventListener("resize", () => { gCloseMenus(); gFit(); });
     try {
       window.runtime.EventsOn("progress", onProgress);
       const s = await api().Start();

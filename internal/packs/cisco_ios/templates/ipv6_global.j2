@@ -1,0 +1,98 @@
+{# IPv6, what stands before the interfaces (appendix A 3.23): the switch of
+   the device and the DHCPv6 pools. Syntax: Cisco IOS IPv6 Command Reference
+   (README). #}
+{% if device.ipv6_routing == true %}
+ipv6 unicast-routing
+!
+{% endif %}
+{# A row of the IPv6 settings needs the row of its interface. #}
+{% for v in t.ipv6_interfaces %}
+{% set n = namespace(seen=false) %}
+{% for i in t.interfaces %}
+{% if i.name == v.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('IPv6 インタフェースの IF ' ~ v.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{% for p in t.ipv6_ra_prefixes %}
+{% set n = namespace(seen=false) %}
+{% for i in t.interfaces %}
+{% if i.name == p.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('RA のプレフィックス ' ~ p.prefix ~ ' の IF ' ~ p.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{% for o in t.ospfv3_interfaces %}
+{% set n = namespace(seen=false) %}
+{% for i in t.interfaces %}
+{% if i.name == o.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('OSPFv3 インタフェースの IF ' ~ o.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{# A DHCPv6 pool is written once: by the first interface that names it. #}
+{% for v in t.ipv6_interfaces %}
+{% if v.dhcp_server %}
+{% set n = namespace(first=true) %}
+{% for w in t.ipv6_interfaces %}
+{% if w.dhcp_server == v.dhcp_server and w.if_name < v.if_name %}
+{% set n.first = false %}
+{% endif %}
+{% endfor %}
+{% if n.first %}
+{% set what = v.if_name ~ ' の DHCPv6 サーバ' %}
+{% if v.dhcp_pd_from %}
+{{ fail(what ~ ': 上流からもらったプレフィックスを下流へ配り直す設定（「上流からもらったプレフィックスから配る」）は、Cisco の公開資料に当たる書き方がありません。「下流へ配るプレフィックスの元」に決まったプレフィックスを書くか、追加コンフィグに書いてください') }}
+{% elif v.dhcp_pd_pool or v.dhcp_pd_length %}
+{% if not v.dhcp_pd_pool or not v.dhcp_pd_length %}
+{{ fail(what ~ ': 「下流へ配るプレフィックスの元」と「下流へ配る長さ」は、組で書きます') }}
+{% elif v.dhcp_pd_length < v.dhcp_pd_pool | prefixlen | int %}
+{{ fail(what ~ ': 「下流へ配る長さ」' ~ v.dhcp_pd_length ~ ' が、「下流へ配るプレフィックスの元」' ~ v.dhcp_pd_pool ~ ' の長さより短くなっています') }}
+{% else %}
+ipv6 local pool PD-{{ v.dhcp_server }} {{ v.dhcp_pd_pool }} {{ v.dhcp_pd_length }}
+!
+{% endif %}
+{% endif %}
+ipv6 dhcp pool {{ v.dhcp_server }}
+{% for a in v.dhcp_address_prefix %}
+ address prefix {{ a }}
+{% endfor %}
+{% if v.dhcp_pd_pool and not v.dhcp_pd_from %}
+{% if (v.dhcp_pd_valid or v.dhcp_pd_valid == 0) and (v.dhcp_pd_preferred or v.dhcp_pd_preferred == 0) %}
+ prefix-delegation pool PD-{{ v.dhcp_server }} lifetime {{ v.dhcp_pd_valid }} {{ v.dhcp_pd_preferred }}
+{% elif v.dhcp_pd_valid or v.dhcp_pd_valid == 0 or v.dhcp_pd_preferred or v.dhcp_pd_preferred == 0 %}
+{{ fail(what ~ ': 「配るプレフィックスの有効時間」と「推奨時間」は、組で書きます') }}
+{% else %}
+ prefix-delegation pool PD-{{ v.dhcp_server }}
+{% endif %}
+{% endif %}
+{% for a in v.dhcp_dns %}
+{% if a == 'dhcp' %}
+ import dns-server
+{% else %}
+ dns-server {{ a }}
+{% endif %}
+{% endfor %}
+{% if v.dhcp_domain %}
+ domain-name {{ v.dhcp_domain }}
+{% endif %}
+{% for a in v.dhcp_ntp %}
+{% if a == 'dhcp' %}
+{{ fail(what ~ ': 「DHCPv6 で配る NTP サーバ」の dhcp（WAN 側でもらった NTP サーバを配る）は、Cisco の書き方を確かめていません。アドレスで書いてください') }}
+{% else %}
+ sntp address {{ a }}
+{% endif %}
+{% endfor %}
+!
+{% endif %}
+{% endif %}
+{% endfor %}

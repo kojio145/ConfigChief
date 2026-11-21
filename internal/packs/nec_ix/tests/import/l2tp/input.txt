@@ -1,0 +1,88 @@
+hostname ix-c02
+!
+ip access-list sec-sample-ra permit ip src any dest any
+!
+url-list lac-sample permit domain *example.com
+url-list lac-sample permit domain *example.net
+url-list lac-sample deny any
+!
+ipsec dynamic-map ipsec-sample-ra sec-sample-ra ipsec-prop-sample
+!
+ppp profile lns-sample
+  authentication request chap
+  authentication password example-user dummy-l2tp-user-secret-1
+  authentication password sample-user dummy-l2tp-user-secret-2
+  lcp pfc
+  lcp acfc
+  ipcp ip-compression
+  ipcp provide-static-ip-address example-user 192.0.2.130
+  ipcp provide-ip-address range 192.0.2.131 192.0.2.190
+  ipcp provide-remote-dns 192.0.2.53 192.0.2.54
+!
+ppp profile ppp-sample-wan
+  authentication myname sample-w@example.com
+  authentication password sample-w@example.com dummy-pppoe-secret-w
+!
+interface GigaEthernet0.0
+  no ip address
+  no shutdown
+!
+interface GigaEthernet0.1
+  description sample-wan
+  ppp binding ppp-sample-wan
+  ip address ipcp
+  no shutdown
+!
+interface GigaEthernet2.0
+  description sample-access
+  ip address 198.51.100.129/25
+  no shutdown
+!
+interface GigaEthernet2.1
+  pppoe server
+  pppoe l2tp interface Tunnel2.0 url-list lac-sample
+  ip unnumbered GigaEthernet2.0
+  no shutdown
+!
+interface GigaEthernet2.2
+  pppoe l2tp interface Tunnel2.0 url-list lac-sample
+  ip unnumbered GigaEthernet2.0
+  no shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.129/25
+!
+interface Tunnel0.0
+  ppp binding lns-sample
+  tunnel mode l2tp-lns ipsec
+  ip unnumbered Loopback0.0
+  ipsec policy transport ipsec-sample-ra
+  no shutdown
+!
+interface Tunnel1.0
+  ppp binding lns-sample
+  tunnel mode l2tp ipsec
+  ip unnumbered Loopback0.0
+  ipsec policy transport ipsec-sample-ra
+  no shutdown
+!
+interface Tunnel2.0
+  l2tp session idle-time 120
+  l2tp password plain dummy-l2tp-secret-c
+  tunnel mode l2tp-lac ip
+  tunnel destination 198.51.100.1
+  no ip address
+  no shutdown
+!
+interface Tunnel3.0
+  tunnel mode l2tp-lac ip
+  tunnel destination fqdn lns.example.net
+  no ip address
+  no shutdown
+!
+interface GigaEthernet2.3
+  pppoe l2tp interface Tunnel3.0 url-list lac-sample-b
+  ip unnumbered GigaEthernet2.0
+  no shutdown
+!
+url-list lac-sample-b permit domain *example.org

@@ -1,0 +1,23 @@
+table: rip_interfaces
+title: {ja: RIP インタフェース, en: RIP interfaces}
+since: M7
+key: [device, family, if_name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: family, title: {ja: 種類, en: Family}, type: enum, values: [ipv4, ipv6], required: true, note: {ja: "ipv4 = RIP、ipv6 = RIPng", en: "ipv4 = RIP, ipv6 = RIPng"}}
+  - {name: if_name, title: {ja: IF 名, en: Interface}, type: ifname, required: true, note: {ja: "行があれば、その IF で RIP が動く", en: "A row means RIP runs on the interface"}}
+  - {name: send, title: {ja: 送る, en: Send}, type: bool, note: {ja: "無効 = 経路を送らない（受けるだけ）。空 = 送る", en: "false = sends no routes (listens only). Empty = sends"}}
+  - {name: receive, title: {ja: 受ける, en: Receive}, type: bool, note: {ja: "無効 = 経路を受けない。空 = 受ける", en: "false = takes no routes. Empty = takes them"}}
+  - {name: send_version, title: {ja: 送る版, en: Send version}, type: "list<enum>", values: ["1", "2"], note: {ja: "RIP（ipv4）だけ。空 = プロセスの「版」", en: "RIP (ipv4) only. Empty = the version of the process"}}
+  - {name: receive_version, title: {ja: 受ける版, en: Receive version}, type: "list<enum>", values: ["1", "2"]}
+  - {name: v2_broadcast, title: {ja: 版 2 をブロードキャストで送る, en: Version 2 by broadcast}, type: bool}
+  - {name: auth_mode, title: {ja: 認証, en: Authentication}, type: enum, values: [text, md5], note: {ja: "RIP（ipv4）の版 2 だけ。NEC IX は text だけ", en: "RIP (ipv4) version 2 only. NEC IX has text only"}}
+  - {name: auth_key, title: {ja: 認証キー, en: Authentication key}, type: secret}
+  - {name: auth_key_id, title: {ja: 認証キーの番号, en: Authentication key ID}, type: int, min: 0, note: {ja: "md5 のとき。空 = 1", en: "For md5. Empty = 1"}}
+  - {name: metric_offset, title: {ja: メトリックに足す値, en: Metric offset}, type: int, min: 1, max: 16}
+  - {name: split_horizon, title: {ja: スプリットホライズン, en: Split horizon}, type: enum, values: [split_horizon, poisoned_reverse, none], note: {ja: "split_horizon = 受けた IF へは送らない、poisoned_reverse = 受けた IF へは届かない経路として送る、none = 何もしない", en: "split_horizon = not sent back, poisoned_reverse = sent back as unreachable, none = sent back"}}
+  - {name: summary, title: {ja: 集約して送る経路, en: Summary addresses}, type: "list<net>"}
+  - {name: default_originate, title: {ja: この IF でデフォルト経路を広告する, en: Default originate}, type: bool}
+  - {name: default_originate_metric, title: {ja: 広告するデフォルト経路のメトリック, en: Default originate metric}, type: int, min: 1, max: 15}
+  - {name: prefix_list_in, title: {ja: 受信フィルタ, en: Prefix list in}, type: string}
+  - {name: prefix_list_out, title: {ja: 送信フィルタ, en: Prefix list out}, type: string}

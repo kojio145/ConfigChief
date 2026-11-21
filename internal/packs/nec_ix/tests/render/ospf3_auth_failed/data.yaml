@@ -1,0 +1,14 @@
+# NEC IX has no authentication of OSPFv3 (made-up values): an interface and
+# an area that ask for it stop with a reason.
+tables:
+  devices:
+    - {hostname: ix-v04, vendor: nec_ix}
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv6: ["2001:db8:0:1::2/64"]}
+  ospfv3_processes:
+    - {process_id: 1, router_id: 192.0.2.4}
+  ospfv3_interfaces:
+    - {process_id: 1, if_name: GigaEthernet0.0, area: "1", auth_hash: sha1, auth_spi: 500, auth_key: 0123456789abcdef0123456789abcdef01234567}
+  ospfv3_areas:
+    - {process_id: 1, area: "1", auth_hash: md5, auth_spi: 1000, auth_key: 0123456789abcdef0123456789abcdef}
+findings: [G-601, G-601]

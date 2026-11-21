@@ -1,0 +1,50 @@
+version 15.9
+hostname rt-m01
+!
+interface Loopback0
+ ip address 198.51.100.250 255.255.255.255
+!
+interface FastEthernet0
+!
+interface FastEthernet1
+!
+interface FastEthernet2
+ switchport access vlan 20
+!
+interface FastEthernet3
+ switchport access vlan 20
+ duplex full
+ speed 100
+!
+interface FastEthernet4
+ shutdown
+!
+interface FastEthernet5
+ shutdown
+!
+interface FastEthernet6
+ shutdown
+!
+interface FastEthernet7
+ shutdown
+!
+interface FastEthernet8
+ shutdown
+!
+interface GigabitEthernet0
+ description sample wan
+ no ip address
+!
+interface GigabitEthernet0.100
+ encapsulation dot1Q 100
+ ip address 203.0.113.10 255.255.255.252
+!
+interface Vlan1
+ ip address 192.0.2.1 255.255.255.128
+!
+interface Vlan20
+ ip address 192.0.2.129 255.255.255.128
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.9
+!
+end

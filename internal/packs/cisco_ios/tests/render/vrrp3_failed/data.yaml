@@ -1,0 +1,15 @@
+# What this vendor cannot write of VRRP version 3 (made-up values): the
+# authentication of an IPv4 group on version 3, an interval longer than 40
+# seconds, a global address no fixed IPv6 address of the interface holds, a
+# virtual link-local address outside fe80::/10, an interval under 100
+# milliseconds.
+tables:
+  devices:
+    - {hostname: rt-w04, vendor: cisco_ios, vrrp_version: "3"}
+  interfaces:
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 192.0.2.5/24, ipv6: ["2001:db8:0:1::5/64"]}
+  fhrp:
+    - {if_name: GigabitEthernet0/1, group: 1, protocol: vrrp, virtual_ip: 192.0.2.1, priority: 100, preempt: true, auth_type: simple, auth_key: sample01, advert_interval: 50}
+  ipv6_fhrp:
+    - {if_name: GigabitEthernet0/1, group: 2, link_local: "2001:db8:0:1::99", addresses: ["2001:db8:0:2::1"], priority: 100, preempt: true, advert_interval: 50}
+findings: [G-601, G-601, G-601, G-601, G-601]

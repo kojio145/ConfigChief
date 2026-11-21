@@ -5,7 +5,7 @@ key: [device, policy, class]
 columns:
   - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
   - {name: policy, title: {ja: ポリシー名, en: Policy}, type: string, required: true, note: {ja: "1〜31 字", en: "1 to 31 characters"}}
-  - {name: class, title: {ja: クラス名, en: Class}, type: ref, ref: qos_classes.name, also: [default, local], required: true, note: {ja: "QoS の見分け方のクラス名か、default（どれにも当たらない通信）、local（機器自身が出す通信）", en: "A QoS class, default (everything else) or local (packets the device itself sends)"}}
+  - {name: class, title: {ja: クラス名, en: Class}, type: ref, ref: qos_classes.name, also: [default, local, dynamic], required: true, note: {ja: "QoS の見分け方のクラス名か、default（どれにも当たらない通信）、local（機器自身が出す通信）、dynamic（ダイナミック QoS）", en: "A QoS class, default (everything else) local (packets the device itself sends) or dynamic (dynamic QoS)"}}
   - {name: seq, title: {ja: 順番, en: Sequence}, type: int, required: true, generate: false, note: {ja: "ポリシーの中で見る順（小さい順に書く。default はいつも最後）", en: "The order in the policy (written from the smallest; default is always the last)"}}
   - {name: priority, title: {ja: 優先して送る, en: Priority}, type: bool}
   - {name: priority_level, title: {ja: 優先の段, en: Priority level}, type: int, min: 1, max: 2}
@@ -25,3 +25,15 @@ columns:
   - {name: set_precedence, title: {ja: 付ける precedence, en: Set precedence}, type: int, min: 0, max: 7}
   - {name: queue_limit, title: {ja: キューの長さ（パケット）, en: Queue limit (packets)}, type: "list<int>", min: 1, note: {ja: "PQ では high・medium・normal・low の順", en: "For priority queues: high, medium, normal, low"}}
   - {name: fair_queue, title: {ja: 公平に送る, en: Fair queue}, type: bool}
+  - {name: set_cos, title: {ja: 付ける CoS, en: Set CoS}, type: int, min: 0, max: 7}
+  - {name: set_qos_group, title: {ja: 付ける QoS グループ, en: Set QoS group}, type: int, min: 0, max: 65535}
+  - {name: set_ipv6_dscp, title: {ja: 付ける DSCP（IPv6）, en: Set DSCP (IPv6)}, type: int, min: 0, max: 63}
+  - {name: set_ipv6_precedence, title: {ja: 付ける precedence（IPv6）, en: Set precedence (IPv6)}, type: int, min: 0, max: 7}
+  - {name: shape_mode, title: {ja: 遅らせ方, en: Shape mode}, type: enum, values: [average, peak], note: {ja: "空 = average", en: "Empty = average"}}
+  - {name: shape_percent, title: {ja: 上限・遅らせる（%）, en: Shape (%)}, type: int, min: 1, max: 100}
+  - {name: police_percent, title: {ja: 上限・捨てる（%）, en: Police (%)}, type: int, min: 1, max: 100}
+  - {name: police_pir_bps, title: {ja: 最大の速さ・捨てる（bps）, en: Police PIR (bps)}, type: int, min: 1}
+  - {name: police_violate, title: {ja: 最大を超えたとき, en: Violate action}, type: enum, values: [drop, transmit, set_dscp, set_precedence]}
+  - {name: police_violate_value, title: {ja: 最大を超えたときに付ける値, en: Violate value}, type: int, min: 0, max: 63}
+  - {name: random_detect, title: {ja: 混む前に間引く（WRED）, en: Random detect}, type: enum, values: ["on", dscp, precedence], note: {ja: "on = 機器の既定、dscp・precedence = その値で間引き方を変える", en: "on = the default of the device; dscp / precedence = by that value"}}
+  - {name: queue_limit_unit, title: {ja: キューの長さの単位, en: Queue limit unit}, type: enum, values: [bytes, ms, us], note: {ja: "空 = パケット", en: "Empty = packets"}}

@@ -1,0 +1,8 @@
+table: log_subsystems
+title: {ja: ログの対象ごとの重要度, en: Log subsystems}
+since: M7
+key: [device, subsystem]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: subsystem, title: {ja: 対象, en: Subsystem}, type: string, required: true, note: {ja: "機器の中の機能の名前（メーカーの語）。全部は、機器のシートの「ログに残す重要度」に書く", en: "The name of a function of the device (a word of the vendor). For all of them use the log severity of the device"}}
+  - {name: severity, title: {ja: 重要度, en: Severity}, type: enum, values: [emergencies, alerts, critical, errors, warnings, notifications, informational, debugging], required: true}

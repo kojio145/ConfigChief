@@ -9,7 +9,7 @@ interface Gi0/1
 !
 interface Gi0/2
  mtu big
- speed 2500
+ speed 40000
  address 192.0.2.300/24
  proxy maybe
  relay 192.0.2.67 not-an-address

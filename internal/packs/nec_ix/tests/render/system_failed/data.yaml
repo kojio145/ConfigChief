@@ -1,0 +1,25 @@
+# What this device cannot write (made-up values; appendix A 3.26): each
+# tells why, and how it is put right.
+tables:
+  devices:
+    - hostname: ix-d04
+      vendor: nec_ix
+      # The switches of the device are written only when they are on.
+      log_buffer: false
+      forward_cache: false
+      ntp_serve: false
+  users:
+    # The encrypted form of another vendor.
+    - {name: example-user, secret: dummy7sample8A9B, secret_form: encrypted}
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.1/24}
+  syslog_servers:
+    # The source interface has no address to write.
+    - {server: 192.0.2.50, source_if: GigaEthernet0.0}
+  ospf_processes:
+    - {process_id: 1}
+  ospf_interfaces:
+    # The encrypted form of another vendor.
+    - {process_id: 1, if_name: GigaEthernet1.0, area: 0, hello: 10, dead: 40, auth_type: simple, auth_key: "7 dummy7sample4C5D"}
+findings: [G-601]

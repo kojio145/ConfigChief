@@ -1,0 +1,63 @@
+hostname ix-m01
+!
+system interfaces bvi 16
+system subinterfaces GigaEthernet0 64
+!
+loop-detection interval-time 60
+loop-detection threshold 100
+loop-detection window-size 5
+!
+bridge irb enable
+bridge 1 aging-time 100
+bridge 1 table-size 5000
+no bridge 1 bridge ipv6
+bridge 2 table-size unlimited
+bridge 2 bridge-only pppoe
+!
+device GigaEthernet0
+  speed 2500
+  mdi-mdix mdix
+!
+device GigaEthernet2
+  qos scheduler wfq
+  router-port qos default-priority 7
+  vlan-group 1 port 1 2
+  vlan-group 4 port 4
+  port 1 mdi-mdix mdi
+  port 1 qos default-priority 4
+  port 1 mirror-port 4 both
+  port 2 mirror-port 4 out
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.2/30
+  no shutdown
+!
+interface GigaEthernet0.1
+  encapsulation dot1q 10
+  dot1q min-frame-size 64
+  no ip address
+  bridge-group 1
+  bridge-group 1 port-protected
+  bridge-group 1 port-table-size 2
+  no shutdown
+!
+interface GigaEthernet2.0
+  no ip address
+  shutdown
+!
+interface GigaEthernet2:1.0
+  no ip address
+  bridge-group 1
+  loop-detection enable
+  loop-detection action none restore-time 100
+  no shutdown
+!
+interface GigaEthernet2:4.0
+  no ip address
+  shutdown
+!
+interface BVI0
+  ip address 192.0.2.1/25
+  bridge-group 1
+  no shutdown
+!

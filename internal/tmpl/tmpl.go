@@ -176,10 +176,38 @@ func New(opt Options) *Engine {
 		}
 		return mjv.FromBool(compareVersions(text(v), text(args[0])) >= 0), nil
 	})
-	env.AddFilter("natural", func(_ mj.FilterState, v mjv.Value, _ []mjv.Value, _ map[string]mjv.Value) (mjv.Value, error) {
+	// With attribute='name', rows are put in the order of that column.
+	env.AddFilter("natural", func(_ mj.FilterState, v mjv.Value, _ []mjv.Value, kw map[string]mjv.Value) (mjv.Value, error) {
 		items := append([]mjv.Value{}, v.Iter()...)
-		sort.SliceStable(items, func(i, j int) bool { return NaturalLess(text(items[i]), text(items[j])) })
+		key := func(x mjv.Value) string { return text(x) }
+		if attr, ok := kw["attribute"]; ok {
+			name := text(attr)
+			key = func(x mjv.Value) string { return text(x.GetAttr(name)) }
+		}
+		sort.SliceStable(items, func(i, j int) bool { return NaturalLess(key(items[i]), key(items[j])) })
 		return mjv.FromSlice(items), nil
+	})
+	// {{ p.allowed_vlans | ranges }}: "10,20,30-32" (or a list of such items)
+	// as the numbers it stands for, in order and once each. Words (all, none)
+	// stand for no number.
+	env.AddFilter("ranges", func(_ mj.FilterState, v mjv.Value, _ []mjv.Value, _ map[string]mjv.Value) (mjv.Value, error) {
+		var items []string
+		if l, ok := v.AsSlice(); ok {
+			for _, x := range l {
+				items = append(items, text(x))
+			}
+		} else {
+			items = []string{text(v)}
+		}
+		nums, err := Ranges(items)
+		if err != nil {
+			return e.stop("%s", err.Error())
+		}
+		out := make([]mjv.Value, len(nums))
+		for i, n := range nums {
+			out[i] = mjv.FromInt(int64(n))
+		}
+		return mjv.FromSlice(out), nil
 	})
 	// {% if i.ipv4 is cidr %}: an address with a length, not a word like dhcp.
 	env.AddTest("cidr", func(_ mj.TestState, v mjv.Value, _ []mjv.Value) (bool, error) {
@@ -493,6 +521,16 @@ func fail(format string, a ...any) (mjv.Value, error) {
 func wrap(err error) error {
 	var me *mj.Error
 	if errors.As(err, &me) {
+		// What fails inside an included template comes wrapped in an error
+		// of the template that includes it; the one inside tells what is
+		// wrong, and where.
+		for me.Kind == mj.ErrBadInclude {
+			var in *mj.Error
+			if cause := me.Unwrap(); cause == nil || !errors.As(cause, &in) {
+				break
+			}
+			me = in
+		}
 		out := &Error{Msg: me.Message, Name: me.Name}
 		if me.Kind != mj.ErrInvalidOperation {
 			out.Msg = fmt.Sprintf("%s: %s", me.Kind, me.Message)
@@ -709,4 +747,38 @@ func digits(s string) int {
 		n++
 	}
 	return n
+}
+
+// Ranges gives the numbers that a list such as "10,20,30-32" stands for, in
+// order and once each. The items may be split by commas or spaces. A word
+// (all, none) stands for no number; a range may hold 4094 numbers at most.
+func Ranges(items []string) ([]int, error) {
+	seen := map[int]bool{}
+	for _, item := range items {
+		for _, part := range strings.FieldsFunc(item, func(r rune) bool { return r == ',' || r == ' ' }) {
+			ends := strings.SplitN(part, "-", 2)
+			lo, err := strconv.Atoi(ends[0])
+			if err != nil {
+				if len(ends) == 1 && strings.IndexFunc(part, notDigit) >= 0 && strings.IndexFunc(part, func(r rune) bool { return r >= '0' && r <= '9' }) < 0 {
+					continue
+				}
+				return nil, fmt.Errorf("「%s」は、番号でも番号の範囲でもありません", part)
+			}
+			hi := lo
+			if len(ends) == 2 {
+				if hi, err = strconv.Atoi(ends[1]); err != nil || hi < lo || hi-lo > 4094 {
+					return nil, fmt.Errorf("「%s」は、番号の範囲として読めません", part)
+				}
+			}
+			for n := lo; n <= hi; n++ {
+				seen[n] = true
+			}
+		}
+	}
+	out := make([]int, 0, len(seen))
+	for n := range seen {
+		out = append(out, n)
+	}
+	sort.Ints(out)
+	return out, nil
 }

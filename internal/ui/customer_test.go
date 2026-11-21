@@ -108,6 +108,27 @@ func TestCustomer(t *testing.T) {
 		t.Fatalf("after saving: %v, %+v", err, m.Mappings)
 	}
 	noNullValue(t, "the mappings", m)
+	// The value after each step.
+	if got := s.ListTrace(" ＲＴ－a01/x ", []listimport.Step{{Type: "trim"}, {Type: "width"}, {Type: "split", Sep: "/", Keep: "left"}}); len(got) != 3 || got[0] != "ＲＴ－a01/x" || got[1] != "RT-a01/x" || got[2] != "RT-a01" {
+		t.Errorf("trace = %q", got)
+	}
+	if got := s.ListTrace("x", nil); got == nil || len(got) != 0 {
+		t.Errorf("trace of no steps = %#v", got)
+	}
+	// A mapping is taken out into state/backup; a file that is no mapping is not.
+	if _, err := s.ListDelete("project.yaml"); err == nil {
+		t.Error("a file that is no mapping was taken out")
+	}
+	if _, err := s.ListSave("", rule); err != nil {
+		t.Fatal(err)
+	}
+	kept, err := s.ListDelete("mappings/sites_2.yaml")
+	if err != nil || !strings.HasPrefix(kept, "state/backup/mappings_sites_2_") || !exists(filepath.Join(dir, filepath.FromSlash(kept))) || exists(filepath.Join(dir, "mappings", "sites_2.yaml")) {
+		t.Errorf("delete: %v, %s", err, kept)
+	}
+	if m, err = s.Mappings(); err != nil || len(m.Mappings) != 1 {
+		t.Fatalf("after deleting: %v, %+v", err, m.Mappings)
+	}
 
 	// The comparison: the device rt-a09 is new, the site and the address differ.
 	v, err := s.Customer()

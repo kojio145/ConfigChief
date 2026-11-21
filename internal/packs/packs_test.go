@@ -20,7 +20,7 @@ func TestBundledPacks(t *testing.T) {
 		t.Fatalf("schemas: %v", err)
 	}
 	ids := IDs()
-	if len(ids) != 2 || ids[0] != "cisco_ios" || ids[1] != "nec_ix" {
+	if len(ids) != 3 || ids[0] != "cisco_ios" || ids[1] != "nec_ix" || ids[2] != "nec_qx" {
 		t.Fatalf("ids = %v", ids)
 	}
 	for _, id := range ids {

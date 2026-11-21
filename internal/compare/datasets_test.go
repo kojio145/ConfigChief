@@ -132,3 +132,90 @@ func TestDatasetsMadeUpName(t *testing.T) {
 		t.Errorf("got %v (rows %d, same %d), want %v", got, res.Rows, res.Same, want)
 	}
 }
+
+// A row that points at a made-up name (a ref column) points at the same row
+// on both sides, whatever each side calls it: the rows that hang on a
+// renamed row are one row, in the key and in a cell alike.
+func TestDatasetsPointsAtMadeUpName(t *testing.T) {
+	sc, err := schemas.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := model.NewDataset("book")
+	put(a, "ipsec_tunnels", k("device", "rt-a01", "name", "sample-ra"), "style", "policy", "peer_address", "any", "ike_version", "1", "psk", "dummy-psk-1")
+	put(a, "ipsec_selectors", k("device", "rt-a01", "tunnel", "sample-ra", "seq", "10"), "local_net", "0.0.0.0/0", "remote_net", "0.0.0.0/0", "protocol", "udp", "local_port", "1701")
+	put(a, "ipsec_selectors", k("device", "rt-a01", "tunnel", "sample-ra", "seq", "20"), "local_net", "192.0.2.0/24", "remote_net", "0.0.0.0/0")
+	put(a, "l2tp_groups", k("device", "rt-a01", "name", "RA-SAMPLE"), "role", "lns", "ipsec_policy", "sample-ra")
+
+	b := model.NewDataset("running")
+	put(b, "ipsec_tunnels", k("device", "rt-a01", "name", "CMAP-SAMPLE/10"), "style", "policy", "peer_address", "any", "ike_version", "1", "psk", "dummy-psk-1")
+	put(b, "ipsec_selectors", k("device", "rt-a01", "tunnel", "CMAP-SAMPLE/10", "seq", "10"), "local_net", "0.0.0.0/0", "remote_net", "0.0.0.0/0", "protocol", "udp", "local_port", "1701")
+	put(b, "ipsec_selectors", k("device", "rt-a01", "tunnel", "CMAP-SAMPLE/10", "seq", "20"), "local_net", "192.0.2.0/24", "remote_net", "198.51.100.0/24")
+	put(b, "l2tp_groups", k("device", "rt-a01", "name", "RA-SAMPLE"), "role", "lns", "ipsec_policy", "CMAP-SAMPLE/10")
+
+	res := Datasets(sc, a, b)
+	var got []string
+	for _, d := range res.OnlyA {
+		got = append(got, "A "+d.Table)
+	}
+	for _, d := range res.OnlyB {
+		got = append(got, "B "+d.Table)
+	}
+	for _, d := range res.Cells {
+		got = append(got, "cell "+d.Table+" "+d.ARow.KeyText()+" "+d.Column)
+	}
+	want := []string{"cell ipsec_selectors " + a.Tables["ipsec_selectors"].Rows[1].KeyText() + " remote_net"}
+	if !reflect.DeepEqual(got, want) || res.Rows != 4 || res.Same != 3 {
+		t.Errorf("got %v (rows %d, same %d), want %v", got, res.Rows, res.Same, want)
+	}
+}
+
+// A number that only orders the rows (schema: order_only) is compared as
+// the place it gives the row: 15 and 25 on one side are 20 and 30 on the
+// other, and a row more on one side is told.
+func TestDatasetsOrderOnly(t *testing.T) {
+	sc, err := schemas.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := model.NewDataset("book")
+	put(a, "ipsec_proposals", k("device", "rt-a01", "tunnel", "Tunnel1", "phase", "ipsec", "seq", "25"), "encryption", "aes128", "hash", "sha1")
+	put(a, "ipsec_proposals", k("device", "rt-a01", "tunnel", "Tunnel1", "phase", "ipsec", "seq", "15"), "encryption", "aes192", "hash", "sha1")
+	put(a, "ipsec_proposals", k("device", "rt-a01", "tunnel", "Tunnel1", "phase", "ike", "seq", "15"), "encryption", "aes128", "hash", "sha1", "dh", "dh14")
+	b := model.NewDataset("running")
+	put(b, "ipsec_proposals", k("device", "rt-a01", "tunnel", "Tunnel1", "phase", "ipsec", "seq", "20"), "encryption", "aes192", "hash", "sha1")
+	put(b, "ipsec_proposals", k("device", "rt-a01", "tunnel", "Tunnel1", "phase", "ipsec", "seq", "30"), "encryption", "aes128", "hash", "sha256")
+	put(b, "ipsec_proposals", k("device", "rt-a01", "tunnel", "Tunnel1", "phase", "ipsec", "seq", "40"), "encryption", "3des", "hash", "sha1")
+	put(b, "ipsec_proposals", k("device", "rt-a01", "tunnel", "Tunnel1", "phase", "ike", "seq", "20"), "encryption", "aes128", "hash", "sha1", "dh", "dh14")
+
+	res := Datasets(sc, a, b)
+	var got []string
+	for _, d := range res.OnlyA {
+		got = append(got, "A "+d.Row.Get("seq"))
+	}
+	for _, d := range res.OnlyB {
+		got = append(got, "B "+d.Row.Get("phase")+" "+d.Row.Get("seq"))
+	}
+	for _, d := range res.Cells {
+		got = append(got, "cell "+d.ARow.Get("seq")+"/"+d.BRow.Get("seq")+" "+d.Column)
+	}
+	want := []string{"B ipsec 40", "cell 25/30 hash"}
+	if !reflect.DeepEqual(got, want) || res.Rows != 3 || res.Same != 2 {
+		t.Errorf("got %v (rows %d, same %d), want %v", got, res.Rows, res.Same, want)
+	}
+}
+
+// A column that only a person fills in (compare: false) is not a difference
+// between the book and a configuration.
+func TestDatasetsLeavesOutWhatNoConfigurationTells(t *testing.T) {
+	sc, err := schemas.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := model.NewDataset("book"), model.NewDataset("new")
+	put(a, "interfaces", k("device", "rt-a01", "name", "GigabitEthernet0/1"), "peer_device", "sw-b01", "peer_if", "GigabitEthernet1/0/1", "description", "to sw-b01")
+	put(b, "interfaces", k("device", "rt-a01", "name", "GigabitEthernet0/1"), "description", "to sw-b01")
+	if res := Datasets(sc, a, b); !res.Equal() {
+		t.Errorf("the peer columns were compared: %+v", res.Cells)
+	}
+}

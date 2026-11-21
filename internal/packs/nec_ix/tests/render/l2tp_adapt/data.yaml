@@ -1,0 +1,14 @@
+# An LNS with one tunnel interface (made-up values; appendix A 3.21,
+# adapt.yaml): one caller at a time, told as G-614. Nothing is changed.
+tables:
+  devices:
+    - hostname: ix-c03
+      vendor: nec_ix
+  interfaces:
+    - {name: Loopback0.0, enabled: true, ipv4: 192.0.2.129/25}
+    - {name: Tunnel0.0, enabled: true, ipv4: "unnumbered:Loopback0.0"}
+  l2tp_groups:
+    - {name: lns-sample, role: lns, logical_ifs: [Tunnel0.0], tunnel_auth: false, auth: chap_pap, pool_start: 192.0.2.131, pool_end: 192.0.2.190, ipsec_policy: ipsec-sample-ra}
+  l2tp_users:
+    - {group: lns-sample, name: example-user, password: dummy-l2tp-user-secret-1}
+findings: [G-614]

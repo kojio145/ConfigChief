@@ -107,7 +107,10 @@ func Values(in Input, tally *Tally) []Finding {
 	}
 	// Each of these ran, also when the data holds nothing for it to look at.
 	for _, id := range []string{"V-101", "V-102", "V-103", "V-104", "V-106", "V-109", "V-110", "V-115",
-		"V-201", "V-202", "V-203", "V-204", "V-205", "V-206", "V-207", "V-208", "V-210", "V-211", "V-212", "V-213", "V-214", "V-215", "V-216", "V-217", "V-218"} {
+		"V-201", "V-202", "V-203", "V-204", "V-205", "V-206", "V-207", "V-208", "V-210", "V-211", "V-212", "V-213", "V-214", "V-215", "V-216", "V-217", "V-218",
+		"V-221", "V-222", "V-223", "V-224", "V-225", "V-226",
+		"V-231", "V-232", "V-233", "V-234",
+		"V-251", "V-252", "V-253", "V-254", "V-255", "V-256", "V-257", "V-258", "V-259"} {
 		tally.Look(id, "", 0)
 	}
 	x.noDevice()
@@ -125,13 +128,30 @@ func Values(in Input, tally *Tally) []Finding {
 	x.interfaces()
 	x.routes()
 	x.redundancy()
+	x.vrrp3()
 	x.routerIDs()
 	x.unused()
 	x.emptyLists()
 	x.trackSources()
 	x.dhcp()
 	x.ipsec()
+	x.ipsecMore()
+	x.selectorPorts()
 	x.pppoe()
+	for _, id := range l2tpIDs {
+		tally.Look(id, "", 0)
+	}
+	x.l2tp()
+	x.l2tpv3()
+	x.routePolicies()
+	x.vlans()
+	x.ipv6()
+	x.l3()
+	x.f1()
+	for _, id := range basicsIDs {
+		tally.Look(id, "", 0)
+	}
+	x.basics()
 
 	const noModels = "どのメーカーパックにも、機種の定義（models.yaml）がまだありません"
 	tally.Skip("V-111", "", noModels)

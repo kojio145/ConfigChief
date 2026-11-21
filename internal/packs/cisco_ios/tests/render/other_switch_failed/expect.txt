@@ -1,0 +1,15 @@
+hostname sw-a06
+!
+ip access-list extended 2001
+ permit ip any any
+!
+ip access-list standard ACL-2000
+ permit any
+!
+ip access-list extended ACL-3000
+ permit ip any any
+!
+route-map sample-policy permit 10
+ match ip address 2000
+!
+end

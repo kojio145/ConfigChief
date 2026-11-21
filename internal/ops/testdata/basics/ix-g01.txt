@@ -1,0 +1,43 @@
+hostname ix-g01
+!
+logging buffered 131072
+logging subsystem all warn
+logging timestamp timeofday
+!
+username admin password plain 1 dummy-admin-secret-1 administrator
+!
+ip ufs-cache enable
+!
+class-map match-any cm-g-voice
+  match cos 5
+  match qos-group 10
+!
+policy-map pm-g-in
+  class cm-g-voice
+    set qos-group 10
+  class class-local
+  class class-default
+!
+ntp ip enable
+ntp server 192.0.2.123
+!
+syslog ip host 192.0.2.50
+syslog ip source 192.0.2.1
+!
+device GigaEthernet0
+  description sample uplink port
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.69/30
+  ip mtu 1454
+  ip tcp adjust-mss auto
+  no shutdown
+!
+interface GigaEthernet1.0
+  description sample-lan
+  ip address 198.51.100.1/24
+  service-policy input pm-g-in
+  no shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.1/32

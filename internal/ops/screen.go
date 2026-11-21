@@ -70,6 +70,44 @@ func (e *Env) Lines(f *File) []Line {
 	return out
 }
 
+// ChooseFile records which file is taken for a host name that two or more
+// files of input/<source> have (spec 8.1 step 4). The source is imported
+// to learn the host name of the file; nothing but state/sources.yaml and
+// the log is written.
+func (e *Env) ChooseFile(source, path string, now time.Time) error {
+	if source != "old" && source != "new" {
+		return fmt.Errorf("データ源「%s」では選べません（old か new）", source)
+	}
+	src, err := e.Import(source, "")
+	if err != nil {
+		return err
+	}
+	var f *File
+	for _, x := range src.Files {
+		if x.Path == path {
+			f = x
+		}
+	}
+	switch {
+	case f == nil:
+		return fmt.Errorf("%s は input/%s にありません", path, source)
+	case f.Device == "":
+		return fmt.Errorf("%s は取り込めていません: %s", path, f.Err)
+	case len(f.Same) < 2:
+		return fmt.Errorf("%s のホスト名 %s は、ほかのファイルと重なっていません（選ぶ必要はありません）", path, f.Device)
+	}
+	chosen, err := e.Proj.Sources()
+	if err != nil {
+		return err
+	}
+	chosen.SetUse(source, f.Device, path)
+	if err := e.Proj.SaveSources(chosen); err != nil {
+		return err
+	}
+	e.Proj.Log(now, "use: ホスト名 %s は %s を取り込みます（人が選んだ。同じホスト名のファイル: %s）", f.Device, path, strings.Join(f.Same, ", "))
+	return nil
+}
+
 // ChoosePack records the pack a person chose for a file whose vendor the
 // tool cannot tell (spec 8.1 step 3). The next import reads the file with it.
 func (e *Env) ChoosePack(path, id string, now time.Time) error {

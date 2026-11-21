@@ -1,0 +1,54 @@
+hostname ix-v01
+!
+ip route default 203.0.113.1
+!
+ip dhcp-relay enable
+!
+bridge irb enable
+!
+device GigaEthernet2
+  vlan-group 1 port 1 2
+  vlan-group 3 port 3 4
+  vlan-group 5 port 5
+  port 3 speed 100
+  port 3 duplex full
+  port 4 shutdown
+!
+interface BVI0
+  description sample office
+  ip address 192.0.2.1/25
+  ip dhcp-relay server 198.51.100.67
+  bridge-group 10
+  no shutdown
+!
+interface BVI1
+  ip address 192.0.2.129/25
+  bridge-group 20
+  no shutdown
+!
+interface GigaEthernet0.0
+  description sample wan
+  ip address 203.0.113.2/30
+  no shutdown
+!
+interface GigaEthernet2:1.0
+  bridge-group 10
+  no shutdown
+!
+interface GigaEthernet2:3.0
+  bridge-group 20
+  no shutdown
+!
+interface GigaEthernet2:5.0
+  no shutdown
+!
+interface GigaEthernet2:5.1
+  encapsulation dot1q 10
+  bridge-group 10
+  no shutdown
+!
+interface GigaEthernet2:5.2
+  encapsulation dot1q 20
+  bridge-group 20
+  no shutdown
+!

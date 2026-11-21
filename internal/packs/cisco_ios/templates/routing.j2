@@ -3,7 +3,16 @@
 {% if ' ' in r.description %}
 {{ fail('経路 ' ~ r.prefix ~ ' の説明に空白があります（Cisco の経路の名前は 1 語です）') }}
 {% endif %}
-ip route{{ ' vrf ' ~ r.vrf if r.vrf else '' }} {{ r.prefix | ip }} {{ r.prefix | mask }}{{ ' ' ~ r.out_if if r.out_if else '' }}{{ ' ' ~ r.next_hop if r.next_hop else '' }}{{ ' ' ~ r.distance if r.distance else '' }}{{ ' name ' ~ r.description if r.description else '' }}{{ ' track ' ~ r.track if r.track else '' }}
+{% if r.permanent == true and r.track %}
+{{ fail('経路 ' ~ r.prefix ~ ': 「IF が落ちても残す」と「回線監視」は、どちらか 1 つだけ書けます') }}
+{% endif %}
+{% if r.next_hop_global == true and not r.vrf %}
+{{ fail('経路 ' ~ r.prefix ~ ': 「ネクストホップを全体の経路表で引く」は、VRF の経路にだけ書けます') }}
+{% endif %}
+{% if r.next_hop == 'dhcp' and (r.track or r.permanent == true or r.tag != '' or r.description or r.next_hop_global == true or r.multicast == true) %}
+{{ fail('経路 ' ~ r.prefix ~ ': ネクストホップが dhcp の経路に書けるのは、出力 IF と優先度だけです') }}
+{% endif %}
+ip route{{ ' vrf ' ~ r.vrf if r.vrf else '' }} {{ r.prefix | ip }} {{ r.prefix | mask }}{{ ' ' ~ r.out_if if r.out_if else '' }}{{ ' ' ~ r.next_hop if r.next_hop else '' }}{{ ' global' if r.next_hop_global == true else '' }}{{ ' ' ~ r.distance if r.distance else '' }}{{ ' multicast' if r.multicast == true else '' }}{{ ' name ' ~ r.description if r.description else '' }}{{ ' permanent' if r.permanent == true else '' }}{{ ' track ' ~ r.track if r.track else '' }}{{ ' tag ' ~ r.tag if r.tag != '' else '' }}
 {% endfor %}
 {% if t.static_routes %}
 !

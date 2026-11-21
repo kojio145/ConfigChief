@@ -1,0 +1,22 @@
+# What this vendor cannot write of a DHCPv6 server (made-up values): a part
+# of the prefix the WAN side received, delegated on; the NTP server "the one
+# the WAN side got"; a pool without its length; a delegated length shorter
+# than the pool; one lifetime without the other.
+tables:
+  devices:
+    - hostname: rt-w03
+      vendor: cisco_ios
+      ipv6_routing: true
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true}
+    - {name: GigabitEthernet0/1, enabled: true, ipv6: ["2001:db8:0:2::1/64"]}
+    - {name: GigabitEthernet0/2, enabled: true, ipv6: ["2001:db8:0:3::1/64"]}
+    - {name: GigabitEthernet0/3, enabled: true, ipv6: ["2001:db8:0:4::1/64"]}
+    - {name: GigabitEthernet0/4, enabled: true, ipv6: ["2001:db8:0:5::1/64"]}
+  ipv6_interfaces:
+    - {if_name: GigabitEthernet0/0, pd_request: pd-sample}
+    - {if_name: GigabitEthernet0/1, dhcp_server: pool-a, dhcp_pd_from: pd-sample, dhcp_pd_pool: "::/56", dhcp_pd_length: 60, dhcp_ntp: [dhcp]}
+    - {if_name: GigabitEthernet0/2, dhcp_server: pool-b, dhcp_pd_pool: "2001:db8:1000::/40"}
+    - {if_name: GigabitEthernet0/3, dhcp_server: pool-c, dhcp_pd_pool: "2001:db8:2000::/40", dhcp_pd_length: 32}
+    - {if_name: GigabitEthernet0/4, dhcp_server: pool-d, dhcp_pd_pool: "2001:db8:3000::/40", dhcp_pd_length: 56, dhcp_pd_valid: 1800}
+findings: [G-601, G-601, G-601, G-601, G-601]

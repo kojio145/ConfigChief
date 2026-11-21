@@ -1,0 +1,117 @@
+!
+hostname rt-v02
+!
+ipv6 unicast-routing
+ipv6 cef
+!
+ipv6 dhcp pool pool-sample-v6
+ dns-server 2001:DB8::53
+ import dns-server
+ domain-name example.com
+ address prefix 2001:DB8:0:10::/64
+!
+interface Loopback0
+ ip address 192.0.2.2 255.255.255.255
+ ipv6 address 2001:DB8::2/128
+ ospfv3 1 ipv6 area 0
+!
+interface GigabitEthernet0/0
+ description WAN sample
+ no ip address
+ ipv6 address FE80::1 link-local
+ ipv6 address 2001:DB8:0:1::2/64
+ ipv6 traffic-filter V6-SAMPLE-IN in
+ ipv6 nd ra suppress all
+ ipv6 nd router-preference High
+ ipv6 ospf 1 area 0
+ ipv6 ospf network point-to-point
+ ipv6 ospf cost 20
+ ipv6 ospf hello-interval 5
+!
+interface GigabitEthernet0/1
+ description LAN sample
+ no ip address
+ ipv6 address 2001:DB8:0:11::/64 eui-64
+ ipv6 address 2001:DB8:0:12::1/64 anycast
+ ipv6 enable
+ ipv6 mtu 1400
+ ipv6 nd prefix 2001:DB8:0:11::/64 86400 14400 no-autoconfig
+ ipv6 nd prefix 2001:DB8:0:12::/64
+ ipv6 nd managed-config-flag
+ ipv6 nd other-config-flag
+ ipv6 nd ra interval 200 50
+ ipv6 nd ra lifetime 1800
+ ipv6 nd ra dns server 2001:DB8::53 600
+ ipv6 dhcp server pool-sample-v6
+ ipv6 ospf 1 area 1
+!
+interface GigabitEthernet0/2
+ description IPoE sample
+ no ip address
+ ipv6 address autoconfig default
+ ipv6 dhcp client pd pd-sample rapid-commit
+ ipv6 dhcp client pd hint 2001:DB8:1000::/48
+!
+interface GigabitEthernet0/3
+ description LAN of the delegated prefix
+ no ip address
+ ipv6 address pd-sample ::1/64
+ ipv6 nd ra suppress
+!
+interface Tunnel1
+ ip address 192.0.2.213 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel mode ipv6
+ tunnel destination aftr.example.jp
+!
+router ospfv3 1
+ router-id 192.0.2.2
+ !
+ address-family ipv6 unicast
+  passive-interface GigabitEthernet0/1
+  default-information originate metric 10
+  redistribute connected
+  redistribute static metric 20
+  area 1 stub no-summary
+  area 1 range 2001:DB8:0:10::/60
+ exit-address-family
+!
+router bgp 64496
+ bgp router-id 192.0.2.2
+ bgp log-neighbor-changes
+ neighbor 2001:DB8:0:1::1 remote-as 64497
+ neighbor 2001:DB8:0:1::1 description sample upstream
+ neighbor 2001:DB8:0:1::1 update-source Loopback0
+ !
+ address-family ipv6
+  redistribute connected
+  network 2001:DB8:10::/48
+  neighbor 2001:DB8:0:1::1 activate
+  neighbor 2001:DB8:0:1::1 prefix-list PL6-SAMPLE in
+  neighbor 2001:DB8:0:1::1 route-map RM-SAMPLE-OUT out
+ exit-address-family
+!
+ipv6 route ::/0 2001:DB8:0:1::1
+ipv6 route 2001:DB8:100::/48 GigabitEthernet0/0 FE80::2 10 name to-sample
+ipv6 route 2001:DB8:200::/48 Null0
+ipv6 route 2001:DB8:300::/48 2001:DB8:0:1::1 tag 5
+!
+ipv6 prefix-list PL6-SAMPLE seq 5 permit 2001:DB8::/32 ge 48 le 64
+ipv6 prefix-list PL6-SAMPLE seq 10 deny ::/0 le 128
+ipv6 prefix-list PL6-NOSEQ permit 2001:DB8:1::/48
+!
+ipv6 access-list V6-SAMPLE-IN
+ sequence 10 permit tcp any 2001:DB8:0:10::/64 eq 443 established
+ sequence 20 permit udp host 2001:DB8::53 eq 53 any range 1024 65535
+ sequence 30 permit icmp any any nd-ns
+ sequence 40 permit icmp any any 134
+ sequence 44 permit tcp any any eq www syn log-input
+ sequence 46 permit udp any eq domain any
+ sequence 50 deny ipv6 any any log
+!
+ipv6 access-list V6-SAMPLE-OLD
+ remark sample filter
+ permit ipv6 2001:DB8:1::/48 any dscp 46
+ deny esp any host 2001:DB8::1 sequence 100
+!
+end

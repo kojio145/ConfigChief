@@ -1,0 +1,18 @@
+table: ospfv3_interfaces
+title: {ja: OSPFv3 インタフェース, en: OSPFv3 interfaces}
+since: M7
+key: [device, process_id, if_name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: process_id, title: {ja: プロセス番号, en: Process ID}, type: int, required: true}
+  - {name: if_name, title: {ja: IF 名, en: Interface}, type: ifname, required: true}
+  - {name: area, title: {ja: エリア, en: Area}, type: string, required: true, note: {ja: "0 と 0.0.0.0 は同じ値として扱う", en: "0 and 0.0.0.0 are the same value"}}
+  - {name: cost, title: {ja: コスト, en: Cost}, type: int}
+  - {name: priority, title: {ja: 優先度, en: Priority}, type: int, min: 0, max: 255}
+  - {name: hello, title: {ja: Hello 間隔（秒）, en: Hello interval (s)}, type: int}
+  - {name: dead, title: {ja: Dead 間隔（秒）, en: Dead interval (s)}, type: int}
+  - {name: network_type, title: {ja: 網の種類, en: Network type}, type: enum, values: [broadcast, point_to_point, nbma, point_to_multipoint]}
+  - {name: passive, title: {ja: 受動, en: Passive}, type: bool}
+  - {name: auth_hash, title: {ja: 認証のアルゴリズム, en: Authentication algorithm}, type: enum, values: [md5, sha1, none], note: {ja: "IPsec の AH で隣接を認証する（Cisco の ipv6 ospf authentication）。none = エリアの認証をこの IF では使わない", en: "Authenticate the neighbors with IPsec AH (Cisco ipv6 ospf authentication). none = this interface does not use the authentication of the area"}}
+  - {name: auth_spi, title: {ja: 認証の SPI, en: Authentication SPI}, type: int, min: 256, max: 4294967295, note: {ja: "両端で同じ値", en: "The same value on both ends"}}
+  - {name: auth_key, title: {ja: 認証の鍵, en: Authentication key}, type: secret, note: {ja: "16 進の数字（md5 は 32 字、sha1 は 40 字）。両端で同じ値", en: "Hexadecimal digits (32 for md5, 40 for sha1). The same value on both ends"}}

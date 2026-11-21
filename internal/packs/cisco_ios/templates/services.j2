@@ -1,6 +1,20 @@
 {# Syslog, SNMP and NTP. Syntax: cmdref 4.4. The facility, the level and the
    source interface of syslog, and the source of the SNMP traps, are one
    setting of the device: the rows have to agree. #}
+{# The log the device keeps (appendix A 3.26). #}
+{% if device.log_buffer == true %}
+logging buffered{{ ' ' ~ device.log_buffer_size if device.log_buffer_size != '' else '' }}{{ ' ' ~ device.log_severity if device.log_severity else '' }}
+{% elif device.log_buffer_size != '' or device.log_severity %}
+{{ fail('機器内ログの大きさ・ログに残す重要度は、「機器内にログを溜める」が有効のときだけ書けます（Cisco は logging buffered の行に書きます）') }}
+{% elif device.log_buffer == false %}
+no logging buffered
+{% endif %}
+{% if device.log_buffer != '' %}
+!
+{% endif %}
+{% if device.log_buffer_mode == 'one_time' %}
+{{ fail('機器内ログがいっぱいのときに止める（one_time）は Cisco にありません（古いものから上書きします。セルを空にしてください）') }}
+{% endif %}
 {% set logs = t.syslog_servers %}
 {% if logs %}
 {% for s in logs %}
@@ -18,7 +32,15 @@ logging trap {{ logs[0].severity }}
 logging source-interface {{ logs[0].source_if }}
 {% endif %}
 {% for s in logs %}
+{% if ':' in s.server %}
+{# The IPv6 form has no VRF (Embedded Syslog Manager Command Reference). #}
+{% if s.vrf %}
+{{ fail('ログ転送先 ' ~ s.server ~ ': IPv6 の転送先には VRF を付けられません（Cisco の logging host ipv6 に VRF の指定がありません）') }}
+{% endif %}
+logging host ipv6 {{ s.server }}
+{% else %}
 logging host {{ s.server }}{{ ' vrf ' ~ s.vrf if s.vrf else '' }}
+{% endif %}
 {% endfor %}
 !
 {% endif %}

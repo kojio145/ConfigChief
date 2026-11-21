@@ -1,0 +1,49 @@
+version 15.9
+hostname rt-v01
+!
+vlan 10
+ name sample-office
+!
+vlan 20
+ name sample-guest
+!
+interface FastEthernet0
+ description office desk 1
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet1
+ switchport access vlan 10
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+!
+interface FastEthernet2
+ switchport access vlan 20
+ duplex full
+ speed 100
+!
+interface FastEthernet3
+ switchport access vlan 20
+ shutdown
+!
+interface FastEthernet4
+ description to sw-b01
+ switchport trunk allowed vlan 10,20
+ switchport mode trunk
+!
+interface GigabitEthernet8
+ description sample wan
+ ip address 203.0.113.2 255.255.255.252
+!
+interface Vlan10
+ description sample office
+ ip address 192.0.2.1 255.255.255.128
+ ip helper-address 198.51.100.67
+!
+interface Vlan20
+ ip address 192.0.2.129 255.255.255.128
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.1
+!
+end

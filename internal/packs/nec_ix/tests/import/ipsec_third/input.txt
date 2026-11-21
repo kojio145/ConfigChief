@@ -1,0 +1,35 @@
+hostname ix-v02
+!
+ip access-list sec-sample-any permit ip src any dest any
+!
+ikev2 authentication psk id ipv4 203.0.113.9 key secret DUMMYENCSAMPLEBBBB
+ikev2 authentication psk id ipv4 203.0.113.30 key secret DUMMYENCSAMPLECCCC
+!
+ike proposal ike-prop-sample encryption aes-256 hash sha2-256 group 2048-bit
+ike policy ike-sample-a peer 203.0.113.20 key DUMMYENCSAMPLEAAAA key-type secret 1 ike-prop-sample
+!
+ipsec autokey-proposal ipsec-prop-sample esp-aes-256 esp-sha2-256
+ipsec autokey-map ipsec-sample-a sec-sample-any peer 203.0.113.20 ipsec-prop-sample
+!
+ikev2 profile ikev2-sample-b
+  child-proposal enc aes-cbc-256
+  child-proposal integrity off
+  local-authentication psk
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.9/29
+  no shutdown
+!
+interface Tunnel0.0
+  tunnel mode ipsec
+  ip unnumbered GigaEthernet0.0
+  ipsec policy tunnel ipsec-sample-a out
+  no shutdown
+!
+interface Tunnel1.0
+  tunnel mode ipsec-ikev2
+  ip unnumbered GigaEthernet0.0
+  ikev2 binding ikev2-sample-b
+  ikev2 peer 203.0.113.30 authentication psk
+  ikev2 source-address GigaEthernet0.0
+  no shutdown

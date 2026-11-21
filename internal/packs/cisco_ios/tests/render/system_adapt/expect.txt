@@ -1,0 +1,19 @@
+hostname rt-d03
+!
+service timestamps log datetime
+!
+interface GigabitEthernet0/0
+ description sample uplink port
+ ip address 203.0.113.13 255.255.255.252
+ ip mtu 1454
+ ip tcp adjust-mss 1414
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description sample-lan
+ ip address 198.51.100.1 255.255.255.0
+ no shutdown
+!
+logging buffered 131072 warnings
+!
+end

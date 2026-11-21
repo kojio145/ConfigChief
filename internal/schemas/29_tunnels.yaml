@@ -5,9 +5,14 @@ key: [device, if_name]
 columns:
   - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
   - {name: if_name, title: {ja: トンネル IF, en: Tunnel interface}, type: ifname, required: true, note: {ja: "アドレスはインタフェースのシートに書く", en: "The address goes on the Interfaces sheet"}}
-  - {name: type, title: {ja: 種類, en: Type}, type: enum, values: [gre, ipip, ipsec, l2tpv3], required: true, note: {ja: "ipsec は IPsec のシートのトンネル IF と対になる", en: "ipsec pairs with the tunnel interface on the IPsec sheet"}}
+  - {name: type, title: {ja: 種類, en: Type}, type: enum, values: [gre, ipip, ipsec, l2tpv3, ipv4_over_ipv6, ipv6_over_ipv4, map_e, auto_ds_lite, auto_ipip, etherip], required: true, note: {ja: "ipsec は IPsec のシートのトンネル IF と対になる。ipv4_over_ipv6 = IPv6 の網で IPv4 を運ぶ（DS-Lite・固定 IP の IPIP）、map_e = MAP-E、auto_ds_lite・auto_ipip = 回線の事業者から設定をもらう", en: "ipsec pairs with the tunnel interface on the IPsec sheet. ipv4_over_ipv6 = IPv4 carried over IPv6 (DS-Lite, IPIP), map_e = MAP-E, auto_ds_lite / auto_ipip = provisioned by the carrier"}}
   - {name: source, title: {ja: 送信元, en: Source}, type: string, or_ifname: true, note: {ja: "IF 名かアドレス。種類が ipsec 以外では必須", en: "An interface or an address. Needed unless the type is ipsec"}}
   - {name: destination, title: {ja: 宛先, en: Destination}, type: ip4, note: {ja: "種類が ipsec 以外では必須", en: "Needed unless the type is ipsec"}}
   - {name: key, title: {ja: 鍵（GRE）, en: Key (GRE)}, type: int}
   - {name: keepalive_interval, title: {ja: 監視間隔（秒）, en: Keepalive interval (s)}, type: int}
   - {name: keepalive_retry, title: {ja: 監視の再送回数, en: Keepalive retries}, type: int}
+  - {name: destination_v6, title: {ja: 宛先（IPv6）, en: Destination (IPv6)}, type: ip6, note: {ja: "IPv6 の網を通るトンネルの宛先", en: "The destination of a tunnel that runs over IPv6"}}
+  - {name: destination_fqdn, title: {ja: 宛先（名前）, en: Destination (name)}, type: string, note: {ja: "宛先を名前で書く（DS-Lite の AFTR など）", en: "The destination by its name (the AFTR of DS-Lite and the like)"}}
+  - {name: provider, title: {ja: MAP-E の事業者, en: MAP-E provider}, type: enum, values: [jpix, ocn, ocn_fixed], note: {ja: "種類が map_e のとき。空 = 機器の既定", en: "For the type map_e. Empty = the default of the device"}}
+  - {name: provider_host, title: {ja: MAP-E のホスト名, en: MAP-E host name}, type: string, note: {ja: "事業者が ocn_fixed のとき", en: "For the provider ocn_fixed"}}
+  - {name: lan_if, title: {ja: LAN 側 IF（自動設定）, en: LAN interface (provisioned)}, type: ifname, note: {ja: "種類が auto_ds_lite・auto_ipip のとき、もらった IPv4 アドレスを使う LAN 側の IF", en: "For auto_ds_lite / auto_ipip: the LAN interface the provisioned address is for"}}

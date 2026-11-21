@@ -1,0 +1,126 @@
+hostname rt-f01
+!
+time-range TR-SAMPLE-WORK
+ periodic weekdays 8:00 to 18:00
+ periodic Saturday Sunday 9:00 to 12:00
+ periodic monday 8:00 to friday 20:00
+!
+time-range TR-SAMPLE-YEAR
+ absolute start 8:00 1 January 2026 end 18:00 31 December 2026
+!
+interface GigabitEthernet0/0
+ description sample wan
+ ip address dhcp
+ ip nat outside
+ ip access-group ACL-SAMPLE-WAN in
+!
+interface GigabitEthernet0/1
+ description sample lan
+ ip address 198.51.100.1 255.255.255.0
+ ip nat inside
+ ip access-group 101 in
+!
+interface GigabitEthernet0/2
+ ip vrf forwarding VRF-SAMPLE-F
+ ip address 192.0.2.129 255.255.255.128
+!
+ip vrf VRF-SAMPLE-F
+!
+router ospf 1
+ router-id 192.0.2.1
+ log-adjacency-changes detail
+!
+router ospf 2
+ router-id 192.0.2.2
+ no log-adjacency-changes
+!
+ip route 0.0.0.0 0.0.0.0 dhcp
+ip route 192.0.2.64 255.255.255.192 GigabitEthernet0/0 dhcp 200
+ip route vrf VRF-SAMPLE-F 203.0.113.64 255.255.255.192 198.51.100.254 global
+ip route 203.0.113.128 255.255.255.192 198.51.100.253 multicast
+ip route 203.0.113.192 255.255.255.192 198.51.100.252 track 10
+!
+ip nat pool POOL-SAMPLE-A 203.0.113.17 203.0.113.22 netmask 255.255.255.248
+ip nat inside source list 10 pool POOL-SAMPLE-A overload
+ip nat inside source static 198.51.100.10 203.0.113.10 extendable
+ip nat inside source static tcp 198.51.100.11 8080 203.0.113.10 80 extendable
+ip nat inside source static network 198.51.100.64 203.0.113.64 /26
+ip nat inside source static network 198.51.100.128 203.0.113.128 255.255.255.192
+ip nat inside source static 198.51.100.12 203.0.113.12 no-alias
+!
+access-list 10 permit 198.51.100.0 0.0.0.255
+access-list 101 permit tcp 198.51.100.0 0.0.0.255 any eq www
+access-list 101 permit tcp 198.51.100.0 0.0.0.255 any range 8000 8080
+access-list 101 permit udp any eq domain any
+access-list 101 permit icmp any any echo
+access-list 101 deny ip any any log
+!
+ip access-list extended ACL-SAMPLE-WAN
+ permit tcp any any established
+ permit tcp any host 203.0.113.10 eq www
+ permit tcp any host 203.0.113.10 eq 443 syn
+ permit tcp any gt 1023 host 203.0.113.10 eq smtp time-range TR-SAMPLE-WORK
+ permit udp any eq domain any range bootps bootpc
+ permit udp any any eq ntp dscp cs6
+ permit udp any any eq isakmp
+ permit udp any any eq non500-isakmp
+ permit tcp any any eq ftp ftp-data
+ permit tcp any any match-all +ack -syn
+ permit icmp any any echo-reply
+ permit icmp any any 3 4
+ permit icmp any any time-exceeded log
+ permit icmp any any 11
+ deny tcp any any eq telnet tos min-delay log-input
+ deny udp any any precedence critical fragments
+ deny ip any any tos 4
+!
+ip sla 1
+ icmp-echo 203.0.113.2 source-ip 198.51.100.1
+ threshold 1000
+ timeout 2000
+ frequency 5
+ip sla schedule 1 life forever start-time now
+track 1 ip sla 1 state
+!
+ip sla 2
+ icmp-echo 203.0.113.3 source-interface GigabitEthernet0/0
+ threshold 2000
+ timeout 2000
+ip sla schedule 2 life forever start-time now
+track 2 ip sla 2 reachability
+!
+ip sla 3
+ icmp-echo 203.0.113.4
+ip sla schedule 3 life forever start-time now
+track 3 ip sla 3
+!
+track 5 ip route 203.0.113.0/24 reachability
+ delay down 10
+!
+track 10 list boolean and
+ object 1
+ object 2
+ delay up 30
+!
+track 11 list boolean or
+ object 1
+ object 5
+!
+track 12 list boolean and
+ object 1 not
+!
+ip dhcp pool POOL-SAMPLE-LAN
+ network 198.51.100.0 255.255.255.0
+ default-router 198.51.100.1 198.51.100.2 198.51.100.3
+ lease 0 1 30
+!
+ip dhcp pool POOL-SAMPLE-B
+ network 192.0.2.128 255.255.255.128
+ default-router 192.0.2.129
+ lease infinite
+!
+ip dhcp pool POOL-SAMPLE-C
+ network 203.0.113.0 255.255.255.128
+ lease 1 12
+!
+end

@@ -95,7 +95,14 @@ type FileView struct {
 	Version  string `json:"version"` // the version of that pack
 	Chosen   bool   `json:"chosen"`  // a person chose the pack
 	// NeedsPack: the tool cannot tell the vendor; a person chooses.
-	NeedsPack  bool        `json:"needsPack"`
+	NeedsPack bool `json:"needsPack"`
+	// Same: the files of the folder with the same host name, this one
+	// among them (empty if the host name is its own). NeedsFile: none of
+	// them is chosen yet. Left: a person chose another one; this file is
+	// left out.
+	Same       []string    `json:"same"`
+	NeedsFile  bool        `json:"needsFile"`
+	Left       string      `json:"left"`
 	Candidates []Candidate `json:"candidates"`
 	Total      int         `json:"total"`
 	Taken      int         `json:"taken"`
@@ -175,6 +182,24 @@ func (s *Session) ChoosePack(source, path, pack string) (*ImportView, error) {
 	return s.runImport(e, source)
 }
 
+// ChooseFile records which file is taken for a host name that two or more
+// files of the source have, and imports the source again.
+func (s *Session) ChooseFile(source, path string) (*ImportView, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := checkSource(source); err != nil {
+		return nil, err
+	}
+	e, err := s.begin()
+	if err != nil {
+		return nil, err
+	}
+	if err := e.ChooseFile(source, path, s.now()); err != nil {
+		return nil, err
+	}
+	return s.runImport(e, source)
+}
+
 func importView(e *ops.Env, o *ops.ImportOutcome, d *report.Doc) *ImportView {
 	v := &ImportView{
 		Source:   o.Source.Name,
@@ -208,6 +233,11 @@ func importView(e *ops.Env, o *ops.ImportOutcome, d *report.Doc) *ImportView {
 			fv.Candidates = append(fv.Candidates, Candidate{c.Pack, c.Score})
 		}
 		fv.NeedsPack = f.Pack == "" && len(f.Candidates) > 0
+		fv.Same, fv.Left, fv.Device = strs(f.Same), f.Left, f.Device
+		fv.NeedsFile = len(f.Same) > 1 && f.Err != ""
+		if f.Left != "" {
+			fv.Mark = report.MarkIgnored
+		}
 		if r := f.Result; r != nil {
 			n := r.Count()
 			fv.Imported = true

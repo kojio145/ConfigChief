@@ -1,0 +1,20 @@
+# L2TP (made-up values; appendix A 3.21): an LNS for two callers at a time,
+# two LACs (the LNS by its address and by its name), and a PPPoE client
+# whose profile keeps its password in the same way as the callers of the LNS.
+tables:
+  l2tp_groups:
+    - {name: lns-sample, role: lns, logical_ifs: [Tunnel0.0, Tunnel1.0], tunnel_auth: false, auth: chap, pool_start: 192.0.2.131, pool_end: 192.0.2.190, dns_servers: [192.0.2.53, 192.0.2.54], ipsec_policy: ipsec-sample-ra}
+    - {name: lac-sample, role: lac, logical_ifs: [Tunnel2.0], access_ifs: [GigaEthernet2.1, GigaEthernet2.2], peer_address: 198.51.100.1, tunnel_auth: true, password: dummy-l2tp-secret-c, domains: [example.com, example.net], idle_timeout: 120}
+    - {name: lac-sample-b, role: lac, logical_ifs: [Tunnel3.0], access_ifs: [GigaEthernet2.3], peer_address: lns.example.net, tunnel_auth: false, domains: [example.org]}
+  l2tp_users:
+    - {group: lns-sample, name: example-user, password: dummy-l2tp-user-secret-1, address: 192.0.2.130}
+    - {group: lns-sample, name: sample-user, password: dummy-l2tp-user-secret-2}
+  pppoe:
+    - {name: ppp-sample-wan, physical_if: GigaEthernet0.0, logical_if: GigaEthernet0.1, username: sample-w@example.com, password: dummy-pppoe-secret-w}
+  interfaces:
+    - {name: Tunnel0.0, kind: tunnel, ipv4: "unnumbered:Loopback0.0", enabled: true}
+    - {name: Tunnel2.0, kind: tunnel, enabled: true}
+unknown:
+  - "url-list lac-sample deny any"
+  - "ipsec dynamic-map ipsec-sample-ra sec-sample-ra ipsec-prop-sample"
+  - "pppoe server"

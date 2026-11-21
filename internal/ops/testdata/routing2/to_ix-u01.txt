@@ -1,0 +1,52 @@
+hostname ix-u01
+!
+ip prefix-list pl-u-ospf 5 permit 198.51.100.0/24 max 28
+!
+route-map rm-u-out permit 10
+  set community delete 64497:100 64497:200
+!
+ip router ospf 1
+  router-id 192.0.2.1
+  distance external 115 inter-area 115 intra-area 115
+  distribute-list prefix pl-u-ospf
+  area 1 virtual-link 192.0.2.9 dead-interval 20 hello-interval 5
+  originate-default always metric 50 metric-type 1
+  network GigaEthernet1.0 area 0
+!
+router bgp 64496
+  router-id 192.0.2.1
+  timers 20 60
+  neighbor 192.0.2.2 remote-as 64496
+  neighbor 192.0.2.2 update-source Loopback0.0
+  neighbor 192.0.2.2 timers 10 30
+  neighbor 192.0.2.2 route-reflector-client
+  neighbor 192.0.2.3 remote-as 64496
+  neighbor 192.0.2.3 update-source Loopback0.0
+  neighbor 192.0.2.3 timers 10 30
+  neighbor 192.0.2.3 route-reflector-client
+  neighbor 203.0.113.2 remote-as 64497
+  neighbor 203.0.113.2 advertisement-interval 15
+  address-family ipv4 unicast
+    network 198.51.100.0/24
+    aggregate-address 198.51.100.0/23 summary-only
+    distance ebgp 30 ibgp 190
+    neighbor 192.0.2.2 next-hop-self
+    neighbor 192.0.2.3 next-hop-self
+    neighbor 203.0.113.2 route-map rm-u-out out
+    neighbor 203.0.113.2 send-default
+!
+interface GigaEthernet0.0
+  description to sample upstream
+  ip address 203.0.113.1/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  description sample lan
+  ip address 198.51.100.1/24
+  ip ospf hello-interval 10
+  ip ospf dead-interval 40
+  no shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.1/32
+!

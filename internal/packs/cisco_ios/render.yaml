@@ -3,14 +3,20 @@
 sections:
   - {id: system,     template: system.j2}
   - {id: vrf,        template: vrf.j2}
+  - {id: ipv6_global, template: ipv6_global.j2}  # the switch of IPv6 and the DHCPv6 pools
   - {id: ipsec,      template: ipsec.j2}        # before the interfaces that name the profiles and maps
   - {id: qos,        template: qos.j2}          # before the interfaces that name the policies
+  - {id: l2tp,       template: l2tp.j2}         # before the interfaces that name the pseudowire classes
+  - {id: switch,     template: switch.j2}       # VLANs and bridging, before the ports that name them
   - {id: interfaces, template: interfaces.j2}   # PPPoE stands under its two interfaces
   - {id: tracking,   template: tracking.j2}
   - {id: routing,    template: routing.j2}
   - {id: ospf,       template: ospf.j2}
   - {id: bgp,        template: bgp.j2}
+  - {id: rip,        template: rip.j2}          # RIP and RIPng (appendix A 3.27)
+  - {id: ipv6,       template: ipv6.j2}         # IPv6 routes, OSPFv3, prefix lists and access lists
   - {id: policy,     template: policy.j2}
+  - {id: route_policy, template: route_policy.j2}   # after the lists the route maps name
   - {id: nat,        template: nat.j2}
   - {id: dhcp,       template: dhcp.j2}
   - {id: services,   template: services.j2}

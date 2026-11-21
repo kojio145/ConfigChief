@@ -12,8 +12,12 @@ columns:
   - {name: src_port, title: {ja: 送信元ポート, en: Source port}, type: string, note: {ja: "80、1000-2000、>1023、<1024、!80", en: "80, 1000-2000, >1023, <1024, !80"}}
   - {name: dst, title: {ja: 宛先, en: Destination}, type: string, note: {ja: "送信元と同じ書き方", en: "Written like the source"}}
   - {name: dst_port, title: {ja: 宛先ポート, en: Destination port}, type: string, note: {ja: "送信元ポートと同じ書き方", en: "Written like the source port"}}
-  - {name: flags, title: {ja: 付加条件, en: Flags}, type: "list<enum>", values: [established, log, fragments]}
-  - {name: icmp_type, title: {ja: ICMP の種類, en: ICMP type}, type: string}
+  - {name: flags, title: {ja: 付加条件, en: Flags}, type: "list<enum>", values: [established, log, fragments, log_input, ack, fin, psh, rst, syn, urg], note: {ja: "log_input = 入ってきた IF も記録する。ack fin psh rst syn urg = その TCP のフラグが立った通信だけに合う", en: "log_input = log with the input interface. ack fin psh rst syn urg = only packets with that TCP flag"}}
+  - {name: icmp_type, title: {ja: ICMP の種類, en: ICMP type}, type: string, note: {ja: "番号か、メーカーの語（echo、echo-reply、unreachable など）", en: "A number, or the word of the vendor (echo, echo-reply, unreachable and so on)"}}
   - {name: remark, title: {ja: 注記, en: Remark}, type: string, note: {ja: "動作が remark の行の本文", en: "The text of a remark entry"}}
   - {name: dscp, title: {ja: DSCP, en: DSCP}, type: int, min: 0, max: 63, note: {ja: "この DSCP の通信だけに合う。数で書く（ef = 46）", en: "Matches this DSCP only. A number (ef = 46)"}}
   - {name: precedence, title: {ja: precedence, en: Precedence}, type: int, min: 0, max: 7, note: {ja: "この precedence の通信だけに合う", en: "Matches this precedence only"}}
+  - {name: icmp_code, title: {ja: ICMP のコード, en: ICMP code}, type: int, min: 0, max: 255, note: {ja: "ICMP の種類を番号で書いた行だけ", en: "Only with an ICMP type written as a number"}}
+  - {name: tos, title: {ja: ToS, en: ToS}, type: int, min: 0, max: 15, note: {ja: "この ToS の通信だけに合う。数で書く", en: "Matches this ToS only. A number"}}
+  - {name: time_range, title: {ja: 効かせる時間帯, en: Time range}, type: ref, ref: time_ranges.name, note: {ja: "この時間帯の間だけ効く行（シート「時間帯」の名前）", en: "The entry works in this time range only (a name of the sheet of time ranges)"}}
+  - {name: comment, title: {ja: 行の注記, en: Comment of the entry}, type: string, note: {ja: "この行に付ける注記（NEC QX の rule <番号> comment）。注記だけの行を持つメーカーでは、動作 remark の行を使う", en: "A comment tied to this entry (rule <number> comment of NEC QX). A vendor with comment lines of their own uses a row with the action remark"}}

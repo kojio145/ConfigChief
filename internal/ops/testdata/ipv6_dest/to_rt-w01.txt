@@ -1,0 +1,35 @@
+hostname rt-w01
+!
+ip name-server 2001:db8:0:53::1
+!
+ipv6 unicast-routing
+!
+interface GigabitEthernet0/0
+ ip address 192.0.2.1 255.255.255.0
+ no shutdown
+!
+interface GigabitEthernet0/1
+ ipv6 address 2001:db8:0:2::1/64
+ ipv6 enable
+ no shutdown
+!
+ip sla 1
+ icmp-echo 2001:db8:ff::10 source-interface GigabitEthernet0/1
+ frequency 10
+ip sla schedule 1 life forever start-time now
+track 1 ip sla 1 reachability
+!
+ip route 0.0.0.0 0.0.0.0 192.0.2.254 1 track 1
+!
+ipv6 route 2001:db8:ff::/48 GigabitEthernet0/1 fe80::1
+!
+logging facility local0
+logging source-interface GigabitEthernet0/1
+logging host ipv6 2001:db8:0:50::1
+!
+snmp-server community example-ro RO
+snmp-server host 2001:db8:0:162::1 version 2c example-ro
+!
+ntp server 2001:db8:0:123::1
+!
+end

@@ -1,0 +1,235 @@
+# Access lists (IPv4 basic and advanced), the time ranges they name, and
+# what a packet filter does with a packet no rule matches.
+# Syntax: README, "参照した資料" (ACL commands, Time range commands).
+#
+# A list is opened in one of two ways ("acl basic 2000" or "acl number 2000"),
+# so the rules of an entry stand under acl.basic and acl.advanced and the
+# "number" forms borrow them. A numbered list has its number as its name; a
+# list with a name ("acl advanced name <name>") is known by the name.
+#
+# The parts of a rule may stand in any order (the command takes them so; the
+# order of a saved configuration was not seen). An address is "any" (also
+# when the part is absent), a host (wildcard 0) or a network with its
+# wildcard. "counting" has no column: a rule with it stays unknown.
+#
+# This file is written by a script of the maintainers that puts the long
+# patterns together from their parts.
+rules:
+  - id: acl.basic
+    match: '^acl basic (?:name )?(?P<name>\S+)$'
+    when: "name != 'name'"
+    row: {table: acls, key: {name: "{{ name }}"}}
+    set: {type: standard}
+    children:
+      - id: acl.description
+        match: '^description (?P<text>.+)$'
+        set: {description: "{{ text }}"}
+      - id: acl.basic.rule
+        match: '^rule (?P<seq>\d+) (?P<action>permit|deny)(?: source (?:(?P<sany>any)|(?P<sa>\d+\.\d+\.\d+\.\d+) (?P<sw>0|\d+\.\d+\.\d+\.\d+))|(?P<frag> fragment)|(?P<log> logging)| time-range (?P<tr>\S+))*$'
+        row: {table: acl_entries, key: {acl: "{{ name }}", seq: "{{ seq }}"}}
+        set:
+          action: "{{ action }}"
+          src: "{{ 'any' if not sa else (sa if sw in ['0', '0.0.0.0'] else (sa | with_wildcard(sw) | network)) }}"
+          time_range: "{{ tr }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
+      # A comment is tied to a rule by its number.
+      - id: acl.basic.comment
+        match: '^rule (?P<seq>\d+) comment (?P<text>.+)$'
+        row: {table: acl_entries, key: {acl: "{{ name }}", seq: "{{ seq }}"}}
+        set: {comment: "{{ text }}"}
+
+  - id: acl.advanced
+    match: '^acl advanced (?:name )?(?P<name>\S+)$'
+    when: "name != 'name'"
+    row: {table: acls, key: {name: "{{ name }}"}}
+    set: {type: extended}
+    children:
+      - id: acl.advanced.description
+        match: '^description (?P<text>.+)$'
+        set: {description: "{{ text }}"}
+      # TCP and UDP, with ports: one port (eq, gt, lt, neq) or a range. A
+      # port may be shown by its name (lexicon.yaml). A flag of TCP is read
+      # when it has to be set ("ack 1"); "ack 0" has no word in the dataset.
+      - id: acl.advanced.l4
+        match: '^rule (?P<seq>\d+) (?P<action>permit|deny) (?P<proto>tcp|udp)(?: source (?:(?P<sany>any)|(?P<sa>\d+\.\d+\.\d+\.\d+) (?P<sw>0|\d+\.\d+\.\d+\.\d+))| source-port (?:(?P<sop>eq|gt|lt|neq) (?P<sp>[\w-]+)|range (?P<sp1>[\w-]+) (?P<sp2>[\w-]+))| destination (?:(?P<dany>any)|(?P<da>\d+\.\d+\.\d+\.\d+) (?P<dw>0|\d+\.\d+\.\d+\.\d+))| destination-port (?:(?P<dop>eq|gt|lt|neq) (?P<dp>[\w-]+)|range (?P<dp1>[\w-]+) (?P<dp2>[\w-]+))|(?P<est> established)|(?P<ack> ack 1)|(?P<fin> fin 1)|(?P<psh> psh 1)|(?P<rst> rst 1)|(?P<syn> syn 1)|(?P<urg> urg 1)| dscp (?P<dscp>[\w-]+)| precedence (?P<prec>[\w-]+)| tos (?P<tos>\d+)|(?P<frag> fragment)|(?P<log> logging)| time-range (?P<tr>\S+))*$'
+        when: "proto == 'tcp' or not (est or ack or fin or psh or rst or syn or urg)"
+        row: {table: acl_entries, key: {acl: "{{ name }}", seq: "{{ seq }}"}}
+        set:
+          action: "{{ action }}"
+          protocol: "{{ proto }}"
+          src: "{{ 'any' if not sa else (sa if sw in ['0', '0.0.0.0'] else (sa | with_wildcard(sw) | network)) }}"
+          dst: "{{ 'any' if not da else (da if dw in ['0', '0.0.0.0'] else (da | with_wildcard(dw) | network)) }}"
+          src_port: "{{ ((sop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ (sp if sp is digits else ((sp | unlex('tcp_port')) if proto == 'tcp' else (sp | unlex('udp_port'))))) if sp else (((sp1 if sp1 is digits else ((sp1 | unlex('tcp_port')) if proto == 'tcp' else (sp1 | unlex('udp_port')))) ~ '-' ~ (sp2 if sp2 is digits else ((sp2 | unlex('tcp_port')) if proto == 'tcp' else (sp2 | unlex('udp_port'))))) if sp1 else '') }}"
+          dst_port: "{{ ((dop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ (dp if dp is digits else ((dp | unlex('tcp_port')) if proto == 'tcp' else (dp | unlex('udp_port'))))) if dp else (((dp1 if dp1 is digits else ((dp1 | unlex('tcp_port')) if proto == 'tcp' else (dp1 | unlex('udp_port')))) ~ '-' ~ (dp2 if dp2 is digits else ((dp2 | unlex('tcp_port')) if proto == 'tcp' else (dp2 | unlex('udp_port'))))) if dp1 else '') }}"
+          dscp: "{{ (dscp if dscp is digits else dscp | unlex('dscp')) if dscp else '' }}"
+          precedence: "{{ (prec if prec is digits else prec | unlex('precedence')) if prec else '' }}"
+          tos: "{{ tos }}"
+          time_range: "{{ tr }}"
+        append: {flags: "{{ 'established' if est else '' }} {{ 'ack' if ack else '' }} {{ 'fin' if fin else '' }} {{ 'psh' if psh else '' }} {{ 'rst' if rst else '' }} {{ 'syn' if syn else '' }} {{ 'urg' if urg else '' }} {{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
+      # ICMP, with the type as a number (and a code) or as one of the names
+      # of the manual.
+      - id: acl.advanced.icmp
+        match: '^rule (?P<seq>\d+) (?P<action>permit|deny) icmp(?: source (?:(?P<sany>any)|(?P<sa>\d+\.\d+\.\d+\.\d+) (?P<sw>0|\d+\.\d+\.\d+\.\d+))| destination (?:(?P<dany>any)|(?P<da>\d+\.\d+\.\d+\.\d+) (?P<dw>0|\d+\.\d+\.\d+\.\d+))| icmp-type (?:(?P<type>\d+)(?: (?P<code>\d+))?|(?P<tname>[A-Za-z]+(?:-[A-Za-z]+)*))| dscp (?P<dscp>[\w-]+)| precedence (?P<prec>[\w-]+)| tos (?P<tos>\d+)|(?P<frag> fragment)|(?P<log> logging)| time-range (?P<tr>\S+))*$'
+        when: "tname not in ['fragment', 'logging', 'counting', 'time-range', 'source', 'destination', 'dscp', 'precedence', 'tos']"
+        row: {table: acl_entries, key: {acl: "{{ name }}", seq: "{{ seq }}"}}
+        set:
+          action: "{{ action }}"
+          protocol: icmp
+          src: "{{ 'any' if not sa else (sa if sw in ['0', '0.0.0.0'] else (sa | with_wildcard(sw) | network)) }}"
+          dst: "{{ 'any' if not da else (da if dw in ['0', '0.0.0.0'] else (da | with_wildcard(dw) | network)) }}"
+          icmp_type: "{{ type if type else tname }}"
+          icmp_code: "{{ code }}"
+          dscp: "{{ (dscp if dscp is digits else dscp | unlex('dscp')) if dscp else '' }}"
+          precedence: "{{ (prec if prec is digits else prec | unlex('precedence')) if prec else '' }}"
+          tos: "{{ tos }}"
+          time_range: "{{ tr }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
+      # Any other protocol, by its word or its number (50 and 51 are what
+      # the dataset calls esp and ah).
+      - id: acl.advanced.ip
+        match: '^rule (?P<seq>\d+) (?P<action>permit|deny) (?P<proto>ip|gre|ospf|\d+)(?: source (?:(?P<sany>any)|(?P<sa>\d+\.\d+\.\d+\.\d+) (?P<sw>0|\d+\.\d+\.\d+\.\d+))| destination (?:(?P<dany>any)|(?P<da>\d+\.\d+\.\d+\.\d+) (?P<dw>0|\d+\.\d+\.\d+\.\d+))| dscp (?P<dscp>[\w-]+)| precedence (?P<prec>[\w-]+)| tos (?P<tos>\d+)|(?P<frag> fragment)|(?P<log> logging)| time-range (?P<tr>\S+))*$'
+        row: {table: acl_entries, key: {acl: "{{ name }}", seq: "{{ seq }}"}}
+        set:
+          action: "{{ action }}"
+          protocol: "{{ (proto | unlex('acl_protocol')) if proto in ['50', '51'] else proto }}"
+          src: "{{ 'any' if not sa else (sa if sw in ['0', '0.0.0.0'] else (sa | with_wildcard(sw) | network)) }}"
+          dst: "{{ 'any' if not da else (da if dw in ['0', '0.0.0.0'] else (da | with_wildcard(dw) | network)) }}"
+          dscp: "{{ (dscp if dscp is digits else dscp | unlex('dscp')) if dscp else '' }}"
+          precedence: "{{ (prec if prec is digits else prec | unlex('precedence')) if prec else '' }}"
+          tos: "{{ tos }}"
+          time_range: "{{ tr }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
+      - id: acl.advanced.comment
+        match: '^rule (?P<seq>\d+) comment (?P<text>.+)$'
+        row: {table: acl_entries, key: {acl: "{{ name }}", seq: "{{ seq }}"}}
+        set: {comment: "{{ text }}"}
+
+  # ---- the other way to open a list: by "number" (2000-2999 basic,
+  # 3000-3999 advanced). "match-order config" is what the device does
+  # anyway. The form with a name behind the number, and "match-order auto",
+  # stay unknown. ----
+  - id: acl.number.basic
+    match: '^acl number (?P<name>2\d\d\d)(?: match-order config)?$'
+    row: {table: acls, key: {name: "{{ name }}"}}
+    set: {type: standard}
+    children_from: acl.basic
+  - id: acl.number.advanced
+    match: '^acl number (?P<name>3\d\d\d)(?: match-order config)?$'
+    row: {table: acls, key: {name: "{{ name }}"}}
+    set: {type: extended}
+    children_from: acl.advanced
+
+  # ---- IPv6 lists ----
+  # The dataset has no row for an IPv6 list itself: the rules carry its
+  # name. The parts of a rule are read as for IPv4; an address is "any", a
+  # host (length 128) or a prefix. An ICMPv6 type is read as two numbers
+  # (type and code). "time-range", "counting", "flow-label", "routing" and
+  # the names of ICMPv6 messages stay unknown, like "acl ipv6 number".
+  - id: acl6.basic
+    match: '^acl ipv6 basic (?:name )?(?P<name>\S+)$'
+    when: "name != 'name'"
+    children:
+      - id: acl6.basic.rule
+        match: '^rule (?P<seq>\d+) (?P<action>permit|deny)(?: source (?:(?P<sany>any)|(?P<sa>[0-9A-Fa-f:]+)(?:/| )(?P<sl>\d+))|(?P<frag> fragment)|(?P<log> logging))*$'
+        row: {table: ipv6_acl_entries, key: {acl: "{{ name }}", seq: "{{ seq }}"}}
+        set:
+          action: "{{ action }}"
+          src: "{{ 'any' if not sa else ((sa ~ '/128') | ip if sl == '128' else ((sa ~ '/' ~ sl) | network)) }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
+  - id: acl6.advanced
+    match: '^acl ipv6 advanced (?:name )?(?P<name>\S+)$'
+    when: "name != 'name'"
+    children:
+      - id: acl6.advanced.l4
+        match: '^rule (?P<seq>\d+) (?P<action>permit|deny) (?P<proto>tcp|udp)(?: source (?:(?P<sany>any)|(?P<sa>[0-9A-Fa-f:]+)(?:/| )(?P<sl>\d+))| source-port (?:(?P<sop>eq|gt|lt|neq) (?P<sp>\d+)|range (?P<sp1>\d+) (?P<sp2>\d+))| destination (?:(?P<dany>any)|(?P<da>[0-9A-Fa-f:]+)(?:/| )(?P<dl>\d+))| destination-port (?:(?P<dop>eq|gt|lt|neq) (?P<dp>\d+)|range (?P<dp1>\d+) (?P<dp2>\d+))| dscp (?P<dscp>\d+)|(?P<est> established)|(?P<ack> ack 1)|(?P<fin> fin 1)|(?P<psh> psh 1)|(?P<rst> rst 1)|(?P<syn> syn 1)|(?P<urg> urg 1)|(?P<frag> fragment)|(?P<log> logging))*$'
+        when: "proto == 'tcp' or not (est or ack or fin or psh or rst or syn or urg)"
+        row: {table: ipv6_acl_entries, key: {acl: "{{ name }}", seq: "{{ seq }}"}}
+        set:
+          action: "{{ action }}"
+          protocol: "{{ proto }}"
+          src: "{{ 'any' if not sa else ((sa ~ '/128') | ip if sl == '128' else ((sa ~ '/' ~ sl) | network)) }}"
+          dst: "{{ 'any' if not da else ((da ~ '/128') | ip if dl == '128' else ((da ~ '/' ~ dl) | network)) }}"
+          src_port: "{{ ((sop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ sp) if sp else ((sp1 ~ '-' ~ sp2) if sp1 else '') }}"
+          dst_port: "{{ ((dop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ dp) if dp else ((dp1 ~ '-' ~ dp2) if dp1 else '') }}"
+          dscp: "{{ dscp }}"
+        append: {flags: "{{ 'established' if est else '' }} {{ 'ack' if ack else '' }} {{ 'fin' if fin else '' }} {{ 'psh' if psh else '' }} {{ 'rst' if rst else '' }} {{ 'syn' if syn else '' }} {{ 'urg' if urg else '' }} {{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
+      - id: acl6.advanced.icmp
+        match: '^rule (?P<seq>\d+) (?P<action>permit|deny) icmpv6(?: source (?:(?P<sany>any)|(?P<sa>[0-9A-Fa-f:]+)(?:/| )(?P<sl>\d+))| destination (?:(?P<dany>any)|(?P<da>[0-9A-Fa-f:]+)(?:/| )(?P<dl>\d+))| icmp6-type (?P<type>\d+) (?P<code>\d+)| dscp (?P<dscp>\d+)|(?P<frag> fragment)|(?P<log> logging))*$'
+        row: {table: ipv6_acl_entries, key: {acl: "{{ name }}", seq: "{{ seq }}"}}
+        set:
+          action: "{{ action }}"
+          protocol: icmp
+          src: "{{ 'any' if not sa else ((sa ~ '/128') | ip if sl == '128' else ((sa ~ '/' ~ sl) | network)) }}"
+          dst: "{{ 'any' if not da else ((da ~ '/128') | ip if dl == '128' else ((da ~ '/' ~ dl) | network)) }}"
+          icmp_type: "{{ type }}"
+          icmp_code: "{{ code }}"
+          dscp: "{{ dscp }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
+      # "ipv6" (every protocol) is what the dataset calls ip.
+      - id: acl6.advanced.ip
+        match: '^rule (?P<seq>\d+) (?P<action>permit|deny) (?P<proto>ipv6|gre|ospf|\d+)(?: source (?:(?P<sany>any)|(?P<sa>[0-9A-Fa-f:]+)(?:/| )(?P<sl>\d+))| destination (?:(?P<dany>any)|(?P<da>[0-9A-Fa-f:]+)(?:/| )(?P<dl>\d+))| dscp (?P<dscp>\d+)|(?P<frag> fragment)|(?P<log> logging))*$'
+        row: {table: ipv6_acl_entries, key: {acl: "{{ name }}", seq: "{{ seq }}"}}
+        set:
+          action: "{{ action }}"
+          protocol: "{{ 'ip' if proto == 'ipv6' else proto }}"
+          src: "{{ 'any' if not sa else ((sa ~ '/128') | ip if sl == '128' else ((sa ~ '/' ~ sl) | network)) }}"
+          dst: "{{ 'any' if not da else ((da ~ '/128') | ip if dl == '128' else ((da ~ '/' ~ dl) | network)) }}"
+          dscp: "{{ dscp }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
+
+  # ---- time ranges (Time range commands) ----
+  # One line is one statement: a periodic one ("08:00 to 18:00 working-day")
+  # or an absolute one ("from 08:00 1/1/2026 to 18:00 12/31/2026"; the date
+  # is MM/DD/YYYY or YYYY/MM/DD). The days are read by their words; days as
+  # digits (0 to 6) and a statement that is both periodic and absolute stay
+  # unknown. A time range has one absolute statement in the dataset.
+  - id: time_range.periodic
+    match: '^time-range (?P<name>[A-Za-z]\S*) (?P<sh>\d{1,2}):(?P<sm>\d{2}) to (?P<eh>\d{1,2}):(?P<em>\d{2}) (?P<days>(?i:sun|mon|tue|wed|thu|fri|sat|working-day|off-day|daily)(?: (?i:sun|mon|tue|wed|thu|fri|sat|working-day|off-day|daily))*)$'
+    row: {table: time_ranges, key: {name: "{{ name }}", seq: "{{ (rows('time_ranges', name=name) | length + 1) * 10 }}"}}
+    set: {kind: periodic, start_time: "{{ sh | int }}:{{ sm }}", end_time: "{{ eh | int }}:{{ em }}"}
+    append: {days: "{{ days | lower | replace('working-day', 'weekdays') | replace('off-day', 'weekend') | replace('sun', 'sunday') | replace('mon', 'monday') | replace('tue', 'tuesday') | replace('wed', 'wednesday') | replace('thu', 'thursday') | replace('fri', 'friday') | replace('sat', 'saturday') }}"}
+  - id: time_range.absolute
+    match: '^time-range (?P<name>[A-Za-z]\S*)(?: from (?P<sh>\d{1,2}):(?P<sm>\d{2}) (?:(?P<sy>\d{4})/(?P<smo>\d{1,2})/(?P<sd>\d{1,2})|(?P<smo2>\d{1,2})/(?P<sd2>\d{1,2})/(?P<sy2>\d{4})))?(?: to (?P<eh>\d{1,2}):(?P<em>\d{2}) (?:(?P<ey>\d{4})/(?P<emo>\d{1,2})/(?P<ed>\d{1,2})|(?P<emo2>\d{1,2})/(?P<ed2>\d{1,2})/(?P<ey2>\d{4})))?$'
+    when: "(sh or eh) and not (rows('time_ranges', name=name) | selectattr('kind', 'equalto', 'absolute') | list)"
+    row: {table: time_ranges, key: {name: "{{ name }}", seq: "{{ (rows('time_ranges', name=name) | length + 1) * 10 }}"}}
+    set:
+      kind: absolute
+      start_time: "{{ (sh | int ~ ':' ~ sm) if sh else '' }}"
+      start_date: "{{ ((sy ~ sy2) ~ '-' ~ ('0' if (smo ~ smo2) | length == 1 else '') ~ smo ~ smo2 ~ '-' ~ ('0' if (sd ~ sd2) | length == 1 else '') ~ sd ~ sd2) if sh else '' }}"
+      end_time: "{{ (eh | int ~ ':' ~ em) if eh else '' }}"
+      end_date: "{{ ((ey ~ ey2) ~ '-' ~ ('0' if (emo ~ emo2) | length == 1 else '') ~ emo ~ emo2 ~ '-' ~ ('0' if (ed ~ ed2) | length == 1 else '') ~ ed ~ ed2) if eh else '' }}"
+
+derive:
+  # A packet filter of this device lets a packet through that no rule
+  # matches (README, "IF に当てた ACL"); the dataset means that such a packet
+  # is dropped (appendix A 3.25). A list that is only used as a packet
+  # filter and does not end with a rule for everything gets that rule said
+  # in full: "permit" for all, behind the last rule.
+  - id: acl.filter.default
+    for: acls
+    as: a
+    let:
+      used: "rows('x_pf', acl=a.name) | length"
+      other: "(rows('x_remote_acl', ssh=a.name) | length) + (rows('x_remote_acl', telnet=a.name) | length) + (rows('snmp_communities', acl=a.name) | length) + (rows('snmp_users', acl=a.name) | length) + (rows('x_snmp_group', acl=a.name) | length)"
+      top: "rows('acl_entries', acl=a.name) | map(attribute='seq') | map('int') | max"
+      last: "lookup('acl_entries', acl=a.name, seq=(rows('acl_entries', acl=a.name) | map(attribute='seq') | map('int') | max))"
+      whole: "last.action in ['permit', 'deny'] and last.protocol in ['', 'ip'] and last.src in ['', 'any'] and last.dst in ['', 'any'] and last.dscp | string == '' and last.precedence | string == '' and last.tos | string == '' and not last.flags and not last.time_range"
+      n: "rows('acl_entries', acl=a.name) | length"
+    when: "used > 0 and other == 0 and not (n > 0 and whole) and (n == 0 or top + 5 <= 65534)"
+    row: {table: acl_entries, key: {acl: "{{ a.name }}", seq: "{{ (top + 5) if n > 0 else 0 }}"}}
+    set: {action: permit, protocol: "{{ 'ip' if a.type == 'extended' else '' }}", src: any, dst: "{{ 'any' if a.type == 'extended' else '' }}"}
+  # The filter is put on the interface when the list says what happens to
+  # every packet (by itself, or after the step above). A list that is also
+  # used for something else, and does not end with a rule for everything,
+  # cannot say both: the "packet-filter" line stays unknown.
+  - id: acl.filter.apply
+    for: x_pf
+    as: x
+    let:
+      n: "rows('acl_entries', acl=x.acl) | length"
+      last: "lookup('acl_entries', acl=x.acl, seq=(rows('acl_entries', acl=x.acl) | map(attribute='seq') | map('int') | max))"
+      whole: "last.action in ['permit', 'deny'] and last.protocol in ['', 'ip'] and last.src in ['', 'any'] and last.dst in ['', 'any'] and last.dscp | string == '' and last.precedence | string == '' and last.tos | string == '' and not last.flags and not last.time_range"
+      known: "lookup('acls', name=x.acl)"
+    when: "x.acl and (not known or (n > 0 and whole))"
+    row: {table: interfaces, key: {name: "{{ x.if_name }}"}}
+    set: {"acl_{{ x.dir }}": "{{ x.acl }}"}

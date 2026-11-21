@@ -1,0 +1,28 @@
+hostname rt-w05
+!
+fhrp version vrrp v3
+!
+interface GigabitEthernet0/0
+ ip address 192.0.2.1 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet0/1
+ ip address 198.51.100.2 255.255.255.0
+ ipv6 address 2001:db8:0:10::2/64
+ vrrp 1 address-family ipv4
+  address 198.51.100.1 primary
+  priority 110
+  timers advertise 2000
+  vrrpv2
+  exit-vrrp
+ vrrp 2 address-family ipv6
+  address fe80::1 primary
+  address 2001:db8:0:10::1/64
+  priority 110
+  timers advertise 500
+  exit-vrrp
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 192.0.2.2
+!
+end

@@ -1,0 +1,10 @@
+table: l2tp_users
+title: {ja: L2TP 接続ユーザ, en: L2TP users}
+since: M7
+key: [device, group, name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: group, title: {ja: L2TP の名前, en: L2TP group}, type: ref, ref: l2tp_groups.name, required: true}
+  - {name: name, title: {ja: 接続 ID, en: User name}, type: string, required: true}
+  - {name: password, title: {ja: 接続パスワード, en: Password}, type: secret, required: true, note: {ja: "CHAP で確かめるので、ハッシュでは持てない", en: "Checked by CHAP, so it cannot be kept as a hash"}}
+  - {name: address, title: {ja: 固定で払い出すアドレス, en: Static address}, type: ip4}

@@ -1,0 +1,267 @@
+{# RIP and RIPng (appendix A 3.27). The lines under an interface are in
+   rip_if.j2. Syntax: Cisco IOS IP Routing: RIP Command Reference, IP
+   Routing: Protocol-Independent Command Reference, IPv6 Command Reference
+   (README). #}
+{% for r in t.rip_interfaces %}
+{% set n = namespace(proc=false, seen=false) %}
+{% for p in t.rip_processes %}
+{% if p.family == r.family %}
+{% set n.proc = true %}
+{% endif %}
+{% endfor %}
+{% for i in t.interfaces %}
+{% if i.name == r.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.proc %}
+{{ fail('RIP インタフェース ' ~ r.if_name ~ '（' ~ r.family ~ '）: シート「RIP」に、種類が ' ~ r.family ~ ' の行がありません（行を足してください）') }}
+{% endif %}
+{% if not n.seen %}
+{{ fail('RIP インタフェースの IF ' ~ r.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{% for d in t.rip_redistribute %}
+{% set n = namespace(proc=false) %}
+{% for p in t.rip_processes %}
+{% if p.family == d.family %}
+{% set n.proc = true %}
+{% endif %}
+{% endfor %}
+{% if not n.proc %}
+{{ fail('RIP 再配布 ' ~ d.source ~ '（' ~ d.family ~ '）: シート「RIP」に、種類が ' ~ d.family ~ ' の行がありません（行を足してください）') }}
+{% endif %}
+{% endfor %}
+{% for p in t.rip_processes %}
+{% if p.family == 'ipv4' %}
+{% set what = 'RIP' %}
+{# The key of an interface: a key chain the pack names after it. #}
+{% for r in t.rip_interfaces %}
+{% if r.family == 'ipv4' and r.auth_key %}
+key chain RIP-{{ r.if_name | ifshort | replace('/', '-') | replace('.', '-') }}
+ key {{ r.auth_key_id if (r.auth_key_id or r.auth_key_id == 0) else 1 }}
+  key-string {{ r.auth_key }}
+!
+{% endif %}
+{% endfor %}
+router rip
+{% if p.version %}
+ version {{ p.version }}
+{% endif %}
+{% if p.timer_update or p.timer_invalid or p.timer_holddown or p.timer_holddown == 0 or p.timer_flush %}
+{% if p.timer_update and p.timer_invalid and p.timer_flush %}
+ timers basic {{ p.timer_update }} {{ p.timer_invalid }} {{ p.timer_holddown if (p.timer_holddown or p.timer_holddown == 0) else 180 }} {{ p.timer_flush }}
+{% else %}
+{{ fail(what ~ ': タイマは、「更新を送る間隔」「経路を無効とみなすまで」「経路を消すまで」の 3 つを組で書きます') }}
+{% endif %}
+{% endif %}
+{% if p.distance %}
+ distance {{ p.distance }} 0.0.0.0 255.255.255.255
+{% endif %}
+{% if p.default_metric %}
+ default-metric {{ p.default_metric }}
+{% endif %}
+{% for d in t.rip_redistribute %}
+{% if d.family == 'ipv4' %}
+{% set src = d.source %}
+{% if d.source == 'ospf' %}
+{% set o = namespace(pid=d.process_id, n=0) %}
+{% if not o.pid %}
+{% for x in t.ospf_processes %}
+{% set o.pid = x.process_id %}
+{% set o.n = o.n + 1 %}
+{% endfor %}
+{% if o.n != 1 %}
+{{ fail(what ~ ' の再配布の元 ospf: 「OSPF のプロセス番号」が空で、OSPF のプロセスが ' ~ o.n ~ ' つあります（番号を書いてください）') }}
+{% endif %}
+{% endif %}
+{% set src = 'ospf ' ~ o.pid %}
+{% elif d.source == 'bgp' %}
+{% set b = namespace(asn='') %}
+{% for x in t.bgp_processes %}
+{% if not b.asn or x.vrf == '' %}
+{% set b.asn = x.asn %}
+{% endif %}
+{% endfor %}
+{% if not b.asn %}
+{{ fail(what ~ ' の再配布の元 bgp は、BGP の表に行（AS 番号）が要ります') }}
+{% endif %}
+{% set src = 'bgp ' ~ b.asn %}
+{% elif d.process_id %}
+{{ fail(what ~ ' の再配布の元 ' ~ d.source ~ ': 「OSPF のプロセス番号」は、再配布する経路が ospf の行にだけ書けます') }}
+{% endif %}
+ redistribute {{ src }}{{ ' metric ' ~ d.metric if d.metric else '' }}{{ ' route-map ' ~ d.filter if d.filter else '' }}
+{% endif %}
+{% endfor %}
+{% if p.passive_default == true %}
+ passive-interface default
+{% endif %}
+{% for r in t.rip_interfaces %}
+{% if r.family == 'ipv4' %}
+{% if r.send == false %}
+{% if p.passive_default != true %}
+ passive-interface {{ r.if_name }}
+{% endif %}
+{% elif r.send == true and p.passive_default == true %}
+ no passive-interface {{ r.if_name }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# RIP runs on every interface with an address in a network of its class:
+   the networks of the interfaces that have a row, and no other interface
+   may have an address in them. #}
+{% set nets = namespace(list=[]) %}
+{% for r in t.rip_interfaces %}
+{% if r.family == 'ipv4' %}
+{% for i in t.interfaces %}
+{% if i.name == r.if_name %}
+{% if i.ipv4 is cidr %}
+{% set o = i.ipv4 | ip | split('.') | first | int %}
+{% set net = ((i.ipv4 | ip) ~ '/' ~ (8 if o < 128 else (16 if o < 192 else 24))) | network | ip %}
+{% if net not in nets.list %}
+{% set nets.list = nets.list + [net] %}
+ network {{ net }}
+{% endif %}
+{% else %}
+{{ fail('RIP インタフェース ' ~ r.if_name ~ ': Cisco の RIP は、IF のアドレスが入るネットワーク（network の行）で IF を選びます。IF に固定の IPv4 アドレスが要ります') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% for i in t.interfaces %}
+{% if i.ipv4 is cidr %}
+{% set o = i.ipv4 | ip | split('.') | first | int %}
+{% set net = ((i.ipv4 | ip) ~ '/' ~ (8 if o < 128 else (16 if o < 192 else 24))) | network | ip %}
+{% if net in nets.list %}
+{% set n = namespace(row=false) %}
+{% for r in t.rip_interfaces %}
+{% if r.family == 'ipv4' and r.if_name == i.name %}
+{% set n.row = true %}
+{% endif %}
+{% endfor %}
+{% if not n.row %}
+{{ fail(i.name ~ '（' ~ i.ipv4 ~ '）: Cisco の RIP は network ' ~ net ~ '（クラスのネットワーク）で IF を選ぶので、この IF でも RIP が動きます。シート「RIP インタフェース」にこの IF の行を足すか（送らないなら「送る」を無効に）、アドレスを見直してください') }}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if p.prefix_list_in %}
+ distribute-list prefix {{ p.prefix_list_in }} in
+{% endif %}
+{% if p.prefix_list_out %}
+ distribute-list prefix {{ p.prefix_list_out }} out
+{% endif %}
+{% for r in t.rip_interfaces %}
+{% if r.family == 'ipv4' %}
+{% if r.prefix_list_in %}
+ distribute-list prefix {{ r.prefix_list_in }} in {{ r.if_name }}
+{% endif %}
+{% if r.prefix_list_out %}
+ distribute-list prefix {{ r.prefix_list_out }} out {{ r.if_name }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if p.default_originate == true %}
+ default-information originate{{ ' route-map ' ~ p.default_originate_filter if p.default_originate_filter else '' }}
+{% elif p.default_originate_filter %}
+{{ fail(what ~ ': 「デフォルト経路の広告の条件」は、「デフォルト経路を広告する」が有効な行にだけ書けます') }}
+{% endif %}
+{% if p.auto_summary == true %}
+ auto-summary
+{% elif p.auto_summary == false %}
+ no auto-summary
+{% endif %}
+!
+{% else %}
+{# ---- RIPng: the process has the name "ripng" ---- #}
+{% set what = 'RIPng' %}
+{% if p.version or p.auto_summary == true or p.auto_summary == false %}
+{{ fail(what ~ ': 「版」「クラスの境目で集約する」は RIP（ipv4）だけの設定です（セルを空にしてください）') }}
+{% endif %}
+{% if p.passive_default == true %}
+{{ fail(what ~ ': 「既定を「送らない」にする」は、Cisco の RIPng では書けません（RIPng に passive-interface の行がありません）') }}
+{% endif %}
+{% if p.default_originate == true or p.default_originate_metric or p.default_originate_filter %}
+{{ fail(what ~ ': Cisco の RIPng は、デフォルト経路の広告を IF ごとに書きます。シート「RIP インタフェース」の、広告する IF の行の「この IF でデフォルト経路を広告する」に書いてください') }}
+{% endif %}
+{% if p.default_metric %}
+{{ fail(what ~ ': 「再配布のメトリックの既定」は RIPng にありません（再配布の行の「メトリック」に書いてください）') }}
+{% endif %}
+ipv6 router rip ripng
+{% if p.timer_update or p.timer_invalid or p.timer_holddown or p.timer_holddown == 0 or p.timer_flush %}
+{% if not (p.timer_update and p.timer_invalid and p.timer_flush) %}
+{{ fail(what ~ ': タイマは、「更新を送る間隔」「経路を無効とみなすまで」「経路を消すまで」の 3 つを組で書きます') }}
+{% elif p.timer_flush <= p.timer_invalid %}
+{{ fail(what ~ ': 「経路を消すまで」（' ~ p.timer_flush ~ '）は、「経路を無効とみなすまで」（' ~ p.timer_invalid ~ '）より長くします') }}
+{% else %}
+ timers {{ p.timer_update }} {{ p.timer_invalid }} {{ p.timer_holddown if (p.timer_holddown or p.timer_holddown == 0) else 0 }} {{ p.timer_flush - p.timer_invalid }}
+{% endif %}
+{% endif %}
+{% if p.distance %}
+ distance {{ p.distance }}
+{% endif %}
+{% for d in t.rip_redistribute %}
+{% if d.family == 'ipv6' %}
+{% set src = d.source %}
+{% if d.source == 'ospf' %}
+{% set o = namespace(pid=d.process_id, n=0) %}
+{% if not o.pid %}
+{% for x in t.ospfv3_processes %}
+{% set o.pid = x.process_id %}
+{% set o.n = o.n + 1 %}
+{% endfor %}
+{% if o.n != 1 %}
+{{ fail(what ~ ' の再配布の元 ospf: 「OSPF のプロセス番号」が空で、OSPFv3 のプロセスが ' ~ o.n ~ ' つあります（番号を書いてください）') }}
+{% endif %}
+{% endif %}
+{% set src = 'ospf ' ~ o.pid %}
+{% elif d.source == 'bgp' %}
+{% set b = namespace(asn='') %}
+{% for x in t.bgp_processes %}
+{% if not b.asn or x.vrf == '' %}
+{% set b.asn = x.asn %}
+{% endif %}
+{% endfor %}
+{% if not b.asn %}
+{{ fail(what ~ ' の再配布の元 bgp は、BGP の表に行（AS 番号）が要ります') }}
+{% endif %}
+{% set src = 'bgp ' ~ b.asn %}
+{% endif %}
+ redistribute {{ src }}{{ ' metric ' ~ d.metric if d.metric else '' }}{{ ' route-map ' ~ d.filter if d.filter else '' }}
+{% endif %}
+{% endfor %}
+{% if p.prefix_list_in %}
+ distribute-list prefix-list {{ p.prefix_list_in }} in
+{% endif %}
+{% if p.prefix_list_out %}
+ distribute-list prefix-list {{ p.prefix_list_out }} out
+{% endif %}
+{# The split horizon is of the whole process here: every interface has to
+   say the same. #}
+{% set sh = namespace(v='', n=0, mixed=false) %}
+{% for r in t.rip_interfaces %}
+{% if r.family == 'ipv6' %}
+{% if sh.n > 0 and r.split_horizon != sh.v %}
+{% set sh.mixed = true %}
+{% endif %}
+{% set sh.v = r.split_horizon %}
+{% set sh.n = sh.n + 1 %}
+{% if r.prefix_list_in %}
+ distribute-list prefix-list {{ r.prefix_list_in }} in {{ r.if_name }}
+{% endif %}
+{% if r.prefix_list_out %}
+ distribute-list prefix-list {{ r.prefix_list_out }} out {{ r.if_name }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if sh.mixed %}
+{{ fail(what ~ ': Cisco の RIPng のスプリットホライズンは、プロセス全体の設定です。RIPng の IF の行ぜんぶで、「スプリットホライズン」を同じ値にしてください') }}
+{% elif sh.v == 'none' %}
+ no split-horizon
+{% elif sh.v == 'poisoned_reverse' %}
+ poison-reverse
+{% endif %}
+!
+{% endif %}
+{% endfor %}

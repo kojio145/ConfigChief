@@ -1,0 +1,18 @@
+# The rest of IPsec (made-up values; appendix A 3.13 and 3.20): GCM and the
+# SHA-2 words of a transform set, the identity of the device ("crypto isakmp
+# identity hostname"), a tunnel interface whose IPsec profile names an
+# ISAKMP profile, the IKEv2 profile named on the line of the tunnel, an
+# access list on a tunnel interface (what it tells the peer that it
+# protects: a selector of the row), and NAT traversal switched off for the
+# device.
+tables:
+  ipsec_tunnels:
+    - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: 203.0.113.20, ike_version: 2, psk: dummy-psk-sample-a, esp_encryption: aes256gcm, esp_hash: "", nat_traversal: false}
+    - {name: Tunnel2, style: tunnel_if, tunnel_if: Tunnel2, peer_address: 203.0.113.30, ike_version: 1, psk: dummy-psk-sample-b, local_id: "fqdn:rt-h03.example.com", remote_id: "", esp_encryption: aes256, esp_hash: sha256, nat_traversal: false}
+    - {name: Tunnel3, style: tunnel_if, tunnel_if: Tunnel3, peer_address: 203.0.113.40, ike_version: 1, psk: dummy-psk-sample-c, local_id: "email:sample-c@example.com", remote_id: "fqdn:rt-h04.example.com", esp_encryption: aes256, esp_hash: sha256, nat_traversal: false}
+  ipsec_selectors:
+    - {tunnel: Tunnel1, seq: 10, local_net: 192.0.2.0/25, remote_net: 198.51.100.128/25, protocol: ip}
+  ipsec_proposals:
+    - {tunnel: Tunnel1, phase: ipsec, seq: 20, encryption: aes128gcm, hash: ""}
+    - {tunnel: Tunnel2, phase: ipsec, seq: 20, encryption: aes256, hash: sha512}
+unknown: []

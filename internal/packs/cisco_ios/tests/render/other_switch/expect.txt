@@ -1,0 +1,24 @@
+hostname sw-a05
+!
+username admin privilege 15 secret 0 Example-Secret-1
+username monitor privilege 1 secret 0 Example-Secret-2
+!
+spanning-tree mode mst
+!
+vlan 10
+ name sample-office
+!
+interface Vlan10
+ ip address 192.0.2.1 255.255.255.128
+ ip access-group sample-in in
+ no shutdown
+!
+ip access-list extended sample-in
+ permit tcp 192.0.2.0 0.0.0.127 any eq 22 log
+ permit icmp any any echo
+ deny ip any any
+!
+ip access-list standard sample-other
+ 5 permit 192.0.2.0 0.0.0.127
+!
+end

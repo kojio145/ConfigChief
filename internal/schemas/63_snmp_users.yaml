@@ -1,0 +1,18 @@
+table: snmp_users
+title: {ja: SNMP ユーザ（版 3）, en: SNMP users (version 3)}
+since: M7
+key: [device, name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: ユーザ名, en: User name}, type: string, required: true}
+  - {name: group, title: {ja: グループ, en: Group}, type: string, required: true, note: {ja: "SNMP のグループの名前。同じグループの行は、段・ビュー・グループの接続元の制限を同じにする", en: "The name of the SNMP group. Rows of one group agree in the level, the views and the list of the group"}}
+  - {name: security_level, title: {ja: セキュリティの段, en: Security level}, type: enum, values: [noauth, auth, priv], required: true, note: {ja: "グループの段。noauth = 認証なし、auth = 認証あり、priv = 認証と暗号化", en: "The level of the group: noauth = no authentication, auth = authentication, priv = authentication and privacy"}}
+  - {name: read_view, title: {ja: 読めるビュー, en: Read view}, type: string, note: {ja: "空 = 機器の既定のビュー", en: "Empty = the default view of the device"}}
+  - {name: write_view, title: {ja: 書けるビュー, en: Write view}, type: string, note: {ja: "空 = 書き込みを許さない", en: "Empty = no write access"}}
+  - {name: notify_view, title: {ja: 通知のビュー, en: Notify view}, type: string}
+  - {name: group_acl, title: {ja: グループの接続元の制限, en: ACL of the group}, type: ref, ref: acls.name}
+  - {name: auth, title: {ja: 認証の方式, en: Authentication}, type: enum, values: [md5, sha]}
+  - {name: auth_key, title: {ja: 認証のパスワード, en: Authentication password}, type: secret}
+  - {name: priv, title: {ja: 暗号化の方式, en: Privacy}, type: enum, values: [des, 3des, aes128]}
+  - {name: priv_key, title: {ja: 暗号化のパスワード, en: Privacy password}, type: secret}
+  - {name: acl, title: {ja: 接続元の制限, en: ACL}, type: ref, ref: acls.name}

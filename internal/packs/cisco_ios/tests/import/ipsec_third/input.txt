@@ -1,0 +1,68 @@
+hostname rt-v02
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp key 6 DUMMYENCSAMPLEAAAA address 203.0.113.20
+crypto isakmp key 6 DUMMYENCSAMPLEAAAA address 203.0.113.21
+crypto isakmp key dummy-psk-sample-any address 0.0.0.0 0.0.0.0
+!
+crypto ikev2 keyring IKEV2-KEYS-SAMPLE
+ peer sample-peer-b
+  address 203.0.113.30
+  pre-shared-key local 6 DUMMYENCSAMPLEBBBB
+  pre-shared-key remote 6 DUMMYENCSAMPLECCCC
+!
+crypto ikev2 profile IKEV2-PROF-SAMPLE-B
+ match identity remote address 203.0.113.30 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS-SAMPLE
+ nat force-encap
+!
+crypto isakmp aggressive-mode disable
+crypto isakmp invalid-spi-recovery
+!
+crypto ipsec security-association replay window-size 128
+crypto ipsec security-association idle-time 600
+crypto ipsec df-bit clear
+crypto ipsec security-association lifetime seconds 7200
+crypto ipsec security-association lifetime kilobytes 2000000
+!
+crypto ipsec transform-set TS-SAMPLE esp-aes 256 esp-sha256-hmac
+crypto ipsec transform-set TS-SAMPLE-TR esp-aes 256 esp-sha-hmac
+ mode transport
+!
+crypto ipsec profile PROF-SAMPLE-B
+ set transform-set TS-SAMPLE
+ set security-association lifetime seconds 3600
+ set ikev2-profile IKEV2-PROF-SAMPLE-B
+!
+crypto dynamic-map DYN-SAMPLE 10
+ set nat demux
+ set transform-set TS-SAMPLE-TR
+!
+crypto map CMAP-SAMPLE 10 ipsec-isakmp
+ set peer 203.0.113.20 default
+ set peer 203.0.113.21
+ set transform-set TS-SAMPLE
+ match address ACL-SAMPLE-A
+crypto map CMAP-SAMPLE 20 ipsec-isakmp dynamic DYN-SAMPLE
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.9 255.255.255.248
+ crypto map CMAP-SAMPLE
+!
+interface Tunnel1
+ ip address 198.51.100.1 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel mode ipsec ipv4
+ tunnel destination 203.0.113.30
+ tunnel protection ipsec profile PROF-SAMPLE-B
+!
+ip access-list extended ACL-SAMPLE-A
+ permit ip 192.0.2.0 0.0.0.127 198.51.100.128 0.0.0.127
+!
+end

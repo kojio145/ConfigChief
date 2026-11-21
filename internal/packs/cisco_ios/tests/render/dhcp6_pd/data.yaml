@@ -1,0 +1,24 @@
+# What a DHCPv6 server hands out besides DNS (appendix A 3.23; made-up
+# values): the pack names the local pool after the DHCPv6 pool.
+tables:
+  devices:
+    - hostname: rt-w02
+      vendor: cisco_ios
+      ipv6_routing: true
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv6: ["2001:db8:0:1::1/64"]}
+    - {name: GigabitEthernet0/1, enabled: true, ipv6: ["2001:db8:0:2::1/64"]}
+  ipv6_interfaces:
+    - if_name: GigabitEthernet0/0
+      dhcp_server: pool-sample-pd
+      dhcp_dns: ["2001:db8::53"]
+      dhcp_ntp: ["2001:db8::123"]
+      dhcp_address_prefix: ["2001:db8:0:10::/64"]
+      dhcp_pd_pool: "2001:db8:1000::/40"
+      dhcp_pd_length: 56
+      dhcp_pd_valid: 1800
+      dhcp_pd_preferred: 600
+    - if_name: GigabitEthernet0/1
+      dhcp_server: pool-sample-inf
+      dhcp_pd_pool: "2001:db8:4000::/36"
+      dhcp_pd_length: 48

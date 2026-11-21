@@ -1,0 +1,81 @@
+{# QoS: traffic classes, a traffic behavior for each class of a policy (its
+   name is the pack's: "<policy>-<class>") and the policies (README, "QoS"). #}
+{% for c in t.qos_classes %}
+traffic classifier {{ c.name }} operator {{ 'or' if c.match == 'any' else 'and' }}
+{% for m in t.qos_class_matches %}
+{% if m.class == c.name %}
+{% set what = 'QoS の見分け方 ' ~ c.name ~ ' の ' ~ m.seq ~ ' 番' %}
+{% if m.queue or m.input_if or m.qos_group != '' or m.negate == true or m.class_ref or m.local_generated == true or m.rtp_port_start != '' or m.rtp_port_range != '' or m.ngn_if or m.precedence %}
+{{ fail(what ~ ': この条件（キュー・受信 IF・QoS グループ・条件を逆にする・ほかのクラス・機器自身が出す通信・RTP・NGN・precedence）は、QX では書けません（ACL・DSCP・CoS・プロトコルで書いてください）') }}
+{% endif %}
+{% if m.acl %}
+ if-match acl {{ '' if m.acl is digits else 'name ' }}{{ m.acl }}
+{% elif m.ipv6_acl %}
+ if-match acl ipv6 {{ '' if m.ipv6_acl is digits else 'name ' }}{{ m.ipv6_acl }}
+{% elif m.dscp %}
+{% if m.dscp | length > 8 %}
+{{ fail(what ~ ': DSCP は、QX では 1 行に 8 つまでです') }}
+{% endif %}
+ if-match dscp {{ m.dscp | join(' ') }}
+{% elif m.cos %}
+ if-match service-dot1p {{ m.cos | join(' ') }}
+{% elif m.protocol %}
+{% if m.protocol not in ['ip', 'ipv6'] %}
+{{ fail(what ~ ': プロトコル「' ~ m.protocol ~ '」は、QX では書けません（ip か ipv6 です）') }}
+{% endif %}
+ if-match protocol {{ m.protocol }}
+{% else %}
+ if-match any
+{% endif %}
+{% endif %}
+{% endfor %}
+#
+{% endfor %}
+{% for p in t.qos_policies %}
+{% set what = 'QoS のポリシー ' ~ p.policy ~ ' のクラス ' ~ p.class %}
+{% if p.class in ['default', 'local', 'dynamic'] %}
+{{ fail(what ~ ': QX には、このクラス（' ~ p.class ~ '）に当たるものがありません（どのクラスにも当たらない通信には、条件が「すべて」のクラスを作って、ポリシーの最後に置いてください）') }}
+{% endif %}
+traffic behavior {{ p.policy }}-{{ p.class }}
+{% if p.police_bps != '' %}
+{% if p.police_bps % 1000 != 0 %}
+{{ fail(what ~ ': 上限・捨てる（bps）' ~ p.police_bps ~ ' は、QX では書けません（kbps で持つので、1000 の倍数にしてください）') }}
+{% endif %}
+{% if p.police_be != '' and p.police_bc == '' %}
+{{ fail(what ~ ': 捨てる側のバーストは、1 つ目（CBS）が無いと 2 つ目（EBS）を書けません') }}
+{% endif %}
+{% set red = '' %}
+{% if p.police_exceed == 'transmit' %}
+{% set red = ' red pass' %}
+{% elif p.police_exceed == 'set_dscp' %}
+{% set red = ' red remark-dscp-pass ' ~ (p.police_exceed_value | required(what ~ ' の「超えたときに付ける値」')) %}
+{% elif p.police_exceed == 'drop' %}
+{% set red = ' red discard' %}
+{% elif p.police_exceed %}
+{{ fail(what ~ ': 超えたときの動作 ' ~ p.police_exceed ~ ' は、QX では書けません（drop・transmit・set_dscp）') }}
+{% endif %}
+ car cir {{ p.police_bps // 1000 }}{{ ' cbs ' ~ p.police_bc if p.police_bc != '' else '' }}{{ ' ebs ' ~ p.police_be if p.police_be != '' else '' }}{{ red }}
+{% elif p.police_bc != '' or p.police_be != '' or p.police_exceed or p.police_exceed_value != '' %}
+{{ fail(what ~ ': 捨てる側のバースト・超えたときの動作は、「上限・捨てる（bps）」があるときだけ書けます') }}
+{% endif %}
+{% if p.set_dscp != '' %}
+ remark dscp {{ p.set_dscp }}
+{% endif %}
+{% if p.set_cos != '' %}
+ remark dot1p {{ p.set_cos }}
+{% endif %}
+#
+{% endfor %}
+{% set seen = namespace(names=[]) %}
+{% for p in t.qos_policies | sort(attribute='seq') %}
+{% if p.policy not in seen.names %}
+{% set seen.names = seen.names + [p.policy] %}
+qos policy {{ p.policy }}
+{% for q in t.qos_policies | sort(attribute='seq') %}
+{% if q.policy == p.policy %}
+ classifier {{ q.class }} behavior {{ q.policy }}-{{ q.class }}
+{% endif %}
+{% endfor %}
+#
+{% endif %}
+{% endfor %}

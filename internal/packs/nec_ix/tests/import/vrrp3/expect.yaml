@@ -1,0 +1,12 @@
+# IPv6 VRRP (version 3; appendix A 3.23, "IPv6 の VRRP"; made-up values) next
+# to an IPv4 group. A second link-local address and the authentication of an
+# IPv6 group (version 3 has none) stay unknown.
+tables:
+  fhrp:
+    - {if_name: GigaEthernet0.0, group: 1, protocol: vrrp, virtual_ip: 192.0.2.1, priority: 110}
+  ipv6_fhrp:
+    - {if_name: GigaEthernet0.0, group: 2, link_local: "fe80::1", addresses: ["2001:db8:0:1::1"], priority: 120, preempt: false, advert_interval: 1500}
+    - {if_name: GigaEthernet1.0, group: 3, link_local: "fe80::3", addresses: "", priority: 100, preempt: true, advert_interval: 2000}
+unknown:
+  - "  vrrp 2 ipv6 fe80::2"
+  - "  vrrp 3 authentication sample01"

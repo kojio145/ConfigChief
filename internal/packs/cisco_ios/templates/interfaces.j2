@@ -82,12 +82,38 @@
 {% if n.same > 1 %}
 {{ fail(what ~ ': 同じ物理 IF か同じ論理 IF を使う PPPoE の行が、ほかにあります（Cisco では、1 つのポートに 1 つのプールです）') }}
 {% endif %}
-{% if ' ' in p.service_name or '"' in p.service_name %}
-{{ fail(what ~ ' のサービス名に、空白か引用符があります（このパックは 1 語の名前だけを書きます）') }}
+{% if '"' in p.service_name %}
+{{ fail(what ~ ' のサービス名に、引用符（"）があります') }}
 {% endif %}
 {% endfor %}
+{# The whole device on VRRP version 3 (appendix A 3.23). A row of IPv6 VRRP
+   needs its interface. #}
+{% for f in t.ipv6_fhrp %}
+{% set n = namespace(seen=false) %}
 {% for i in t.interfaces %}
-interface {{ i.name }}
+{% if i.name == f.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('IPv6 の冗長化の IF ' ~ f.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% endfor %}
+{% if device.vrrp_version == '3' %}
+fhrp version vrrp v3
+!
+{% endif %}
+{% for i in t.interfaces %}
+{# A virtual template that a row of IPsec uses is of the type "tunnel". #}
+{% set vt = namespace(tunnel=false) %}
+{% if i.name is startingwith('Virtual-Template') %}
+{% for u in t.tunnels %}
+{% if u.if_name == i.name and u.type == 'ipsec' %}
+{% set vt.tunnel = true %}
+{% endif %}
+{% endfor %}
+{% endif %}
+interface {{ i.name }}{{ ' type tunnel' if vt.tunnel else '' }}
 {% if i.description %}
  description {{ i.description }}
 {% endif %}
@@ -95,7 +121,155 @@ interface {{ i.name }}
  bandwidth {{ i.bandwidth }}
 {% endif %}
 {% if i.encap_vlan %}
- encapsulation dot1Q {{ i.encap_vlan }}
+{% if i.encap_inner_vlans %}
+{% if i.encap_native == true %}
+{{ fail(i.name ~ ': 二重タグのサブ IF に「タグなしの VLAN」は書けません') }}
+{% endif %}
+ encapsulation dot1Q {{ i.encap_vlan }} second-dot1q {{ i.encap_inner_vlans | join(',') }}
+{% else %}
+ encapsulation dot1Q {{ i.encap_vlan }}{{ ' native' if i.encap_native == true else '' }}
+{% endif %}
+{% elif i.encap_native != '' %}
+{{ fail(i.name ~ ' の「タグなしの VLAN」は、「VLAN 番号（サブ IF）」を書いたときだけ書けます') }}
+{% endif %}
+{# The lines of a switch port, a LAG member and a bridged interface (README,
+   "VLAN とスイッチ"). A routed port of a switch says so before its address. #}
+{% if i.vlan_id != '' and i.name is startingwith('Vlan') and i.name != 'Vlan' ~ i.vlan_id %}
+{{ fail(i.name ~ ' の「VLAN 番号（VLAN の IF）」' ~ i.vlan_id ~ ' が、IF 名の番号と違います（Cisco では、VLAN ' ~ i.vlan_id ~ ' の IF は Vlan' ~ i.vlan_id ~ ' です。IF 名か VLAN 番号を直してください）') }}
+{% elif i.vlan_id != '' and not i.name is startingwith('Vlan') %}
+{{ fail(i.name ~ ' に「VLAN 番号（VLAN の IF）」' ~ i.vlan_id ~ ' があります（Cisco では、VLAN ' ~ i.vlan_id ~ ' の IF は Vlan' ~ i.vlan_id ~ ' です。IF 対応で IF 名を Vlan' ~ i.vlan_id ~ ' にするか、VLAN 番号を空にしてください）') }}
+{% endif %}
+{% for s in t.switchports %}
+{% if s.if_name == i.name %}
+{% if s.mode == 'routed' %}
+ no switchport
+{% else %}
+{% set what = i.name ~ ' のスイッチポート' %}
+{% if s.trunk_encapsulation %}
+ switchport trunk encapsulation {{ s.trunk_encapsulation }}
+{% endif %}
+{% if s.access_vlan != '' %}
+ switchport access vlan {{ s.access_vlan }}
+{% endif %}
+{% if s.native_vlan != '' %}
+ switchport trunk native vlan {{ s.native_vlan }}
+{% endif %}
+{% if s.allowed_vlans %}
+{% if s.allowed_vlans | length > 1 and ('all' in s.allowed_vlans or 'none' in s.allowed_vlans) %}
+{{ fail(what ~ ' の許可 VLAN: all・none は、番号と一緒には書けません') }}
+{% endif %}
+ switchport trunk allowed vlan {{ s.allowed_vlans | join(',') }}
+{% endif %}
+{% if s.mode is startingwith('pvlan_') %}
+ switchport mode private-vlan {{ s.mode | replace('pvlan_', '') }}
+{% elif s.mode %}
+ switchport mode {{ s.mode | replace('_', ' ') }}
+{% endif %}
+{% if s.nonegotiate == true %}
+ switchport nonegotiate
+{% elif s.nonegotiate == false %}
+{{ fail(what ~ ' の「モードの自動交渉を止める」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if s.voice_vlan != '' %}
+ switchport voice vlan {{ s.voice_vlan }}
+{% endif %}
+{% if s.port_security_max != '' %}
+ switchport port-security maximum {{ s.port_security_max }}
+{% endif %}
+{% if s.port_security_violation %}
+ switchport port-security violation {{ s.port_security_violation }}
+{% endif %}
+{% if s.port_security_sticky == true %}
+ switchport port-security mac-address sticky
+{% elif s.port_security_sticky == false %}
+{{ fail(what ~ ' の「覚えた MAC を設定に残す」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if s.port_security == true %}
+ switchport port-security
+{% elif s.port_security == false %}
+{{ fail(what ~ ' の「ポートセキュリティ」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{# Storm control: a share of the bandwidth ("10.00"), or a rate ("500pps",
+   "64kbps", "1500bps"); the falling level after it, in the same unit. #}
+{% for kind in ['broadcast', 'multicast', 'unicast'] %}
+{% set v = s.storm_broadcast if kind == 'broadcast' else (s.storm_multicast if kind == 'multicast' else s.storm_unicast) %}
+{% set lo = s.storm_broadcast_low if kind == 'broadcast' else (s.storm_multicast_low if kind == 'multicast' else s.storm_unicast_low) %}
+{% set st = namespace(line='', unit='', low='') %}
+{% for w in [[v, 'high'], [lo, 'low']] %}
+{% set x = w[0] %}
+{% if x != '' %}
+{% if x is endingwith('kbps') and (x | replace('kbps', '')) is digits %}
+{% set unit, num = 'bps', (x | replace('kbps', '') | int) * 1000 %}
+{% elif x is endingwith('pps') and (x | replace('pps', '')) is digits %}
+{% set unit, num = 'pps', x | replace('pps', '') | int %}
+{% elif x is endingwith('bps') and (x | replace('bps', '')) is digits %}
+{% set unit, num = 'bps', x | replace('bps', '') | int %}
+{% elif (x | replace('.', '', 1)) is digits %}
+{% set unit, num = '%', x %}
+{% else %}
+{% set unit, num = '', fail(what ~ ': ストーム制御の値「' ~ x ~ '」は書けません（10.00 のような割合か、500pps・64kbps・1500bps の形で書きます）') %}
+{% endif %}
+{% if w[1] == 'high' %}
+{% set st.unit = unit %}
+{% set st.line = (unit ~ ' ' if unit != '%' else '') ~ num %}
+{% elif st.line == '' %}
+{{ fail(what ~ ': ストーム制御の下限（' ~ kind ~ '）は、上の値と一緒に書きます') }}
+{% elif unit != st.unit %}
+{{ fail(what ~ ': ストーム制御の下限（' ~ kind ~ '）「' ~ x ~ '」の単位が、上の値「' ~ v ~ '」と違います（同じ単位で書きます）') }}
+{% else %}
+{% set st.low = ' ' ~ num %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if st.line != '' %}
+ storm-control {{ kind }} level {{ st.line }}{{ st.low }}
+{% endif %}
+{% endfor %}
+{% if s.storm_action %}
+ storm-control action {{ s.storm_action }}
+{% endif %}
+{% if s.stp_edge == 'on' %}
+ spanning-tree portfast
+{% elif s.stp_edge == 'trunk' %}
+ spanning-tree portfast trunk
+{% elif s.stp_edge == 'off' %}
+ spanning-tree portfast disable
+{% endif %}
+{% if s.stp_bpdu_guard == true %}
+ spanning-tree bpduguard enable
+{% elif s.stp_bpdu_guard == false %}
+ spanning-tree bpduguard disable
+{% endif %}
+{% include 'switchport_more.j2' %}
+{% if not (s.mode or s.trunk_encapsulation or s.access_vlan != '' or s.native_vlan != '' or s.allowed_vlans or s.nonegotiate != '' or s.voice_vlan != '' or s.port_security_max != '' or s.port_security_violation or s.port_security_sticky != '' or s.port_security != '' or s.storm_broadcast or s.storm_multicast or s.storm_unicast or s.storm_action or s.stp_edge or s.stp_bpdu_guard != '' or s.voice_vlan_mode or s.port_security_macs or s.port_security_sticky_macs or s.port_security_aging_time != '' or s.port_security_aging_type or s.port_security_aging_static != '' or s.protected != '' or s.stp_guard or s.stp_bpdu_filter != '' or s.stp_cost != '' or s.stp_port_priority != '' or s.stp_link_type or s.udld or s.dhcp_snooping_trust != '' or s.dhcp_snooping_rate != '' or s.arp_inspection_trust != '') %}
+ switchport
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for l in t.lags %}
+{% if l.if_name == i.name %}
+{% if l.protocol %}
+ channel-protocol {{ l.protocol }}
+{% endif %}
+{% if l.non_silent == true and l.mode not in ['auto', 'desirable'] %}
+{{ fail('LAG のメンバー ' ~ l.if_name ~ ': 「PAgP を黙らない相手として扱う」は、束ね方が auto か desirable のときだけ書けます') }}
+{% elif l.non_silent == false %}
+{{ fail('LAG のメンバー ' ~ l.if_name ~ ' の「PAgP を黙らない相手として扱う」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+ channel-group {{ l.group }}{{ ' mode ' ~ l.mode if l.mode else '' }}{{ ' non-silent' if l.non_silent == true else '' }}
+{% if l.lacp_port_priority != '' %}
+ lacp port-priority {{ l.lacp_port_priority }}
+{% endif %}
+{% if l.lacp_short == true %}
+ lacp rate fast
+{% elif l.lacp_short == false %}
+ lacp rate normal
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if i.bridge_group != '' and not i.name is startingwith('BVI') %}
+ bridge-group {{ i.bridge_group }}
 {% endif %}
 {% if i.vrf %}
  vrf forwarding {{ i.vrf }}
@@ -113,6 +287,7 @@ interface {{ i.name }}
 {% for a in i.ipv6 %}
  ipv6 address {{ a }}
 {% endfor %}
+{% include 'ipv6_if.j2' %}
 {% if i.acl_in %}
  ip access-group {{ i.acl_in }} in
 {% endif %}
@@ -126,6 +301,9 @@ interface {{ i.name }}
  ip proxy-arp
 {% elif i.proxy_arp == false %}
  no ip proxy-arp
+{% endif %}
+{% if i.policy_route %}
+ ip policy route-map {{ i.policy_route }}
 {% endif %}
 {% if i.mtu %}
  mtu {{ i.mtu }}
@@ -142,10 +320,33 @@ interface {{ i.name }}
 {% if i.duplex %}
  duplex {{ i.duplex }}
 {% endif %}
-{% if i.speed == '10000' %}
-{{ fail(i.name ~ ' の速度 10000 は、このパックでは書けません（書き方を確かめていません）') }}
+{% if i.speed_advertise %}
+{% if i.speed != 'auto' %}
+{{ fail(i.name ~ ': 「自動交渉で名乗る速度」は、速度が auto のときだけ書けます') }}
+{% endif %}
+ speed auto {{ i.speed_advertise | join(' ') }}
 {% elif i.speed %}
  speed {{ i.speed }}
+{% endif %}
+{% if i.speed_nonegotiate == true %}
+ speed nonegotiate
+{% elif i.speed_nonegotiate == false %}
+{{ fail(i.name ~ ' の「速度の自動交渉を止める」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if i.cdp == true %}
+ cdp enable
+{% elif i.cdp == false %}
+ no cdp enable
+{% endif %}
+{% if i.lldp_transmit == true %}
+ lldp transmit
+{% elif i.lldp_transmit == false %}
+ no lldp transmit
+{% endif %}
+{% if i.lldp_receive == true %}
+ lldp receive
+{% elif i.lldp_receive == false %}
+ no lldp receive
 {% endif %}
 {% for o in t.ospf_interfaces %}
 {% if o.if_name == i.name %}
@@ -186,8 +387,31 @@ interface {{ i.name }}
 {% for u in t.tunnels %}
 {% if u.if_name == i.name %}
 {% set what = i.name ~ ' のトンネル' %}
+{# The interfaces made from a virtual template take their destination from
+   the peer that connects; the source may be left to the device. #}
+{% if not (vt.tunnel and not u.source) %}
  tunnel source {{ u.source | required(what ~ ' の送信元') }}
+{% endif %}
+{# A tunnel that runs over IPv6 names an IPv6 address or a host name. #}
+{% if u.type in ['map_e', 'auto_ds_lite', 'auto_ipip'] %}
+{{ fail(what ~ ' の種類 ' ~ u.type ~ ' は、Cisco では書けません（MAP-E は Cisco では規則を手で書く別の設定です。回線の事業者からもらう自動設定も書けません。種類を ipv4_over_ipv6 にして宛先を書くか、追加コンフィグに書いてください）') }}
+{% elif u.type == 'ipv4_over_ipv6' %}
+{% if u.destination_v6 %}
+ tunnel destination {{ u.destination_v6 }}
+{% else %}
+ tunnel destination {{ u.destination_fqdn | required(what ~ ' の宛先（IPv6）か宛先（名前）') }}
+{% endif %}
+{% elif vt.tunnel %}
+{% if u.destination or u.destination_v6 or u.destination_fqdn %}
+{{ fail(what ~ ': 仮想テンプレートに宛先は書けません（相手ごとに作られる IF が、つないできた相手を宛先にします。セルを空にしてください）') }}
+{% endif %}
+{% elif u.type == 'ipsec' and u.destination_fqdn and not u.destination and not u.destination_v6 %}
+ tunnel destination {{ u.destination_fqdn }}
+{% elif u.destination_v6 or u.destination_fqdn %}
+{{ fail(what ~ ': 「宛先（IPv6）」「宛先（名前）」は、種類が ipv4_over_ipv6 のときと、種類が ipsec で相手を名前で書くときだけ書けます') }}
+{% else %}
  tunnel destination {{ u.destination | required(what ~ ' の宛先') }}
+{% endif %}
 {% if u.type != 'gre' %}
  tunnel mode {{ u.type | lex('tunnel_mode') }}
 {% endif %}
@@ -206,6 +430,18 @@ interface {{ i.name }}
 {% for r in t.ipsec_tunnels %}
 {% if r.style == 'tunnel_if' and r.tunnel_if == i.name %}
 {% set sec.seen = true %}
+{% set psel = namespace(n=0) %}
+{% for s in t.ipsec_selectors %}
+{% if s.tunnel == r.name %}
+{% set psel.n = psel.n + 1 %}
+{% endif %}
+{% endfor %}
+{% if r.outer_vrf %}
+ tunnel vrf {{ r.outer_vrf }}
+{% endif %}
+{% if psel.n > 0 %}
+ tunnel protection ipsec policy ipv4 ACL-{{ i.name }}
+{% endif %}
  tunnel protection ipsec profile PROF-{{ i.name }}
 {% endif %}
 {% endfor %}
@@ -219,30 +455,44 @@ interface {{ i.name }}
 {% set cmap = namespace(done=false) %}
 {% for r in t.ipsec_tunnels %}
 {% if r.style == 'policy' and r.local_if == i.name and not cmap.done %}
- crypto map {{ (r.name | split('/'))[0] }}
+{% set cp = r.name | split('/') %}
+{% if cp | length == 2 and cp[0] and cp[1] is digits and ' ' not in r.name %}
+ crypto map {{ cp[0] }}
+{% else %}
+ crypto map CMAP-{{ i.name | replace('/', '-') | replace('.', '-') | replace(':', '-') }}
+{% endif %}
 {% set cmap.done = true %}
 {% endif %}
 {% endfor %}
 {# PPPoE. The port: the switch, then the pool. The Dialer interface: the
    answer to the authentication of the other side only ("callin"). Without
    a method the name and the password are given for both. #}
+{% set trig = namespace(n=0) %}
 {% for p in t.pppoe %}
 {% set pool = p.logical_if | replace('Dialer', '') %}
+{% if p.dial_trigger %}
+{% set trig.n = trig.n + 1 %}
+{% endif %}
 {% if p.physical_if == i.name %}
  pppoe enable group global
- pppoe-client dial-pool-number {{ pool }}{{ ' service-name ' ~ p.service_name if p.service_name else '' }}
+ pppoe-client dial-pool-number {{ pool }}{{ ' dial-on-demand' if p.on_demand == true else '' }}{{ ' restart ' ~ p.restart_delay if p.restart_delay != '' else '' }}{{ (' service-name "' ~ p.service_name ~ '"' if ' ' in p.service_name else ' service-name ' ~ p.service_name) if p.service_name else '' }}{{ ' mac-override' if p.mac_override == true else '' }}
 {% endif %}
 {% if p.logical_if == i.name %}
 {% set what = 'PPPoE ' ~ p.name %}
 {% set user = p.username | required(what ~ ' の接続 ID') %}
 {% set pw = p.password | required(what ~ ' の接続パスワード') %}
-{% if ' ' in user or ' ' in pw %}
+{% if ' ' in user or (' ' in pw and not pw is startingwith('7 ')) %}
 {{ fail(what ~ ' の接続 ID か接続パスワードに、空白があります') }}
 {% endif %}
  encapsulation ppp
  dialer pool {{ pool }}
+{% if p.dial_trigger %}
+ dialer-group {{ trig.n }}
+{% endif %}
 {% if p.auth %}
- ppp authentication {{ p.auth | replace('_', ' ') }} callin
+ ppp authentication {{ p.auth | replace('_', ' ') }}{{ '' if p.auth_both == true else ' callin' }}
+{% elif p.auth_both == true %}
+{{ fail(what ~ ': 「相手も認証する」は、認証方式を書いたときだけ書けます') }}
 {% endif %}
 {% if p.auth != 'pap' %}
  ppp chap hostname {{ user }}
@@ -251,6 +501,16 @@ interface {{ i.name }}
 {% if p.auth != 'chap' %}
  ppp pap sent-username {{ user }} password {{ pw }}
 {% endif %}
+{% endif %}
+{% endfor %}
+{# A port that takes PPPoE for a LAC (l2tp.j2 writes the group), and the
+   Virtual-Template of that group: what the callers are asked for. #}
+{% for g in t.l2tp_groups %}
+{% if g.role == 'lac' and i.name in g.access_ifs %}
+ pppoe enable group {{ g.name }}
+{% endif %}
+{% if g.role == 'lac' and g.access_ifs and i.name in g.logical_ifs and g.auth %}
+ ppp authentication {{ g.auth | lex('ppp_auth') }}
 {% endif %}
 {% endfor %}
 {# HSRP version 2 is one setting of the interface. #}
@@ -270,7 +530,7 @@ interface {{ i.name }}
 {{ fail(i.name ~ ' の HSRP の版 3 はありません（1 か 2 です）') }}
 {% endif %}
 {% for f in t.fhrp %}
-{% if f.if_name == i.name %}
+{% if f.if_name == i.name and not (device.vrrp_version == '3' and f.protocol == 'vrrp') %}
 {% set what = i.name ~ ' の冗長化のグループ ' ~ f.group %}
 {% set g = ('standby ' if f.protocol == 'hsrp' else 'vrrp ') ~ f.group %}
  {{ g }} ip {{ f.virtual_ip | required(what ~ ' の仮想 IP') }}
@@ -305,6 +565,137 @@ interface {{ i.name }}
 {% endif %}
 {% endif %}
 {% endfor %}
+{# VRRP version 3 (appendix A 3.23, "IPv6 の VRRP"; Network Services
+   Configuration Guide, "VRRPv3 Protocol Support"; First Hop Redundancy
+   Protocols Command Reference, "track (VRRP)"). With "fhrp version vrrp v3"
+   an IPv4 group too stands in a mode of its own; the interval is in
+   milliseconds; there is no authentication. Preemption is on by default:
+   "preempt" alone is not written (only "preempt delay minimum" was read in
+   the guide). #}
+{% for f in t.fhrp %}
+{% if f.if_name == i.name and device.vrrp_version == '3' and f.protocol == 'vrrp' %}
+{% set what = i.name ~ ' の冗長化のグループ ' ~ f.group %}
+ vrrp {{ f.group }} address-family ipv4
+  address {{ f.virtual_ip | required(what ~ ' の仮想 IP') }} primary
+{% if f.priority != '' %}
+  priority {{ f.priority }}
+{% endif %}
+{% if f.preempt == true and f.preempt_delay != '' %}
+  preempt delay minimum {{ f.preempt_delay }}
+{% elif f.preempt_delay != '' %}
+{{ fail(what ~ ' の切り戻し待ちは、切り戻しが有効のときだけ書けます') }}
+{% elif f.preempt == false %}
+  no preempt
+{% endif %}
+{% if f.advert_interval != '' %}
+{% if f.advert_interval | int > 40 %}
+{{ fail(what ~ ' の広告間隔 ' ~ f.advert_interval ~ ' 秒は書けません（VRRP の版 3 は 0.1〜40 秒です）') }}
+{% else %}
+  timers advertise {{ f.advert_interval | int * 1000 }}
+{% endif %}
+{% endif %}
+{% if f.track %}
+  track {{ f.track }}{{ ' decrement ' ~ f.track_decrement if f.track_decrement != '' else '' }}
+{% elif f.track_decrement != '' %}
+{{ fail(what ~ ' の減点は、回線監視を書いたときだけ書けます') }}
+{% endif %}
+{% if f.vrrpv2 == true %}
+  vrrpv2
+{% endif %}
+{% if f.auth_type in ['simple', 'md5'] or f.auth_key %}
+{{ fail(what ~ ': VRRP の版 3（機器の「VRRP の版（IPv4）」が 3）に認証はありません。認証を空にするか、版を 2 にしてください（版 2 にすると IPv6 の VRRP は書けません）') }}
+{% endif %}
+  exit-vrrp
+{% endif %}
+{% endfor %}
+{% for f in t.ipv6_fhrp %}
+{% if f.if_name == i.name %}
+{% set what = i.name ~ ' の IPv6 の冗長化のグループ ' ~ f.group %}
+{% if device.vrrp_version != '3' %}
+{{ fail(what ~ ': IPv6 の VRRP は、機器の「VRRP の版（IPv4）」が 3 のときだけ書けます') }}
+{% endif %}
+ vrrp {{ f.group }} address-family ipv6
+{% if f.link_local != '' and not (f.link_local | in_net('fe80::/10')) %}
+{{ fail(what ~ ' の仮想リンクローカルアドレス ' ~ f.link_local ~ ' が、fe80::/10 にありません') }}
+{% endif %}
+  address {{ f.link_local | required(what ~ ' の仮想リンクローカルアドレス') }} primary
+{% for a in f.addresses %}
+{% set n = namespace(len='') %}
+{% for p in i.ipv6 %}
+{% if n.len == '' and a | in_net(p) %}
+{% set n.len = p | prefixlen %}
+{% endif %}
+{% endfor %}
+{% if n.len == '' %}
+{{ fail(what ~ ' の仮想グローバルアドレス ' ~ a ~ ' を含む IPv6 アドレスが、' ~ i.name ~ ' にありません（Cisco は仮想アドレスにプレフィックスの長さを付けて書くので、IF の固定の IPv6 アドレスから長さを決めます）') }}
+{% else %}
+  address {{ a }}/{{ n.len }}
+{% endif %}
+{% endfor %}
+{% if f.priority != '' %}
+  priority {{ f.priority }}
+{% endif %}
+{% if f.preempt == true and f.preempt_delay != '' %}
+  preempt delay minimum {{ f.preempt_delay }}
+{% elif f.preempt_delay != '' %}
+{{ fail(what ~ ' の切り戻し待ちは、切り戻しが有効のときだけ書けます') }}
+{% elif f.preempt == false %}
+  no preempt
+{% endif %}
+{% if f.advert_interval != '' %}
+{% if f.advert_interval | int < 100 %}
+{{ fail(what ~ ' の広告間隔 ' ~ f.advert_interval ~ ' ミリ秒は書けません（Cisco は 100〜40000 ミリ秒です）') }}
+{% else %}
+  timers advertise {{ f.advert_interval }}
+{% endif %}
+{% endif %}
+{% if f.track %}
+  track {{ f.track }}{{ ' decrement ' ~ f.track_decrement if f.track_decrement != '' else '' }}
+{% elif f.track_decrement != '' %}
+{{ fail(what ~ ' の減点は、回線監視を書いたときだけ書けます') }}
+{% endif %}
+  exit-vrrp
+{% endif %}
+{% endfor %}
+{# L2TP (appendix A 3.21; the classes and the groups are in l2tp.j2). An
+   attachment circuit of L2TPv3: set by hand, its lines stand under the
+   "xconnect" line. #}
+{% for x in t.l2tpv3 %}
+{% if x.if_name == i.name %}
+{% if x.signaling == 'manual' %}
+ xconnect {{ x.peer_address }} {{ x.vc_id }} encapsulation l2tpv3 manual pw-class {{ x.profile }}
+  l2tp id {{ x.local_session_id }} {{ x.remote_session_id }}
+{% if x.local_cookie %}
+  l2tp cookie local {{ x.local_cookie }}
+{% endif %}
+{% if x.remote_cookie %}
+  l2tp cookie remote {{ x.remote_cookie }}
+{% endif %}
+{% if x.hello != '' %}
+  l2tp hello {{ x.profile }}
+{% endif %}
+{% else %}
+ xconnect {{ x.peer_address }} {{ x.vc_id }} pw-class {{ x.profile }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# The Virtual-Template of an LNS: where the callers get their addresses,
+   what they are asked for, the DNS servers they are told. #}
+{% for g in t.l2tp_groups %}
+{% if g.role == 'lns' and i.name in g.logical_ifs %}
+{% if g.pool_start or g.pool_end %}
+ peer default ip address pool l2tp-{{ g.name }}
+{% endif %}
+{% if g.auth %}
+ ppp authentication {{ g.auth | lex('ppp_auth') }}
+{% endif %}
+{% if g.dns_servers | length > 2 %}
+{{ fail('L2TP ' ~ g.name ~ ' の配る DNS サーバは 2 つまでです') }}
+{% elif g.dns_servers %}
+ ppp ipcp dns {{ g.dns_servers | join(' ') }}
+{% endif %}
+{% endif %}
+{% endfor %}
 {# QoS: the policy, or the parent that shapes the whole interface (qos.j2). #}
 {% for b in t.qos_bindings %}
 {% if b.if_name == i.name %}
@@ -322,3 +713,21 @@ interface {{ i.name }}
 {% endif %}
 !
 {% endfor %}
+{# What starts a call of PPPoE: a list per row, numbered in the order of
+   the rows (the number is not kept in the dataset). #}
+{% set trig = namespace(n=0) %}
+{% for p in t.pppoe %}
+{% if p.dial_trigger %}
+{% set trig.n = trig.n + 1 %}
+{% if p.dial_trigger == 'ip' %}
+dialer-list {{ trig.n }} protocol ip permit
+{% elif p.dial_trigger is digits %}
+dialer-list {{ trig.n }} protocol ip list {{ p.dial_trigger }}
+{% else %}
+{{ fail('PPPoE ' ~ p.name ~ ' の「つなぐきっかけの通信」は、ip か、番号の ACL で書きます（Cisco の dialer-list は、ACL を番号で指します）') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if trig.n > 0 %}
+!
+{% endif %}

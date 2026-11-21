@@ -105,10 +105,10 @@ func TestCrossIPsec(t *testing.T) {
 	// Everything differs between the two sides of the tunnel.
 	put(t, sc, ds, "ipsec_tunnels", "device", "rt-a01", "name", "Tunnel1", "style", "tunnel_if", "tunnel_if", "Tunnel1", "peer_address", "203.0.113.21",
 		"ike_version", "1", "ike_mode", "main", "psk", "dummy-psk-sample-1", "ike_encryption", "aes256", "ike_hash", "sha256", "ike_dh", "dh14", "ike_lifetime", "28800",
-		"esp_encryption", "aes256", "esp_hash", "sha1", "pfs", "dh14", "ipsec_lifetime", "3600", "local_id", "rt-a01.example.com", "remote_id", "ix-a02.example.com", "dpd_interval", "30")
+		"esp_encryption", "aes256", "esp_hash", "sha1", "pfs", "dh14", "ipsec_lifetime", "3600", "local_id", "fqdn:rt-a01.example.com", "remote_id", "fqdn:ix-a02.example.com", "dpd_interval", "30")
 	put(t, sc, ds, "ipsec_tunnels", "device", "ix-a02", "name", "Tunnel0.0", "style", "tunnel_if", "tunnel_if", "Tunnel0.0", "peer_address", "203.0.113.9",
 		"ike_version", "1", "ike_mode", "aggressive", "psk", "dummy-psk-sample-2", "ike_encryption", "aes128", "ike_hash", "sha256", "ike_dh", "dh14", "ike_lifetime", "86400",
-		"esp_encryption", "aes256", "esp_hash", "sha256", "pfs", "none", "ipsec_lifetime", "3600", "local_id", "ix-a02.example.com", "remote_id", "rt-sample.example.com", "nat_traversal", "true")
+		"esp_encryption", "aes256", "esp_hash", "sha256", "pfs", "none", "ipsec_lifetime", "3600", "local_id", "fqdn:ix-a02.example.com", "remote_id", "fqdn:rt-sample.example.com", "nat_traversal", "true")
 	// Crypto maps on both sides: the selectors do not mirror.
 	put(t, sc, ds, "ipsec_tunnels", append([]string{"device", "rt-a01", "name", "CMAP-SAMPLE/10", "style", "policy", "local_if", "GigabitEthernet0/1", "peer_address", "192.0.2.1"}, ike...)...)
 	put(t, sc, ds, "ipsec_tunnels", append([]string{"device", "ix-a02", "name", "vpn-sample-lan", "style", "policy", "local_if", "GigaEthernet1.0", "peer_address", "198.51.100.1"}, ike...)...)

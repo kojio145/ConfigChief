@@ -71,6 +71,43 @@
 <tr><td><a href="#qos_class_matches">QoS の見分け方の条件</a></td><td>qos_class_matches</td><td>device、class、seq</td></tr>
 <tr><td><a href="#qos_policies">QoS のポリシー</a></td><td>qos_policies</td><td>device、policy、class</td></tr>
 <tr><td><a href="#qos_bindings">QoS の適用</a></td><td>qos_bindings</td><td>device、if_name、direction</td></tr>
+<tr><td><a href="#route_policies">経路制御の方針</a></td><td>route_policies</td><td>device、name、seq</td></tr>
+<tr><td><a href="#as_path_lists">AS パスのリスト</a></td><td>as_path_lists</td><td>device、name、seq</td></tr>
+<tr><td><a href="#community_lists">コミュニティのリスト</a></td><td>community_lists</td><td>device、name、seq</td></tr>
+<tr><td><a href="#ipsec_proposals">IPsec 追加の提案</a></td><td>ipsec_proposals</td><td>device、tunnel、phase、seq</td></tr>
+<tr><td><a href="#ipsec_settings">IPsec の全体設定</a></td><td>ipsec_settings</td><td>device</td></tr>
+<tr><td><a href="#l2tpv3">L2 延伸（L2TPv3）</a></td><td>l2tpv3</td><td>device、if_name</td></tr>
+<tr><td><a href="#l2tp_groups">L2TP</a></td><td>l2tp_groups</td><td>device、name</td></tr>
+<tr><td><a href="#l2tp_users">L2TP 接続ユーザ</a></td><td>l2tp_users</td><td>device、group、name</td></tr>
+<tr><td><a href="#vlans">VLAN</a></td><td>vlans</td><td>device、vlan_id</td></tr>
+<tr><td><a href="#switchports">スイッチポート</a></td><td>switchports</td><td>device、if_name</td></tr>
+<tr><td><a href="#lags">LAG のメンバー</a></td><td>lags</td><td>device、if_name</td></tr>
+<tr><td><a href="#l2_settings">L2 の全体設定</a></td><td>l2_settings</td><td>device</td></tr>
+<tr><td><a href="#stp_vlans">VLAN ごとのスパニングツリー</a></td><td>stp_vlans</td><td>device、vlans</td></tr>
+<tr><td><a href="#stack_members">スタックのメンバー</a></td><td>stack_members</td><td>device、member</td></tr>
+<tr><td><a href="#ipv6_interfaces">IPv6 インタフェース</a></td><td>ipv6_interfaces</td><td>device、if_name</td></tr>
+<tr><td><a href="#ipv6_ra_prefixes">RA のプレフィックス</a></td><td>ipv6_ra_prefixes</td><td>device、if_name、prefix</td></tr>
+<tr><td><a href="#ipv6_routes">IPv6 スタティック経路</a></td><td>ipv6_routes</td><td>device、vrf、prefix、next_hop、out_if</td></tr>
+<tr><td><a href="#ipv6_acl_entries">IPv6 フィルタ</a></td><td>ipv6_acl_entries</td><td>device、acl、seq</td></tr>
+<tr><td><a href="#ipv6_prefix_lists">IPv6 プレフィックスリスト</a></td><td>ipv6_prefix_lists</td><td>device、name、seq</td></tr>
+<tr><td><a href="#ospfv3_processes">OSPFv3</a></td><td>ospfv3_processes</td><td>device、process_id</td></tr>
+<tr><td><a href="#ospfv3_interfaces">OSPFv3 インタフェース</a></td><td>ospfv3_interfaces</td><td>device、process_id、if_name</td></tr>
+<tr><td><a href="#ospfv3_areas">OSPFv3 エリア</a></td><td>ospfv3_areas</td><td>device、process_id、area</td></tr>
+<tr><td><a href="#bgp_ipv6_neighbors">BGP IPv6 ネイバー</a></td><td>bgp_ipv6_neighbors</td><td>device、vrf、neighbor</td></tr>
+<tr><td><a href="#snmp_users">SNMP ユーザ（版 3）</a></td><td>snmp_users</td><td>device、name</td></tr>
+<tr><td><a href="#stp_instances">MSTP のインスタンス</a></td><td>stp_instances</td><td>device、instance</td></tr>
+<tr><td><a href="#mirror_sessions">ポートミラー</a></td><td>mirror_sessions</td><td>device、session</td></tr>
+<tr><td><a href="#time_ranges">時間帯</a></td><td>time_ranges</td><td>device、name、seq</td></tr>
+<tr><td><a href="#log_subsystems">ログの対象ごとの重要度</a></td><td>log_subsystems</td><td>device、subsystem</td></tr>
+<tr><td><a href="#bridge_groups">ブリッジグループ</a></td><td>bridge_groups</td><td>device、group</td></tr>
+<tr><td><a href="#bgp_aggregates">BGP 集約経路</a></td><td>bgp_aggregates</td><td>device、vrf、prefix</td></tr>
+<tr><td><a href="#ospf_virtual_links">OSPF バーチャルリンク</a></td><td>ospf_virtual_links</td><td>device、process_id、area、router_id</td></tr>
+<tr><td><a href="#ospfv3_redistribute">OSPFv3 再配布の指定</a></td><td>ospfv3_redistribute</td><td>device、process_id、source</td></tr>
+<tr><td><a href="#bgp_ipv6_redistribute">BGP IPv6 再配布の指定</a></td><td>bgp_ipv6_redistribute</td><td>device、source</td></tr>
+<tr><td><a href="#rip_processes">RIP</a></td><td>rip_processes</td><td>device、family</td></tr>
+<tr><td><a href="#rip_interfaces">RIP インタフェース</a></td><td>rip_interfaces</td><td>device、family、if_name</td></tr>
+<tr><td><a href="#rip_redistribute">RIP 再配布</a></td><td>rip_redistribute</td><td>device、family、source</td></tr>
+<tr><td><a href="#ipv6_fhrp">冗長化（IPv6 の VRRP）</a></td><td>ipv6_fhrp</td><td>device、if_name、group</td></tr>
 </table>
 <h2>機器</h2>
 <p><a id="devices"></a>内部名 <code>devices</code></p>
@@ -83,14 +120,35 @@
 <tr><td>グループ</td><td>group</td><td>文字。複数可</td><td></td><td></td><td></td><td>@グループ名 で行をまとめて当てるための名前。複数はカンマで区切る コンフィグには書きません</td></tr>
 <tr><td>拠点</td><td>site</td><td>文字</td><td></td><td></td><td></td><td>コンフィグには書きません</td></tr>
 <tr><td>ドメイン名</td><td>domain_name</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
-<tr><td>DNS サーバ</td><td>name_servers</td><td>IPv4 アドレス。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>DNS サーバ</td><td>name_servers</td><td>IPv4 か IPv6 のアドレス。複数可</td><td></td><td></td><td></td><td>IPv4 か IPv6 のアドレス</td></tr>
 <tr><td>時刻帯</td><td>timezone</td><td>文字</td><td></td><td></td><td></td><td>例 JST +9。名前は省ける（+9）。分があれば +5:30</td></tr>
 <tr><td>特権パスワード</td><td>enable_secret</td><td>秘密の値</td><td></td><td></td><td></td><td>画面とレポートでは伏せます</td></tr>
-<tr><td>パスワードの形</td><td>secret_form</td><td>選択（plain、hashed）</td><td></td><td></td><td></td><td>取り込んだ値がハッシュのとき hashed。別メーカーへは引き継げない</td></tr>
+<tr><td>パスワードの形</td><td>secret_form</td><td>選択（plain、hashed、encrypted）</td><td></td><td></td><td></td><td>取り込んだ値がハッシュのとき hashed、機器が戻せる形で暗号化した値のとき encrypted。別メーカーへは引き継げない</td></tr>
 <tr><td>SNMP 設置場所</td><td>snmp_location</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>SNMP 連絡先</td><td>snmp_contact</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>IPv6 の転送</td><td>ipv6_routing</td><td>有効・無効</td><td></td><td></td><td></td><td>IPv6 のパケットを転送する（ルータとして動かす）。メーカーによっては書く行が無い</td></tr>
 <tr><td>バナー</td><td>banner</td><td>文章</td><td></td><td></td><td></td><td>ログインの前に出す文</td></tr>
+<tr><td>機器自身の通信のポリシールーティング</td><td>local_policy_route</td><td>文字</td><td></td><td></td><td></td><td>機器が自分で出す通信に当てる、経路制御の方針の名前</td></tr>
+<tr><td>バナー（接続したとき）</td><td>banner_motd</td><td>文章</td><td></td><td></td><td></td><td>つないだ端末に、ログインの前に出す文（motd）</td></tr>
+<tr><td>バナー（ログインの後）</td><td>banner_exec</td><td>文章</td><td></td><td></td><td></td><td>ログインの後に出す文</td></tr>
+<tr><td>パスワードを暗号化して保存</td><td>password_encryption</td><td>有効・無効</td><td></td><td></td><td></td><td>コンフィグの中のパスワードを、機器が暗号化して保存する</td></tr>
+<tr><td>ログの時刻の付け方</td><td>log_timestamp</td><td>選択（datetime、time、uptime）</td><td></td><td></td><td></td><td>datetime = 日付と時刻、time = 時刻だけ、uptime = 起動してからの時間</td></tr>
+<tr><td>ログの時刻に足すもの</td><td>log_timestamp_options</td><td>選択（msec、localtime、show_timezone、year）。複数可</td><td></td><td></td><td></td><td>msec = ミリ秒、localtime = 機器の時刻帯、show_timezone = 時刻帯の名前、year = 年</td></tr>
+<tr><td>デバッグの時刻の付け方</td><td>debug_timestamp</td><td>選択（datetime、uptime）</td><td></td><td></td><td></td><td>デバッグの表示の時刻をログと分けるメーカーで使う</td></tr>
+<tr><td>デバッグの時刻に足すもの</td><td>debug_timestamp_options</td><td>選択（msec、localtime、show_timezone、year）。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>機器内にログを溜める</td><td>log_buffer</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>機器内ログの大きさ（バイト）</td><td>log_buffer_size</td><td>数（1〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>機器内ログがいっぱいのとき</td><td>log_buffer_mode</td><td>選択（cyclic、one_time）</td><td></td><td></td><td></td><td>cyclic = 古いものから上書き、one_time = 止める</td></tr>
+<tr><td>ログに残す重要度</td><td>log_severity</td><td>選択（emergencies、alerts、critical、errors、warnings、notifications、informational、debugging）</td><td></td><td></td><td></td><td>機器がログに残す、いちばん低い重要度</td></tr>
+<tr><td>コンソールの無操作切断（分）</td><td>console_timeout</td><td>数（0〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>コンソールの無操作切断（秒の端数）</td><td>console_timeout_sec</td><td>数（0〜59）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>NTP サーバとして動く</td><td>ntp_serve</td><td>有効・無効</td><td></td><td></td><td></td><td>ほかの機器からの時刻の問い合わせに答える</td></tr>
+<tr><td>転送のキャッシュ</td><td>forward_cache</td><td>有効・無効</td><td></td><td></td><td></td><td>転送を速くするキャッシュを使う（行が要るメーカーだけが書く）</td></tr>
+<tr><td>転送のキャッシュ（IPv6）</td><td>forward_cache_ipv6</td><td>有効・無効</td><td></td><td></td><td></td><td>IPv6 の転送を速くするキャッシュを使う（行が要るメーカーだけが書く）</td></tr>
+<tr><td>DNS サーバの VRF</td><td>name_servers_vrf</td><td>参照（vrfs.name）</td><td></td><td></td><td></td><td>空 = VRF なし。DNS サーバは全部が同じ VRF</td></tr>
 <tr><td>備考</td><td>note</td><td>文字</td><td></td><td></td><td></td><td>生成には使わない コンフィグには書きません</td></tr>
+<tr><td>機器自身の通信のポリシールーティング（IPv6）</td><td>local_policy_route_v6</td><td>文字</td><td></td><td></td><td></td><td>機器が自分で出す IPv6 の通信に当てる経路制御の方針の名前</td></tr>
+<tr><td>VRRP の版（IPv4）</td><td>vrrp_version</td><td>選択（2、3）</td><td></td><td></td><td></td><td>空 = 2。3 = 機器全体を VRRPv3 にする（Cisco の fhrp version vrrp v3。IPv6 の VRRP に要る）</td></tr>
 </table>
 <h2>インタフェース</h2>
 <p><a id="interfaces"></a>内部名 <code>interfaces</code></p>
@@ -98,7 +156,7 @@
 <tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
 <tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
 <tr><td>IF 名</td><td>name</td><td>IF 名</td><td>○</td><td>○</td><td></td><td>メーカーの正式な書き方。例 GigabitEthernet0/0/0</td></tr>
-<tr><td>種類</td><td>kind</td><td>選択（physical、subif、loopback、tunnel、dialer、vlan、lag、other）</td><td></td><td></td><td></td><td>空なら名前から決める コンフィグには書きません</td></tr>
+<tr><td>種類</td><td>kind</td><td>選択（physical、subif、loopback、tunnel、dialer、vlan、lag、bvi、other）</td><td></td><td></td><td></td><td>空なら名前から決める コンフィグには書きません</td></tr>
 <tr><td>説明</td><td>description</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>有効</td><td>enabled</td><td>有効・無効</td><td>○</td><td></td><td>○</td><td>無効 = shutdown</td></tr>
 <tr><td>IPv4 アドレス</td><td>ipv4</td><td>IPv4 アドレス/長さ。ほかに dhcp、negotiated、unnumbered:*</td><td></td><td></td><td></td><td>例 192.0.2.1/30。dhcp、negotiated、unnumbered:&lt;IF 名&gt; も書ける</td></tr>
@@ -106,17 +164,44 @@
 <tr><td>IPv6 アドレス</td><td>ipv6</td><td>IPv6 アドレス/長さ。複数可</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>VRF</td><td>vrf</td><td>参照（vrfs.name）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>VLAN 番号（サブ IF）</td><td>encap_vlan</td><td>数（1〜4094）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>タグなしの VLAN（サブ IF）</td><td>encap_native</td><td>有効・無効</td><td></td><td></td><td></td><td>このサブ IF の VLAN を、タグを付けずに送る（ネイティブ VLAN）</td></tr>
+<tr><td>タグの種別（TPID）</td><td>encap_tpid</td><td>文字</td><td></td><td></td><td></td><td>16 進数。空 = 8100</td></tr>
+<tr><td>VLAN 番号（VLAN の IF）</td><td>vlan_id</td><td>数（1〜4094）</td><td></td><td></td><td></td><td>この IF が L3 の口になる VLAN の番号。取り込みが IF 名から入れる。別メーカーへ書き換えるときに、ポートの VLAN と IF を結ぶ コンフィグには書きません</td></tr>
+<tr><td>ブリッジグループ</td><td>bridge_group</td><td>数（1〜65535）</td><td></td><td></td><td></td><td>同じ番号の IF どうしを L2 でつなぐ。BVI の行に書くと、そのグループの L3 の口になる</td></tr>
+<tr><td>対向機器</td><td>peer_device</td><td>文字</td><td></td><td></td><td></td><td>このポートの先につながる機器のホスト名。両端の VLAN・LAG のチェック（X-381〜）に使う。生成には使わない コンフィグには書きません</td></tr>
+<tr><td>対向 IF</td><td>peer_if</td><td>文字</td><td></td><td></td><td></td><td>対向機器の側の IF 名 コンフィグには書きません</td></tr>
+<tr><td>内側の VLAN（二重タグ）</td><td>encap_inner_vlans</td><td>文字。複数可</td><td></td><td></td><td></td><td>サブ IF が受ける二重タグの内側の VLAN。例 200、100-199,201-600。any = ほかのサブ IF に無いものすべて。「VLAN 番号（サブ IF）」が外側</td></tr>
+<tr><td>タグ付きフレームの最小の長さ</td><td>dot1q_min_frame</td><td>数（64〜1522）</td><td></td><td></td><td></td><td>タグ付きで送るフレームの最小の長さ（オクテット）</td></tr>
+<tr><td>サブ IF の数の上限</td><td>max_subinterfaces</td><td>数（1〜）</td><td></td><td></td><td></td><td>このポートに作れるサブ IF の数を増やす（対応する機種だけ。ポートの基本 IF の行に書く）</td></tr>
+<tr><td>ブリッジの保護ポート</td><td>bridge_protected</td><td>有効・無効</td><td></td><td></td><td></td><td>同じブリッジグループの保護ポートどうしは通信させない</td></tr>
+<tr><td>このポートで覚える MAC の数</td><td>bridge_table_size</td><td>数（1〜）</td><td></td><td></td><td></td><td>ブリッジグループの中で、このポートが覚える MAC アドレスの数の上限</td></tr>
+<tr><td>CDP</td><td>cdp</td><td>有効・無効</td><td></td><td></td><td></td><td>この IF で CDP を送受信する。空 = 機器の既定</td></tr>
+<tr><td>LLDP を送る</td><td>lldp_transmit</td><td>有効・無効</td><td></td><td></td><td></td><td>空 = 機器の既定</td></tr>
+<tr><td>LLDP を受ける</td><td>lldp_receive</td><td>有効・無効</td><td></td><td></td><td></td><td>空 = 機器の既定</td></tr>
+<tr><td>ループ検出</td><td>loop_detect</td><td>有効・無効</td><td></td><td></td><td></td><td>検出用のフレームを送り、戻ってきたらループとみなす</td></tr>
+<tr><td>ループを見つけたときの動作</td><td>loop_detect_action</td><td>選択（shutdown、none）</td><td></td><td></td><td></td><td>shutdown = ポートを止める。none = 知らせるだけ</td></tr>
+<tr><td>ループ検出からの復帰（秒）</td><td>loop_detect_restore</td><td>数（0〜86400）</td><td></td><td></td><td></td><td>止めたポートを自動で戻すまでの秒。0 = 戻さない</td></tr>
+<tr><td>タグなしフレームの既定の優先度</td><td>qos_default_priority</td><td>数（0〜7）</td><td></td><td></td><td></td><td>内蔵スイッチのポートが、優先度の無いフレームに付ける優先度（0〜7）</td></tr>
+<tr><td>内蔵スイッチの送信の順序</td><td>switch_qos_scheduler</td><td>選択（strict、wfq）</td><td></td><td></td><td></td><td>strict = 優先度の高い順。wfq = 重み付き。内蔵スイッチの基本 IF の行に書く</td></tr>
+<tr><td>ルータ側ポートの既定の優先度</td><td>switch_router_priority</td><td>数（0〜7）</td><td></td><td></td><td></td><td>内蔵スイッチとルータの間のポートの、既定の優先度（0〜7）。内蔵スイッチの基本 IF の行に書く</td></tr>
 <tr><td>MTU</td><td>mtu</td><td>数</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>IP MTU</td><td>ip_mtu</td><td>数</td><td></td><td></td><td></td><td></td></tr>
-<tr><td>TCP MSS 調整</td><td>tcp_mss</td><td>数</td><td></td><td></td><td></td><td></td></tr>
-<tr><td>速度</td><td>speed</td><td>選択（auto、10、100、1000、10000）</td><td></td><td></td><td></td><td>単位は Mbps</td></tr>
+<tr><td>TCP MSS 調整</td><td>tcp_mss</td><td>数。ほかに auto</td><td></td><td></td><td></td><td>数か auto（MTU から機器が決める）</td></tr>
+<tr><td>速度</td><td>speed</td><td>選択（auto、10、100、1000、2500、5000、10000）</td><td></td><td></td><td></td><td>単位は Mbps</td></tr>
 <tr><td>二重</td><td>duplex</td><td>選択（auto、full、half）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>自動交渉で名乗る速度</td><td>speed_advertise</td><td>選択（10、100、1000、2500、5000）。複数可</td><td></td><td></td><td></td><td>速度が auto のとき、相手に名乗る速度を絞る（Mbps）</td></tr>
+<tr><td>速度の自動交渉を止める</td><td>speed_nonegotiate</td><td>有効・無効</td><td></td><td></td><td></td><td>光のポートなどで、自動交渉をせずに決まった速度で動かす</td></tr>
+<tr><td>MDI の向き</td><td>mdi</td><td>選択（mdi、mdix）</td><td></td><td></td><td></td><td>ケーブルの結線の向きを決め打ちにする。空 = 機器の既定</td></tr>
 <tr><td>帯域（kbps）</td><td>bandwidth</td><td>数</td><td></td><td></td><td></td><td>経路計算用の値</td></tr>
 <tr><td>入力 ACL</td><td>acl_in</td><td>参照（acls.name）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>出力 ACL</td><td>acl_out</td><td>参照（acls.name）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>入力 ACL（2 つ目以降）</td><td>acl_in_more</td><td>参照（acls.name）。複数可</td><td></td><td></td><td></td><td>入力 ACL の後に、書いた順で見る ACL</td></tr>
+<tr><td>出力 ACL（2 つ目以降）</td><td>acl_out_more</td><td>参照（acls.name）。複数可</td><td></td><td></td><td></td><td>出力 ACL の後に、書いた順で見る ACL</td></tr>
 <tr><td>NAT の向き</td><td>nat_role</td><td>選択（inside、outside）</td><td></td><td></td><td></td><td>メーカーによっては使わない</td></tr>
 <tr><td>DHCP 中継先</td><td>dhcp_relay</td><td>IPv4 アドレス。複数可</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>代理 ARP</td><td>proxy_arp</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ポリシールーティング</td><td>policy_route</td><td>文字</td><td></td><td></td><td></td><td>この IF に入ってくる通信に当てる、経路制御の方針の名前</td></tr>
+<tr><td>ポートの説明</td><td>port_description</td><td>文字</td><td></td><td></td><td></td><td>ポートと IF が別のメーカーの、ポートの側の説明。「ポート名.0」の行に書く</td></tr>
 <tr><td>備考</td><td>note</td><td>文字</td><td></td><td></td><td></td><td>生成には使わない コンフィグには書きません</td></tr>
 </table>
 <h2>スタティック経路</h2>
@@ -126,11 +211,17 @@
 <tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
 <tr><td>VRF</td><td>vrf</td><td>参照（vrfs.name）</td><td></td><td>○</td><td></td><td>空 = VRF なし（全体の経路表）</td></tr>
 <tr><td>宛先</td><td>prefix</td><td>IPv4 ネットワーク</td><td>○</td><td>○</td><td></td><td>例 192.0.2.0/24。デフォルト経路は 0.0.0.0/0</td></tr>
-<tr><td>ネクストホップ</td><td>next_hop</td><td>IPv4 アドレス</td><td></td><td>○</td><td></td><td></td></tr>
+<tr><td>ネクストホップ</td><td>next_hop</td><td>IPv4 アドレス。ほかに dhcp</td><td></td><td>○</td><td></td><td>dhcp と書くと、DHCP でもらったゲートウェイ</td></tr>
 <tr><td>出力 IF</td><td>out_if</td><td>IF 名。ほかに Null*</td><td></td><td>○</td><td></td><td>捨てる経路の Null0 などは、インタフェースの表に行がなくてもよい</td></tr>
 <tr><td>優先度（distance）</td><td>distance</td><td>数（1〜255）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>回線監視</td><td>track</td><td>参照（tracks.id）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>説明</td><td>description</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>タグ</td><td>tag</td><td>数（0〜）</td><td></td><td></td><td></td><td>再配布のときに、経路制御の方針の「条件: タグ」で見分ける印</td></tr>
+<tr><td>メトリック</td><td>metric</td><td>数（1〜255）</td><td></td><td></td><td></td><td>NEC IX だけ</td></tr>
+<tr><td>IF が落ちても残す</td><td>permanent</td><td>有効・無効</td><td></td><td></td><td></td><td>Cisco だけ</td></tr>
+<tr><td>つながっている間だけ有効</td><td>connected_only</td><td>有効・無効</td><td></td><td></td><td></td><td>NEC IX だけ（つなぎに行く IF の経路）</td></tr>
+<tr><td>ネクストホップを全体の経路表で引く</td><td>next_hop_global</td><td>有効・無効</td><td></td><td></td><td></td><td>VRF の経路だけ。Cisco だけ</td></tr>
+<tr><td>マルチキャストの確認だけに使う</td><td>multicast</td><td>有効・無効</td><td></td><td></td><td></td><td>Cisco だけ</td></tr>
 </table>
 <h2>ユーザ</h2>
 <p><a id="users"></a>内部名 <code>users</code></p>
@@ -140,7 +231,9 @@
 <tr><td>ユーザ名</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td></td></tr>
 <tr><td>権限</td><td>privilege</td><td>文字</td><td></td><td></td><td></td><td>admin、operator か、メーカーの値（数値など）</td></tr>
 <tr><td>パスワード</td><td>secret</td><td>秘密の値</td><td>○</td><td></td><td></td><td>画面とレポートでは伏せます</td></tr>
-<tr><td>パスワードの形</td><td>secret_form</td><td>選択（plain、hashed）</td><td></td><td></td><td></td><td>取り込んだ値がハッシュのとき hashed</td></tr>
+<tr><td>パスワードの形</td><td>secret_form</td><td>選択（plain、hashed、encrypted）</td><td></td><td></td><td></td><td>取り込んだ値がハッシュのとき hashed。機器が戻せる形で暗号化した値は encrypted</td></tr>
+<tr><td>使える接続方式</td><td>services</td><td>選択（terminal、ssh、telnet、ftp）。複数可</td><td></td><td></td><td></td><td>ユーザごとに使える方式を決める機器だけ。terminal = コンソール。空 = 機器の既定</td></tr>
+<tr><td>元に戻せる形で持つ</td><td>reversible</td><td>有効・無効</td><td></td><td></td><td></td><td>機器がパスワードそのものを使う認証（PPP の CHAP の相手）のユーザは有効にする</td></tr>
 </table>
 <h2>遠隔ログイン</h2>
 <p><a id="remote_access"></a>内部名 <code>remote_access</code></p>
@@ -150,9 +243,12 @@
 <tr><td>許可する方式</td><td>protocols</td><td>選択（ssh、telnet）。複数可</td><td>○</td><td></td><td></td><td></td></tr>
 <tr><td>SSH の版</td><td>ssh_version</td><td>選択（1、2）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>接続元の制限</td><td>acl</td><td>参照（acls.name）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>接続元の制限（SSH だけ）</td><td>acl_ssh</td><td>参照（acls.name）</td><td></td><td></td><td></td><td>方式で制限が違うときだけ。同じなら「接続元の制限」に書く</td></tr>
+<tr><td>接続元の制限（Telnet だけ）</td><td>acl_telnet</td><td>参照（acls.name）</td><td></td><td></td><td></td><td>方式で制限が違うときだけ。同じなら「接続元の制限」に書く</td></tr>
 <tr><td>無操作切断（分）</td><td>idle_timeout</td><td>数</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>認証</td><td>auth</td><td>選択（local、password、aaa）</td><td></td><td></td><td></td><td>aaa の中身は追加コンフィグに書く</td></tr>
 <tr><td>回線パスワード</td><td>line_password</td><td>秘密の値</td><td></td><td></td><td></td><td>画面とレポートでは伏せます</td></tr>
+<tr><td>無操作切断（秒の端数）</td><td>idle_timeout_sec</td><td>数（0〜59）</td><td></td><td></td><td></td><td></td></tr>
 </table>
 <h2>NTP サーバ</h2>
 <p><a id="ntp_servers"></a>内部名 <code>ntp_servers</code></p>
@@ -163,6 +259,8 @@
 <tr><td>優先</td><td>prefer</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>送信元 IF</td><td>source_if</td><td>IF 名</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>VRF</td><td>vrf</td><td>参照（vrfs.name）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>認証の鍵番号</td><td>auth_key_id</td><td>数（1〜4294967295）</td><td></td><td></td><td></td><td>このサーバを確かめる鍵の番号。空 = 認証しない</td></tr>
+<tr><td>認証の鍵</td><td>auth_key</td><td>秘密の値</td><td></td><td></td><td></td><td>その番号の鍵（MD5）。同じ番号の行は同じ鍵にする 画面とレポートでは伏せます</td></tr>
 </table>
 <h2>ログ転送先</h2>
 <p><a id="syslog_servers"></a>内部名 <code>syslog_servers</code></p>
@@ -189,10 +287,11 @@
 <table>
 <tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
 <tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
-<tr><td>通知先</td><td>host</td><td>IPv4 アドレス</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>通知先</td><td>host</td><td>IPv4 か IPv6 のアドレス</td><td>○</td><td>○</td><td></td><td>IPv4 か IPv6 のアドレス</td></tr>
 <tr><td>版</td><td>version</td><td>選択（1、2c、3）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>コミュニティ</td><td>community</td><td>秘密の値</td><td></td><td></td><td></td><td>画面とレポートでは伏せます</td></tr>
 <tr><td>送信元 IF</td><td>source_if</td><td>IF 名</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>セキュリティの段（版 3）</td><td>security_level</td><td>選択（noauth、auth、priv）</td><td></td><td></td><td></td><td>版 3 の通知で使う段。noauth = 認証なし、auth = 認証あり、priv = 認証と暗号化。版 3 の行の「コミュニティ」には SNMP ユーザの名前を書く</td></tr>
 </table>
 <h2>VRF</h2>
 <p><a id="vrfs"></a>内部名 <code>vrfs</code></p>
@@ -202,6 +301,8 @@
 <tr><td>名前</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td></td></tr>
 <tr><td>RD</td><td>rd</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>説明</td><td>description</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>取り込むルートターゲット</td><td>rt_import</td><td>文字。複数可</td><td></td><td></td><td></td><td>64496:100 の形。Cisco だけ</td></tr>
+<tr><td>付けるルートターゲット</td><td>rt_export</td><td>文字。複数可</td><td></td><td></td><td></td><td>64496:100 の形。Cisco だけ</td></tr>
 </table>
 <h2>OSPF</h2>
 <p><a id="ospf_processes"></a>内部名 <code>ospf_processes</code></p>
@@ -215,6 +316,17 @@
 <tr><td>既定を受動にする</td><td>passive_default</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>デフォルト経路の広告</td><td>default_originate</td><td>選択（none、when_present、always）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>広告のメトリック</td><td>default_metric</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>隣接の変化の記録</td><td>log_adjacency</td><td>選択（detail、off）</td><td></td><td></td><td></td><td>空 = 機器の既定。detail = 状態が変わるたびに記録、off = 記録しない（Cisco）</td></tr>
+<tr><td>広告のメトリックの種類</td><td>default_metric_type</td><td>選択（1、2）</td><td></td><td></td><td></td><td>デフォルト経路の広告に付ける外部経路の種類。空 = 機器の既定（2）</td></tr>
+<tr><td>デフォルト経路の広告の条件</td><td>default_filter</td><td>文字</td><td></td><td></td><td></td><td>条件にする経路制御の方針の名前</td></tr>
+<tr><td>通過させない（最大メトリックで広告）</td><td>max_metric</td><td>有効・無効</td><td></td><td></td><td></td><td>有効 = 自分を通る経路を、ほかのルータに選ばせない（保守のとき）。Cisco だけ</td></tr>
+<tr><td>優先度（distance）</td><td>distance</td><td>数（1〜255）</td><td></td><td></td><td></td><td>OSPF の経路ぜんぶの優先度。種類ごとの 3 列とどちらか</td></tr>
+<tr><td>優先度（エリア内の経路）</td><td>distance_intra</td><td>数（1〜255）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>優先度（エリア間の経路）</td><td>distance_inter</td><td>数（1〜255）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>優先度（外部経路）</td><td>distance_external</td><td>数（1〜255）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>経路表に入れる経路の絞り込み（プレフィックスリスト）</td><td>filter_in_prefix_list</td><td>参照（prefix_lists.name）</td><td></td><td></td><td></td><td>OSPF で学んだ経路のうち、経路表に入れるものを絞る</td></tr>
+<tr><td>経路表に入れる経路の絞り込み（ACL）</td><td>filter_in_acl</td><td>参照（acls.name）</td><td></td><td></td><td></td><td>Cisco だけ</td></tr>
+<tr><td>経路表に入れる経路の絞り込み（経路制御の方針）</td><td>filter_in_policy</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
 </table>
 <h2>OSPF インタフェース</h2>
 <p><a id="ospf_interfaces"></a>内部名 <code>ospf_interfaces</code></p>
@@ -230,7 +342,7 @@
 <tr><td>Dead 間隔（秒）</td><td>dead</td><td>数</td><td></td><td></td><td>○</td><td></td></tr>
 <tr><td>網の種類</td><td>network_type</td><td>選択（broadcast、point_to_point、nbma、point_to_multipoint）</td><td></td><td></td><td>○</td><td></td></tr>
 <tr><td>受動</td><td>passive</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
-<tr><td>認証</td><td>auth_type</td><td>選択（none、simple、md5）</td><td></td><td></td><td>○</td><td></td></tr>
+<tr><td>認証</td><td>auth_type</td><td>選択（none、simple、md5、hmac_md5）</td><td></td><td></td><td>○</td><td>hmac_md5 は、md5 と別の語として持つ機器だけ（NEC QX の hmac-md5）</td></tr>
 <tr><td>鍵番号</td><td>auth_key_id</td><td>数</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>鍵</td><td>auth_key</td><td>秘密の値</td><td></td><td></td><td></td><td>画面とレポートでは伏せます</td></tr>
 </table>
@@ -263,7 +375,8 @@
 <tr><td>再配布の元</td><td>source</td><td>選択（connected、static、bgp、rip）</td><td>○</td><td>○</td><td></td><td></td></tr>
 <tr><td>メトリック</td><td>metric</td><td>数</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>メトリックの種類</td><td>metric_type</td><td>選択（1、2）</td><td></td><td></td><td></td><td></td></tr>
-<tr><td>経路制御の条件</td><td>filter</td><td>文字</td><td></td><td></td><td></td><td>条件の名前。中身は追加コンフィグに書く</td></tr>
+<tr><td>経路制御の条件</td><td>filter</td><td>文字</td><td></td><td></td><td></td><td>経路制御の方針の表の名前。方針を追加コンフィグに書くときは、その名前</td></tr>
+<tr><td>タグ</td><td>tag</td><td>数（0〜）</td><td></td><td></td><td></td><td>再配布した経路に付ける印</td></tr>
 </table>
 <h2>BGP</h2>
 <p><a id="bgp_processes"></a>内部名 <code>bgp_processes</code></p>
@@ -276,6 +389,12 @@
 <tr><td>Keepalive（秒）</td><td>keepalive</td><td>数</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>Hold（秒）</td><td>holdtime</td><td>数</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>ネイバーの変化を記録</td><td>log_neighbor_changes</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>IPv6 の広告経路</td><td>ipv6_networks</td><td>IPv6 ネットワーク。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>IPv6 の再配布</td><td>ipv6_redistribute</td><td>選択（connected、static、ospf）。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>優先度（eBGP の経路）</td><td>distance_ebgp</td><td>数（1〜255）</td><td></td><td></td><td></td><td>空 = 機器の既定（20）。Cisco は 3 つを組で書く</td></tr>
+<tr><td>優先度（iBGP の経路）</td><td>distance_ibgp</td><td>数（1〜255）</td><td></td><td></td><td></td><td>空 = 機器の既定（200）</td></tr>
+<tr><td>優先度（自分で作った経路）</td><td>distance_local</td><td>数（1〜255）</td><td></td><td></td><td></td><td>空 = 機器の既定（200）。Cisco だけ</td></tr>
+<tr><td>ローカルプリファレンスの既定値</td><td>default_local_preference</td><td>数（0〜）</td><td></td><td></td><td></td><td>空 = 機器の既定（100）</td></tr>
 </table>
 <h2>BGP ネイバー</h2>
 <p><a id="bgp_neighbors"></a>内部名 <code>bgp_neighbors</code></p>
@@ -297,8 +416,22 @@
 <tr><td>受信経路の保持</td><td>soft_reconfig_in</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>受信フィルタ</td><td>prefix_list_in</td><td>参照（prefix_lists.name）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>送信フィルタ</td><td>prefix_list_out</td><td>参照（prefix_lists.name）</td><td></td><td></td><td></td><td></td></tr>
-<tr><td>受信の経路制御</td><td>filter_in</td><td>文字</td><td></td><td></td><td></td><td>条件の名前。中身は追加コンフィグに書く</td></tr>
-<tr><td>送信の経路制御</td><td>filter_out</td><td>文字</td><td></td><td></td><td></td><td>条件の名前。中身は追加コンフィグに書く</td></tr>
+<tr><td>受信の経路制御</td><td>filter_in</td><td>文字</td><td></td><td></td><td></td><td>経路制御の方針の表の名前。方針を追加コンフィグに書くときは、その名前</td></tr>
+<tr><td>送信の経路制御</td><td>filter_out</td><td>文字</td><td></td><td></td><td></td><td>経路制御の方針の表の名前。方針を追加コンフィグに書くときは、その名前</td></tr>
+<tr><td>コミュニティを送る</td><td>send_community</td><td>有効・無効</td><td></td><td></td><td></td><td>Cisco は、これが無いと相手にコミュニティを送らない。NEC IX には当たる行が無い</td></tr>
+<tr><td>デフォルト経路の広告の条件</td><td>default_originate_filter</td><td>文字</td><td></td><td></td><td></td><td>デフォルト経路を送る条件にする経路制御の方針の名前。Cisco だけ</td></tr>
+<tr><td>受信の AS パスのリスト</td><td>as_path_filter_in</td><td>参照（as_path_lists.name）</td><td></td><td></td><td></td><td>受け取る経路を AS パスのリストで絞る。Cisco だけ</td></tr>
+<tr><td>送信の AS パスのリスト</td><td>as_path_filter_out</td><td>参照（as_path_lists.name）</td><td></td><td></td><td></td><td>送る経路を AS パスのリストで絞る。Cisco だけ</td></tr>
+<tr><td>受信フィルタ（ACL）</td><td>acl_in</td><td>参照（acls.name）</td><td></td><td></td><td></td><td>受け取る経路の宛先を ACL で絞る。Cisco だけ（NEC IX はプレフィックスリストで書く）</td></tr>
+<tr><td>送信フィルタ（ACL）</td><td>acl_out</td><td>参照（acls.name）</td><td></td><td></td><td></td><td>送る経路の宛先を ACL で絞る。Cisco だけ</td></tr>
+<tr><td>受け取る経路数の上限</td><td>max_prefix</td><td>数（1〜）</td><td></td><td></td><td></td><td>超えるとセッションを切る（動作の列で変えられる）。Cisco だけ</td></tr>
+<tr><td>上限の警告を出す割合（%）</td><td>max_prefix_threshold</td><td>数（1〜100）</td><td></td><td></td><td></td><td>空 = 機器の既定（Cisco は 75）</td></tr>
+<tr><td>上限を超えたときの動作</td><td>max_prefix_action</td><td>選択（warning_only、discard_extra）</td><td></td><td></td><td></td><td>空 = セッションを切る。warning_only = 記録するだけ。discard_extra = 超えた分を捨てる</td></tr>
+<tr><td>上限で切れた後に戻すまで（分）</td><td>max_prefix_restart</td><td>数（1〜65535）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>weight</td><td>weight</td><td>数（0〜65535）</td><td></td><td></td><td></td><td>このネイバーから受け取った経路に付ける weight。Cisco だけ</td></tr>
+<tr><td>拡張コミュニティを送る</td><td>send_ext_community</td><td>有効・無効</td><td></td><td></td><td></td><td>Cisco の send-community extended（both は「コミュニティを送る」も有効）</td></tr>
+<tr><td>ルートリフレクタのクライアント</td><td>route_reflector_client</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>経路の更新を送る最小間隔（秒）</td><td>advertisement_interval</td><td>数（0〜600）</td><td></td><td></td><td></td><td></td></tr>
 </table>
 <h2>BGP 広告経路</h2>
 <p><a id="bgp_networks"></a>内部名 <code>bgp_networks</code></p>
@@ -316,7 +449,8 @@
 <tr><td>VRF</td><td>vrf</td><td>参照（vrfs.name）</td><td></td><td>○</td><td></td><td>空 = VRF なし（全体の経路表）</td></tr>
 <tr><td>再配布の元</td><td>source</td><td>選択（connected、static、ospf、rip）</td><td>○</td><td>○</td><td></td><td></td></tr>
 <tr><td>メトリック</td><td>metric</td><td>数</td><td></td><td></td><td></td><td></td></tr>
-<tr><td>経路制御の条件</td><td>filter</td><td>文字</td><td></td><td></td><td></td><td>条件の名前。中身は追加コンフィグに書く</td></tr>
+<tr><td>経路制御の条件</td><td>filter</td><td>文字</td><td></td><td></td><td></td><td>経路制御の方針の表の名前。方針を追加コンフィグに書くときは、その名前</td></tr>
+<tr><td>OSPF のプロセス番号</td><td>process_id</td><td>数</td><td></td><td></td><td></td><td>再配布の元が ospf のとき。空なら、同じ VRF にちょうど 1 つあるプロセス</td></tr>
 </table>
 <h2>冗長化（VRRP・HSRP）</h2>
 <p><a id="fhrp"></a>内部名 <code>fhrp</code></p>
@@ -337,6 +471,7 @@
 <tr><td>鍵</td><td>auth_key</td><td>秘密の値</td><td></td><td></td><td></td><td>画面とレポートでは伏せます</td></tr>
 <tr><td>回線監視</td><td>track</td><td>参照（tracks.id）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>監視断のときの減点</td><td>track_decrement</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>版 2 の相手とも話す</td><td>vrrpv2</td><td>有効・無効</td><td></td><td></td><td></td><td>VRRP の版（IPv4）が 3 の機器の IPv4 のグループを、版 2 だけの機器ともつなぐ（Cisco の vrrpv2）</td></tr>
 </table>
 <h2>ACL</h2>
 <p><a id="acls"></a>内部名 <code>acls</code></p>
@@ -346,6 +481,7 @@
 <tr><td>名前</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td>番号の ACL は番号を名前として書く</td></tr>
 <tr><td>種類</td><td>type</td><td>選択（standard、extended）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>説明</td><td>description</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>行の番号の刻み</td><td>seq_step</td><td>数（1〜1000）</td><td></td><td></td><td></td><td>NEC IX の sequence-mode。値があれば、行に番号を付けて持つ。空なら、番号は 10、20、30 … で書く</td></tr>
 </table>
 <h2>ACL 行</h2>
 <p><a id="acl_entries"></a>内部名 <code>acl_entries</code></p>
@@ -360,11 +496,15 @@
 <tr><td>送信元ポート</td><td>src_port</td><td>文字</td><td></td><td></td><td></td><td>80、1000-2000、&gt;1023、&lt;1024、!80</td></tr>
 <tr><td>宛先</td><td>dst</td><td>文字</td><td></td><td></td><td></td><td>送信元と同じ書き方</td></tr>
 <tr><td>宛先ポート</td><td>dst_port</td><td>文字</td><td></td><td></td><td></td><td>送信元ポートと同じ書き方</td></tr>
-<tr><td>付加条件</td><td>flags</td><td>選択（established、log、fragments）。複数可</td><td></td><td></td><td></td><td></td></tr>
-<tr><td>ICMP の種類</td><td>icmp_type</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>付加条件</td><td>flags</td><td>選択（established、log、fragments、log_input、ack、fin、psh、rst、syn、urg）。複数可</td><td></td><td></td><td></td><td>log_input = 入ってきた IF も記録する。ack fin psh rst syn urg = その TCP のフラグが立った通信だけに合う</td></tr>
+<tr><td>ICMP の種類</td><td>icmp_type</td><td>文字</td><td></td><td></td><td></td><td>番号か、メーカーの語（echo、echo-reply、unreachable など）</td></tr>
 <tr><td>注記</td><td>remark</td><td>文字</td><td></td><td></td><td></td><td>動作が remark の行の本文</td></tr>
 <tr><td>DSCP</td><td>dscp</td><td>数（0〜63）</td><td></td><td></td><td></td><td>この DSCP の通信だけに合う。数で書く（ef = 46）</td></tr>
 <tr><td>precedence</td><td>precedence</td><td>数（0〜7）</td><td></td><td></td><td></td><td>この precedence の通信だけに合う</td></tr>
+<tr><td>ICMP のコード</td><td>icmp_code</td><td>数（0〜255）</td><td></td><td></td><td></td><td>ICMP の種類を番号で書いた行だけ</td></tr>
+<tr><td>ToS</td><td>tos</td><td>数（0〜15）</td><td></td><td></td><td></td><td>この ToS の通信だけに合う。数で書く</td></tr>
+<tr><td>効かせる時間帯</td><td>time_range</td><td>参照（time_ranges.name）</td><td></td><td></td><td></td><td>この時間帯の間だけ効く行（シート「時間帯」の名前）</td></tr>
+<tr><td>行の注記</td><td>comment</td><td>文字</td><td></td><td></td><td></td><td>この行に付ける注記（NEC QX の rule &lt;番号&gt; comment）。注記だけの行を持つメーカーでは、動作 remark の行を使う</td></tr>
 </table>
 <h2>プレフィックスリスト</h2>
 <p><a id="prefix_lists"></a>内部名 <code>prefix_lists</code></p>
@@ -384,7 +524,7 @@
 <tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
 <tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
 <tr><td>名前</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td>取り込み時は nat1 から自動で振る。比べるときは、名前でなく中身で行を合わせる</td></tr>
-<tr><td>種類</td><td>type</td><td>選択（pat_interface、pat_pool、dynamic_pool、static、static_port）</td><td>○</td><td></td><td></td><td>pat_interface = 外側 IF のアドレスへまとめて変換</td></tr>
+<tr><td>種類</td><td>type</td><td>選択（pat_interface、pat_pool、dynamic_pool、static、static_port、static_network）</td><td>○</td><td></td><td></td><td>pat_interface = 外側 IF のアドレスへまとめて変換。static_network = ネットワークごとの 1 対 1（内側・外側アドレスにネットワークのアドレス、範囲のプレフィックス長に長さ）</td></tr>
 <tr><td>外側 IF</td><td>outside_if</td><td>IF 名</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>対象の通信</td><td>match_acl</td><td>参照（acls.name）</td><td></td><td></td><td></td><td>空 = すべて</td></tr>
 <tr><td>変換後アドレスの先頭</td><td>pool_start</td><td>IPv4 アドレス</td><td></td><td></td><td></td><td></td></tr>
@@ -395,6 +535,7 @@
 <tr><td>プロトコル</td><td>protocol</td><td>選択（tcp、udp）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>内側ポート</td><td>local_port</td><td>数（1〜65535）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>外側ポート</td><td>global_port</td><td>数（1〜65535）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>複数の外側アドレスに対応させる</td><td>extendable</td><td>有効・無効</td><td></td><td></td><td></td><td>同じ内側アドレスを、複数の外側アドレスに対応させる（Cisco の extendable）</td></tr>
 </table>
 <h2>回線監視</h2>
 <p><a id="tracks"></a>内部名 <code>tracks</code></p>
@@ -402,8 +543,8 @@
 <tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
 <tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
 <tr><td>番号・名前</td><td>id</td><td>文字</td><td>○</td><td>○</td><td></td><td></td></tr>
-<tr><td>監視の方法</td><td>type</td><td>選択（icmp、interface、route）</td><td>○</td><td></td><td></td><td></td></tr>
-<tr><td>監視先</td><td>target</td><td>文字</td><td></td><td></td><td></td><td>icmp はアドレス、interface は IF 名、route はネットワーク</td></tr>
+<tr><td>監視の方法</td><td>type</td><td>選択（icmp、interface、route、list）</td><td>○</td><td></td><td></td><td>icmp = 相手に届くか、interface = IF が上がっているか、route = 経路表に宛先があるか、list = ほかの監視をまとめる</td></tr>
+<tr><td>監視先</td><td>target</td><td>文字</td><td></td><td></td><td></td><td>icmp はアドレス、interface は IF 名、route はネットワーク（アドレスとネットワークは IPv4 か IPv6）</td></tr>
 <tr><td>送信元 IF</td><td>source_if</td><td>IF 名</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>VRF</td><td>vrf</td><td>参照（vrfs.name）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>間隔（秒）</td><td>interval</td><td>数</td><td></td><td></td><td>○</td><td></td></tr>
@@ -412,6 +553,15 @@
 <tr><td>復旧と判断する回数</td><td>restore_count</td><td>数</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>断の反映待ち（秒）</td><td>down_delay</td><td>数</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>復旧の反映待ち（秒）</td><td>up_delay</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>送信元アドレス</td><td>source_ip</td><td>IPv4 か IPv6 のアドレス</td><td></td><td></td><td></td><td>送信元 IF とどちらか 1 つ。監視先と同じ種類（IPv4 か IPv6）</td></tr>
+<tr><td>監視の出口の IF</td><td>via_if</td><td>IF 名</td><td></td><td></td><td></td><td>経路表によらず、この IF から確かめる（NEC IX）</td></tr>
+<tr><td>監視の出口のネクストホップ</td><td>via_next_hop</td><td>IPv4 か IPv6 のアドレス</td><td></td><td></td><td></td><td>NEC IX。監視先と同じ種類（IPv4 か IPv6）</td></tr>
+<tr><td>しきい値（ミリ秒）</td><td>threshold</td><td>数</td><td></td><td></td><td></td><td>応答がこれより遅いと「遅い」とみなす（Cisco）</td></tr>
+<tr><td>正常とみなす条件</td><td>up_when</td><td>選択（reachable、within_threshold）</td><td></td><td></td><td></td><td>空・reachable = 届けば正常。within_threshold = しきい値より遅い応答も断とみなす</td></tr>
+<tr><td>断の間の監視間隔（秒）</td><td>restore_interval</td><td>数</td><td></td><td></td><td></td><td>NEC IX</td></tr>
+<tr><td>まとめる監視</td><td>members</td><td>参照（tracks.id）。複数可</td><td></td><td></td><td></td><td>監視の方法が list の行だけ。まとめる行の「番号・名前」</td></tr>
+<tr><td>まとめ方</td><td>list_rule</td><td>選択（all_up、any_up）</td><td></td><td></td><td></td><td>all_up = 全部が正常のときだけ正常。any_up = 1 つでも正常なら正常</td></tr>
+<tr><td>断のとき止める IF</td><td>shutdown_ifs</td><td>IF 名。複数可</td><td></td><td></td><td></td><td>NEC IX</td></tr>
 </table>
 <h2>PPPoE</h2>
 <p><a id="pppoe"></a>内部名 <code>pppoe</code></p>
@@ -427,34 +577,64 @@
 <tr><td>サービス名</td><td>service_name</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>デフォルト経路を作る</td><td>default_route</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>監視間隔（秒）</td><td>keepalive</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>相手も認証する</td><td>auth_both</td><td>有効・無効</td><td></td><td></td><td></td><td>こちらからも相手に認証を求める</td></tr>
+<tr><td>通信があるときだけつなぐ</td><td>on_demand</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>無通信で切る時間（秒）</td><td>idle_timeout</td><td>数（0〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>つなぐきっかけの通信</td><td>dial_trigger</td><td>文字</td><td></td><td></td><td></td><td>ip（IP の通信すべて）か、ACL の名前</td></tr>
+<tr><td>つなぎ直すまでの待ち（秒）</td><td>restart_delay</td><td>数（1〜3600）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>MAC アドレスを論理 IF のものにする</td><td>mac_override</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
 </table>
 <h2>IPsec</h2>
 <p><a id="ipsec_tunnels"></a>内部名 <code>ipsec_tunnels</code></p>
 <table>
 <tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
 <tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
-<tr><td>名前</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td>取り込み時は、トンネル IF の名前か「マップ名/番号」。比べるときは、名前でなく中身で行を合わせる</td></tr>
+<tr><td>名前</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td>取り込み時は、トンネル IF の名前か、マップの名前（Cisco は「マップ名/番号」）。比べるときは、名前でなく中身で行を合わせる</td></tr>
 <tr><td>方式</td><td>style</td><td>選択（tunnel_if、policy）</td><td>○</td><td></td><td></td><td>tunnel_if = トンネル IF に経路を向ける。policy = 対象通信で選ぶ</td></tr>
 <tr><td>トンネル IF</td><td>tunnel_if</td><td>IF 名</td><td></td><td></td><td></td><td>方式が tunnel_if のとき必須</td></tr>
-<tr><td>自分側 IF</td><td>local_if</td><td>IF 名</td><td></td><td></td><td></td><td>自分側 IF か自分側アドレスのどちらか</td></tr>
+<tr><td>自分側 IF</td><td>local_if</td><td>IF 名</td><td></td><td></td><td></td><td>方式が policy のとき: IPsec を当てる IF。L2TP の受け口を守る行は、NEC IX では空（受け口のトンネル IF に当てる）</td></tr>
 <tr><td>自分側アドレス</td><td>local_address</td><td>IPv4 アドレス</td><td></td><td></td><td></td><td></td></tr>
-<tr><td>相手アドレス</td><td>peer_address</td><td>文字</td><td>○</td><td></td><td></td><td>アドレス。相手が動的なら any</td></tr>
+<tr><td>相手アドレス</td><td>peer_address</td><td>文字</td><td>○</td><td></td><td></td><td>アドレス。相手が動的なら any。名前（FQDN）で書いてもよい</td></tr>
 <tr><td>IKE の版</td><td>ike_version</td><td>選択（1、2）</td><td>○</td><td></td><td>○</td><td></td></tr>
 <tr><td>IKE のモード</td><td>ike_mode</td><td>選択（main、aggressive）</td><td></td><td></td><td>○</td><td>版 1 のみ</td></tr>
-<tr><td>自分の ID</td><td>local_id</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
-<tr><td>相手の ID</td><td>remote_id</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>自分の ID</td><td>local_id</td><td>文字</td><td></td><td></td><td></td><td>種類:値 の形。種類は address・fqdn・email・keyid（例 fqdn:rt-a01.example.com）。空 = 自分のアドレス</td></tr>
+<tr><td>相手の ID</td><td>remote_id</td><td>文字</td><td></td><td></td><td></td><td>種類:値 の形（自分の ID と同じ）。空 = 相手のアドレス</td></tr>
 <tr><td>事前共有鍵</td><td>psk</td><td>秘密の値</td><td>○</td><td></td><td></td><td>画面とレポートでは伏せます</td></tr>
-<tr><td>IKE 暗号</td><td>ike_encryption</td><td>選択（des、3des、aes128、aes192、aes256、aes128gcm、aes256gcm、null）</td><td>○</td><td></td><td>○</td><td></td></tr>
-<tr><td>IKE ハッシュ</td><td>ike_hash</td><td>選択（md5、sha1、sha256、sha384、sha512）</td><td>○</td><td></td><td>○</td><td></td></tr>
-<tr><td>IKE DH グループ</td><td>ike_dh</td><td>選択（dh1、dh2、dh5、dh14、dh15、dh16、dh19、dh20、dh21、dh24）</td><td>○</td><td></td><td>○</td><td></td></tr>
+<tr><td>相手を確かめる鍵</td><td>psk_remote</td><td>秘密の値</td><td></td><td></td><td></td><td>版 2 で、自分が名乗る鍵（事前共有鍵）と相手を確かめる鍵が別のとき。空 = 事前共有鍵と同じ 画面とレポートでは伏せます</td></tr>
+<tr><td>鍵の書き方</td><td>psk_form</td><td>選択（text、hex）</td><td></td><td></td><td></td><td>hex = 16 進で書いた鍵。空 = text（文字）</td></tr>
+<tr><td>IKE 暗号</td><td>ike_encryption</td><td>選択（des、3des、aes128、aes192、aes256、aes128gcm、aes256gcm、null）</td><td></td><td></td><td>○</td><td>版 1 では必須。版 2 で空なら、機器が持つ候補に任せる</td></tr>
+<tr><td>IKE ハッシュ</td><td>ike_hash</td><td>選択（md5、sha1、sha256、sha384、sha512）</td><td></td><td></td><td>○</td><td>版 1 では必須。版 2 で空なら、機器が持つ候補に任せる</td></tr>
+<tr><td>IKE DH グループ</td><td>ike_dh</td><td>選択（dh1、dh2、dh5、dh14、dh15、dh16、dh19、dh20、dh21、dh24）</td><td></td><td></td><td>○</td><td>版 1 では必須。版 2 で空なら、機器が持つ候補に任せる</td></tr>
+<tr><td>IKE PRF</td><td>ike_prf</td><td>選択（md5、sha1、sha256、sha384、sha512）</td><td></td><td></td><td></td><td>版 2 のみ。空 = IKE ハッシュと同じ</td></tr>
 <tr><td>IKE 有効時間（秒）</td><td>ike_lifetime</td><td>数</td><td></td><td></td><td>○</td><td></td></tr>
-<tr><td>ESP 暗号</td><td>esp_encryption</td><td>選択（des、3des、aes128、aes192、aes256、aes128gcm、aes256gcm、null）</td><td>○</td><td></td><td>○</td><td></td></tr>
-<tr><td>ESP ハッシュ</td><td>esp_hash</td><td>選択（md5、sha1、sha256、sha384、sha512）</td><td>○</td><td></td><td>○</td><td></td></tr>
+<tr><td>ESP 暗号</td><td>esp_encryption</td><td>選択（des、3des、aes128、aes192、aes256、aes128gcm、aes256gcm、null）</td><td></td><td></td><td>○</td><td>版 1 では必須。版 2 で空なら、機器が持つ候補に任せる</td></tr>
+<tr><td>ESP ハッシュ</td><td>esp_hash</td><td>選択（md5、sha1、sha256、sha384、sha512、none）</td><td></td><td></td><td>○</td><td>none = ESP の認証を使わない。版 1 では必須。版 2 で空なら、機器が持つ候補に任せる</td></tr>
+<tr><td>AH ハッシュ</td><td>ah_hash</td><td>選択（md5、sha1、sha256、sha384、sha512）</td><td></td><td></td><td></td><td>AH（認証ヘッダ）も使うとき</td></tr>
+<tr><td>IPsec のモード</td><td>ipsec_mode</td><td>選択（tunnel、transport）</td><td></td><td></td><td></td><td>空 = tunnel</td></tr>
 <tr><td>PFS</td><td>pfs</td><td>選択（none、dh1、dh2、dh5、dh14、dh15、dh16、dh19、dh20、dh21、dh24）</td><td></td><td></td><td>○</td><td></td></tr>
 <tr><td>IPsec 有効時間（秒）</td><td>ipsec_lifetime</td><td>数</td><td></td><td></td><td>○</td><td></td></tr>
+<tr><td>IPsec 有効量（キロバイト）</td><td>ipsec_lifetime_kb</td><td>数</td><td></td><td></td><td></td><td>この量を送ったら鍵を替える</td></tr>
+<tr><td>いつもつないでおく</td><td>always_on</td><td>有効・無効</td><td></td><td></td><td></td><td>通信が無くても、切れたらつなぎ直す。空 = 通信があったときにつなぐ</td></tr>
 <tr><td>相手監視の間隔（秒）</td><td>dpd_interval</td><td>数</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>相手監視の再送回数</td><td>dpd_retry</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>相手監視の再送間隔（秒）</td><td>dpd_retry_interval</td><td>数</td><td></td><td></td><td></td><td>返事が無いときに、聞き直す間隔</td></tr>
+<tr><td>相手監視の送り方</td><td>dpd_mode</td><td>選択（on_demand、periodic）</td><td></td><td></td><td></td><td>on_demand = 通信が無いときだけ聞く。periodic = いつも間隔ごとに聞く</td></tr>
 <tr><td>NAT 越え</td><td>nat_traversal</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>NAT 越えの維持間隔（秒）</td><td>nat_keepalive</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>NAT 越えを必ず使う</td><td>nat_force</td><td>有効・無効</td><td></td><td></td><td></td><td>途中に NAT が無くても UDP で包む</td></tr>
+<tr><td>この IKE の相手だけに使う</td><td>ike_bind</td><td>有効・無効</td><td></td><td></td><td></td><td>相手が any のとき、この行の IKE で確かめた相手だけを受け付ける（NEC IX の ike-binding）</td></tr>
+<tr><td>IKE 暗号（追加）</td><td>ike_encryption_more</td><td>選択（3des、aes128、aes192、aes256、aes128gcm、aes256gcm）。複数可</td><td></td><td></td><td></td><td>版 2 のみ。同じ提案に並べる 2 つ目以降の値（機器は、並べた値のどの組み合わせでも折り合う）</td></tr>
+<tr><td>IKE ハッシュ（追加）</td><td>ike_hash_more</td><td>選択（md5、sha1、sha256、sha384、sha512）。複数可</td><td></td><td></td><td></td><td>版 2 のみ。同じ提案に並べる 2 つ目以降の値</td></tr>
+<tr><td>IKE DH グループ（追加）</td><td>ike_dh_more</td><td>選択（dh1、dh2、dh5、dh14、dh15、dh16、dh19、dh20、dh21、dh24）。複数可</td><td></td><td></td><td></td><td>版 2 のみ。同じ提案に並べる 2 つ目以降の値</td></tr>
+<tr><td>IKE PRF（追加）</td><td>ike_prf_more</td><td>選択（md5、sha1、sha256、sha384、sha512）。複数可</td><td></td><td></td><td></td><td>版 2 のみ。同じ提案に並べる 2 つ目以降の値</td></tr>
+<tr><td>ESP 暗号（追加）</td><td>esp_encryption_more</td><td>選択（3des、aes128、aes192、aes256、aes128gcm、aes256gcm、null）。複数可</td><td></td><td></td><td></td><td>版 2 のみ。同じ提案に並べる 2 つ目以降の値（NEC IX の child-proposal。Cisco は、組み合わせごとのトランスフォームセットに置き換えて書く）</td></tr>
+<tr><td>ESP ハッシュ（追加）</td><td>esp_hash_more</td><td>選択（md5、sha1、sha256、sha384、sha512）。複数可</td><td></td><td></td><td></td><td>版 2 のみ。同じ提案に並べる 2 つ目以降の値</td></tr>
+<tr><td>PFS（追加）</td><td>pfs_more</td><td>選択（dh1、dh2、dh5、dh14、dh15、dh16、dh19、dh20、dh21、dh24）。複数可</td><td></td><td></td><td></td><td>版 2 のみ。PFS に並べる 2 つ目以降のグループ（NEC IX の child-pfs）</td></tr>
+<tr><td>予備の相手</td><td>peer_backup</td><td>文字。複数可</td><td></td><td></td><td></td><td>相手アドレスの相手につながらないときに、順につなぎに行く相手（アドレスか名前）。鍵は同じ（Cisco のクリプトマップの 2 つ目以降の set peer）</td></tr>
+<tr><td>外側の VRF</td><td>outer_vrf</td><td>参照（vrfs.name）</td><td></td><td></td><td></td><td>暗号化した通信と IKE が通る VRF（Cisco の fvrf）。空 = VRF なし。方式が policy の行では、自分側 IF の VRF と同じにする</td></tr>
+<tr><td>内側の VRF</td><td>inner_vrf</td><td>参照（vrfs.name）</td><td></td><td></td><td></td><td>守る通信が属する VRF（Cisco の ivrf）。方式が policy の行だけに書く。空 = 外側の VRF と同じ。方式が tunnel_if の行では、トンネル IF の VRF（インタフェースのシート）が内側</td></tr>
+<tr><td>同じ NAT の後ろの端末を見分ける</td><td>nat_demux</td><td>有効・無効</td><td></td><td></td><td></td><td>L2TP/IPsec の受け口で、同じ NAT の後ろから複数の端末がつなぐとき（Cisco の set nat demux）</td></tr>
+<tr><td>つなぎ直しは最初の相手から</td><td>peer_default</td><td>有効・無効</td><td></td><td></td><td></td><td>予備の相手があるとき、相手が応えなくなったら、次の相手の前に最初の相手（相手アドレス）をもう一度試す（Cisco の set peer … default）</td></tr>
 </table>
 <h2>IPsec 対象通信</h2>
 <p><a id="ipsec_selectors"></a>内部名 <code>ipsec_selectors</code></p>
@@ -463,9 +643,11 @@
 <tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
 <tr><td>IPsec の名前</td><td>tunnel</td><td>参照（ipsec_tunnels.name）</td><td>○</td><td>○</td><td></td><td></td></tr>
 <tr><td>順番</td><td>seq</td><td>数</td><td>○</td><td>○</td><td></td><td></td></tr>
-<tr><td>自分側ネットワーク</td><td>local_net</td><td>IPv4 ネットワーク</td><td>○</td><td></td><td></td><td></td></tr>
-<tr><td>相手側ネットワーク</td><td>remote_net</td><td>IPv4 ネットワーク</td><td>○</td><td></td><td></td><td></td></tr>
-<tr><td>プロトコル</td><td>protocol</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>自分側ネットワーク</td><td>local_net</td><td>IPv4 ネットワーク</td><td>○</td><td></td><td></td><td>すべてなら 0.0.0.0/0</td></tr>
+<tr><td>相手側ネットワーク</td><td>remote_net</td><td>IPv4 ネットワーク</td><td>○</td><td></td><td></td><td>すべてなら 0.0.0.0/0</td></tr>
+<tr><td>プロトコル</td><td>protocol</td><td>文字</td><td></td><td></td><td></td><td>ip（すべて）・udp・tcp など。空 = ip</td></tr>
+<tr><td>自分側ポート</td><td>local_port</td><td>数（1〜65535）</td><td></td><td></td><td></td><td>プロトコルが udp・tcp のとき。L2TP を守るなら udp の 1701</td></tr>
+<tr><td>相手側ポート</td><td>remote_port</td><td>数（1〜65535）</td><td></td><td></td><td></td><td>プロトコルが udp・tcp のとき</td></tr>
 </table>
 <h2>トンネル</h2>
 <p><a id="tunnels"></a>内部名 <code>tunnels</code></p>
@@ -473,12 +655,17 @@
 <tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
 <tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
 <tr><td>トンネル IF</td><td>if_name</td><td>IF 名</td><td>○</td><td>○</td><td></td><td>アドレスはインタフェースのシートに書く</td></tr>
-<tr><td>種類</td><td>type</td><td>選択（gre、ipip、ipsec、l2tpv3）</td><td>○</td><td></td><td></td><td>ipsec は IPsec のシートのトンネル IF と対になる</td></tr>
+<tr><td>種類</td><td>type</td><td>選択（gre、ipip、ipsec、l2tpv3、ipv4_over_ipv6、ipv6_over_ipv4、map_e、auto_ds_lite、auto_ipip、etherip）</td><td>○</td><td></td><td></td><td>ipsec は IPsec のシートのトンネル IF と対になる。ipv4_over_ipv6 = IPv6 の網で IPv4 を運ぶ（DS-Lite・固定 IP の IPIP）、map_e = MAP-E、auto_ds_lite・auto_ipip = 回線の事業者から設定をもらう</td></tr>
 <tr><td>送信元</td><td>source</td><td>文字</td><td></td><td></td><td></td><td>IF 名かアドレス。種類が ipsec 以外では必須</td></tr>
 <tr><td>宛先</td><td>destination</td><td>IPv4 アドレス</td><td></td><td></td><td></td><td>種類が ipsec 以外では必須</td></tr>
 <tr><td>鍵（GRE）</td><td>key</td><td>数</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>監視間隔（秒）</td><td>keepalive_interval</td><td>数</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>監視の再送回数</td><td>keepalive_retry</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>宛先（IPv6）</td><td>destination_v6</td><td>IPv6 アドレス</td><td></td><td></td><td></td><td>IPv6 の網を通るトンネルの宛先</td></tr>
+<tr><td>宛先（名前）</td><td>destination_fqdn</td><td>文字</td><td></td><td></td><td></td><td>宛先を名前で書く（DS-Lite の AFTR など）</td></tr>
+<tr><td>MAP-E の事業者</td><td>provider</td><td>選択（jpix、ocn、ocn_fixed）</td><td></td><td></td><td></td><td>種類が map_e のとき。空 = 機器の既定</td></tr>
+<tr><td>MAP-E のホスト名</td><td>provider_host</td><td>文字</td><td></td><td></td><td></td><td>事業者が ocn_fixed のとき</td></tr>
+<tr><td>LAN 側 IF（自動設定）</td><td>lan_if</td><td>IF 名</td><td></td><td></td><td></td><td>種類が auto_ds_lite・auto_ipip のとき、もらった IPv4 アドレスを使う LAN 側の IF</td></tr>
 </table>
 <h2>DHCP</h2>
 <p><a id="dhcp_pools"></a>内部名 <code>dhcp_pools</code></p>
@@ -491,9 +678,10 @@
 <tr><td>配る範囲の末尾</td><td>range_end</td><td>IPv4 アドレス</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>配らないアドレス</td><td>excluded</td><td>文字。複数可</td><td></td><td></td><td></td><td>192.0.2.1-192.0.2.10 の形。複数はカンマで区切る</td></tr>
 <tr><td>デフォルトゲートウェイ</td><td>default_router</td><td>IPv4 アドレス</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>デフォルトゲートウェイ（2 つ目以降）</td><td>default_routers_more</td><td>IPv4 アドレス。複数可</td><td></td><td></td><td></td><td>Cisco だけ（8 つまで）</td></tr>
 <tr><td>DNS サーバ</td><td>dns_servers</td><td>IPv4 アドレス。複数可</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>ドメイン名</td><td>domain</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
-<tr><td>貸し出し時間</td><td>lease</td><td>文字</td><td></td><td></td><td></td><td>1d、12h の形</td></tr>
+<tr><td>貸し出し時間</td><td>lease</td><td>文字</td><td></td><td></td><td></td><td>1d、12h、90m、100s の形か、infinite（無期限）</td></tr>
 </table>
 <h2>接続</h2>
 <p><a id="connections"></a>内部名 <code>connections</code></p>
@@ -541,7 +729,18 @@
 <tr><td>ACL</td><td>acl</td><td>参照（acls.name）</td><td></td><td></td><td></td><td>ACL・DSCP・precedence は 1 行に 1 つだけ。3 つとも空 = すべての通信</td></tr>
 <tr><td>DSCP</td><td>dscp</td><td>数（0〜63）。複数可</td><td></td><td></td><td></td><td>数で書く（ef = 46、af41 = 34）。複数はカンマで区切る</td></tr>
 <tr><td>precedence</td><td>precedence</td><td>数（0〜7）。複数可</td><td></td><td></td><td></td><td>数で書く。複数はカンマで区切る</td></tr>
-<tr><td>キュー</td><td>queue</td><td>選択（high、medium、normal、low）</td><td></td><td></td><td></td><td>この条件に合った通信を入れる優先度のキュー</td></tr>
+<tr><td>キュー</td><td>queue</td><td>選択（high、medium、normal、low、sub_a、sub_b、sub_c、sub_d）</td><td></td><td></td><td></td><td>この条件に合った通信を入れる優先度のキュー</td></tr>
+<tr><td>受信 IF</td><td>input_if</td><td>IF 名</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>CoS</td><td>cos</td><td>数（0〜7）。複数可</td><td></td><td></td><td></td><td>VLAN タグの優先度。複数はカンマで区切る</td></tr>
+<tr><td>QoS グループ</td><td>qos_group</td><td>数（0〜65535）</td><td></td><td></td><td></td><td>受信側で付けた機器の中だけの印</td></tr>
+<tr><td>プロトコル</td><td>protocol</td><td>文字</td><td></td><td></td><td></td><td>機器が見分けるプロトコルの名前</td></tr>
+<tr><td>条件を逆にする</td><td>negate</td><td>有効・無効</td><td></td><td></td><td></td><td>この行の条件に合わない通信</td></tr>
+<tr><td>ほかのクラス</td><td>class_ref</td><td>参照（qos_classes.name）</td><td></td><td></td><td></td><td>ほかのクラスに合う通信</td></tr>
+<tr><td>IPv6 の ACL</td><td>ipv6_acl</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>機器自身が出す通信</td><td>local_generated</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>RTP のポートの先頭</td><td>rtp_port_start</td><td>数（1〜65535）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>RTP のポートの幅</td><td>rtp_port_range</td><td>数（0〜65535）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>NGN のトンネル IF</td><td>ngn_if</td><td>IF 名</td><td></td><td></td><td></td><td></td></tr>
 </table>
 <h2>QoS のポリシー</h2>
 <p><a id="qos_policies"></a>内部名 <code>qos_policies</code></p>
@@ -549,7 +748,7 @@
 <tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
 <tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
 <tr><td>ポリシー名</td><td>policy</td><td>文字</td><td>○</td><td>○</td><td></td><td>1〜31 字</td></tr>
-<tr><td>クラス名</td><td>class</td><td>参照（qos_classes.name）。ほかに default、local</td><td>○</td><td>○</td><td></td><td>QoS の見分け方のクラス名か、default（どれにも当たらない通信）、local（機器自身が出す通信）</td></tr>
+<tr><td>クラス名</td><td>class</td><td>参照（qos_classes.name）。ほかに default、local、dynamic</td><td>○</td><td>○</td><td></td><td>QoS の見分け方のクラス名か、default（どれにも当たらない通信）、local（機器自身が出す通信）、dynamic（ダイナミック QoS）</td></tr>
 <tr><td>順番</td><td>seq</td><td>数</td><td>○</td><td></td><td></td><td>ポリシーの中で見る順（小さい順に書く。default はいつも最後） コンフィグには書きません</td></tr>
 <tr><td>優先して送る</td><td>priority</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>優先の段</td><td>priority_level</td><td>数（1〜2）</td><td></td><td></td><td></td><td></td></tr>
@@ -569,6 +768,18 @@
 <tr><td>付ける precedence</td><td>set_precedence</td><td>数（0〜7）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>キューの長さ（パケット）</td><td>queue_limit</td><td>数（1〜）。複数可</td><td></td><td></td><td></td><td>PQ では high・medium・normal・low の順</td></tr>
 <tr><td>公平に送る</td><td>fair_queue</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>付ける CoS</td><td>set_cos</td><td>数（0〜7）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>付ける QoS グループ</td><td>set_qos_group</td><td>数（0〜65535）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>付ける DSCP（IPv6）</td><td>set_ipv6_dscp</td><td>数（0〜63）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>付ける precedence（IPv6）</td><td>set_ipv6_precedence</td><td>数（0〜7）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>遅らせ方</td><td>shape_mode</td><td>選択（average、peak）</td><td></td><td></td><td></td><td>空 = average</td></tr>
+<tr><td>上限・遅らせる（%）</td><td>shape_percent</td><td>数（1〜100）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>上限・捨てる（%）</td><td>police_percent</td><td>数（1〜100）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>最大の速さ・捨てる（bps）</td><td>police_pir_bps</td><td>数（1〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>最大を超えたとき</td><td>police_violate</td><td>選択（drop、transmit、set_dscp、set_precedence）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>最大を超えたときに付ける値</td><td>police_violate_value</td><td>数（0〜63）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>混む前に間引く（WRED）</td><td>random_detect</td><td>選択（on、dscp、precedence）</td><td></td><td></td><td></td><td>on = 機器の既定、dscp・precedence = その値で間引き方を変える</td></tr>
+<tr><td>キューの長さの単位</td><td>queue_limit_unit</td><td>選択（bytes、ms、us）</td><td></td><td></td><td></td><td>空 = パケット</td></tr>
 </table>
 <h2>QoS の適用</h2>
 <p><a id="qos_bindings"></a>内部名 <code>qos_bindings</code></p>
@@ -581,6 +792,675 @@
 <tr><td>IF 全体を絞る速さ（bps）</td><td>shape_bps</td><td>数（1〜）</td><td></td><td></td><td></td><td>出力だけ</td></tr>
 <tr><td>IF 全体の通常バースト（ビット）</td><td>shape_bc</td><td>数（1〜）</td><td></td><td></td><td></td><td></td></tr>
 <tr><td>IF 全体の超過バースト（ビット）</td><td>shape_be</td><td>数（0〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>NGN 用の既定のポリシー</td><td>ngn_default</td><td>有効・無効</td><td></td><td></td><td></td><td>機器が持つ NGN 用のポリシーを当てる（ポリシー名は空にする）</td></tr>
+</table>
+<h2>経路制御の方針</h2>
+<p><a id="route_policies"></a>内部名 <code>route_policies</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>方針名</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td>BGP ネイバーの受信・送信の経路制御、再配布の経路制御の条件、IF のポリシールーティングから、この名前で指す</td></tr>
+<tr><td>順番</td><td>seq</td><td>数（0〜65535）</td><td>○</td><td>○</td><td></td><td>小さい順に見て、最初に条件が合った行で決まる</td></tr>
+<tr><td>動作</td><td>action</td><td>選択（permit、deny）</td><td>○</td><td></td><td></td><td>permit = 条件に合ったら通して値を付ける。deny = 条件に合ったら落とす（ポリシールーティングでは、ふつうの経路表どおりに送る）</td></tr>
+<tr><td>条件: 宛先（プレフィックスリスト）</td><td>match_prefix_list</td><td>参照（prefix_lists.name）。複数可</td><td></td><td></td><td></td><td>経路の宛先がリストに合う。複数はどれか 1 つに合えばよい</td></tr>
+<tr><td>条件: ACL</td><td>match_acl</td><td>参照（acls.name）。複数可</td><td></td><td></td><td></td><td>ポリシールーティングでは通信、経路の方針では経路の宛先を ACL で見る</td></tr>
+<tr><td>条件: ネクストホップ（プレフィックスリスト）</td><td>match_next_hop_prefix_list</td><td>参照（prefix_lists.name）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>条件: AS パス</td><td>match_as_path</td><td>参照（as_path_lists.name）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>条件: コミュニティ</td><td>match_community</td><td>文字。複数可</td><td></td><td></td><td></td><td>経路が、書いたコミュニティをすべて持つ。64496:100 の形か、no-export などの語</td></tr>
+<tr><td>条件: コミュニティのリスト</td><td>match_community_list</td><td>参照（community_lists.name）</td><td></td><td></td><td></td><td>「条件: コミュニティ」とは、1 行にどちらか 1 つ</td></tr>
+<tr><td>条件: コミュニティが完全に同じ</td><td>match_community_exact</td><td>有効・無効</td><td></td><td></td><td></td><td>書いたもの以外のコミュニティを持つ経路には合わない</td></tr>
+<tr><td>条件: 出力 IF</td><td>match_interface</td><td>IF 名。複数可</td><td></td><td></td><td></td><td>経路の出口の IF</td></tr>
+<tr><td>条件: メトリック</td><td>match_metric</td><td>数（0〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>条件: タグ</td><td>match_tag</td><td>数（0〜）。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>付ける値: ローカルプリファレンス</td><td>set_local_preference</td><td>数（0〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>付ける値: メトリック（MED）</td><td>set_metric</td><td>文字</td><td></td><td></td><td></td><td>数で書く。+10・-10 と書くと、今の値に足す・引く</td></tr>
+<tr><td>付ける値: メトリックの種類</td><td>set_metric_type</td><td>選択（1、2、internal）</td><td></td><td></td><td></td><td>1・2 = OSPF の外部経路の種類。internal = BGP の MED に IGP のメトリックを入れる</td></tr>
+<tr><td>付ける値: AS パスに足す AS</td><td>set_as_path_prepend</td><td>数（1〜）。複数可</td><td></td><td></td><td></td><td>書いた順に足す</td></tr>
+<tr><td>付ける値: コミュニティ</td><td>set_community</td><td>文字。複数可</td><td></td><td></td><td></td><td>64496:100 の形か、no-export などの語。none は、コミュニティをすべて外す</td></tr>
+<tr><td>コミュニティを足す</td><td>set_community_additive</td><td>有効・無効</td><td></td><td></td><td></td><td>有効 = 今のコミュニティに足す。空・無効 = 置き換える</td></tr>
+<tr><td>付ける値: weight</td><td>set_weight</td><td>数（0〜65535）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>付ける値: オリジン</td><td>set_origin</td><td>選択（igp、incomplete）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>付ける値: タグ</td><td>set_tag</td><td>数（0〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>付ける値: ネクストホップ</td><td>set_next_hop</td><td>IPv4 アドレス。ほかに self。複数可</td><td></td><td></td><td></td><td>経路ではネクストホップの属性、ポリシールーティングでは送り先。self = 自分のアドレス（BGP）</td></tr>
+<tr><td>経路が無いときのネクストホップ</td><td>set_default_next_hop</td><td>IPv4 アドレス。複数可</td><td></td><td></td><td></td><td>ポリシールーティング。経路表に宛先が無いときだけ使う</td></tr>
+<tr><td>付ける値: 出力 IF</td><td>set_interface</td><td>IF 名。ほかに Null*。複数可</td><td></td><td></td><td></td><td>ポリシールーティング</td></tr>
+<tr><td>経路が無いときの出力 IF</td><td>set_default_interface</td><td>IF 名。ほかに Null*。複数可</td><td></td><td></td><td></td><td>ポリシールーティング。経路表に宛先が無いときだけ使う</td></tr>
+<tr><td>条件: IPv6 の宛先（プレフィックスリスト）</td><td>match_ipv6_prefix_list</td><td>参照（ipv6_prefix_lists.name）。複数可</td><td></td><td></td><td></td><td>IPv6 の経路の宛先がリストに合う</td></tr>
+<tr><td>条件: IPv6 フィルタ</td><td>match_ipv6_acl</td><td>参照（ipv6_acl_entries.acl）。複数可</td><td></td><td></td><td></td><td>ポリシールーティングでは、IPv6 の通信をフィルタで見る</td></tr>
+<tr><td>条件: IPv6 のネクストホップ（プレフィックスリスト）</td><td>match_ipv6_next_hop_prefix_list</td><td>参照（ipv6_prefix_lists.name）</td><td></td><td></td><td></td><td>IPv6 の経路のネクストホップがリストに合う</td></tr>
+<tr><td>条件: ネクストホップ（ACL）</td><td>match_next_hop_acl</td><td>参照（acls.name）。複数可</td><td></td><td></td><td></td><td>経路のネクストホップを ACL で見る。Cisco だけ（NEC IX はプレフィックスリストで見る）</td></tr>
+<tr><td>条件: 経路の種類</td><td>match_route_type</td><td>選択（local、internal、external、external_type1、external_type2）。複数可</td><td></td><td></td><td></td><td>local = 自分で作った BGP の経路。internal = OSPF のエリア内・エリア間。external = 外部経路（type1・type2 で分けられる）。Cisco だけ</td></tr>
+<tr><td>合った後に続けて見る順番</td><td>continue_to</td><td>文字</td><td></td><td></td><td></td><td>条件に合って値を付けた後、この順番の行も続けて見る。next = 次の行。Cisco だけ</td></tr>
+<tr><td>外すコミュニティ</td><td>set_community_delete</td><td>文字。複数可</td><td></td><td></td><td></td><td>経路から、ここに書いたコミュニティだけを外す。Cisco はパックがリストを作って書く</td></tr>
+<tr><td>付ける値: 拡張コミュニティ（ルートターゲット）</td><td>set_extcommunity_rt</td><td>文字。複数可</td><td></td><td></td><td></td><td>64496:100 の形。Cisco だけ</td></tr>
+<tr><td>ルートターゲットを足す</td><td>set_extcommunity_rt_additive</td><td>有効・無効</td><td></td><td></td><td></td><td>有効 = 今のルートターゲットに足す</td></tr>
+<tr><td>付ける値: 拡張コミュニティ（Site of Origin）</td><td>set_extcommunity_soo</td><td>文字</td><td></td><td></td><td></td><td>64496:100 の形。Cisco だけ</td></tr>
+<tr><td>付ける値: IPv6 のネクストホップ</td><td>set_ipv6_next_hop</td><td>IPv6 アドレス。複数可</td><td></td><td></td><td></td><td>IPv6 のポリシールーティングの送り先（経路ではネクストホップの属性）</td></tr>
+<tr><td>経路が無いときの IPv6 のネクストホップ</td><td>set_ipv6_default_next_hop</td><td>IPv6 アドレス。複数可</td><td></td><td></td><td></td><td>IPv6 のポリシールーティング。経路表に宛先が無いときだけ使う</td></tr>
+</table>
+<h2>AS パスのリスト</h2>
+<p><a id="as_path_lists"></a>内部名 <code>as_path_lists</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>名前</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td>Cisco は番号（1〜500）</td></tr>
+<tr><td>順番</td><td>seq</td><td>数</td><td>○</td><td>○</td><td></td><td>書いた順に 10 刻みで振る</td></tr>
+<tr><td>動作</td><td>action</td><td>選択（permit、deny）</td><td>○</td><td></td><td></td><td></td></tr>
+<tr><td>AS パスの正規表現</td><td>regex</td><td>文字</td><td>○</td><td></td><td></td><td>例 ^64496_</td></tr>
+</table>
+<h2>コミュニティのリスト</h2>
+<p><a id="community_lists"></a>内部名 <code>community_lists</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>名前</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td>番号も名前として持つ</td></tr>
+<tr><td>順番</td><td>seq</td><td>数</td><td>○</td><td>○</td><td></td><td>書いた順に 10 刻みで振る。行どうしは、どれかに合えばよい</td></tr>
+<tr><td>動作</td><td>action</td><td>選択（permit、deny）</td><td>○</td><td></td><td></td><td></td></tr>
+<tr><td>種類</td><td>type</td><td>選択（standard、expanded）</td><td>○</td><td></td><td></td><td>standard = コミュニティを並べる。expanded = 正規表現</td></tr>
+<tr><td>コミュニティ</td><td>communities</td><td>文字。複数可</td><td></td><td></td><td></td><td>standard の行。1 行に並べたものは「すべて持つ」。64496:100 の形か、no-export などの語</td></tr>
+<tr><td>正規表現</td><td>regex</td><td>文字</td><td></td><td></td><td></td><td>expanded の行</td></tr>
+</table>
+<h2>IPsec 追加の提案</h2>
+<p><a id="ipsec_proposals"></a>内部名 <code>ipsec_proposals</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>IPsec の名前</td><td>tunnel</td><td>参照（ipsec_tunnels.name）</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>段</td><td>phase</td><td>選択（ike、ipsec）</td><td>○</td><td>○</td><td></td><td>ike = IKE の提案の候補、ipsec = IPsec（ESP・AH）の提案の候補</td></tr>
+<tr><td>順番</td><td>seq</td><td>数</td><td>○</td><td>○</td><td></td><td>IPsec の行に書いた提案の次に、小さい順に出す候補。番号は順番を決めるだけ（取り込みは 20・30… と振る）</td></tr>
+<tr><td>暗号</td><td>encryption</td><td>選択（des、3des、aes128、aes192、aes256、aes128gcm、aes256gcm、null）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ハッシュ</td><td>hash</td><td>選択（md5、sha1、sha256、sha384、sha512）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>DH グループ</td><td>dh</td><td>選択（dh1、dh2、dh5、dh14、dh15、dh16、dh19、dh20、dh21、dh24）</td><td></td><td></td><td></td><td>段が ike のとき</td></tr>
+<tr><td>PRF</td><td>prf</td><td>選択（md5、sha1、sha256、sha384、sha512）</td><td></td><td></td><td></td><td>段が ike で、IKE の版 2 のとき</td></tr>
+<tr><td>AH ハッシュ</td><td>ah_hash</td><td>選択（md5、sha1、sha256、sha384、sha512）</td><td></td><td></td><td></td><td>段が ipsec のとき</td></tr>
+<tr><td>有効時間（秒）</td><td>lifetime</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>有効量（キロバイト）</td><td>lifetime_kb</td><td>数</td><td></td><td></td><td></td><td>段が ipsec のとき</td></tr>
+</table>
+<h2>IPsec の全体設定</h2>
+<p><a id="ipsec_settings"></a>内部名 <code>ipsec_settings</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>再送攻撃の検出</td><td>anti_replay</td><td>有効・無効</td><td></td><td></td><td></td><td>同じパケットをもう一度受けたら捨てる。空 = 機器の既定（有効）</td></tr>
+<tr><td>再送攻撃の検出の窓</td><td>replay_window</td><td>数（64〜1024）</td><td></td><td></td><td></td><td>順番の入れ替わりを許すパケットの数（64・128・256・512・1024）</td></tr>
+<tr><td>外側の DF ビット</td><td>df_bit</td><td>選択（copy、set、clear）</td><td></td><td></td><td></td><td>暗号化したパケットの外側のヘッダの DF ビット。copy = 元のパケットから写す、set = 立てる、clear = 立てない（途中で分割できる）</td></tr>
+<tr><td>通信が無いときに切るまでの時間（秒）</td><td>idle_time</td><td>数（60〜86400）</td><td></td><td></td><td></td><td>この時間だけ通信が無い相手の IPsec を切る。空 = 切らない</td></tr>
+<tr><td>アグレッシブモードを受け付ける</td><td>aggressive_mode</td><td>有効・無効</td><td></td><td></td><td></td><td>無効 = IKE 版 1 のアグレッシブモードを、受けることも始めることもしない。空 = 機器の既定（受け付ける）</td></tr>
+<tr><td>知らない SPI を受けたら IKE をつなぎ直す</td><td>invalid_spi_recovery</td><td>有効・無効</td><td></td><td></td><td></td><td>相手が再起動した後などに、知らない SPI のパケットを受けたら、IKE をつないで相手に知らせる</td></tr>
+</table>
+<h2>L2 延伸（L2TPv3）</h2>
+<p><a id="l2tpv3"></a>内部名 <code>l2tpv3</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>延伸する IF</td><td>if_name</td><td>IF 名</td><td>○</td><td>○</td><td></td><td>この IF に入ったフレームを、そのまま相手へ運ぶ。インタフェースのシートに行を持つ</td></tr>
+<tr><td>相手アドレス</td><td>peer_address</td><td>IPv4 アドレス</td><td>○</td><td></td><td></td><td>相手の機器の「送信元 IF」のアドレス</td></tr>
+<tr><td>回線番号（VC ID）</td><td>vc_id</td><td>数（1〜4294967295）</td><td>○</td><td></td><td></td><td>両端で同じ値</td></tr>
+<tr><td>設定名</td><td>profile</td><td>文字</td><td></td><td></td><td></td><td>pseudowire-class の名前。空ならパックが付ける</td></tr>
+<tr><td>送信元 IF</td><td>local_if</td><td>IF 名</td><td>○</td><td></td><td></td><td>この IF のアドレスから送る</td></tr>
+<tr><td>張り方</td><td>signaling</td><td>選択（dynamic、manual）</td><td>○</td><td></td><td></td><td>dynamic = 両端が制御の通信で決める。manual = セッション ID とクッキーを手で決める</td></tr>
+<tr><td>トンネルのパスワード</td><td>password</td><td>秘密の値</td><td></td><td></td><td></td><td>dynamic のとき。空 = 認証しない 画面とレポートでは伏せます</td></tr>
+<tr><td>自分の名前</td><td>local_name</td><td>文字</td><td></td><td></td><td></td><td>認証で名乗る名前。空なら機器のホスト名</td></tr>
+<tr><td>Hello 間隔（秒）</td><td>hello</td><td>数（0〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>自分のセッション ID</td><td>local_session_id</td><td>数（1〜）</td><td></td><td></td><td></td><td>manual のとき必須。相手の「相手のセッション ID」と同じ値</td></tr>
+<tr><td>相手のセッション ID</td><td>remote_session_id</td><td>数（1〜）</td><td></td><td></td><td></td><td>manual のとき必須</td></tr>
+<tr><td>自分のクッキー</td><td>local_cookie</td><td>文字</td><td></td><td></td><td></td><td>manual のとき。大きさ（4 か 8）と値。例 4 54321</td></tr>
+<tr><td>相手のクッキー</td><td>remote_cookie</td><td>文字</td><td></td><td></td><td></td><td>manual のとき。相手の「自分のクッキー」と同じ値</td></tr>
+<tr><td>順序の確認</td><td>sequencing</td><td>選択（transmit、receive、both）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>経路 MTU の検出</td><td>pmtu</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>DF ビットを立てる</td><td>df_bit</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>L2TP</h2>
+<p><a id="l2tp_groups"></a>内部名 <code>l2tp_groups</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>名前</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td>Cisco は vpdn-group の名前。NEC IX は、lns なら PPP プロファイル、lac なら URL リストの名前</td></tr>
+<tr><td>役割</td><td>role</td><td>選択（lns、lac）</td><td>○</td><td></td><td></td><td>lns = 受ける側（リモートアクセスの受け口・回線を受ける側）。lac = PPP を LNS へ運ぶ側</td></tr>
+<tr><td>受け口の IF</td><td>logical_ifs</td><td>IF 名。複数可</td><td></td><td></td><td></td><td>lns: つないだ相手が乗る IF（Cisco は Virtual-Template を 1 つ、NEC IX はトンネル IF を同時につなぐ数だけ）。lac（NEC IX）: LNS へのトンネル IF</td></tr>
+<tr><td>PPPoE を受ける IF</td><td>access_ifs</td><td>IF 名。複数可</td><td></td><td></td><td></td><td>lac（NEC IX）: 配下の PPPoE を受けて L2TP へ渡す IF</td></tr>
+<tr><td>相手アドレス</td><td>peer_address</td><td>文字</td><td></td><td></td><td></td><td>lac のとき必須: LNS のアドレス</td></tr>
+<tr><td>相手の名前</td><td>peer_name</td><td>文字</td><td></td><td></td><td></td><td>lns: 受け付ける相手（LAC）の名前</td></tr>
+<tr><td>自分の名前</td><td>local_name</td><td>文字</td><td></td><td></td><td></td><td>トンネルで名乗る名前</td></tr>
+<tr><td>トンネルの認証</td><td>tunnel_auth</td><td>有効・無効</td><td></td><td></td><td>○</td><td>無効 = トンネルを張るときに相手を確かめない</td></tr>
+<tr><td>トンネルのパスワード</td><td>password</td><td>秘密の値</td><td></td><td></td><td></td><td>画面とレポートでは伏せます</td></tr>
+<tr><td>運ぶドメイン</td><td>domains</td><td>文字。複数可</td><td></td><td></td><td></td><td>lac: 接続 ID の @ の後ろがこの名前の PPP を運ぶ</td></tr>
+<tr><td>利用者の認証</td><td>auth</td><td>選択（chap、pap、chap_pap、mschap_v2）</td><td></td><td></td><td></td><td>lns: つないできた利用者に求める認証</td></tr>
+<tr><td>払い出すアドレスの先頭</td><td>pool_start</td><td>IPv4 アドレス</td><td></td><td></td><td></td><td>lns: 利用者に配るアドレスの範囲</td></tr>
+<tr><td>払い出すアドレスの末尾</td><td>pool_end</td><td>IPv4 アドレス</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>配る DNS サーバ</td><td>dns_servers</td><td>IPv4 アドレス。複数可</td><td></td><td></td><td></td><td>lns。2 つまで</td></tr>
+<tr><td>IPsec の設定名</td><td>ipsec_policy</td><td>参照（ipsec_tunnels.name）</td><td></td><td></td><td></td><td>lns: この受け口を守る IPsec の行の名前（IPsec のシート。相手が any で、モードが transport の行）</td></tr>
+<tr><td>無通信で切る時間（秒）</td><td>idle_timeout</td><td>数（1〜）</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>L2TP 接続ユーザ</h2>
+<p><a id="l2tp_users"></a>内部名 <code>l2tp_users</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>L2TP の名前</td><td>group</td><td>参照（l2tp_groups.name）</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>接続 ID</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>接続パスワード</td><td>password</td><td>秘密の値</td><td>○</td><td></td><td></td><td>CHAP で確かめるので、ハッシュでは持てない 画面とレポートでは伏せます</td></tr>
+<tr><td>固定で払い出すアドレス</td><td>address</td><td>IPv4 アドレス</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>VLAN</h2>
+<p><a id="vlans"></a>内部名 <code>vlans</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>VLAN 番号</td><td>vlan_id</td><td>数（1〜4094）</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>VLAN 名</td><td>name</td><td>文字</td><td></td><td></td><td></td><td>1〜32 字</td></tr>
+<tr><td>説明</td><td>description</td><td>文字</td><td></td><td></td><td></td><td>VLAN の説明の行を持つ機器だけ（名前とは別の文）</td></tr>
+<tr><td>状態</td><td>state</td><td>選択（active、suspend）</td><td></td><td></td><td></td><td>active = 使う。suspend = 定義は残して通信を止める。空 = 機器の既定（active）</td></tr>
+<tr><td>この機器で止める</td><td>shutdown</td><td>有効・無効</td><td></td><td></td><td></td><td>この機器の中でだけ、VLAN の通信を止める</td></tr>
+<tr><td>遠隔ミラー用</td><td>remote_span</td><td>有効・無効</td><td></td><td></td><td></td><td>ポートミラーの通信を、別のスイッチへ運ぶための VLAN</td></tr>
+<tr><td>プライベート VLAN の種類</td><td>private_vlan</td><td>選択（primary、isolated、community）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>プライベート VLAN のセカンダリ</td><td>private_vlan_secondaries</td><td>文字。複数可</td><td></td><td></td><td></td><td>primary の VLAN に結び付けるセカンダリの VLAN。例 501-503</td></tr>
+</table>
+<h2>スイッチポート</h2>
+<p><a id="switchports"></a>内部名 <code>switchports</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>IF 名</td><td>if_name</td><td>IF 名</td><td>○</td><td>○</td><td></td><td>ポート、または LAG の IF</td></tr>
+<tr><td>モード</td><td>mode</td><td>選択（access、trunk、dynamic_auto、dynamic_desirable、routed、hybrid、pvlan_host、pvlan_promiscuous）</td><td></td><td></td><td></td><td>access = 1 つの VLAN にタグなしで入る。trunk = 複数の VLAN をタグ付きで通す。routed = L3 のポートとして使う。空 = 機器の既定</td></tr>
+<tr><td>アクセス VLAN</td><td>access_vlan</td><td>数（1〜4094）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ネイティブ VLAN</td><td>native_vlan</td><td>数（1〜4094）</td><td></td><td></td><td></td><td>トランクでタグを付けずに通す VLAN。空 = 機器の既定（ふつう 1）</td></tr>
+<tr><td>許可 VLAN</td><td>allowed_vlans</td><td>文字。複数可</td><td></td><td></td><td></td><td>トランクで通す VLAN。例 10,20,30-40。all = すべて、none = なし。空 = 機器の既定（ふつう すべて）</td></tr>
+<tr><td>トランクのタグ方式</td><td>trunk_encapsulation</td><td>選択（dot1q、isl、negotiate）</td><td></td><td></td><td></td><td>方式を選べる機器だけ</td></tr>
+<tr><td>モードの自動交渉を止める</td><td>nonegotiate</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>音声 VLAN</td><td>voice_vlan</td><td>数（1〜4094）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>すぐ転送にする（エッジポート）</td><td>stp_edge</td><td>選択（on、trunk、off）</td><td></td><td></td><td></td><td>on = 端末をつなぐポートとして、つないですぐ転送にする（PortFast）。trunk = トランクでも同じにする。off = 全体の既定を、このポートでは止める</td></tr>
+<tr><td>BPDU ガード</td><td>stp_bpdu_guard</td><td>有効・無効</td><td></td><td></td><td></td><td>BPDU を受けたらポートを止める</td></tr>
+<tr><td>ストーム制御・ブロードキャスト（%）</td><td>storm_broadcast</td><td>文字</td><td></td><td></td><td></td><td>帯域に対する割合。例 10.00。速さで書くときは 500pps（1 秒あたりのパケット数）、64kbps、1500bps</td></tr>
+<tr><td>ストーム制御・マルチキャスト（%）</td><td>storm_multicast</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ストーム制御・ユニキャスト（%）</td><td>storm_unicast</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ストームのときの動作</td><td>storm_action</td><td>選択（shutdown、trap）</td><td></td><td></td><td></td><td>空 = 超えた分を捨てるだけ</td></tr>
+<tr><td>ポートセキュリティ</td><td>port_security</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>覚える MAC の数</td><td>port_security_max</td><td>数（1〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>違反のときの動作</td><td>port_security_violation</td><td>選択（protect、restrict、shutdown）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>覚えた MAC を設定に残す</td><td>port_security_sticky</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>タグ付きで通す VLAN（hybrid）</td><td>hybrid_tagged</td><td>文字。複数可</td><td></td><td></td><td></td><td>モードが hybrid のポートが、タグ付きで通す VLAN。10,20,30-40 の形</td></tr>
+<tr><td>タグなしで通す VLAN（hybrid）</td><td>hybrid_untagged</td><td>文字。複数可</td><td></td><td></td><td></td><td>モードが hybrid のポートが、タグなしで通す VLAN。入ってくるタグなしのフレームの VLAN は「ネイティブ VLAN」</td></tr>
+<tr><td>スパニングツリー（ポート）</td><td>stp_enabled</td><td>有効・無効</td><td></td><td></td><td></td><td>無効 = このポートではスパニングツリーを止める。空 = 機器の既定（有効）</td></tr>
+<tr><td>ガード</td><td>stp_guard</td><td>選択（root、loop、none）</td><td></td><td></td><td></td><td>root = 上位の BPDU を受けたら止める（ルートガード）。loop = BPDU が来なくなっても転送にしない（ループガード）。none = 全体の既定のガードを、このポートでは止める</td></tr>
+<tr><td>パスコスト</td><td>stp_cost</td><td>数（1〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ポートの優先度</td><td>stp_port_priority</td><td>数（0〜240）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ループ検出をする VLAN</td><td>loop_detect_vlans</td><td>文字。複数可</td><td></td><td></td><td></td><td>このポートでループ検出をする VLAN。10,20,30-40 の形か all</td></tr>
+<tr><td>ループのときの動作</td><td>loop_detect_action</td><td>選択（block、no_learning、shutdown）</td><td></td><td></td><td></td><td>空 = 記録するだけ。block = 止める、no_learning = MAC を覚えない、shutdown = ポートを落とす</td></tr>
+<tr><td>DHCP スヌーピングで信頼する</td><td>dhcp_snooping_trust</td><td>有効・無効</td><td></td><td></td><td></td><td>有効 = DHCP サーバのいる側のポート</td></tr>
+<tr><td>音声 VLAN の伝え方</td><td>voice_vlan_mode</td><td>選択（dot1p、none、untagged）</td><td></td><td></td><td></td><td>番号を使わないとき: dot1p = 優先度だけのタグ。untagged = タグなし。none = 電話機に何も伝えない</td></tr>
+<tr><td>ストーム制御・ブロードキャストの下限</td><td>storm_broadcast_low</td><td>文字</td><td></td><td></td><td></td><td>ここまで下がったら通信を戻す値。上の値と同じ書き方（10.00、500pps、64kbps）で、同じ単位にする</td></tr>
+<tr><td>ストーム制御・マルチキャストの下限</td><td>storm_multicast_low</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ストーム制御・ユニキャストの下限</td><td>storm_unicast_low</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>許可する MAC アドレス</td><td>port_security_macs</td><td>文字。複数可</td><td></td><td></td><td></td><td>手で決めた MAC アドレス。0000.5e00.5301 の形。VLAN を限るときは 0000.5e00.5301/10（トランクの VLAN 10）、0000.5e00.5301/access、0000.5e00.5301/voice</td></tr>
+<tr><td>覚えた MAC アドレス</td><td>port_security_sticky_macs</td><td>文字。複数可</td><td></td><td></td><td></td><td>機器が覚えて設定に残したアドレス。書き方は「許可する MAC アドレス」と同じ</td></tr>
+<tr><td>MAC を忘れるまでの時間（分）</td><td>port_security_aging_time</td><td>数（0〜1440）</td><td></td><td></td><td></td><td>0 = 忘れない</td></tr>
+<tr><td>MAC の忘れ方</td><td>port_security_aging_type</td><td>選択（absolute、inactivity）</td><td></td><td></td><td></td><td>absolute = 覚えてからの時間。inactivity = 通信が無くなってからの時間</td></tr>
+<tr><td>手で決めた MAC も忘れる</td><td>port_security_aging_static</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>保護ポート</td><td>protected</td><td>有効・無効</td><td></td><td></td><td></td><td>保護ポートどうしは、同じ VLAN でも通信させない</td></tr>
+<tr><td>BPDU フィルタ</td><td>stp_bpdu_filter</td><td>有効・無効</td><td></td><td></td><td></td><td>BPDU を送らず、受けても捨てる。有効・無効のどちらも書ける</td></tr>
+<tr><td>スパニングツリーのリンクの種類</td><td>stp_link_type</td><td>選択（point_to_point、shared）</td><td></td><td></td><td></td><td>空 = 二重から機器が決める</td></tr>
+<tr><td>プライベート VLAN のプライマリ</td><td>pvlan_primary</td><td>数（1〜4094）</td><td></td><td></td><td></td><td>モードが pvlan_host・pvlan_promiscuous のポートが属するプライマリの VLAN</td></tr>
+<tr><td>プライベート VLAN のセカンダリ（ポート）</td><td>pvlan_secondaries</td><td>文字。複数可</td><td></td><td></td><td></td><td>pvlan_host は 1 つ。pvlan_promiscuous は並び（501-503）</td></tr>
+<tr><td>片方向リンクの検出（UDLD）</td><td>udld</td><td>選択（enable、aggressive、disable）</td><td></td><td></td><td></td><td>enable・aggressive = このポートで使う。disable = 全体の設定を、このポートでは止める</td></tr>
+<tr><td>DHCP の受信の上限（毎秒）</td><td>dhcp_snooping_rate</td><td>数（1〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ARP 検査の信頼ポート</td><td>arp_inspection_trust</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>LAG のメンバー</h2>
+<p><a id="lags"></a>内部名 <code>lags</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>IF 名</td><td>if_name</td><td>IF 名</td><td>○</td><td>○</td><td></td><td>束ねるポート</td></tr>
+<tr><td>LAG の番号</td><td>group</td><td>数（1〜）</td><td>○</td><td></td><td></td><td>同じ番号のポートを 1 本に束ねる。LAG の IF（Cisco は Port-channel&lt;番号&gt;）の設定は、インタフェースとスイッチポートの表に書く</td></tr>
+<tr><td>束ね方</td><td>mode</td><td>選択（on、active、passive、auto、desirable）</td><td></td><td></td><td></td><td>on = 固定。active・passive = LACP。auto・desirable = PAgP（Cisco）</td></tr>
+<tr><td>LACP の短いタイムアウト</td><td>lacp_short</td><td>有効・無効</td><td></td><td></td><td></td><td>有効 = 相手に 1 秒ごとの送信を求める</td></tr>
+<tr><td>PAgP を黙らない相手として扱う</td><td>non_silent</td><td>有効・無効</td><td></td><td></td><td></td><td>束ね方が auto・desirable のときだけ（Cisco の non-silent）</td></tr>
+<tr><td>束ねる手順の指定</td><td>protocol</td><td>選択（lacp、pagp）</td><td></td><td></td><td></td><td>ポートで使う手順を先に決める（Cisco の channel-protocol）</td></tr>
+<tr><td>LACP のポート優先度</td><td>lacp_port_priority</td><td>数（1〜65535）</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>L2 の全体設定</h2>
+<p><a id="l2_settings"></a>内部名 <code>l2_settings</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>スパニングツリーを使う</td><td>stp_enabled</td><td>有効・無効</td><td></td><td></td><td></td><td>機器全体の有効・無効。空 = 機器の既定（メーカーで違う）</td></tr>
+<tr><td>スパニングツリーの方式</td><td>stp_mode</td><td>選択（pvst、rapid_pvst、mst、rstp、stp）</td><td></td><td></td><td></td><td>pvst・rapid_pvst = VLAN ごとの木（rapid は収束の速い方式）。mst = MSTP。rstp・stp = 機器に 1 本の木（RSTP・STP）</td></tr>
+<tr><td>優先度（機器全体）</td><td>stp_priority</td><td>数（0〜65535）</td><td></td><td></td><td></td><td>機器に 1 本の木（rstp・stp）と、MSTP の共通の木での優先度。VLAN ごとの優先度は「VLAN ごとのスパニングツリー」に書く</td></tr>
+<tr><td>アクセスポートをすぐ転送にする</td><td>stp_edge_default</td><td>有効・無効</td><td></td><td></td><td></td><td>全体の既定（PortFast default）</td></tr>
+<tr><td>エッジポートの BPDU ガード</td><td>stp_bpdu_guard_default</td><td>有効・無効</td><td></td><td></td><td></td><td>すぐ転送にするポートすべてに BPDU ガードを掛ける</td></tr>
+<tr><td>拡張システム ID</td><td>stp_extend_system_id</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>L3 の転送</td><td>ip_routing</td><td>有効・無効</td><td></td><td></td><td></td><td>L3 スイッチで経路による転送を使う</td></tr>
+<tr><td>デフォルトゲートウェイ</td><td>default_gateway</td><td>IPv4 アドレス</td><td></td><td></td><td></td><td>L3 の転送を使わない機器（L2 スイッチ）の管理通信の出口</td></tr>
+<tr><td>VTP のモード</td><td>vtp_mode</td><td>選択（server、client、transparent、off）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>VTP のドメイン名</td><td>vtp_domain</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ブリッジと L3 の併用（IRB）</td><td>bridge_irb</td><td>有効・無効</td><td></td><td></td><td></td><td>ブリッジグループを BVI で L3 につなぐ</td></tr>
+<tr><td>ルートブリッジの指定（機器全体）</td><td>stp_root</td><td>選択（primary、secondary）</td><td></td><td></td><td></td><td>primary = ルートブリッジにする、secondary = 予備のルートブリッジにする（優先度を機器が決める）</td></tr>
+<tr><td>Hello 間隔（秒）</td><td>stp_hello</td><td>数</td><td></td><td></td><td></td><td>機器に 1 本の木と、MSTP の共通の木</td></tr>
+<tr><td>転送遅延（秒）</td><td>stp_forward</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>最大エージ（秒）</td><td>stp_max_age</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>MST リージョン名</td><td>mst_name</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>MST リビジョン</td><td>mst_revision</td><td>数（0〜65535）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ループ検出をする VLAN（全体）</td><td>loop_detect_vlans</td><td>文字。複数可</td><td></td><td></td><td></td><td>全部のポートでループ検出をする VLAN。10,20,30-40 の形か all</td></tr>
+<tr><td>ループのときの動作（全体）</td><td>loop_detect_action</td><td>選択（shutdown）</td><td></td><td></td><td></td><td>空 = 記録するだけ</td></tr>
+<tr><td>ループ検出の間隔（秒）</td><td>loop_detect_interval</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>DHCP スヌーピング</td><td>dhcp_snooping</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ポートセキュリティを使う</td><td>port_security</td><td>有効・無効</td><td></td><td></td><td></td><td>機器全体で入り切りする機器だけ（NEC QX の port-security enable）</td></tr>
+<tr><td>LACP のシステム優先度</td><td>lacp_system_priority</td><td>数（0〜65535）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ループガードを全体の既定にする</td><td>stp_loopguard_default</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>エッジポートの BPDU フィルタ</td><td>stp_bpdu_filter_default</td><td>有効・無効</td><td></td><td></td><td></td><td>すぐ転送にするポートすべてに BPDU フィルタを掛ける</td></tr>
+<tr><td>スパニングツリーのコストの桁</td><td>stp_pathcost_method</td><td>選択（short、long）</td><td></td><td></td><td></td><td>short = 16 ビット。long = 32 ビット</td></tr>
+<tr><td>BackboneFast</td><td>stp_backbonefast</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>UplinkFast</td><td>stp_uplinkfast</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>LAG の振り分け方</td><td>lag_load_balance</td><td>選択（dst-ip、dst-mac、dst-mixed-ip-port、dst-port、src-dst-ip、src-dst-mac、src-dst-mixed-ip-port、src-dst-port、src-ip、src-mac、src-mixed-ip-port、src-port）</td><td></td><td></td><td></td><td>どの値でメンバーに振り分けるか</td></tr>
+<tr><td>VTP の版</td><td>vtp_version</td><td>選択（1、2、3）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>VTP のパスワード</td><td>vtp_password</td><td>秘密の値</td><td></td><td></td><td></td><td>画面とレポートでは伏せます</td></tr>
+<tr><td>VTP プルーニング</td><td>vtp_pruning</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>自動で戻す停止の原因</td><td>errdisable_recovery_causes</td><td>文字。複数可</td><td></td><td></td><td></td><td>止まったポートを自動で戻す原因（機器の語。bpduguard、psecure-violation など。all = すべて）</td></tr>
+<tr><td>自動で戻すまでの時間（秒）</td><td>errdisable_recovery_interval</td><td>数（30〜86400）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>片方向リンクの検出（UDLD）</td><td>udld</td><td>選択（enable、aggressive）</td><td></td><td></td><td></td><td>光のポート全体の既定</td></tr>
+<tr><td>UDLD の送信間隔（秒）</td><td>udld_message_time</td><td>数（1〜90）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>CDP</td><td>cdp</td><td>有効・無効</td><td></td><td></td><td></td><td>機器全体の有効・無効。空 = 機器の既定</td></tr>
+<tr><td>CDP の送信間隔（秒）</td><td>cdp_timer</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>CDP の保持時間（秒）</td><td>cdp_holdtime</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>LLDP</td><td>lldp</td><td>有効・無効</td><td></td><td></td><td></td><td>機器全体の有効・無効。空 = 機器の既定</td></tr>
+<tr><td>LLDP の送信間隔（秒）</td><td>lldp_timer</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>LLDP の保持時間（秒）</td><td>lldp_holdtime</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>LLDP の再初期化の待ち（秒）</td><td>lldp_reinit</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>DHCP スヌーピングの VLAN</td><td>dhcp_snooping_vlans</td><td>文字。複数可</td><td></td><td></td><td></td><td>例 10,20,30-40</td></tr>
+<tr><td>DHCP スヌーピングの option 82</td><td>dhcp_snooping_option82</td><td>有効・無効</td><td></td><td></td><td></td><td>有効・無効のどちらも書ける（無効 = 中継情報を付けない）</td></tr>
+<tr><td>ARP 検査の VLAN</td><td>arp_inspection_vlans</td><td>文字。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>MAC アドレスを忘れるまでの時間（秒）</td><td>mac_aging_time</td><td>数（0〜1000000）</td><td></td><td></td><td></td><td>0 = 忘れない</td></tr>
+<tr><td>内部 VLAN の振り方</td><td>vlan_internal_allocation</td><td>選択（ascending、descending）</td><td></td><td></td><td></td><td>L3 のポートのために機器が内部で使う VLAN を、小さい番号から（ascending）か大きい番号から（descending）振る</td></tr>
+<tr><td>スイッチ全体の MTU</td><td>system_mtu</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ループとみなす回数</td><td>loop_detect_threshold</td><td>数（1〜10000）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ループ検出の窓の大きさ</td><td>loop_detect_window</td><td>数（1〜5）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>BVI の数</td><td>bvi_count</td><td>数（1〜64）</td><td></td><td></td><td></td><td>機器が持つ BVI の数を変える（対応する機器だけ）</td></tr>
+</table>
+<h2>VLAN ごとのスパニングツリー</h2>
+<p><a id="stp_vlans"></a>内部名 <code>stp_vlans</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>VLAN</td><td>vlans</td><td>文字</td><td>○</td><td>○</td><td></td><td>VLAN 番号。まとめて書くときは 10,20,30-40</td></tr>
+<tr><td>優先度</td><td>priority</td><td>数（0〜65535）</td><td></td><td></td><td></td><td>小さいほどルートブリッジになりやすい</td></tr>
+<tr><td>Hello 間隔（秒）</td><td>hello_time</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>転送遅延（秒）</td><td>forward_time</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>最大エージ（秒）</td><td>max_age</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ルートブリッジの指定</td><td>root</td><td>選択（primary、secondary）</td><td></td><td></td><td></td><td>primary・secondary（優先度を機器が決める）</td></tr>
+<tr><td>スパニングツリーを使う</td><td>enabled</td><td>有効・無効</td><td></td><td></td><td></td><td>無効 = この VLAN ではスパニングツリーを止める</td></tr>
+<tr><td>ネットワークの直径</td><td>root_diameter</td><td>数（2〜7）</td><td></td><td></td><td></td><td>「ルートブリッジにする」と一緒に書く。スイッチの段数（2〜7）</td></tr>
+</table>
+<h2>スタックのメンバー</h2>
+<p><a id="stack_members"></a>内部名 <code>stack_members</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>メンバー番号</td><td>member</td><td>数（1〜）</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>機種の種別</td><td>provision</td><td>文字</td><td></td><td></td><td></td><td>そのメンバーの機種の種別（機器が設定に持つ語）</td></tr>
+<tr><td>優先度</td><td>priority</td><td>数（1〜）</td><td></td><td></td><td></td><td>大きいほどマスターになりやすい</td></tr>
+<tr><td>説明</td><td>description</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>IPv6 インタフェース</h2>
+<p><a id="ipv6_interfaces"></a>内部名 <code>ipv6_interfaces</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>IF 名</td><td>if_name</td><td>IF 名</td><td>○</td><td>○</td><td></td><td>固定の IPv6 アドレスは、シート「インタフェース」の「IPv6 アドレス」に書く</td></tr>
+<tr><td>IPv6 を使う</td><td>enabled</td><td>有効・無効</td><td></td><td></td><td></td><td>アドレスを書かずに IPv6 を使う IF（リンクローカルだけで動かす）</td></tr>
+<tr><td>リンクローカルアドレス</td><td>link_local</td><td>IPv6 アドレス</td><td></td><td></td><td></td><td>例 fe80::1。空 = 機器が自動で作る</td></tr>
+<tr><td>EUI-64 で付けるプレフィックス</td><td>eui64</td><td>IPv6 ネットワーク。複数可</td><td></td><td></td><td></td><td>例 2001:db8:0:1::/64。下 64 ビットは機器が MAC アドレスから作る</td></tr>
+<tr><td>エニーキャストアドレス</td><td>anycast</td><td>IPv6 アドレス/長さ。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>自動設定（RA を受ける）</td><td>autoconfig</td><td>有効・無効</td><td></td><td></td><td></td><td>ルータ広告（RA）を受けてアドレスを作る。IPoE の WAN 側</td></tr>
+<tr><td>RA の送り元をデフォルト経路にする</td><td>autoconfig_default</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>DHCPv6 でアドレスをもらう</td><td>dhcp_address</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>IPv6 MTU</td><td>mtu</td><td>数（1280〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>入力 IPv6 フィルタ</td><td>acl_in</td><td>参照（ipv6_acl_entries.acl）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>出力 IPv6 フィルタ</td><td>acl_out</td><td>参照（ipv6_acl_entries.acl）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>入力 IPv6 フィルタ（2 つ目以降）</td><td>acl_in_more</td><td>参照（ipv6_acl_entries.acl）。複数可</td><td></td><td></td><td></td><td>入力 IPv6 フィルタの後に、書いた順で見るリスト</td></tr>
+<tr><td>出力 IPv6 フィルタ（2 つ目以降）</td><td>acl_out_more</td><td>参照（ipv6_acl_entries.acl）。複数可</td><td></td><td></td><td></td><td>出力 IPv6 フィルタの後に、書いた順で見るリスト</td></tr>
+<tr><td>RA を送る</td><td>ra</td><td>選択（send、reply_only、off）</td><td></td><td></td><td></td><td>send = 送る、reply_only = 問い合わせにだけ答える、off = 送らない。空 = 機器の既定</td></tr>
+<tr><td>RA の間隔・最大（秒）</td><td>ra_interval</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>RA の間隔・最小（秒）</td><td>ra_interval_min</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>RA のルータ生存時間（秒）</td><td>ra_lifetime</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>RA の M フラグ</td><td>ra_managed</td><td>有効・無効</td><td></td><td></td><td></td><td>アドレスを DHCPv6 でもらうよう端末に伝える</td></tr>
+<tr><td>RA の O フラグ</td><td>ra_other</td><td>有効・無効</td><td></td><td></td><td></td><td>DNS などを DHCPv6 でもらうよう端末に伝える</td></tr>
+<tr><td>RA で配る DNS サーバ</td><td>ra_dns</td><td>IPv6 アドレス。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>RA で配る DNS の生存時間（秒）</td><td>ra_dns_lifetime</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ND プロキシの LAN 側 IF</td><td>nd_proxy</td><td>IF 名</td><td></td><td></td><td></td><td>WAN 側の IF の行に、LAN 側の IF 名を書く（プレフィックスを LAN と共有する IPoE）</td></tr>
+<tr><td>ND プロキシの対象外リスト</td><td>nd_proxy_acl</td><td>参照（ipv6_acl_entries.acl）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>プレフィックスをもらう（DHCPv6-PD）</td><td>pd_request</td><td>文字</td><td></td><td></td><td></td><td>もらったプレフィックスに付ける名前。WAN 側の IF の行に書く</td></tr>
+<tr><td>もらったプレフィックスから付ける</td><td>pd_from</td><td>文字</td><td></td><td></td><td></td><td>プレフィックスの名前（「プレフィックスをもらう」に書いた名前）。LAN 側の IF の行に書く</td></tr>
+<tr><td>付けるアドレスの下の部分</td><td>pd_suffix</td><td>IPv6 アドレス/長さ</td><td></td><td></td><td></td><td>例 ::1/64。もらったプレフィックスの後ろに足す</td></tr>
+<tr><td>下 64 ビットを EUI-64 で作る</td><td>pd_eui64</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>DHCPv6 の Rapid Commit</td><td>rapid_commit</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>DHCPv6 でもらう情報</td><td>dhcp_request</td><td>選択（dns、domain、ntp）。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>DHCPv6 で情報だけもらう</td><td>dhcp_info_only</td><td>有効・無効</td><td></td><td></td><td></td><td>アドレスやプレフィックスはもらわず、DNS などだけをもらう</td></tr>
+<tr><td>DHCPv6 サーバ（名前）</td><td>dhcp_server</td><td>文字</td><td></td><td></td><td></td><td>この IF で DHCPv6 サーバを動かす。設定の名前を書く</td></tr>
+<tr><td>DHCPv6 で配る DNS サーバ</td><td>dhcp_dns</td><td>IPv6 アドレス。ほかに dhcp。複数可</td><td></td><td></td><td></td><td>アドレス。dhcp と書くと、WAN 側の DHCPv6 でもらった DNS を配る</td></tr>
+<tr><td>DHCPv6 で配るドメイン名</td><td>dhcp_domain</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>DHCPv6 で配る NTP サーバ</td><td>dhcp_ntp</td><td>IPv6 アドレス。ほかに dhcp。複数可</td><td></td><td></td><td></td><td>アドレス。dhcp と書くと、WAN 側の DHCPv6 でもらった NTP サーバを配る（NEC IX）</td></tr>
+<tr><td>下流へ配るプレフィックスの元</td><td>dhcp_pd_pool</td><td>IPv6 ネットワーク</td><td></td><td></td><td></td><td>下流のルータへ配るプレフィックスを、ここから切り出す。例 2001:db8::/32。「上流からもらったプレフィックスから配る」があるときは、もらったプレフィックスの下の部分（先頭から切り出すなら ::/56。もらったプレフィックスの部分は 0 で書く）</td></tr>
+<tr><td>下流へ配る長さ</td><td>dhcp_pd_length</td><td>数（1〜128）</td><td></td><td></td><td></td><td>1 台に配るプレフィックスの長さ。例 48</td></tr>
+<tr><td>上流からもらったプレフィックスから配る</td><td>dhcp_pd_from</td><td>文字</td><td></td><td></td><td></td><td>WAN 側の「プレフィックスをもらう（DHCPv6-PD）」の名前。もらったプレフィックスを分けて、下流へ配り直す（NEC IX）</td></tr>
+<tr><td>配るプレフィックスの有効時間（秒）</td><td>dhcp_pd_valid</td><td>数（0〜）。ほかに infinite</td><td></td><td></td><td></td><td>秒か infinite（無期限）。推奨時間と組で書く。空 = 機器の既定</td></tr>
+<tr><td>配るプレフィックスの推奨時間（秒）</td><td>dhcp_pd_preferred</td><td>数（0〜）。ほかに infinite</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>端末へ配るアドレスのプレフィックス</td><td>dhcp_address_prefix</td><td>IPv6 ネットワーク。複数可</td><td></td><td></td><td></td><td>端末へ DHCPv6 でアドレスを配る（Cisco）</td></tr>
+<tr><td>IPv6 のポリシールーティング</td><td>policy_route</td><td>文字</td><td></td><td></td><td></td><td>この IF に入ってくる IPv6 の通信に当てる経路制御の方針の名前</td></tr>
+<tr><td>IPv6 の TCP MSS 調整</td><td>tcp_mss</td><td>数。ほかに auto</td><td></td><td></td><td></td><td>数か auto（MTU から機器が決める。NEC IX）</td></tr>
+</table>
+<h2>RA のプレフィックス</h2>
+<p><a id="ipv6_ra_prefixes"></a>内部名 <code>ipv6_ra_prefixes</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>IF 名</td><td>if_name</td><td>IF 名</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>プレフィックス</td><td>prefix</td><td>IPv6 ネットワーク</td><td>○</td><td>○</td><td></td><td>例 2001:db8:0:1::/64。IF のアドレスのプレフィックスは、行がなくても機器が RA に載せる</td></tr>
+<tr><td>有効時間（秒）</td><td>valid_lifetime</td><td>数</td><td></td><td></td><td>○</td><td></td></tr>
+<tr><td>推奨時間（秒）</td><td>preferred_lifetime</td><td>数</td><td></td><td></td><td>○</td><td></td></tr>
+<tr><td>オンリンク</td><td>on_link</td><td>有効・無効</td><td></td><td></td><td>○</td><td>このプレフィックスが同じリンクにあると端末に伝える</td></tr>
+<tr><td>端末の自動設定に使う</td><td>autonomous</td><td>有効・無効</td><td></td><td></td><td>○</td><td>端末がこのプレフィックスでアドレスを作ってよい</td></tr>
+</table>
+<h2>IPv6 スタティック経路</h2>
+<p><a id="ipv6_routes"></a>内部名 <code>ipv6_routes</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>VRF</td><td>vrf</td><td>参照（vrfs.name）</td><td></td><td>○</td><td></td><td>空 = VRF なし（全体の経路表）</td></tr>
+<tr><td>宛先</td><td>prefix</td><td>IPv6 ネットワーク</td><td>○</td><td>○</td><td></td><td>例 2001:db8:10::/48。デフォルト経路は ::/0</td></tr>
+<tr><td>ネクストホップ</td><td>next_hop</td><td>IPv6 アドレス</td><td></td><td>○</td><td></td><td>リンクローカル（fe80::…）のときは出力 IF も書く</td></tr>
+<tr><td>出力 IF</td><td>out_if</td><td>IF 名。ほかに Null*</td><td></td><td>○</td><td></td><td>捨てる経路の Null0 などは、インタフェースの表に行がなくてもよい</td></tr>
+<tr><td>ネクストホップの決め方</td><td>gateway_from</td><td>選択（ra、dhcp）</td><td></td><td></td><td></td><td>出力 IF だけを書いた経路で、RA の送り元（ra）か DHCPv6 サーバ（dhcp）をネクストホップにする</td></tr>
+<tr><td>優先度（distance）</td><td>distance</td><td>数（1〜255）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>説明</td><td>description</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>IPv6 フィルタ</h2>
+<p><a id="ipv6_acl_entries"></a>内部名 <code>ipv6_acl_entries</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>リスト名</td><td>acl</td><td>文字</td><td>○</td><td>○</td><td></td><td>IPv4 の ACL とは別の名前の世界（同じ名前でもよい）</td></tr>
+<tr><td>順番</td><td>seq</td><td>数</td><td>○</td><td>○</td><td></td><td>番号を持たない書き方では 10 刻みで振る</td></tr>
+<tr><td>動作</td><td>action</td><td>選択（permit、deny、remark）</td><td>○</td><td></td><td></td><td></td></tr>
+<tr><td>プロトコル</td><td>protocol</td><td>文字</td><td></td><td></td><td></td><td>ip（すべて）、tcp、udp、icmp か番号</td></tr>
+<tr><td>送信元</td><td>src</td><td>文字</td><td></td><td></td><td></td><td>any、2001:db8::1（ホスト）、2001:db8:1::/64（ネットワーク）</td></tr>
+<tr><td>送信元ポート</td><td>src_port</td><td>文字</td><td></td><td></td><td></td><td>80、1000-2000、&gt;1023、&lt;1024、!80</td></tr>
+<tr><td>宛先</td><td>dst</td><td>文字</td><td></td><td></td><td></td><td>送信元と同じ書き方</td></tr>
+<tr><td>宛先ポート</td><td>dst_port</td><td>文字</td><td></td><td></td><td></td><td>送信元ポートと同じ書き方</td></tr>
+<tr><td>付加条件</td><td>flags</td><td>選択（established、log、fragments、log_input、ack、fin、psh、rst、syn、urg）。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ICMPv6 の種類</td><td>icmp_type</td><td>文字</td><td></td><td></td><td></td><td>番号か、メーカーの語（echo-request など）</td></tr>
+<tr><td>注記</td><td>remark</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>DSCP</td><td>dscp</td><td>数（0〜63）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ICMPv6 のコード</td><td>icmp_code</td><td>数（0〜255）</td><td></td><td></td><td></td><td>ICMPv6 の種類を番号で書いた行だけ</td></tr>
+</table>
+<h2>IPv6 プレフィックスリスト</h2>
+<p><a id="ipv6_prefix_lists"></a>内部名 <code>ipv6_prefix_lists</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>名前</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>順番</td><td>seq</td><td>数</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>動作</td><td>action</td><td>選択（permit、deny）</td><td>○</td><td></td><td></td><td></td></tr>
+<tr><td>範囲</td><td>prefix</td><td>IPv6 ネットワーク</td><td>○</td><td></td><td></td><td>例 2001:db8::/32。すべては ::/0 と「長さの上限」128</td></tr>
+<tr><td>長さの下限（ge）</td><td>ge</td><td>数（0〜128）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>長さの上限（le）</td><td>le</td><td>数（0〜128）</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>OSPFv3</h2>
+<p><a id="ospfv3_processes"></a>内部名 <code>ospfv3_processes</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>プロセス番号</td><td>process_id</td><td>数</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>ルータ ID</td><td>router_id</td><td>IPv4 アドレス</td><td></td><td></td><td></td><td>IPv4 アドレスの形（例 192.0.2.1）</td></tr>
+<tr><td>既定を受動にする</td><td>passive_default</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>デフォルト経路の広告</td><td>default_originate</td><td>選択（none、when_present、always）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>広告のメトリック</td><td>default_metric</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>再配布する経路</td><td>redistribute</td><td>選択（connected、static、bgp、rip）。複数可</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>OSPFv3 インタフェース</h2>
+<p><a id="ospfv3_interfaces"></a>内部名 <code>ospfv3_interfaces</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>プロセス番号</td><td>process_id</td><td>数</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>IF 名</td><td>if_name</td><td>IF 名</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>エリア</td><td>area</td><td>文字</td><td>○</td><td></td><td></td><td>0 と 0.0.0.0 は同じ値として扱う</td></tr>
+<tr><td>コスト</td><td>cost</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>優先度</td><td>priority</td><td>数（0〜255）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Hello 間隔（秒）</td><td>hello</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Dead 間隔（秒）</td><td>dead</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>網の種類</td><td>network_type</td><td>選択（broadcast、point_to_point、nbma、point_to_multipoint）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>受動</td><td>passive</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>認証のアルゴリズム</td><td>auth_hash</td><td>選択（md5、sha1、none）</td><td></td><td></td><td></td><td>IPsec の AH で隣接を認証する（Cisco の ipv6 ospf authentication）。none = エリアの認証をこの IF では使わない</td></tr>
+<tr><td>認証の SPI</td><td>auth_spi</td><td>数（256〜4294967295）</td><td></td><td></td><td></td><td>両端で同じ値</td></tr>
+<tr><td>認証の鍵</td><td>auth_key</td><td>秘密の値</td><td></td><td></td><td></td><td>16 進の数字（md5 は 32 字、sha1 は 40 字）。両端で同じ値 画面とレポートでは伏せます</td></tr>
+</table>
+<h2>OSPFv3 エリア</h2>
+<p><a id="ospfv3_areas"></a>内部名 <code>ospfv3_areas</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>プロセス番号</td><td>process_id</td><td>数</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>エリア</td><td>area</td><td>文字</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>種類</td><td>type</td><td>選択（normal、stub、totally_stub、nssa、totally_nssa）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>既定経路のコスト</td><td>default_cost</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>集約して広告する範囲</td><td>ranges</td><td>IPv6 ネットワーク。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>集約して広告しない範囲</td><td>ranges_hidden</td><td>IPv6 ネットワーク。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>認証のアルゴリズム</td><td>auth_hash</td><td>選択（md5、sha1）</td><td></td><td></td><td></td><td>エリアの全部の IF の隣接を IPsec の AH で認証する（Cisco の area … authentication）</td></tr>
+<tr><td>認証の SPI</td><td>auth_spi</td><td>数（256〜4294967295）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>認証の鍵</td><td>auth_key</td><td>秘密の値</td><td></td><td></td><td></td><td>16 進の数字（md5 は 32 字、sha1 は 40 字） 画面とレポートでは伏せます</td></tr>
+</table>
+<h2>BGP IPv6 ネイバー</h2>
+<p><a id="bgp_ipv6_neighbors"></a>内部名 <code>bgp_ipv6_neighbors</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>VRF</td><td>vrf</td><td>参照（vrfs.name）</td><td></td><td>○</td><td></td><td>空 = VRF なし（全体の経路表）</td></tr>
+<tr><td>ネイバーアドレス</td><td>neighbor</td><td>IPv6 アドレス</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>相手 AS 番号</td><td>remote_as</td><td>数</td><td>○</td><td></td><td></td><td></td></tr>
+<tr><td>説明</td><td>description</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>有効</td><td>enabled</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>送信元 IF</td><td>update_source</td><td>IF 名</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>eBGP マルチホップ</td><td>ebgp_multihop</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>パスワード</td><td>password</td><td>秘密の値</td><td></td><td></td><td></td><td>画面とレポートでは伏せます</td></tr>
+<tr><td>ネクストホップを自分にする</td><td>next_hop_self</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>受信経路の保持</td><td>soft_reconfig_in</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>受信フィルタ</td><td>prefix_list_in</td><td>参照（ipv6_prefix_lists.name）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>送信フィルタ</td><td>prefix_list_out</td><td>参照（ipv6_prefix_lists.name）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>受信の経路制御</td><td>filter_in</td><td>文字</td><td></td><td></td><td></td><td>条件の名前</td></tr>
+<tr><td>送信の経路制御</td><td>filter_out</td><td>文字</td><td></td><td></td><td></td><td>条件の名前</td></tr>
+<tr><td>コミュニティを送る</td><td>send_community</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>拡張コミュニティを送る</td><td>send_ext_community</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>SNMP ユーザ（版 3）</h2>
+<p><a id="snmp_users"></a>内部名 <code>snmp_users</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>ユーザ名</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>グループ</td><td>group</td><td>文字</td><td>○</td><td></td><td></td><td>SNMP のグループの名前。同じグループの行は、段・ビュー・グループの接続元の制限を同じにする</td></tr>
+<tr><td>セキュリティの段</td><td>security_level</td><td>選択（noauth、auth、priv）</td><td>○</td><td></td><td></td><td>グループの段。noauth = 認証なし、auth = 認証あり、priv = 認証と暗号化</td></tr>
+<tr><td>読めるビュー</td><td>read_view</td><td>文字</td><td></td><td></td><td></td><td>空 = 機器の既定のビュー</td></tr>
+<tr><td>書けるビュー</td><td>write_view</td><td>文字</td><td></td><td></td><td></td><td>空 = 書き込みを許さない</td></tr>
+<tr><td>通知のビュー</td><td>notify_view</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>グループの接続元の制限</td><td>group_acl</td><td>参照（acls.name）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>認証の方式</td><td>auth</td><td>選択（md5、sha）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>認証のパスワード</td><td>auth_key</td><td>秘密の値</td><td></td><td></td><td></td><td>画面とレポートでは伏せます</td></tr>
+<tr><td>暗号化の方式</td><td>priv</td><td>選択（des、3des、aes128）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>暗号化のパスワード</td><td>priv_key</td><td>秘密の値</td><td></td><td></td><td></td><td>画面とレポートでは伏せます</td></tr>
+<tr><td>接続元の制限</td><td>acl</td><td>参照（acls.name）</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>MSTP のインスタンス</h2>
+<p><a id="stp_instances"></a>内部名 <code>stp_instances</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>インスタンス番号</td><td>instance</td><td>数（0〜4094）</td><td>○</td><td>○</td><td></td><td>0 は共通の木（CIST）。VLAN を割り当てない</td></tr>
+<tr><td>VLAN</td><td>vlans</td><td>文字。複数可</td><td></td><td></td><td></td><td>このインスタンスに割り当てる VLAN。10,20,30-40 の形</td></tr>
+<tr><td>優先度</td><td>priority</td><td>数（0〜65535）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>ルートブリッジの指定</td><td>root</td><td>選択（primary、secondary）</td><td></td><td></td><td></td><td>primary・secondary（優先度を機器が決める）</td></tr>
+</table>
+<h2>ポートミラー</h2>
+<p><a id="mirror_sessions"></a>内部名 <code>mirror_sessions</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>番号</td><td>session</td><td>数（1〜）</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>写す先の IF</td><td>destination_if</td><td>IF 名</td><td></td><td></td><td></td><td>写した通信を出すポート（測定器をつなぐ）</td></tr>
+<tr><td>写す元（両方向）</td><td>sources_both</td><td>IF 名。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>写す元（受信）</td><td>sources_rx</td><td>IF 名。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>写す元（送信）</td><td>sources_tx</td><td>IF 名。複数可</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>時間帯</h2>
+<p><a id="time_ranges"></a>内部名 <code>time_ranges</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>名前</td><td>name</td><td>文字</td><td>○</td><td>○</td><td></td><td>ACL の行の「効かせる時間帯」から、この名前で指す</td></tr>
+<tr><td>順番</td><td>seq</td><td>数</td><td>○</td><td>○</td><td></td><td>取り込みでは 10 刻みで振る</td></tr>
+<tr><td>種類</td><td>kind</td><td>選択（periodic、absolute）</td><td>○</td><td></td><td></td><td>periodic = 毎週くり返す。absolute = 日時で区切る（1 つの名前に 1 行まで）</td></tr>
+<tr><td>曜日</td><td>days</td><td>選択（monday、tuesday、wednesday、thursday、friday、saturday、sunday、daily、weekdays、weekend）。複数可</td><td></td><td></td><td></td><td>periodic だけ</td></tr>
+<tr><td>開始の時刻</td><td>start_time</td><td>文字</td><td></td><td></td><td></td><td>8:00 の形（24 時間）</td></tr>
+<tr><td>終了の曜日</td><td>end_days</td><td>選択（monday、tuesday、wednesday、thursday、friday、saturday、sunday、daily、weekdays、weekend）。複数可</td><td></td><td></td><td></td><td>開始と違う曜日に終わるときだけ</td></tr>
+<tr><td>終了の時刻</td><td>end_time</td><td>文字</td><td></td><td></td><td></td><td>18:00 の形</td></tr>
+<tr><td>開始の日</td><td>start_date</td><td>文字</td><td></td><td></td><td></td><td>absolute だけ。2026-01-31 の形</td></tr>
+<tr><td>終了の日</td><td>end_date</td><td>文字</td><td></td><td></td><td></td><td>absolute だけ。2026-12-31 の形</td></tr>
+</table>
+<h2>ログの対象ごとの重要度</h2>
+<p><a id="log_subsystems"></a>内部名 <code>log_subsystems</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>対象</td><td>subsystem</td><td>文字</td><td>○</td><td>○</td><td></td><td>機器の中の機能の名前（メーカーの語）。全部は、機器のシートの「ログに残す重要度」に書く</td></tr>
+<tr><td>重要度</td><td>severity</td><td>選択（emergencies、alerts、critical、errors、warnings、notifications、informational、debugging）</td><td>○</td><td></td><td></td><td></td></tr>
+</table>
+<h2>ブリッジグループ</h2>
+<p><a id="bridge_groups"></a>内部名 <code>bridge_groups</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>ブリッジグループ</td><td>group</td><td>数（1〜65535）</td><td>○</td><td>○</td><td></td><td>グループに入れる IF は、インタフェースの表の「ブリッジグループ」に書く。この表は、グループごとの設定があるときだけ</td></tr>
+<tr><td>スパニングツリーの種類</td><td>protocol</td><td>選択（ieee、dec、vlan-bridge、ibm）</td><td></td><td></td><td></td><td>ブリッジグループで動かすスパニングツリー</td></tr>
+<tr><td>優先度</td><td>priority</td><td>数（0〜65535）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>MAC アドレスを忘れるまでの時間（秒）</td><td>aging_time</td><td>数（10〜1000000）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>覚える MAC の数</td><td>table_size</td><td>数（0〜65535）。ほかに unlimited</td><td></td><td></td><td></td><td>unlimited = 上限なし</td></tr>
+<tr><td>IPv4 をブリッジする</td><td>bridge_ip</td><td>有効・無効</td><td></td><td></td><td></td><td>無効 = このグループでは IPv4 をブリッジしない。空 = 機器の既定（する）</td></tr>
+<tr><td>IPv6 をブリッジする</td><td>bridge_ipv6</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>PPPoE だけをブリッジする</td><td>bridge_only_pppoe</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>BGP 集約経路</h2>
+<p><a id="bgp_aggregates"></a>内部名 <code>bgp_aggregates</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>VRF</td><td>vrf</td><td>参照（vrfs.name）</td><td></td><td>○</td><td></td><td>空 = VRF なし（全体の経路表）</td></tr>
+<tr><td>集約した経路</td><td>prefix</td><td>IPv4 ネットワーク</td><td>○</td><td>○</td><td></td><td>中に入る経路が BGP の表に 1 つでもあれば、この経路を広告する</td></tr>
+<tr><td>細かい経路を広告しない</td><td>summary_only</td><td>有効・無効</td><td></td><td></td><td></td><td>有効 = 集約した経路だけを広告する</td></tr>
+<tr><td>元の経路の AS を残す</td><td>as_set</td><td>有効・無効</td><td></td><td></td><td></td><td>有効 = 集約した経路に、元の経路が通ってきた AS の集まりを付ける</td></tr>
+</table>
+<h2>OSPF バーチャルリンク</h2>
+<p><a id="ospf_virtual_links"></a>内部名 <code>ospf_virtual_links</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>プロセス番号</td><td>process_id</td><td>数</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>通るエリア</td><td>area</td><td>文字</td><td>○</td><td>○</td><td></td><td>バックボーンにじかにつながらないエリアを、このエリアを通してつなぐ</td></tr>
+<tr><td>相手のルータ ID</td><td>router_id</td><td>IPv4 アドレス</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>Hello 間隔（秒）</td><td>hello</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Dead 間隔（秒）</td><td>dead</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>OSPFv3 再配布の指定</h2>
+<p><a id="ospfv3_redistribute"></a>内部名 <code>ospfv3_redistribute</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>プロセス番号</td><td>process_id</td><td>数</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>再配布の元</td><td>source</td><td>選択（connected、static、bgp、rip）</td><td>○</td><td>○</td><td></td><td>OSPFv3 の表の「再配布する経路」に入っている種類。行が無い種類は、指定なしで再配布する</td></tr>
+<tr><td>メトリック</td><td>metric</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>メトリックの種類</td><td>metric_type</td><td>選択（1、2）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>タグ</td><td>tag</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>経路制御の条件</td><td>filter</td><td>文字</td><td></td><td></td><td></td><td>経路制御の方針の表の名前。方針を追加コンフィグに書くときは、その名前</td></tr>
+</table>
+<h2>BGP IPv6 再配布の指定</h2>
+<p><a id="bgp_ipv6_redistribute"></a>内部名 <code>bgp_ipv6_redistribute</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>再配布の元</td><td>source</td><td>選択（connected、static、ospf）</td><td>○</td><td>○</td><td></td><td>BGP の表の「IPv6 の再配布」に入っている種類。行が無い種類は、指定なしで再配布する</td></tr>
+<tr><td>メトリック</td><td>metric</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>経路制御の条件</td><td>filter</td><td>文字</td><td></td><td></td><td></td><td>経路制御の方針の表の名前。方針を追加コンフィグに書くときは、その名前</td></tr>
+</table>
+<h2>RIP</h2>
+<p><a id="rip_processes"></a>内部名 <code>rip_processes</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>種類</td><td>family</td><td>選択（ipv4、ipv6）</td><td>○</td><td>○</td><td></td><td>ipv4 = RIP、ipv6 = RIPng</td></tr>
+<tr><td>版</td><td>version</td><td>選択（1、2）</td><td></td><td></td><td></td><td>RIP（ipv4）だけ。IF ごとの「送る版」「受ける版」が空の IF に効く</td></tr>
+<tr><td>クラスの境目で集約する</td><td>auto_summary</td><td>有効・無効</td><td></td><td></td><td></td><td>RIP（ipv4）だけ。何も書かないときの動きがメーカーで逆（Cisco は集約する、NEC IX はしない）</td></tr>
+<tr><td>既定を「送らない」にする</td><td>passive_default</td><td>有効・無効</td><td></td><td></td><td></td><td>IF の「送る」が空の IF では送らない（Cisco の passive-interface default）</td></tr>
+<tr><td>デフォルト経路を広告する</td><td>default_originate</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>広告するデフォルト経路のメトリック</td><td>default_originate_metric</td><td>数（1〜15）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>デフォルト経路の広告の条件</td><td>default_originate_filter</td><td>文字</td><td></td><td></td><td></td><td>経路制御の方針の名前（Cisco）</td></tr>
+<tr><td>再配布のメトリックの既定</td><td>default_metric</td><td>数（1〜16）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>優先度（distance）</td><td>distance</td><td>数（10〜255）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>更新を送る間隔（秒）</td><td>timer_update</td><td>数（1〜）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>経路を無効とみなすまで（秒）</td><td>timer_invalid</td><td>数（1〜）</td><td></td><td></td><td></td><td>最後の更新から数える</td></tr>
+<tr><td>より良い経路を受け付けない時間（秒）</td><td>timer_holddown</td><td>数（0〜）</td><td></td><td></td><td></td><td>Cisco だけ</td></tr>
+<tr><td>経路を消すまで（秒）</td><td>timer_flush</td><td>数（1〜）</td><td></td><td></td><td></td><td>最後の更新から数える（無効とみなすまで ＋ 無効になってから消すまで）</td></tr>
+<tr><td>受信フィルタ</td><td>prefix_list_in</td><td>文字</td><td></td><td></td><td></td><td>受け取る経路を絞るプレフィックスリストの名前（ipv6 の行は IPv6 プレフィックスリスト）</td></tr>
+<tr><td>送信フィルタ</td><td>prefix_list_out</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>RIP インタフェース</h2>
+<p><a id="rip_interfaces"></a>内部名 <code>rip_interfaces</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>種類</td><td>family</td><td>選択（ipv4、ipv6）</td><td>○</td><td>○</td><td></td><td>ipv4 = RIP、ipv6 = RIPng</td></tr>
+<tr><td>IF 名</td><td>if_name</td><td>IF 名</td><td>○</td><td>○</td><td></td><td>行があれば、その IF で RIP が動く</td></tr>
+<tr><td>送る</td><td>send</td><td>有効・無効</td><td></td><td></td><td></td><td>無効 = 経路を送らない（受けるだけ）。空 = 送る</td></tr>
+<tr><td>受ける</td><td>receive</td><td>有効・無効</td><td></td><td></td><td></td><td>無効 = 経路を受けない。空 = 受ける</td></tr>
+<tr><td>送る版</td><td>send_version</td><td>選択（1、2）。複数可</td><td></td><td></td><td></td><td>RIP（ipv4）だけ。空 = プロセスの「版」</td></tr>
+<tr><td>受ける版</td><td>receive_version</td><td>選択（1、2）。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>版 2 をブロードキャストで送る</td><td>v2_broadcast</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>認証</td><td>auth_mode</td><td>選択（text、md5）</td><td></td><td></td><td></td><td>RIP（ipv4）の版 2 だけ。NEC IX は text だけ</td></tr>
+<tr><td>認証キー</td><td>auth_key</td><td>秘密の値</td><td></td><td></td><td></td><td>画面とレポートでは伏せます</td></tr>
+<tr><td>認証キーの番号</td><td>auth_key_id</td><td>数（0〜）</td><td></td><td></td><td></td><td>md5 のとき。空 = 1</td></tr>
+<tr><td>メトリックに足す値</td><td>metric_offset</td><td>数（1〜16）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>スプリットホライズン</td><td>split_horizon</td><td>選択（split_horizon、poisoned_reverse、none）</td><td></td><td></td><td></td><td>split_horizon = 受けた IF へは送らない、poisoned_reverse = 受けた IF へは届かない経路として送る、none = 何もしない</td></tr>
+<tr><td>集約して送る経路</td><td>summary</td><td>IPv4 か IPv6 のネットワーク。複数可</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>この IF でデフォルト経路を広告する</td><td>default_originate</td><td>有効・無効</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>広告するデフォルト経路のメトリック</td><td>default_originate_metric</td><td>数（1〜15）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>受信フィルタ</td><td>prefix_list_in</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>送信フィルタ</td><td>prefix_list_out</td><td>文字</td><td></td><td></td><td></td><td></td></tr>
+</table>
+<h2>RIP 再配布</h2>
+<p><a id="rip_redistribute"></a>内部名 <code>rip_redistribute</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>種類</td><td>family</td><td>選択（ipv4、ipv6）</td><td>○</td><td>○</td><td></td><td>ipv4 = RIP、ipv6 = RIPng</td></tr>
+<tr><td>再配布する経路</td><td>source</td><td>選択（connected、static、ospf、bgp）</td><td>○</td><td>○</td><td></td><td>ipv6 の行の ospf は OSPFv3</td></tr>
+<tr><td>OSPF のプロセス番号</td><td>process_id</td><td>数</td><td></td><td></td><td></td><td>再配布する経路が ospf のとき。空なら、機器に 1 つだけあるプロセス</td></tr>
+<tr><td>メトリック</td><td>metric</td><td>数（1〜16）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>タグ</td><td>tag</td><td>数（0〜65535）</td><td></td><td></td><td></td><td>NEC IX だけ</td></tr>
+<tr><td>経路制御の条件</td><td>filter</td><td>文字</td><td></td><td></td><td></td><td>経路制御の方針の名前</td></tr>
+</table>
+<h2>冗長化（IPv6 の VRRP）</h2>
+<p><a id="ipv6_fhrp"></a>内部名 <code>ipv6_fhrp</code></p>
+<table>
+<tr><th>見出し</th><th>内部名</th><th>型</th><th>必</th><th>キー</th><th>明示</th><th>説明</th></tr>
+<tr><td>機器</td><td>device</td><td>参照（devices.hostname）</td><td>○</td><td>○</td><td></td><td>ホスト名。* は全機器、@グループ名 はそのグループの機器</td></tr>
+<tr><td>IF 名</td><td>if_name</td><td>IF 名</td><td>○</td><td>○</td><td></td><td></td></tr>
+<tr><td>グループ番号</td><td>group</td><td>数（1〜255）</td><td>○</td><td>○</td><td></td><td>IPv6 の VRRP は版 3（VRRPv3）。NEC IX は、IPv4 の VRRP と同じ番号を機器の中で使えない</td></tr>
+<tr><td>仮想リンクローカルアドレス</td><td>link_local</td><td>IPv6 アドレス</td><td>○</td><td></td><td></td><td>例 fe80::1。同じグループの機器で同じ値にする</td></tr>
+<tr><td>仮想グローバルアドレス</td><td>addresses</td><td>IPv6 アドレス。複数可</td><td></td><td></td><td></td><td>長さを付けずに書く（例 2001:db8:0:1::1）</td></tr>
+<tr><td>優先度</td><td>priority</td><td>数（1〜254）</td><td></td><td></td><td>○</td><td></td></tr>
+<tr><td>切り戻し</td><td>preempt</td><td>有効・無効</td><td></td><td></td><td>○</td><td></td></tr>
+<tr><td>切り戻し待ち（秒）</td><td>preempt_delay</td><td>数</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>広告間隔（ミリ秒）</td><td>advert_interval</td><td>数（10〜40000）</td><td></td><td></td><td>○</td><td>IPv4 の冗長化（秒）と単位が違う。例 1000 = 1 秒</td></tr>
+<tr><td>回線監視</td><td>track</td><td>参照（tracks.id）</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>監視断のときの減点</td><td>track_decrement</td><td>数（1〜255）</td><td></td><td></td><td></td><td></td></tr>
 </table>
 <footer>ConfigChief (MIT License) by KJO. このページは docs/ の Markdown から作っています。</footer>
 </main>

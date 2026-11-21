@@ -88,7 +88,9 @@ func TestCase(t *testing.T) {
 		}
 	}
 
-	text := sample(t, "cisco_ios")
+	// The sample of the pack is read whole by now: a line no rule takes in
+	// is put into it, for the steps that tell of such lines.
+	text := strings.Replace(sample(t, "cisco_ios"), "hostname rt-a01\n", "hostname rt-a01\nservice tcp-keepalives-in\n", 1)
 	oldFile, newFile := filepath.Join(dir, "input", "old", "rt-a01.txt"), filepath.Join(dir, "input", "new", "rt-a01.txt")
 	put(t, oldFile, text)
 	put(t, newFile, strings.Replace(text, "description sample loopback", "description sample loopback 2", 1))

@@ -1,0 +1,26 @@
+# What the pack refuses to write of the rest of VLANs and switches (made-up
+# values).
+tables:
+  devices:
+    - hostname: sw-m03
+      vendor: cisco_ios
+  l2_settings:
+    - {stp_mode: pvst, stp_backbonefast: false}                              # "off" is no line
+  stp_vlans:
+    - {vlans: "10", root_diameter: 4}                        # a diameter without the root
+    - {vlans: "20", enabled: true}                           # "on" is no line
+  stp_instances:
+    - {instance: 3, priority: 1000}                          # steps of 4096
+  interfaces:
+    - {name: GigabitEthernet1/0/1, enabled: true, speed: 100, speed_advertise: [10]}   # only with auto
+    - {name: GigabitEthernet1/0/2, enabled: true}
+    - {name: GigabitEthernet1/0/3, enabled: true}
+    - {name: GigabitEthernet1/0/4, enabled: true}
+  switchports:
+    - {if_name: GigabitEthernet1/0/1, mode: access, voice_vlan: 20, voice_vlan_mode: dot1p, stp_port_priority: 20, storm_broadcast_low: "5", storm_multicast: "500pps", storm_multicast_low: "64kbps"}   # a falling level alone; two units
+    - {if_name: GigabitEthernet1/0/2, mode: access, pvlan_primary: 500}   # not a private VLAN port
+  lags:
+    - {if_name: GigabitEthernet1/0/2, group: 1, mode: active, non_silent: true}   # PAgP only
+  bridge_groups:
+    - {group: 300, protocol: ieee}                           # 1 to 255
+findings: [G-601]

@@ -1,0 +1,167 @@
+#
+ version 7.1.070, Release 1201
+#
+ sysname sw-q01
+#
+ clock timezone JST add 09:00:00
+#
+ dns domain example.com
+ dns server 192.0.2.53
+ dns server 192.0.2.54
+#
+ telnet server enable
+ telnet server acl 2000
+#
+ stp mode pvst
+ stp vlan 10 20 priority 4096
+ stp vlan 30 to 32 priority 8192
+ stp vlan 30 to 32 timer hello 200
+ stp vlan 40 timer hello 250
+ stp instance 1 priority 4096
+ stp bpdu-protection
+ stp global enable
+#
+vlan 1
+#
+vlan 10
+ name sample-office
+ description sample office floor
+#
+vlan 20
+ name sample-voice
+#
+vlan 30 to 32
+#
+interface Bridge-Aggregation1
+ description to sw-q02
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20 30 to 32
+ port trunk pvid vlan 99
+ link-aggregation mode dynamic
+#
+interface Bridge-Aggregation2
+ port link-type trunk
+ port trunk permit vlan all
+#
+interface Vlan-interface10
+ description sample office
+ ip address 192.0.2.1 255.255.255.128
+ ip address 192.0.2.129 25 sub
+#
+interface GigabitEthernet1/0/1
+ port link-mode bridge
+ description office desk
+ port access vlan 10
+ broadcast-suppression 5
+ multicast-suppression pps 500
+ stp edged-port
+ stp port bpdu-protection enable
+#
+interface GigabitEthernet1/0/2
+ port link-mode bridge
+ port access vlan 20
+ speed 100
+ duplex full
+ shutdown
+ stp port bpdu-protection disable
+ undo stp enable
+#
+interface GigabitEthernet1/0/3
+ port link-mode bridge
+#
+interface GigabitEthernet1/0/4
+ port link-mode bridge
+ port link-type hybrid
+ port hybrid vlan 10 untagged
+#
+interface GigabitEthernet1/0/5
+ port link-mode bridge
+ port link-type trunk
+ port trunk permit vlan 10 20
+#
+interface GigabitEthernet1/0/6
+ port link-mode bridge
+ port link-type trunk
+ undo port trunk permit vlan 1
+#
+interface GigabitEthernet1/0/23
+ port link-mode bridge
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20 30 to 32
+ port trunk pvid vlan 99
+ port link-aggregation group 1
+#
+interface GigabitEthernet1/0/24
+ port link-mode bridge
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20 30 to 32
+ port trunk pvid vlan 99
+ port link-aggregation group 1 force
+#
+interface Ten-GigabitEthernet1/0/25
+ port link-mode bridge
+ port link-type trunk
+ port trunk permit vlan all
+ port link-aggregation group 2
+#
+interface Ten-GigabitEthernet1/0/26
+ port link-mode route
+ ip address 198.51.100.1 255.255.255.252
+#
+ ip route-static 0.0.0.0 0 192.0.2.126
+#
+ info-center loghost source Vlan-interface10
+ info-center loghost 192.0.2.20
+ info-center loghost 192.0.2.21 facility local5
+ info-center loghost 192.0.2.22 port 1514
+#
+ snmp-agent
+ snmp-agent community read example-ro acl 2000
+ snmp-agent community write cipher $c$3$sampleSampleSampleSampleSampleSample
+ snmp-agent sys-info contact netops@example.com
+ snmp-agent sys-info location sample room 1
+ snmp-agent sys-info version v2c
+ snmp-agent target-host trap address udp-domain 192.0.2.30 params securityname example-trap v2c
+ snmp-agent trap source Vlan-interface10
+#
+ ntp-service enable
+ ntp-service source Vlan-interface10
+ ntp-service unicast-server 192.0.2.10 priority
+ ntp-service unicast-server 192.0.2.11
+#
+acl basic 2000
+ description sample management hosts
+ rule 0 permit source 192.0.2.0 0.0.0.127
+ rule 5 permit source 198.51.100.10 0
+ rule 10 deny
+#
+ header login %sample banner: authorized use only%
+#
+ super password role network-admin simple Example-Super-1
+#
+local-user admin class manage
+ password simple Example-Secret-1
+ service-type ssh telnet terminal
+ authorization-attribute user-role network-admin
+ authorization-attribute user-role network-operator
+#
+local-user monitor class manage
+ password hash $h$6$sampleSampleSample$dummyDummyDummyDummyDummyDummyDummyDummy==
+ service-type telnet
+ authorization-attribute user-role network-operator
+#
+local-user operator class manage
+ password simple Example-Secret-2
+ service-type ftp
+ service-type terminal
+ authorization-attribute user-role level-3
+#
+line vty 0 63
+ authentication-mode scheme
+ user-role network-operator
+ idle-timeout 15 0
+#
+return

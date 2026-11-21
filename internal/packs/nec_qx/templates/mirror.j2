@@ -1,0 +1,19 @@
+{# Port mirroring: local groups (README, "コンフィグの書き出し"). #}
+{% for m in t.mirror_sessions %}
+ mirroring-group {{ m.session }} local
+{% for p in m.sources_both %}
+ mirroring-group {{ m.session }} mirroring-port {{ p }} both
+{% endfor %}
+{% for p in m.sources_rx %}
+ mirroring-group {{ m.session }} mirroring-port {{ p }} inbound
+{% endfor %}
+{% for p in m.sources_tx %}
+ mirroring-group {{ m.session }} mirroring-port {{ p }} outbound
+{% endfor %}
+{% if m.destination_if %}
+ mirroring-group {{ m.session }} monitor-port {{ m.destination_if }}
+{% endif %}
+{% endfor %}
+{% if t.mirror_sessions %}
+#
+{% endif %}

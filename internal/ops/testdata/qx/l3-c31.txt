@@ -1,0 +1,64 @@
+version 17.9
+hostname l3-c31
+!
+username admin privilege 15 secret 0 Example-Secret-1
+!
+spanning-tree mode rapid-pvst
+!
+vlan 10
+ name sample-office
+!
+vlan 20
+ name sample-voice
+!
+track 1 ip sla 1 reachability
+!
+interface GigabitEthernet1/0/1
+ description office desk
+ switchport access vlan 10
+ switchport mode access
+ switchport voice vlan 20
+ switchport port-security maximum 3
+ switchport port-security violation restrict
+ switchport port-security
+!
+interface GigabitEthernet1/0/24
+ switchport trunk allowed vlan 10,20
+ switchport mode trunk
+!
+interface Vlan10
+ description sample office
+ ip address 192.0.2.2 255.255.255.128
+ ip access-group 110 in
+ vrrp 10 ip 192.0.2.1
+ vrrp 10 priority 120
+!
+ip route 0.0.0.0 0.0.0.0 192.0.2.126 track 1
+!
+ip sla 1
+ icmp-echo 192.0.2.126
+ frequency 5
+ip sla schedule 1 life forever start-time now
+!
+access-list 10 permit 192.0.2.0 0.0.0.127
+access-list 110 remark sample office in
+access-list 110 permit tcp 192.0.2.0 0.0.0.127 any eq www
+access-list 110 permit icmp any any echo
+!
+logging host 192.0.2.20
+snmp-server community example-ro RO 10
+ntp server 192.0.2.10
+!
+banner motd ^C
+sample notice: authorized use only
+^C
+!
+line con 0
+ exec-timeout 5 30
+line vty 0 4
+ access-class 10 in
+ exec-timeout 10 0
+ login local
+ transport input ssh
+!
+end

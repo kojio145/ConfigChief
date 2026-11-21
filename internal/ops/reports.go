@@ -406,6 +406,10 @@ func (e *Env) importDoc(o *ImportOutcome, now time.Time) *report.Doc {
 	for _, f := range src.Files {
 		row := []string{f.Path, "", "", "", "", "", "", "", "", "", "", f.Err}
 		mark := report.MarkWarn
+		if f.Left != "" {
+			// Left out by a person's choice: told, and no fault.
+			row[1], row[11], mark = f.Device, f.Left, report.MarkIgnored
+		}
 		if f.Pack != "" {
 			row[2] = f.Pack + " " + e.Packs[f.Pack].Version
 			row[3] = "自動"
@@ -575,20 +579,20 @@ func (e *Env) mappingSheet(a *convert.Applied, v *Verdicts, all bool) report.She
 	s := report.Sheet{
 		Name:   "対応の未決",
 		Lead:   "パラメータブックの「機器対応」「IF 対応」で、まだ決まっていないところです。直すか、理由を付けて承認します（画面では行を押します。コマンドラインでは、指紋を approve に渡します）。",
-		Header: []string{"チェック", "旧機器", "表", "行", "列", "対象", "内容", "状態", "承認", "指紋"},
+		Header: []string{"チェック", "旧機器", "表", "行", "列", "対象", "内容", "状態", "承認", "指紋", "直し方"},
 	}
 	if all {
 		s.Name = "対応のメモ"
 		s.Lead = "「機器対応」「IF 対応」を当てたときに、決まっていなかったところと、書かなかった行です。"
 	}
 	add := func(mark, check, dev, table, row, col, target, text string) {
-		s.Rows = append(s.Rows, []string{check, dev, table, row, col, target, text, "", "", ""})
+		s.Rows = append(s.Rows, []string{check, dev, table, row, col, target, text, "", "", "", ""})
 		s.Marks = append(s.Marks, mark)
 	}
 	// found adds the row of a finding: marked while it is not approved.
 	found := func(f check.Finding, dev, table, row, col, target string) {
 		st, mark := stateCells(v, f)
-		s.Rows = append(s.Rows, []string{f.RuleID, dev, table, row, col, target, f.Message, st[1], st[2], st[3]})
+		s.Rows = append(s.Rows, []string{f.RuleID, dev, table, row, col, target, f.Message, st[1], st[2], st[3], st[4]})
 		s.Marks = append(s.Marks, mark)
 	}
 	noReason := map[string]bool{}

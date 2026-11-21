@@ -1,0 +1,271 @@
+# IPv6: the switch of the device, static routes, access lists, prefix lists,
+# OSPFv3 and the DHCPv6 pools (appendix A 3.23). The lines under an interface
+# are in 20_interfaces.yaml, those under "router bgp" in 30_routing.yaml.
+# Syntax: Cisco IOS IPv6 Command Reference (README, "参照した資料").
+rules:
+  - id: ipv6.routing
+    match: '^ipv6 unicast-routing$'
+    row: {table: devices, key: {}}
+    set: {ipv6_routing: true}
+
+  # ---- static routes ----
+  # The interface stands before the address (a link-local next hop needs
+  # both). "tag", "nexthop-vrf", "unicast" / "multicast" and the second
+  # distance have no column: such a line stays unknown.
+  - id: route6.static
+    match: '^ipv6 route(?: vrf (?P<vrf>\S+))? (?P<p>[0-9A-Fa-f:]+/\d+)(?: (?P<ifn>[A-Za-z][A-Za-z-]*\d[\w/.]*))?(?: (?P<nh>[0-9A-Fa-f]*:[0-9A-Fa-f:]*))?(?: (?P<dist>\d+))?(?: name (?P<name>\S+))?$'
+    when: "ifn or nh"
+    row:
+      table: ipv6_routes
+      key:
+        vrf: "{{ vrf }}"
+        prefix: "{{ p | network }}"
+        next_hop: "{{ nh }}"
+        out_if: "{{ ifn | ifname }}"
+    set: {distance: "{{ dist }}", description: "{{ name }}"}
+
+  # ---- access lists ----
+  # The line of the list only holds its entries. The device shows the number
+  # of an entry at the head ("sequence 10 permit ...") or at the end
+  # ("... sequence 10"), or not at all: all three are read, and an entry
+  # without a number gets one in steps of 10. Ports are read as numbers only.
+  # The other options (flow-label, routing, mobility, reflect, time-range,
+  # log-input, the names of DSCP values) stay unknown.
+  - id: acl6
+    match: '^ipv6 access-list (?P<name>\S+)$'
+    children:
+      - id: acl6.remark
+        match: '^(?:sequence (?P<seq>\d+) )?remark (?P<text>.+)$'
+        row: {table: ipv6_acl_entries, key: {acl: "{{ parent.name }}", seq: "{{ seq if seq else (rows('ipv6_acl_entries', acl=parent.name) | length + 1) * 10 }}"}}
+        set: {action: remark, remark: "{{ text }}"}
+      - id: acl6.l4
+        match: '^(?:sequence (?P<seq>\d+) )?(?P<action>permit|deny) (?P<proto>tcp|udp) (?:(?P<sany>any)|host (?P<shost>[0-9A-Fa-f:]+)|(?P<snet>[0-9A-Fa-f:]+/\d+))(?: (?P<sop>eq|gt|lt|neq) (?P<sp>[\w-]+)| range (?P<sp1>[\w-]+) (?P<sp2>[\w-]+))? (?:(?P<dany>any)|host (?P<dhost>[0-9A-Fa-f:]+)|(?P<dnet>[0-9A-Fa-f:]+/\d+))(?: (?P<dop>eq|gt|lt|neq) (?P<dp>[\w-]+)| range (?P<dp1>[\w-]+) (?P<dp2>[\w-]+))?(?: dscp (?P<dscp>\d+))?(?:(?P<est> established)|(?P<ack> ack)|(?P<fin> fin)|(?P<psh> psh)|(?P<rst> rst)|(?P<syn> syn)|(?P<urg> urg)|(?P<frag> fragments)|(?P<login> log-input)|(?P<log> log))*(?: sequence (?P<seq2>\d+))?$'
+        when: "(not (est or ack or fin or psh or rst or syn or urg) or proto == 'tcp') and ((1 if ack else 0) + (1 if fin else 0) + (1 if psh else 0) + (1 if rst else 0) + (1 if syn else 0) + (1 if urg else 0)) <= 1"
+        row: {table: ipv6_acl_entries, key: {acl: "{{ parent.name }}", seq: "{{ seq if seq else (seq2 if seq2 else (rows('ipv6_acl_entries', acl=parent.name) | length + 1) * 10) }}"}}
+        set:
+          action: "{{ action }}"
+          protocol: "{{ proto }}"
+          src: "{{ 'any' if sany else ((shost | ip) if shost else (snet | network | replace('/128', ''))) }}"
+          src_port: "{{ ((sop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ (sp if sp is digits else ((sp | unlex('tcp_port')) if proto == 'tcp' else (sp | unlex('udp_port'))))) if sp else '' }}{{ ((sp1 if sp1 is digits else ((sp1 | unlex('tcp_port')) if proto == 'tcp' else (sp1 | unlex('udp_port')))) ~ '-' ~ (sp2 if sp2 is digits else ((sp2 | unlex('tcp_port')) if proto == 'tcp' else (sp2 | unlex('udp_port'))))) if sp1 else '' }}"
+          dst: "{{ 'any' if dany else ((dhost | ip) if dhost else (dnet | network | replace('/128', ''))) }}"
+          dst_port: "{{ ((dop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ (dp if dp is digits else ((dp | unlex('tcp_port')) if proto == 'tcp' else (dp | unlex('udp_port'))))) if dp else '' }}{{ ((dp1 if dp1 is digits else ((dp1 | unlex('tcp_port')) if proto == 'tcp' else (dp1 | unlex('udp_port')))) ~ '-' ~ (dp2 if dp2 is digits else ((dp2 | unlex('tcp_port')) if proto == 'tcp' else (dp2 | unlex('udp_port'))))) if dp1 else '' }}"
+          dscp: "{{ dscp }}"
+        append: {flags: "{{ 'established' if est else '' }} {{ 'ack' if ack else '' }} {{ 'fin' if fin else '' }} {{ 'psh' if psh else '' }} {{ 'rst' if rst else '' }} {{ 'syn' if syn else '' }} {{ 'urg' if urg else '' }} {{ 'fragments' if frag else '' }} {{ 'log_input' if login else '' }} {{ 'log' if log else '' }}"}
+      # The kind of message is a number or one of the names of the device.
+      - id: acl6.icmp
+        match: '^(?:sequence (?P<seq>\d+) )?(?P<action>permit|deny) icmp (?:(?P<sany>any)|host (?P<shost>[0-9A-Fa-f:]+)|(?P<snet>[0-9A-Fa-f:]+/\d+)) (?:(?P<dany>any)|host (?P<dhost>[0-9A-Fa-f:]+)|(?P<dnet>[0-9A-Fa-f:]+/\d+))(?: (?P<type>\d+|echo-request|echo-reply|destination-unreachable|packet-too-big|time-exceeded|parameter-problem|router-solicitation|router-advertisement|nd-ns|nd-na|port-unreachable|no-route))?(?: dscp (?P<dscp>\d+))?(?P<frag> fragments)?(?P<log> log)?(?: sequence (?P<seq2>\d+))?$'
+        row: {table: ipv6_acl_entries, key: {acl: "{{ parent.name }}", seq: "{{ seq if seq else (seq2 if seq2 else (rows('ipv6_acl_entries', acl=parent.name) | length + 1) * 10) }}"}}
+        set:
+          action: "{{ action }}"
+          protocol: icmp
+          src: "{{ 'any' if sany else ((shost | ip) if shost else (snet | network | replace('/128', ''))) }}"
+          dst: "{{ 'any' if dany else ((dhost | ip) if dhost else (dnet | network | replace('/128', ''))) }}"
+          icmp_type: "{{ (type if type is digits else type | unlex('icmp6_type')) if type else '' }}"
+          dscp: "{{ dscp }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
+      # "ipv6" is every protocol: the dataset has "ip" for it.
+      - id: acl6.ip
+        match: '^(?:sequence (?P<seq>\d+) )?(?P<action>permit|deny) (?P<proto>ipv6|esp|ahp|\d+) (?:(?P<sany>any)|host (?P<shost>[0-9A-Fa-f:]+)|(?P<snet>[0-9A-Fa-f:]+/\d+)) (?:(?P<dany>any)|host (?P<dhost>[0-9A-Fa-f:]+)|(?P<dnet>[0-9A-Fa-f:]+/\d+))(?: dscp (?P<dscp>\d+))?(?P<frag> fragments)?(?P<log> log)?(?: sequence (?P<seq2>\d+))?$'
+        row: {table: ipv6_acl_entries, key: {acl: "{{ parent.name }}", seq: "{{ seq if seq else (seq2 if seq2 else (rows('ipv6_acl_entries', acl=parent.name) | length + 1) * 10) }}"}}
+        set:
+          action: "{{ action }}"
+          protocol: "{{ 'ip' if proto == 'ipv6' else ('ah' if proto == 'ahp' else proto) }}"
+          src: "{{ 'any' if sany else ((shost | ip) if shost else (snet | network | replace('/128', ''))) }}"
+          dst: "{{ 'any' if dany else ((dhost | ip) if dhost else (dnet | network | replace('/128', ''))) }}"
+          dscp: "{{ dscp }}"
+        append: {flags: "{{ 'fragments' if frag else '' }} {{ 'log' if log else '' }}"}
+
+  # ---- prefix lists ----
+  # Without "seq" the device numbers the entries in steps of 5.
+  - id: prefix_list6
+    match: '^ipv6 prefix-list (?P<name>\S+)(?: seq (?P<seq>\d+))? (?P<action>permit|deny) (?P<prefix>[0-9A-Fa-f:]+/\d+)(?: ge (?P<ge>\d+))?(?: le (?P<le>\d+))?$'
+    row: {table: ipv6_prefix_lists, key: {name: "{{ name }}", seq: "{{ seq if seq else (rows('ipv6_prefix_lists', name=name) | length + 1) * 5 }}"}}
+    set: {action: "{{ action }}", prefix: "{{ prefix | network }}", ge: "{{ ge }}", le: "{{ le }}"}
+
+  # ---- OSPFv3 ----
+  # The form "ipv6 router ospf". The rules of what stands under it are
+  # borrowed by the newer form "router ospfv3" below.
+  - id: ospf3
+    match: '^ipv6 router ospf (?P<pid>\d+)$'
+    row: {table: ospfv3_processes, key: {process_id: "{{ pid }}"}}
+    children:
+      - id: ospf3.router_id
+        match: '^router-id (?P<id>\d+\.\d+\.\d+\.\d+)$'
+        row: {table: ospfv3_processes, key: {process_id: "{{ pid }}"}}
+        set: {router_id: "{{ id }}"}
+      - id: ospf3.area.type
+        match: '^area (?P<area>\S+) (?P<kind>stub|nssa)(?P<nosum> no-summary)?$'
+        row: {table: ospfv3_areas, key: {process_id: "{{ pid }}", area: "{{ area }}"}}
+        set: {type: "{{ ('totally_' if nosum else '') ~ kind }}"}
+      - id: ospf3.area.default_cost
+        match: '^area (?P<area>\S+) default-cost (?P<n>\d+)$'
+        row: {table: ospfv3_areas, key: {process_id: "{{ pid }}", area: "{{ area }}"}}
+        set: {default_cost: "{{ n }}"}
+      - id: ospf3.area.auth
+        match: '^area (?P<area>\S+) authentication ipsec spi (?P<spi>\d+) (?P<hash>md5|sha1) (?:0 )?(?P<key>7 \S+|[0-9A-Fa-f]+)$'
+        row: {table: ospfv3_areas, key: {process_id: "{{ pid }}", area: "{{ area }}"}}
+        set: {auth_hash: "{{ hash }}", auth_spi: "{{ spi }}", auth_key: "{{ key }}"}
+      # "cost" has no column.
+      - id: ospf3.area.range
+        match: '^area (?P<area>\S+) range (?P<p>[0-9A-Fa-f:]+/\d+)(?: (?P<adv>advertise|not-advertise))?$'
+        row: {table: ospfv3_areas, key: {process_id: "{{ pid }}", area: "{{ area }}"}}
+        append: {"{{ 'ranges_hidden' if adv == 'not-advertise' else 'ranges' }}": "{{ p | network }}"}
+      - id: ospf3.passive.default
+        match: '^passive-interface default$'
+        row: {table: ospfv3_processes, key: {process_id: "{{ pid }}"}}
+        set: {passive_default: true}
+      - id: ospf3.passive
+        match: '^(?P<no>no )?passive-interface (?P<ifn>\S+)$'
+        emit:
+          - table: x_ospf3_passive
+            key: {process_id: "{{ pid }}", if_name: "{{ ifn | ifname }}"}
+            set: {passive: "{{ 'false' if no else 'true' }}"}
+      - id: ospf3.default_originate
+        match: '^default-information originate(?P<always> always)?(?: metric (?P<metric>\d+))?$'
+        row: {table: ospfv3_processes, key: {process_id: "{{ pid }}"}}
+        set: {default_originate: "{{ 'always' if always else 'when_present' }}", default_metric: "{{ metric }}"}
+      # The kind goes into the list of the process; a metric, a tag or a
+      # route map into the table of the options ("redistribute (IPv6)").
+      - id: ospf3.redistribute
+        match: '^redistribute (?P<src>connected|static|bgp \d+)$'
+        row: {table: ospfv3_processes, key: {process_id: "{{ pid }}"}}
+        append: {redistribute: "{{ 'bgp' if src is startingwith('bgp') else src }}"}
+      - id: ospf3.redistribute.options
+        match: '^redistribute (?P<src>connected|static|bgp \d+)(?: metric (?P<metric>\d+)| metric-type (?P<mtype>1|2)| tag (?P<tag>\d+)| route-map (?P<map>\S+))+$'
+        row: {table: ospfv3_processes, key: {process_id: "{{ pid }}"}}
+        append: {redistribute: "{{ 'bgp' if src is startingwith('bgp') else src }}"}
+        emit:
+          - table: ospfv3_redistribute
+            key: {process_id: "{{ pid }}", source: "{{ 'bgp' if src is startingwith('bgp') else src }}"}
+            set: {metric: "{{ metric }}", metric_type: "{{ mtype }}", tag: "{{ tag }}", filter: "{{ map }}"}
+
+  # The newer form: read, and written back in the form above (README).
+  - id: ospf3.new
+    match: '^router ospfv3 (?P<pid>\d+)$'
+    row: {table: ospfv3_processes, key: {process_id: "{{ pid }}"}}
+    children_from: ospf3
+    children:
+      # A line that only holds other lines.
+      - id: ospf3.new.af
+        match: '^address-family ipv6(?: unicast)?$'
+        children_from: ospf3
+      - id: ospf3.new.af.end
+        match: '^exit-address-family$'
+        ignore: 終わりの印
+
+  # ---- DHCPv6 server: the pool is bound to an interface by its name ----
+  # The line of the pool only holds its settings. A prefix delegated to one
+  # client by its DUID and the other options have no column.
+  - id: dhcp6.pool
+    match: '^ipv6 dhcp pool (?P<name>\S+)$'
+    children:
+      - id: dhcp6.pool.dns
+        match: '^dns-server (?P<a>[0-9A-Fa-f:]+)$'
+        emit:
+          - table: x_dhcp6_dns
+            key: {pool: "{{ name }}", addr: "{{ a | ip }}"}
+      - id: dhcp6.pool.dns.import
+        match: '^import dns-server$'
+        emit:
+          - table: x_dhcp6_dns
+            key: {pool: "{{ name }}", addr: dhcp}
+      - id: dhcp6.pool.domain
+        match: '^domain-name (?P<d>\S+)$'
+        emit:
+          - table: x_dhcp6_pool
+            key: {name: "{{ name }}"}
+            set: {domain: "{{ d }}"}
+      - id: dhcp6.pool.sntp
+        match: '^sntp address (?P<a>[0-9A-Fa-f:]+)$'
+        emit:
+          - table: x_dhcp6_ntp
+            key: {pool: "{{ name }}", addr: "{{ a | ip }}"}
+      # Addresses for the hosts. A lifetime has no column.
+      - id: dhcp6.pool.address
+        match: '^address prefix (?P<p>[0-9A-Fa-f:]+/\d+)$'
+        emit:
+          - table: x_dhcp6_addr
+            key: {pool: "{{ name }}", prefix: "{{ p | network }}"}
+      # Prefixes for the routers downstream: cut from a local pool, which
+      # the pool names (appendix A 3.23). The lifetimes are seconds or
+      # "infinite"; the forms with a date stay unknown.
+      - id: dhcp6.pool.pd
+        match: '^prefix-delegation pool (?P<lp>\S+)(?: lifetime (?P<valid>\d+|infinite) (?P<pref>\d+|infinite))?$'
+        emit:
+          - table: x_dhcp6_pd
+            key: {pool: "{{ name }}"}
+            set: {lpool: "{{ lp }}", valid: "{{ valid }}", pref: "{{ pref }}"}
+
+  # The pool of prefixes a DHCPv6 pool delegates from. "shared" and
+  # "cache-size" have no column.
+  - id: ipv6.local_pool
+    match: '^ipv6 local pool (?P<name>\S+) (?P<p>[0-9A-Fa-f:]+/\d+) (?P<len>\d+)$'
+    emit:
+      - table: x_local_pool6
+        key: {name: "{{ name }}"}
+        set: {prefix: "{{ p | network }}", length: "{{ len }}"}
+
+derive:
+  # An interface runs OSPFv3 when it names the process and the area.
+  - id: ospf3.interface
+    for: x_ospf3_if
+    as: o
+    let:
+      pv: "lookup('x_ospf3_passive', process_id=o.process_id, if_name=o.if_name)"
+    when: "o.process_id and o.area"
+    row: {table: ospfv3_interfaces, key: {process_id: "{{ o.process_id }}", if_name: "{{ o.if_name }}"}}
+    set:
+      area: "{{ o.area }}"
+      cost: "{{ o.cost }}"
+      priority: "{{ o.priority }}"
+      hello: "{{ o.hello }}"
+      dead: "{{ o.dead }}"
+      network_type: "{{ o.network_type }}"
+      passive: "{{ pv.passive }}"
+      auth_hash: "{{ o.auth_hash }}"
+      auth_spi: "{{ o.auth_spi }}"
+      auth_key: "{{ o.auth_key }}"
+
+  # The DHCPv6 server of an interface, with what its pool hands out.
+  - id: dhcp6.server
+    for: x_dhcp6_bind
+    as: b
+    let:
+      pool: "lookup('x_dhcp6_pool', name=b.pool)"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ b.if_name }}"}}
+    set: {dhcp_server: "{{ b.pool }}", dhcp_domain: "{{ pool.domain }}"}
+  - id: dhcp6.server.dns
+    for: x_dhcp6_dns
+    as: d
+    let:
+      b: "lookup('x_dhcp6_bind', pool=d.pool)"
+    when: "b.if_name"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ b.if_name }}"}}
+    append: {dhcp_dns: "{{ d.addr }}"}
+  - id: dhcp6.server.ntp
+    for: x_dhcp6_ntp
+    as: d
+    let:
+      b: "lookup('x_dhcp6_bind', pool=d.pool)"
+    when: "b.if_name"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ b.if_name }}"}}
+    append: {dhcp_ntp: "{{ d.addr }}"}
+  - id: dhcp6.server.address
+    for: x_dhcp6_addr
+    as: d
+    let:
+      b: "lookup('x_dhcp6_bind', pool=d.pool)"
+    when: "b.if_name"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ b.if_name }}"}}
+    append: {dhcp_address_prefix: "{{ d.prefix }}"}
+  # The prefixes it delegates: the local pool gives where they are cut from
+  # and how long they are. The name of the local pool is not kept.
+  - id: dhcp6.server.pd
+    for: x_dhcp6_pd
+    as: d
+    let:
+      b: "lookup('x_dhcp6_bind', pool=d.pool)"
+      l: "lookup('x_local_pool6', name=d.lpool)"
+    when: "b.if_name and l.prefix and l.length"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ b.if_name }}"}}
+    set: {dhcp_pd_pool: "{{ l.prefix }}", dhcp_pd_length: "{{ l.length }}", dhcp_pd_valid: "{{ d.valid }}", dhcp_pd_preferred: "{{ d.pref }}"}

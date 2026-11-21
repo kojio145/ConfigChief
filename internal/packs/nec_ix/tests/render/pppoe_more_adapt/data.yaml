@@ -1,0 +1,15 @@
+# PPPoE the way another vendor has it (made-up values; appendix A 3.26):
+# the list of the packets that start a call is not of this device; adapt.yaml
+# leaves it out and tells it (G-614). The delay before a new call and the
+# MAC address of the logical interface have no line and nothing near them
+# (G-602).
+tables:
+  devices:
+    - hostname: ix-e13
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true}
+    - {name: GigaEthernet0.1, enabled: true, ipv4: negotiated}
+  pppoe:
+    - {name: ppp-sample-a, physical_if: GigaEthernet0.0, logical_if: GigaEthernet0.1, username: example-user@example.net, password: dummy-ppp-password-a, auth: chap, dial_trigger: ip, restart_delay: 30, mac_override: true}
+findings: [G-614, G-602]

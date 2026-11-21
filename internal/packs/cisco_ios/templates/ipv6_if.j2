@@ -1,0 +1,139 @@
+{# IPv6 on one interface (appendix A 3.23): read into interfaces.j2, inside
+   the block of the interface "i". Syntax: Cisco IOS IPv6 Command Reference
+   (README). A fixed address is written by interfaces.j2 itself. #}
+{% for v in t.ipv6_interfaces %}
+{% if v.if_name == i.name %}
+{% set what = i.name ~ ' の IPv6' %}
+{% if v.link_local %}
+ ipv6 address {{ v.link_local }} link-local
+{% endif %}
+{% for a in v.eui64 %}
+ ipv6 address {{ a }} eui-64
+{% endfor %}
+{% for a in v.anycast %}
+ ipv6 address {{ a }} anycast
+{% endfor %}
+{% if v.autoconfig == true %}
+ ipv6 address autoconfig{{ ' default' if v.autoconfig_default == true else '' }}
+{% elif v.autoconfig_default == true %}
+{{ fail(what ~ ': 「RA の送り元をデフォルト経路にする」は、「自動設定（RA を受ける）」を有効にした行にだけ書けます') }}
+{% endif %}
+{% if v.dhcp_address == true %}
+ ipv6 address dhcp{{ ' rapid-commit' if v.rapid_commit == true else '' }}
+{% endif %}
+{% if v.pd_from %}
+{% if v.pd_eui64 == true %}
+{{ fail(what ~ ': もらったプレフィックスに EUI-64 で付ける書き方を、Cisco では確かめていません（「付けるアドレスの下の部分」に ::1/64 のようにアドレスを書き、「下 64 ビットを EUI-64 で作る」を空にしてください）') }}
+{% endif %}
+ ipv6 address {{ v.pd_from }} {{ v.pd_suffix | required(what ~ ' の「付けるアドレスの下の部分」（例 ::1/64）') }}
+{% elif v.pd_suffix or v.pd_eui64 == true %}
+{{ fail(what ~ ': 「付けるアドレスの下の部分」は、「もらったプレフィックスから付ける」にプレフィックスの名前を書いた行にだけ書けます') }}
+{% endif %}
+{% if v.enabled == true %}
+ ipv6 enable
+{% endif %}
+{% if v.pd_request %}
+ ipv6 dhcp client pd {{ v.pd_request }}{{ ' rapid-commit' if v.rapid_commit == true else '' }}
+{% endif %}
+{% if v.rapid_commit == true and not v.pd_request and v.dhcp_address != true %}
+{{ fail(what ~ ': 「DHCPv6 の Rapid Commit」は、DHCPv6 でアドレスかプレフィックスをもらう行にだけ書けます') }}
+{% endif %}
+{% if v.dhcp_info_only == true %}
+{{ fail(what ~ ': 「DHCPv6 で情報だけもらう」の書き方を、Cisco では確かめていません（セルを空にして、要る設定を追加コンフィグに書いてください）') }}
+{% endif %}
+{% if v.mtu != '' %}
+ ipv6 mtu {{ v.mtu }}
+{% endif %}
+{% if v.tcp_mss != '' %}
+ ipv6 tcp adjust-mss {{ v.tcp_mss }}
+{% endif %}
+{% if v.policy_route %}
+ ipv6 policy route-map {{ v.policy_route }}
+{% endif %}
+{% if v.acl_in %}
+ ipv6 traffic-filter {{ v.acl_in }} in
+{% endif %}
+{% if v.acl_out %}
+ ipv6 traffic-filter {{ v.acl_out }} out
+{% endif %}
+{# Router advertisements. "no ipv6 nd ra suppress" says "send" in so many
+   words (the device sends them on an Ethernet interface by default). #}
+{% if v.ra == 'send' %}
+ no ipv6 nd ra suppress
+{% elif v.ra == 'reply_only' %}
+ ipv6 nd ra suppress
+{% elif v.ra == 'off' %}
+ ipv6 nd ra suppress all
+{% endif %}
+{% if v.ra_interval != '' %}
+ ipv6 nd ra interval {{ v.ra_interval }}{{ ' ' ~ v.ra_interval_min if v.ra_interval_min != '' else '' }}
+{% elif v.ra_interval_min != '' %}
+{{ fail(what ~ ': 「RA の間隔・最小」は、「RA の間隔・最大」を書いたときだけ書けます') }}
+{% endif %}
+{% if v.ra_lifetime != '' %}
+ ipv6 nd ra lifetime {{ v.ra_lifetime }}
+{% endif %}
+{% if v.ra_managed == true %}
+ ipv6 nd managed-config-flag
+{% endif %}
+{% if v.ra_other == true %}
+ ipv6 nd other-config-flag
+{% endif %}
+{% for a in v.ra_dns %}
+ ipv6 nd ra dns server {{ a }} {{ v.ra_dns_lifetime | required(what ~ ' の「RA で配る DNS の生存時間」') }}
+{% endfor %}
+{% if v.ra_dns_lifetime != '' and not v.ra_dns %}
+{{ fail(what ~ ': 「RA で配る DNS の生存時間」は、「RA で配る DNS サーバ」を書いたときだけ書けます') }}
+{% endif %}
+{% if v.nd_proxy or v.nd_proxy_acl %}
+{{ fail(what ~ ': ND プロキシの書き方を、Cisco では確かめていません（セルを空にしてください。LAN へは、DHCPv6-PD でもらったプレフィックスを配る形にするか、追加コンフィグに書きます）') }}
+{% endif %}
+{% if v.dhcp_server %}
+ ipv6 dhcp server {{ v.dhcp_server }}
+{% elif v.dhcp_dns or v.dhcp_domain %}
+{{ fail(what ~ ': 「DHCPv6 で配る DNS サーバ」「DHCPv6 で配るドメイン名」は、「DHCPv6 サーバ（名前）」を書いた行にだけ書けます') }}
+{% elif v.dhcp_ntp or v.dhcp_pd_pool or v.dhcp_pd_length or v.dhcp_pd_from or v.dhcp_address_prefix %}
+{{ fail(what ~ ': DHCPv6 で配るもの（NTP サーバ・下流へ配るプレフィックス・端末へ配るアドレス）は、「DHCPv6 サーバ（名前）」を書いた行にだけ書けます') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# The prefixes of the router advertisements. One flag at most stands on a
+   line, behind the two lifetimes. #}
+{% for p in t.ipv6_ra_prefixes %}
+{% if p.if_name == i.name %}
+{% if p.on_link == false and p.autonomous == false %}
+{{ fail(i.name ~ ' の RA のプレフィックス ' ~ p.prefix ~ ': 「オンリンク」と「端末の自動設定に使う」の両方を無効にする書き方を、Cisco では確かめていません（どちらかを有効にしてください）') }}
+{% endif %}
+ ipv6 nd prefix {{ p.prefix }} {{ p.valid_lifetime | required('RA のプレフィックス ' ~ p.prefix ~ ' の有効時間') }} {{ p.preferred_lifetime | required('RA のプレフィックス ' ~ p.prefix ~ ' の推奨時間') }}{{ ' no-onlink' if p.on_link == false else '' }}{{ ' no-autoconfig' if p.autonomous == false else '' }}
+{% endif %}
+{% endfor %}
+{# OSPFv3: the process and the area, and what the interface sets. #}
+{% for o in t.ospfv3_interfaces %}
+{% if o.if_name == i.name %}
+ ipv6 ospf {{ o.process_id }} area {{ o.area | required(i.name ~ ' の OSPFv3 のエリア') }}
+{% if o.network_type %}
+ ipv6 ospf network {{ o.network_type | lex('ospf_network') }}
+{% endif %}
+{% if o.cost != '' %}
+ ipv6 ospf cost {{ o.cost }}
+{% endif %}
+{% if o.priority != '' %}
+ ipv6 ospf priority {{ o.priority }}
+{% endif %}
+{% if o.hello != '' %}
+ ipv6 ospf hello-interval {{ o.hello }}
+{% endif %}
+{% if o.dead != '' %}
+ ipv6 ospf dead-interval {{ o.dead }}
+{% endif %}
+{% if o.auth_hash == 'none' %}
+{% if o.auth_spi != '' or o.auth_key %}
+{{ fail(i.name ~ ' の OSPFv3 の認証: none（エリアの認証を使わない）の行には、SPI と鍵を書きません') }}
+{% endif %}
+ ipv6 ospf authentication null
+{% elif o.auth_hash or o.auth_spi != '' or o.auth_key %}
+ ipv6 ospf authentication ipsec spi {{ o.auth_spi | required(i.name ~ ' の OSPFv3 の認証の SPI') }} {{ o.auth_hash | required(i.name ~ ' の OSPFv3 の認証のアルゴリズム') }} {{ o.auth_key | required(i.name ~ ' の OSPFv3 の認証の鍵') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% include 'rip_if.j2' %}

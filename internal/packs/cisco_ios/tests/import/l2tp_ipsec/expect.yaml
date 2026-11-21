@@ -1,0 +1,19 @@
+# L2TP over IPsec (made-up values; appendix A 3.13, 3.20 and 3.21): an LNS
+# whose callers are protected by a crypto map entry that names a dynamic map
+# (a peer "any", the transport mode, the list picks L2TP: UDP 1701), and an
+# entry with a protocol and ports in its list and with a second peer. The row of the LNS names the
+# row of IPsec, though the device has no line that says so. The lists the
+# maps name leave the access lists.
+tables:
+  ipsec_tunnels:
+    - {name: CMAP-SAMPLE/10, style: policy, local_if: GigabitEthernet0/0, peer_address: any, ike_version: 1, psk: dummy-psk-sample-ra, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, ipsec_mode: transport, pfs: none, ipsec_lifetime: 3600, nat_traversal: true}
+    - {name: CMAP-SAMPLE/20, style: policy, local_if: GigabitEthernet0/0, peer_address: 203.0.113.30, peer_backup: [203.0.113.31], ike_version: 1, psk: dummy-psk-sample-c, ipsec_mode: transport}
+  ipsec_selectors:
+    - {tunnel: CMAP-SAMPLE/10, seq: 10, local_net: 203.0.113.9/32, remote_net: 0.0.0.0/0, protocol: udp, local_port: 1701, remote_port: ""}
+    - {tunnel: CMAP-SAMPLE/20, seq: 10, local_net: 203.0.113.9/32, remote_net: 203.0.113.30/32, protocol: udp, local_port: 1701, remote_port: 1701}
+    - {tunnel: CMAP-SAMPLE/20, seq: 20, local_net: 203.0.113.9/32, remote_net: 203.0.113.30/32, protocol: tcp, local_port: "", remote_port: 179}
+  l2tp_groups:
+    - {name: RA-SAMPLE, role: lns, logical_ifs: [Virtual-Template1], tunnel_auth: false, auth: chap, pool_start: 192.0.2.131, pool_end: 192.0.2.190, dns_servers: [192.0.2.53, 192.0.2.54], ipsec_policy: CMAP-SAMPLE/10}
+  l2tp_users:
+    - {group: RA-SAMPLE, name: example-user, password: dummy-l2tp-user-secret-1}
+unknown: []

@@ -6,11 +6,17 @@ columns:
   - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
   - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name, note: {ja: "空 = VRF なし（全体の経路表）", en: "Empty = no VRF (the global table)"}}
   - {name: prefix, title: {ja: 宛先, en: Prefix}, type: net4, required: true, note: {ja: "例 192.0.2.0/24。デフォルト経路は 0.0.0.0/0", en: "e.g. 192.0.2.0/24. The default route is 0.0.0.0/0"}}
-  - {name: next_hop, title: {ja: ネクストホップ, en: Next hop}, type: ip4}
+  - {name: next_hop, title: {ja: ネクストホップ, en: Next hop}, type: ip4, also: [dhcp], note: {ja: "dhcp と書くと、DHCP でもらったゲートウェイ", en: "dhcp = the gateway learned by DHCP"}}
   - {name: out_if, title: {ja: 出力 IF, en: Out interface}, type: ifname, also: ["Null*"], note: {ja: "捨てる経路の Null0 などは、インタフェースの表に行がなくてもよい", en: "Null0 and the like (a route that discards) need no row in the interfaces table"}}
   - {name: distance, title: {ja: 優先度（distance）, en: Distance}, type: int, min: 1, max: 255}
   - {name: track, title: {ja: 回線監視, en: Track}, type: ref, ref: tracks.id}
   - {name: description, title: {ja: 説明, en: Description}, type: string}
+  - {name: tag, title: {ja: タグ, en: Tag}, type: int, min: 0, note: {ja: "再配布のときに、経路制御の方針の「条件: タグ」で見分ける印", en: "A mark the route policies can match when the route is redistributed"}}
+  - {name: metric, title: {ja: メトリック, en: Metric}, type: int, min: 1, max: 255, note: {ja: "NEC IX だけ", en: "NEC IX only"}}
+  - {name: permanent, title: {ja: IF が落ちても残す, en: Permanent}, type: bool, note: {ja: "Cisco だけ", en: "Cisco only"}}
+  - {name: connected_only, title: {ja: つながっている間だけ有効, en: Only while connected}, type: bool, note: {ja: "NEC IX だけ（つなぎに行く IF の経路）", en: "NEC IX only (a route over a dial-on-demand interface)"}}
+  - {name: next_hop_global, title: {ja: ネクストホップを全体の経路表で引く, en: Next hop in the global table}, type: bool, note: {ja: "VRF の経路だけ。Cisco だけ", en: "Routes of a VRF only. Cisco only"}}
+  - {name: multicast, title: {ja: マルチキャストの確認だけに使う, en: Multicast only}, type: bool, note: {ja: "Cisco だけ", en: "Cisco only"}}
 checks:
   - id: V-101
     when: "not row.next_hop and not row.out_if"

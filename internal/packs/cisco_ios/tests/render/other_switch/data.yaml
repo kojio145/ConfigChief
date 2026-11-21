@@ -1,0 +1,23 @@
+# A dataset as it comes from a switch of another vendor (made-up values):
+# what only that vendor says is left out or put another way, and told (G-614).
+tables:
+  devices:
+    - {hostname: sw-a05, vendor: cisco_ios}
+  users:
+    - {name: admin, privilege: admin, secret: Example-Secret-1, secret_form: plain, services: [ssh, terminal]}
+    - {name: monitor, privilege: level-1, secret: Example-Secret-2, secret_form: plain}
+  l2_settings:
+    - {stp_enabled: true, stp_mode: rstp}
+  vlans:
+    - {vlan_id: 10, name: sample-office, description: sample office floor}
+  interfaces:
+    - {name: Vlan10, enabled: true, vlan_id: 10, ipv4: 192.0.2.1/25, acl_in: sample-in}
+  acls:
+    - {name: sample-in, type: extended}
+    - {name: sample-other, type: standard}
+  acl_entries:
+    - {acl: sample-in, seq: 0, action: permit, protocol: tcp, src: 192.0.2.0/25, dst: any, dst_port: "22", flags: [log]}
+    - {acl: sample-in, seq: 5, action: permit, protocol: icmp, src: any, dst: any, icmp_type: echo}
+    - {acl: sample-in, seq: 100, action: deny, protocol: ip, src: any, dst: any}
+    - {acl: sample-other, seq: 5, action: permit, src: 192.0.2.0/25}
+findings: [G-614]

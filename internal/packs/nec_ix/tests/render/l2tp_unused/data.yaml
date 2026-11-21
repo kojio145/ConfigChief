@@ -1,0 +1,14 @@
+# L2TP values this vendor has no line for (made-up values; appendix A 3.21):
+# the names the two ends of a tunnel give. Each is told as a value that was
+# not written (G-602).
+tables:
+  devices:
+    - hostname: ix-c06
+      vendor: nec_ix
+  interfaces:
+    - {name: Loopback0.0, enabled: true, ipv4: 192.0.2.129/25}
+    - {name: Tunnel0.0, enabled: true, ipv4: "unnumbered:Loopback0.0"}
+    - {name: Tunnel1.0, enabled: true, ipv4: "unnumbered:Loopback0.0"}
+  l2tp_groups:
+    - {name: lns-sample, role: lns, logical_ifs: [Tunnel0.0, Tunnel1.0], tunnel_auth: true, password: dummy-l2tp-secret-c, auth: chap, peer_name: rt-c09, local_name: ix-c06, ipsec_policy: ipsec-sample-ra}
+findings: [G-602]

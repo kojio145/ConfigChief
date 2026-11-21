@@ -1,0 +1,8 @@
+hostname rt-s03
+!
+vlan 10
+interface BVI2
+ no shutdown
+!
+interface GigabitEthernet0/0
+end

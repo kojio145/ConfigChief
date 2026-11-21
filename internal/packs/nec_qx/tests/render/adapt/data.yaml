@@ -1,0 +1,48 @@
+# A dataset as it comes from a switch of another vendor (made-up values):
+# what this device writes in another way is put that way, and told (G-614).
+tables:
+  devices:
+    - {hostname: sw-q03, vendor: nec_qx}
+  users:
+    - {name: admin, privilege: admin, secret: Example-Secret-1, secret_form: plain}
+    - {name: monitor, privilege: "1", secret: Example-Secret-2}
+  remote_access:
+    - {protocols: [ssh], ssh_version: "2", auth: local, acl: "10"}   # a numbered list of another vendor
+  l2_settings:
+    - {stp_mode: pvst, stp_edge_default: true, stp_bpdu_guard_default: true, stp_extend_system_id: true, ip_routing: false, default_gateway: 192.0.2.126, vtp_mode: transparent, vtp_domain: sample-domain}
+  vlans:
+    - {vlan_id: 10, name: sample-office}
+    - {vlan_id: 20, name: sample-voice}
+  interfaces:
+    - {name: GigabitEthernet1/0/1, enabled: true}
+    - {name: GigabitEthernet1/0/2, enabled: true}
+    - {name: GigabitEthernet1/0/3, enabled: true}
+    - {name: GigabitEthernet1/0/23, enabled: true}
+    - {name: GigabitEthernet1/0/24, enabled: true}
+    - {name: Vlan-interface10, enabled: true, vlan_id: 10, ipv4: 192.0.2.1/25, acl_in: sample-in, acl_out: "110"}
+  switchports:
+    - {if_name: GigabitEthernet1/0/1, mode: access, access_vlan: 10, storm_broadcast: "5.00"}
+    - {if_name: GigabitEthernet1/0/2, mode: access, access_vlan: 20, stp_edge: "off"}
+    - {if_name: GigabitEthernet1/0/3, mode: trunk, stp_edge: trunk, nonegotiate: true, trunk_encapsulation: dot1q}
+    - {if_name: GigabitEthernet1/0/23, mode: trunk, allowed_vlans: [10, 20]}
+    - {if_name: GigabitEthernet1/0/24, mode: trunk, allowed_vlans: [10, 20]}
+  lags:
+    - {if_name: GigabitEthernet1/0/23, group: 1, mode: passive}
+    - {if_name: GigabitEthernet1/0/24, group: 1, mode: desirable}
+  acls:
+    - {name: sample-in, type: extended}
+    - {name: "10", type: standard}
+    - {name: "110", type: extended, description: sample out}
+  acl_entries:
+    - {acl: sample-in, seq: 10, action: remark, remark: sample office in}
+    - {acl: sample-in, seq: 20, action: permit, protocol: ip, src: 192.0.2.0/25, dst: any}
+    - {acl: "10", seq: 10, action: permit, src: 192.0.2.0/25}
+    - {acl: "110", seq: 10, action: permit, protocol: tcp, src: any, dst: 192.0.2.0/25, dst_port: "443", flags: [established]}
+    - {acl: "110", seq: 20, action: remark, remark: sample tail}
+  route_policies:
+    - {name: sample-policy, seq: 10, action: permit, match_community: ["64496:100", no-export], set_local_preference: 200}
+  tracks:
+    - {id: "1", type: icmp, target: 192.0.2.2, interval: 5}
+  static_routes:
+    - {prefix: 198.51.100.0/24, next_hop: 192.0.2.2, track: "1"}
+findings: [G-614]

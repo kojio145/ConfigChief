@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://kojio145.github.io/ConfigChief/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://kojio145.github.io/ConfigChief/manual.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kojio145.github.io/ConfigChief/checks.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kojio145.github.io/ConfigChief/tables.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kojio145.github.io/ConfigChief/pack-guide.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+</urlset>

@@ -1,0 +1,18 @@
+# What the device writes back after a command (appendix B 4.4). The first
+# entry that matches a line counts.
+#
+# The five rejections are the whole table "コマンドラインのエラーメッセージ"
+# of the Operation Manual (the chapter on the command line). In the table the
+# long messages are broken over two lines; they are matched by their start.
+errors:
+  - {id: unrecognized, match: '^% Unrecognized command found at ', level: rejected}
+  - {id: incomplete, match: '^% Incomplete command found at ', level: rejected}
+  - {id: ambiguous, match: '^% Ambiguous command found at ', level: rejected}
+  - {id: too_many, match: '^% Too many parameters', level: rejected}
+  - {id: wrong, match: '^% Wrong parameter found at ', level: rejected}
+# Any other answer that starts with "%": the pack does not know whether the
+# command was taken, and a person has to look. A log line of the device
+# ("%Jan  1 00:00:00:000 2026 sw-a01 IFNET/3/…") has no space after the "%"
+# and matches nothing here.
+others:
+  - {id: other, match: '^% \S', level: unknown}

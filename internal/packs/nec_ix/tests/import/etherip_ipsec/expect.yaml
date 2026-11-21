@@ -1,0 +1,21 @@
+# EtherIP with IPsec and over IPv6 (made-up values; appendix A 3.20 and
+# 3.26): an EtherIP tunnel that IPsec protects in transport mode, with IKE
+# version 1 (a map on the tunnel, "with-id-payload") and with version 2,
+# and EtherIP over IPv6. The dynamic map names no IKE policy while the
+# device has two policies for the peer "any": which key the peers of the
+# map use cannot be told, and its lines stay unknown.
+tables:
+  tunnels:
+    - {if_name: Tunnel0.0, type: etherip, source: "", destination: ""}
+    - {if_name: Tunnel1.0, type: etherip, destination: 203.0.113.69}
+    - {if_name: Tunnel2.0, type: etherip, source: "2001:db8:0:61::1", destination_v6: "2001:db8:0:65::1"}
+  ipsec_tunnels:
+    - {name: Tunnel0.0, style: tunnel_if, tunnel_if: Tunnel0.0, peer_address: 203.0.113.65, ike_version: 1, ike_mode: aggressive, local_id: "keyid:sample-eip", psk: dummy-psk-sample-eip, ipsec_mode: transport, esp_encryption: aes256, esp_hash: sha256}
+    - {name: Tunnel1.0, style: tunnel_if, tunnel_if: Tunnel1.0, peer_address: 203.0.113.69, ike_version: 2, local_id: "keyid:sample-site-a", remote_id: "keyid:sample-site-b", psk: dummy-psk-sample-a, psk_remote: dummy-psk-sample-b, ipsec_mode: transport, always_on: true}
+  ipsec_selectors:
+    - {tunnel: Tunnel0.0, seq: 10, local_net: 192.0.2.2/32, remote_net: 0.0.0.0/0, protocol: ip}
+unknown:
+  - "ike policy ike-sample-any1 peer any key dummy-psk-sample-any1 mode aggressive ike-prop-sample"
+  - "ike policy ike-sample-any2 peer any key dummy-psk-sample-any2 mode aggressive ike-prop-sample"
+  - "ipsec dynamic-map ipsec-sample-dyn sec-sample-dyn ipsec-prop-sample"
+  - "  ipsec policy tunnel ipsec-sample-dyn out"

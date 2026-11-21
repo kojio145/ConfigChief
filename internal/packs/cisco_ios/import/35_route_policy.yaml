@@ -1,0 +1,241 @@
+# Route maps, AS path lists and community lists (the route policies of
+# appendix A 3.19).
+# Syntax: the command references of the README (IP Routing:
+# Protocol-Independent, chapters "A through R" and "S through T"; IP Routing:
+# BGP, chapters "C through I", "M through N" and "O through show bgp"), read
+# on 2026-11-20.
+#
+# A line that is not named here has no column (continue, match route-type,
+# set comm-list … delete, set ip next-hop peer-address, the IPv6 lines …)
+# and stays unknown.
+rules:
+  # The device shows the action and the number of every entry.
+  - id: rp
+    match: '^route-map (?P<name>\S+) (?P<action>permit|deny) (?P<seq>\d+)$'
+    row: {table: route_policies, key: {name: "{{ name }}", seq: "{{ seq }}"}}
+    set: {action: "{{ action }}"}
+    children:
+      # ---- what the entry applies to ----
+      # ---- IPv6 (IPv6 Command Reference, "match ipv6 address", "set ipv6
+      # next-hop", "set ipv6 default next-hop") ----
+      - id: rp.match.ipv6_prefix_list
+        match: '^match ipv6 address prefix-list (?P<list>\S+)$'
+        append: {match_ipv6_prefix_list: "{{ list }}"}
+      # The next hop of an IPv6 route (IPv6 Command Reference, "match ipv6
+      # next-hop prefix-list <name>").
+      - id: rp.match.ipv6_next_hop
+        match: '^match ipv6 next-hop prefix-list (?P<list>\S+)$'
+        set: {match_ipv6_next_hop_prefix_list: "{{ list }}"}
+      - id: rp.match.ipv6_acl
+        match: '^match ipv6 address (?P<list>\S+)$'
+        when: "list != 'prefix-list'"
+        append: {match_ipv6_acl: "{{ list }}"}
+      - id: rp.set.ipv6_next_hop
+        match: '^set ipv6 next-hop (?P<nh>[0-9A-Fa-f]*:[0-9A-Fa-f:]+(?: [0-9A-Fa-f]*:[0-9A-Fa-f:]+)*)$'
+        append: {set_ipv6_next_hop: "{{ nh }}"}
+      - id: rp.set.ipv6_default_next_hop
+        match: '^set ipv6 default next-hop (?P<nh>[0-9A-Fa-f]*:[0-9A-Fa-f:]+(?: [0-9A-Fa-f]*:[0-9A-Fa-f:]+)*)$'
+        append: {set_ipv6_default_next_hop: "{{ nh }}"}
+      # The next hop of a route, by access lists (Protocol-Independent
+      # Command Reference, "match ip next-hop").
+      - id: rp.match.next_hop_acl
+        match: '^match ip next-hop (?P<lists>\S+(?: \S+)*)$'
+        when: "not lists is startingwith('prefix-list')"
+        append: {match_next_hop_acl: "{{ lists }}"}
+      # The kinds of IS-IS (level-1, level-2) have no word in the dataset.
+      - id: rp.match.route_type
+        match: '^match route-type (?P<kind>local|internal|external)(?: type-(?P<n>[12]))?$'
+        when: "kind == 'external' or not n"
+        append: {match_route_type: "{{ kind }}{{ '_type' ~ n if n else '' }}"}
+      # Without a number the entry goes on with the next one (BGP Command
+      # Reference, "continue").
+      - id: rp.continue
+        match: '^continue(?: (?P<n>\d+))?$'
+        set: {continue_to: "{{ n if n else 'next' }}"}
+      # The communities to take off are named by a list; what the list
+      # holds decides: rp.comm_delete.
+      - id: rp.set.comm_delete
+        match: '^set comm-list (?P<list>\S+) delete$'
+        emit:
+          - table: x_rp_cdel
+            key: {name: "{{ name }}", seq: "{{ seq }}"}
+            set: {list: "{{ list }}"}
+      - id: rp.set.extcommunity_rt
+        match: '^set extcommunity rt (?P<vals>[\w:.]+(?: [\w:.]+)*?)(?P<add> additive)?$'
+        when: "vals != 'additive' and not vals is startingwith('range')"
+        set: {set_extcommunity_rt_additive: "{{ 'true' if add else '' }}"}
+        append: {set_extcommunity_rt: "{{ vals }}"}
+      - id: rp.set.extcommunity_soo
+        match: '^set extcommunity soo (?P<v>[\w:.]+)$'
+        set: {set_extcommunity_soo: "{{ v }}"}
+      - id: rp.match.prefix_list
+        match: '^match ip address prefix-list (?P<lists>\S+(?: \S+)*)$'
+        append: {match_prefix_list: "{{ lists }}"}
+      - id: rp.match.acl
+        match: '^match ip address (?P<lists>\S+(?: \S+)*)$'
+        append: {match_acl: "{{ lists }}"}
+      # One list per line is what the syntax line has.
+      - id: rp.match.as_path
+        match: '^match as-path (?P<list>\d+)$'
+        set: {match_as_path: "{{ list }}"}
+      # The syntax line has "exact"; "exact-match" is read too. What the list
+      # holds decides where the name goes: rp.community.
+      - id: rp.match.community
+        match: '^match community (?P<list>\S+)(?P<exact> exact(?:-match)?)?$'
+        emit:
+          - table: x_rp_comm
+            key: {name: "{{ name }}", seq: "{{ seq }}"}
+            set: {list: "{{ list }}", exact: "{{ 'true' if exact else '' }}"}
+      - id: rp.match.interface
+        match: '^match interface (?P<ifs>[A-Za-z]\S*(?: [A-Za-z]\S*)*)$'
+        append: {match_interface: "{{ ifs }}"}
+      - id: rp.match.metric
+        match: '^match metric (?P<n>\d+)$'
+        set: {match_metric: "{{ n }}"}
+      - id: rp.match.tag
+        match: '^match tag (?P<tags>\d+(?: \d+)*)$'
+        append: {match_tag: "{{ tags }}"}
+
+      # ---- what the entry sets ----
+      - id: rp.set.local_preference
+        match: '^set local-preference (?P<n>\d+)$'
+        set: {set_local_preference: "{{ n }}"}
+      # A value with a sign is not read: what it means is not in the
+      # reference (README).
+      - id: rp.set.metric
+        match: '^set metric (?P<n>\d+)$'
+        set: {set_metric: "{{ n }}"}
+      - id: rp.set.metric_type
+        match: '^set metric-type (?P<kind>type-1|type-2|internal)$'
+        set: {set_metric_type: "{{ kind | replace('type-', '') }}"}
+      - id: rp.set.as_path
+        match: '^set as-path prepend (?P<asns>\d+(?: \d+)*)$'
+        append: {set_as_path_prepend: "{{ asns }}"}
+      - id: rp.set.community.none
+        match: '^set community none$'
+        append: {set_community: none}
+      - id: rp.set.community
+        match: '^set community (?P<vals>[\w:-]+(?: [\w:-]+)*?)(?P<add> additive)?$'
+        when: "vals != 'none' and vals != 'additive'"
+        set: {set_community_additive: "{{ 'true' if add else '' }}"}
+        append: {set_community: "{{ vals }}"}
+      - id: rp.set.weight
+        match: '^set weight (?P<n>\d+)$'
+        set: {set_weight: "{{ n }}"}
+      - id: rp.set.origin
+        match: '^set origin (?P<kind>igp|incomplete)$'
+        set: {set_origin: "{{ kind }}"}
+      - id: rp.set.tag
+        match: '^set tag (?P<n>\d+)$'
+        set: {set_tag: "{{ n }}"}
+      - id: rp.set.next_hop
+        match: '^set ip next-hop (?P<nh>self|\d+\.\d+\.\d+\.\d+(?: \d+\.\d+\.\d+\.\d+)*)$'
+        append: {set_next_hop: "{{ nh }}"}
+      - id: rp.set.default_next_hop
+        match: '^set ip default next-hop (?P<nh>\d+\.\d+\.\d+\.\d+(?: \d+\.\d+\.\d+\.\d+)*)$'
+        append: {set_default_next_hop: "{{ nh }}"}
+      - id: rp.set.interface
+        match: '^set interface (?P<ifs>[A-Za-z]\S*(?: [A-Za-z]\S*)*)$'
+        append: {set_interface: "{{ ifs }}"}
+      - id: rp.set.default_interface
+        match: '^set default interface (?P<ifs>[A-Za-z]\S*(?: [A-Za-z]\S*)*)$'
+        append: {set_default_interface: "{{ ifs }}"}
+
+  # The packets the device itself sends.
+  - id: rp.self
+    match: '^ip local policy route-map (?P<map>\S+)$'
+    row: {table: devices, key: {}}
+    set: {local_policy_route: "{{ map }}"}
+
+  - id: rp.self.v6
+    match: '^ipv6 local policy route-map (?P<map>\S+)$'
+    row: {table: devices, key: {}}
+    set: {local_policy_route_v6: "{{ map }}"}
+
+  # ---- AS path lists ----
+  # A list has a number, its entries have none: they are numbered by tens in
+  # the written order.
+  - id: aspath
+    match: '^ip as-path access-list (?P<name>\d+) (?P<action>permit|deny) (?P<re>\S.*)$'
+    row: {table: as_path_lists, key: {name: "{{ name }}", seq: "{{ (rows('as_path_lists', name=name) | length + 1) * 10 }}"}}
+    set: {action: "{{ action }}", regex: "{{ re }}"}
+
+  # ---- community lists ----
+  # Standard: the number 1 to 99, or "standard <name>". Expanded: the number
+  # 100 to 500, or "expanded <name>". The entries are numbered like those of
+  # an AS path list.
+  - id: clist.standard.number
+    match: '^ip community-list (?P<name>[1-9]\d?) (?P<action>permit|deny) (?P<vals>[\w:-]+(?: [\w:-]+)*)$'
+    row: {table: community_lists, key: {name: "{{ name }}", seq: "{{ (rows('community_lists', name=name) | length + 1) * 10 }}"}}
+    set: {action: "{{ action }}", type: standard}
+    append: {communities: "{{ vals }}"}
+  - id: clist.expanded.number
+    match: '^ip community-list (?P<name>[1-9]\d\d) (?P<action>permit|deny) (?P<re>\S.*)$'
+    row: {table: community_lists, key: {name: "{{ name }}", seq: "{{ (rows('community_lists', name=name) | length + 1) * 10 }}"}}
+    set: {action: "{{ action }}", type: expanded, regex: "{{ re }}"}
+  - id: clist.standard
+    match: '^ip community-list standard (?P<name>\S+) (?P<action>permit|deny) (?P<vals>[\w:-]+(?: [\w:-]+)*)$'
+    row: {table: community_lists, key: {name: "{{ name }}", seq: "{{ (rows('community_lists', name=name) | length + 1) * 10 }}"}}
+    set: {action: "{{ action }}", type: standard}
+    append: {communities: "{{ vals }}"}
+  - id: clist.expanded
+    match: '^ip community-list expanded (?P<name>\S+) (?P<action>permit|deny) (?P<re>\S.*)$'
+    row: {table: community_lists, key: {name: "{{ name }}", seq: "{{ (rows('community_lists', name=name) | length + 1) * 10 }}"}}
+    set: {action: "{{ action }}", type: expanded, regex: "{{ re }}"}
+
+derive:
+  # The communities an entry looks for. A standard list of one "permit"
+  # line says "the route carries all of these": the entry keeps the values
+  # themselves (the dataset holds them that way: appendix A 3.19), and the
+  # list leaves the dataset (rp.community.taken). Any other list stays a
+  # list, and the entry keeps its name.
+  - id: rp.community
+    for: x_rp_comm
+    as: m
+    let:
+      all: "rows('community_lists', name=m.list)"
+      one: "first('community_lists', name=m.list)"
+      plain: "all | length == 1 and one.action == 'permit' and one.type == 'standard'"
+    when: "m.list"
+    row: {table: route_policies, key: {name: "{{ m.name }}", seq: "{{ m.seq }}"}}
+    set:
+      match_community_list: "{{ '' if plain else m.list }}"
+      match_community_exact: "{{ m.exact }}"
+    append:
+      match_community: "{% if plain %}{{ one.communities | join(' ') }}{% endif %}"
+  - id: rp.community.taken
+    for: community_lists
+    as: c
+    let:
+      m: "first('x_rp_comm', list=c.name)"
+      kept: "first('route_policies', match_community_list=c.name)"
+      n: "rows('community_lists', name=c.name) | length"
+    when: "m.name and not kept.name and n == 1 and c.action == 'permit' and c.type == 'standard'"
+    remove: true
+  # The communities an entry takes off the routes. The reference asks for a
+  # standard list with one community on every line ("set comm-list
+  # delete"): the entry keeps those values, and the list leaves the dataset
+  # (the pack writes such a list itself). A list of another shape is not
+  # taken apart: the line of the entry stays unknown.
+  - id: rp.comm_delete
+    for: x_rp_cdel
+    as: m
+    let:
+      all: "rows('community_lists', name=m.list)"
+      ok: "rows('community_lists', name=m.list, type='standard', action='permit')"
+      vals: "all | map(attribute='communities') | map('join', ' ') | join(' ')"
+    when: "m.list and all | length > 0 and all | length == ok | length and (vals | split | length) == all | length"
+    row: {table: route_policies, key: {name: "{{ m.name }}", seq: "{{ m.seq }}"}}
+    append:
+      set_community_delete: "{{ vals }}"
+  - id: rp.comm_delete.taken
+    for: community_lists
+    as: c
+    let:
+      m: "first('x_rp_cdel', list=c.name)"
+      kept: "first('route_policies', match_community_list=c.name)"
+      all: "rows('community_lists', name=c.name)"
+      ok: "rows('community_lists', name=c.name, type='standard', action='permit')"
+      vals: "all | map(attribute='communities') | map('join', ' ') | join(' ')"
+    when: "m.name and not kept.name and all | length == ok | length and (vals | split | length) == all | length"
+    remove: true

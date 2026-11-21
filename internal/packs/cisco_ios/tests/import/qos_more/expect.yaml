@@ -1,0 +1,27 @@
+# The rest of QoS, appendix A 3.26 (made-up values): the conditions by the
+# input interface, CoS, the QoS group, a protocol, another class, and "not";
+# marking CoS and the QoS group; shaping to the peak and by percent; policing
+# by percent, with a peak rate and with an action above it; WRED; a queue
+# limit in bytes.
+tables:
+  qos_class_matches:
+    - {class: cm-m-voice, seq: 10, cos: [5]}
+    - {class: cm-m-voice, seq: 20, qos_group: 10}
+    - {class: cm-m-voice, seq: 30, protocol: rtp}
+    - {class: cm-m-video, seq: 10, input_if: GigabitEthernet0/1}
+    - {class: cm-m-video, seq: 20, cos: [0, 1], negate: true}
+    - {class: cm-m-both, seq: 10, class_ref: cm-m-voice}
+    - {class: cm-m-both, seq: 20, class_ref: cm-m-video}
+    - {class: cm-m-both, seq: 30, acl: ACL-SAMPLE-Q, negate: true}
+  qos_policies:
+    - {policy: pm-m-in, class: cm-m-voice, set_qos_group: 10, set_cos: 5}
+    - {policy: pm-m-in, class: default, police_percent: 20, police_exceed: set_dscp, police_exceed_value: 10, police_violate: drop}
+    - {policy: pm-m-out, class: cm-m-video, bandwidth_remaining: 40, shape_mode: peak, shape_bps: 4000000, random_detect: dscp}
+    - {policy: pm-m-out, class: cm-m-both, shape_percent: 30, shape_mode: "", queue_limit: [64000], queue_limit_unit: bytes}
+    - {policy: pm-m-out, class: default, police_bps: 2000000, police_bc: 8000, police_pir_bps: 4000000, police_be: 16000, police_exceed: transmit, police_violate: drop, random_detect: "on"}
+# A protocol with more words after its name, and the thresholds of WRED for
+# one value.
+unknown:
+  - "match protocol http url sample"
+  - "random-detect dscp 34 24 40"
+ignored_min: 1

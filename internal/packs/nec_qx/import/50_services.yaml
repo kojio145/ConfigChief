@@ -1,0 +1,77 @@
+# DHCP: the server pools and the relay.
+# Syntax: README, "参照した資料" (DHCP commands).
+rules:
+  # DHCP is off without this line: it counts only together with a pool or a
+  # relay interface (the derives below).
+  - id: dhcp.enable
+    match: '^dhcp enable$'
+    emit:
+      - table: x_dhcp
+        key: {}
+        set: {enabled: "true"}
+  - id: dhcp.pool
+    match: '^dhcp server ip-pool (?P<name>\S+)$'
+    row: {table: dhcp_pools, key: {name: "{{ name }}"}}
+    children:
+      # The mask is a length, or a dotted mask behind the word "mask".
+      # "secondary" stays unknown.
+      - id: dhcp.pool.network
+        match: '^network (?P<net>\d+\.\d+\.\d+\.\d+)(?: mask (?P<mask>\d+\.\d+\.\d+\.\d+)| (?P<len>\d+))$'
+        set: {network: "{{ ((net | with_mask(mask)) if mask else (net ~ '/' ~ len)) | network }}"}
+      - id: dhcp.pool.range
+        match: '^address range (?P<start>\d+\.\d+\.\d+\.\d+) (?P<end>\d+\.\d+\.\d+\.\d+)$'
+        set: {range_start: "{{ start }}", range_end: "{{ end }}"}
+      # The first gateway, and the ones behind it.
+      - id: dhcp.pool.gateway
+        match: '^gateway-list (?P<addr>\d+\.\d+\.\d+\.\d+)(?P<more>(?: \d+\.\d+\.\d+\.\d+)*)$'
+        set: {default_router: "{{ addr }}"}
+        append: {default_routers_more: "{{ more }}"}
+      - id: dhcp.pool.dns
+        match: '^dns-list (?P<list>\d+\.\d+\.\d+\.\d+(?: \d+\.\d+\.\d+\.\d+)*)$'
+        append: {dns_servers: "{{ list }}"}
+      - id: dhcp.pool.domain
+        match: '^domain-name (?P<dom>\S+)$'
+        set: {domain: "{{ dom }}"}
+      # The lease in the largest unit that fits: 1d, 12h, 90m, 100s
+      # (appendix A 3.25).
+      - id: dhcp.pool.expired
+        match: '^expired day (?P<d>\d+)(?: hour (?P<h>\d+)(?: minute (?P<m>\d+)(?: second (?P<s>\d+))?)?)?$'
+        set: {lease: "{{ (d ~ 'd') if ((h | int if h else 0) + (m | int if m else 0) + (s | int if s else 0)) == 0 else (((d | int * 24 + (h | int if h else 0)) ~ 'h') if ((m | int if m else 0) + (s | int if s else 0)) == 0 else ((((d | int * 24 + (h | int if h else 0)) * 60 + (m | int if m else 0)) ~ 'm') if (s | int if s else 0) == 0 else ((((d | int * 24 + (h | int if h else 0)) * 60 + (m | int if m else 0)) * 60 + (s | int if s else 0)) ~ 's'))) }}"}
+      - id: dhcp.pool.expired.unlimited
+        match: '^expired unlimited$'
+        set: {lease: infinite}
+
+  # Addresses kept back for the whole device: they go to the pool whose
+  # network holds them. "forbidden-ip" inside a pool stays unknown.
+  - id: dhcp.forbidden
+    match: '^dhcp server forbidden-ip (?P<start>\d+\.\d+\.\d+\.\d+)(?: (?P<end>\d+\.\d+\.\d+\.\d+))?$'
+    emit:
+      - table: x_dhcp_forbidden
+        key: {start: "{{ start }}"}
+        set: {end: "{{ end }}"}
+
+derive:
+  - id: dhcp.enabled.pool
+    for: dhcp_pools
+    as: p
+    let:
+      g: "lookup('x_dhcp')"
+    when: "g.enabled"
+    row: {table: dhcp_pools, key: {name: "{{ p.name }}"}}
+  - id: dhcp.forbidden.join
+    for: x_dhcp_forbidden
+    as: e
+    let:
+      pool: "covering('dhcp_pools', 'network', e.start)"
+    when: "pool.name"
+    row: {table: dhcp_pools, key: {name: "{{ pool.name }}"}}
+    append: {excluded: "{{ e.start }}-{{ e.end if e.end else e.start }}"}
+  # An interface relays when it says so and DHCP is on for the device.
+  - id: dhcp.relay.used
+    for: x_dhcp_select
+    as: x
+    let:
+      i: "lookup('interfaces', name=x.if_name)"
+      g: "lookup('x_dhcp')"
+    when: "x.relay and g.enabled and i.dhcp_relay"
+    row: {table: interfaces, key: {name: "{{ x.if_name }}"}}

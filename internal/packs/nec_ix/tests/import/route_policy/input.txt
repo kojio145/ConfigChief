@@ -1,0 +1,102 @@
+hostname ix-r01
+!
+ip access-list al-r-pbr permit ip src 198.51.100.0/25 dest any
+ip prefix-list pl-r-in 5 permit 0.0.0.0/0 max 24
+ip prefix-list pl-r-out 5 permit 198.51.100.0/24
+ip prefix-list pl-r-any 10 permit any
+ip prefix-list pl-r-nh 5 permit 203.0.113.0/24 min 32
+!
+route-map rm-r-in permit 10
+  match ip address prefix-list pl-r-in
+  match ip next-hop prefix-list pl-r-nh
+  match community 64497:100 no-export-subconfed exact-match
+  set local-preference 200
+  set community 64496:50 no-export additive
+!
+route-map rm-r-in deny 20
+  match community 64497:900
+!
+route-map rm-r-in permit 30
+  match ip address prefix-list pl-r-any
+  set community 64496:60 additive delete 64497:100
+!
+route-map rm-r-out permit 10
+  match ip address prefix-list pl-r-out
+  set metric +10
+  set as-path prepend 64496 64496
+  set origin igp
+  set ip next-hop self
+!
+route-map rm-r-out permit 20
+  set community none
+  set metric-type internal
+!
+route-map rm-r-static permit 10
+  match tag 100
+  match interface GigaEthernet1.0
+  match metric 5
+  set metric 20
+  set metric-type type-1
+  set tag 300
+!
+route-map rm-r-pbr permit 10
+  match ip address access-list al-r-pbr
+  set ip next-hop 203.0.113.2
+  set ip default next-hop 198.51.100.254
+!
+route-map rm-r-pbr permit 20
+  set interface Tunnel0.0
+  set default interface GigaEthernet0.0
+!
+route-map rm-r-short 10
+  match tag 5
+!
+ip route default 203.0.113.2 tag 200
+ip route 192.0.2.64/26 198.51.100.254 metric 5 distance 20 tag 100
+ip route 192.0.2.32/27 Tunnel0.0 connected
+ip route vrf vrf-r 192.0.2.192/26 192.0.2.130
+!
+ip local policy route-map rm-r-pbr
+!
+ip router ospf 1
+  router-id 192.0.2.1
+  network GigaEthernet1.0 area 0
+  redistribute static metric 20 metric-type 1 tag 100 route-map rm-r-static
+!
+router bgp 64496
+  router-id 192.0.2.1
+  neighbor 203.0.113.2 remote-as 64497
+  address-family ipv4 unicast
+    network 198.51.100.0/24
+    redistribute ospf 1 metric 50
+    redistribute connected route-map rm-r-out
+    neighbor 203.0.113.2 route-map rm-r-in in
+    neighbor 203.0.113.2 route-map rm-r-out out
+  vrf vrf-r
+    neighbor 192.0.2.130 remote-as 64498
+    neighbor 192.0.2.130 description to sample vrf peer
+    address-family ipv4 unicast
+      network 192.0.2.128/25
+      redistribute static
+      neighbor 192.0.2.130 next-hop-self
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.1/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.1/24
+  ip policy route-map rm-r-pbr
+  no shutdown
+!
+interface GigaEthernet2.0
+  ip vrf forwarding vrf-r
+  ip address 192.0.2.129/25
+  no shutdown
+!
+interface Tunnel0.0
+  tunnel mode gre
+  tunnel source GigaEthernet0.0
+  tunnel destination 203.0.113.6
+  ip unnumbered GigaEthernet1.0
+  no shutdown

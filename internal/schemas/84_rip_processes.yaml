@@ -1,0 +1,21 @@
+table: rip_processes
+title: {ja: RIP, en: RIP}
+since: M7
+key: [device, family]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: family, title: {ja: 種類, en: Family}, type: enum, values: [ipv4, ipv6], required: true, note: {ja: "ipv4 = RIP、ipv6 = RIPng", en: "ipv4 = RIP, ipv6 = RIPng"}}
+  - {name: version, title: {ja: 版, en: Version}, type: enum, values: ["1", "2"], note: {ja: "RIP（ipv4）だけ。IF ごとの「送る版」「受ける版」が空の IF に効く", en: "RIP (ipv4) only. For the interfaces that name no version themselves"}}
+  - {name: auto_summary, title: {ja: クラスの境目で集約する, en: Auto summary}, type: bool, note: {ja: "RIP（ipv4）だけ。何も書かないときの動きがメーカーで逆（Cisco は集約する、NEC IX はしない）", en: "RIP (ipv4) only. The default differs: Cisco summarizes, NEC IX does not"}}
+  - {name: passive_default, title: {ja: 既定を「送らない」にする, en: Passive by default}, type: bool, note: {ja: "IF の「送る」が空の IF では送らない（Cisco の passive-interface default）", en: "Interfaces with an empty \"Send\" do not send (passive-interface default of Cisco)"}}
+  - {name: default_originate, title: {ja: デフォルト経路を広告する, en: Default originate}, type: bool}
+  - {name: default_originate_metric, title: {ja: 広告するデフォルト経路のメトリック, en: Default originate metric}, type: int, min: 1, max: 15}
+  - {name: default_originate_filter, title: {ja: デフォルト経路の広告の条件, en: Default originate condition}, type: string, note: {ja: "経路制御の方針の名前（Cisco）", en: "The name of a route policy (Cisco)"}}
+  - {name: default_metric, title: {ja: 再配布のメトリックの既定, en: Default metric}, type: int, min: 1, max: 16}
+  - {name: distance, title: {ja: 優先度（distance）, en: Distance}, type: int, min: 10, max: 255}
+  - {name: timer_update, title: {ja: 更新を送る間隔（秒）, en: Update timer (s)}, type: int, min: 1}
+  - {name: timer_invalid, title: {ja: 経路を無効とみなすまで（秒）, en: Invalid timer (s)}, type: int, min: 1, note: {ja: "最後の更新から数える", en: "Counted from the last update"}}
+  - {name: timer_holddown, title: {ja: より良い経路を受け付けない時間（秒）, en: Hold-down timer (s)}, type: int, min: 0, note: {ja: "Cisco だけ", en: "Cisco only"}}
+  - {name: timer_flush, title: {ja: 経路を消すまで（秒）, en: Flush timer (s)}, type: int, min: 1, note: {ja: "最後の更新から数える（無効とみなすまで ＋ 無効になってから消すまで）", en: "Counted from the last update (the invalid timer plus the time an invalid route is kept)"}}
+  - {name: prefix_list_in, title: {ja: 受信フィルタ, en: Prefix list in}, type: string, note: {ja: "受け取る経路を絞るプレフィックスリストの名前（ipv6 の行は IPv6 プレフィックスリスト）", en: "The prefix list for the routes received (an IPv6 prefix list on an ipv6 row)"}}
+  - {name: prefix_list_out, title: {ja: 送信フィルタ, en: Prefix list out}, type: string}

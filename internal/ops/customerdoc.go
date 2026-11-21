@@ -9,7 +9,7 @@ import (
 // customerDoc builds the report of reading the customer's lists (spec 6.5,
 // 13.5).
 func (e *Env) customerDoc(o *CustomerOutcome, now time.Time) *report.Doc {
-	d := &report.Doc{Title: "お客様の一覧とパラメータブックの比較", Facts: e.facts(now)}
+	d := &report.Doc{Title: "外部一覧とパラメータブックの比較", Facts: e.facts(now)}
 	c := o.Verdicts.Count()
 	d.Counts = []report.Pair{
 		{Label: "読んだ一覧", Value: num(len(o.Lists))},
@@ -24,7 +24,7 @@ func (e *Env) customerDoc(o *CustomerOutcome, now time.Time) *report.Doc {
 		{Label: "注意", Value: num(len(o.Notes))},
 	}
 	d.Notes = append(d.Notes,
-		"お客様の一覧は、mappings/ の列対応ファイルのとおりに読んでいます。一覧が空の列と、列対応が行き先にしていない列は比べていません。",
+		"外部一覧は、mappings/ の列対応ファイルのとおりに読んでいます。一覧が空の列と、列対応が行き先にしていない列は比べていません。",
 		"パラメータブックは、「機器」列の * と @グループ、「共通値」を機器ごとの行に広げ、空の列を機器のメーカーの既定値で埋めてから比べています。",
 		"違いは、資料のチェック（S-501〜S-504）の指摘です。一覧の値が正しければ、ブックに反映します（画面では行を選びます。コマンドラインでは、各行の「指紋」を customer --apply に渡します）。ブックの値が正しければ、理由を付けて承認します（approve）。")
 	if e.mask() {
@@ -87,9 +87,9 @@ func (e *Env) customerDoc(o *CustomerOutcome, now time.Time) *report.Doc {
 	}
 	d.Sheets = []report.Sheet{
 		lists,
-		rows("一覧にだけある行", "お客様の一覧にあって、パラメータブックにない行です（S-501）。", "一覧の場所", o.OnlyList),
+		rows("一覧にだけある行", "外部一覧にあって、パラメータブックにない行です（S-501）。", "一覧の場所", o.OnlyList),
 		cells,
-		rows("ブックにだけある行", "パラメータブックにあって、お客様の一覧にない行です（S-502。情報）。見ているのは、一覧が行き先にしている表の、一覧に出てくる機器の行と、機器の表の全部の行です。", "ブックの場所", o.OnlyBook),
+		rows("ブックにだけある行", "パラメータブックにあって、外部一覧にない行です（S-502。情報）。見ているのは、一覧が行き先にしている表の、一覧に出てくる機器の行と、機器の表の全部の行です。", "ブックの場所", o.OnlyBook),
 		probs,
 		approvalSheet(o.Verdicts),
 	}

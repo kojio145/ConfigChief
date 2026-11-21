@@ -1,0 +1,12 @@
+table: ipv6_prefix_lists
+title: {ja: IPv6 プレフィックスリスト, en: IPv6 prefix lists}
+since: M7
+key: [device, name, seq]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: 名前, en: Name}, type: string, required: true}
+  - {name: seq, title: {ja: 順番, en: Sequence}, type: int, required: true}
+  - {name: action, title: {ja: 動作, en: Action}, type: enum, values: [permit, deny], required: true}
+  - {name: prefix, title: {ja: 範囲, en: Prefix}, type: net6, required: true, note: {ja: "例 2001:db8::/32。すべては ::/0 と「長さの上限」128", en: "e.g. 2001:db8::/32. Everything is ::/0 with le 128"}}
+  - {name: ge, title: {ja: 長さの下限（ge）, en: ge}, type: int, min: 0, max: 128}
+  - {name: le, title: {ja: 長さの上限（le）, en: le}, type: int, min: 0, max: 128}

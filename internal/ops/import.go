@@ -24,6 +24,15 @@ type File struct {
 	Candidates []Candidate // highest first
 	Err        string      // why the file was not imported
 	Result     *importer.Result
+	// Device is the host name the file gave, also when it was not imported
+	// because another file has the same one.
+	Device string
+	// Same lists the files of the folder with the same host name, this one
+	// among them (nil if the host name is its own).
+	Same []string
+	// Left tells that a person chose another file for the host name: the
+	// file is left out, and that is no fault ("" if not).
+	Left string
 }
 
 // Source is the outcome of importing one folder of input/.
@@ -117,7 +126,6 @@ func (e *Env) Import(source, choose string) (*Source, error) {
 		return nil, err
 	}
 	src := &Source{Name: source, Data: model.NewDataset(source)}
-	seen := map[string]string{} // host name → file
 	changed := false
 	// The files are read side by side (none needs another), and taken in
 	// their order: the host names that come twice, and what is put together.
@@ -163,6 +171,7 @@ func (e *Env) Import(source, choose string) (*Source, error) {
 	})
 	defer work.stop()
 	var fresh []string
+	same := map[string][]string{} // host name → the files that have it
 	for i, path := range paths {
 		if e.Tick != nil {
 			if err := e.Tick(i, len(paths), path); err != nil {
@@ -175,14 +184,35 @@ func (e *Env) Import(source, choose string) (*Source, error) {
 		if reads[i].fresh {
 			fresh = append(fresh, path)
 		}
+		if res != nil {
+			f.Device = res.Device
+			same[res.Device] = append(same[res.Device], path)
+		}
+	}
+	// A host name that two or more files have: the tool does not pick one
+	// by itself. The file a person chose is taken and the others are left
+	// out; until one is chosen, none is taken (spec 8.1 step 4).
+	for i := range paths {
+		f, res := reads[i].f, reads[i].res
 		if res == nil {
 			continue
 		}
-		if first, dup := seen[res.Device]; dup {
-			f.Err = fmt.Sprintf("ホスト名 %s が %s と同じです。このファイルは取り込みません", res.Device, first)
-			continue
+		if list := same[res.Device]; len(list) > 1 {
+			f.Same = list
+			use := chosen.Use(source, res.Device)
+			found := false
+			for _, p := range list {
+				found = found || p == use
+			}
+			switch {
+			case !found:
+				f.Err = fmt.Sprintf("ホスト名 %s のファイルが %d つあります（%s）。どれを取り込むか選んでください", res.Device, len(list), strings.Join(list, "、"))
+				continue
+			case use != f.Path:
+				f.Left = fmt.Sprintf("ホスト名 %s は %s を取り込みます（人が選んだ）。このファイルは使いません", res.Device, use)
+				continue
+			}
 		}
-		seen[res.Device] = path
 		f.Result = res
 		for _, name := range res.Data.TableNames() {
 			for _, r := range res.Data.Tables[name].Rows {

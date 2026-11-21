@@ -1,0 +1,18 @@
+# The device as a whole the way another vendor has it (made-up values;
+# appendix A 3.26): adapt.yaml writes it the way of this device, or leaves
+# it out, and tells it (G-614).
+tables:
+  devices:
+    - hostname: rt-d03
+      vendor: cisco_ios
+      log_timestamp: time
+      log_buffer: true
+      log_buffer_size: 131072
+      log_buffer_mode: cyclic
+      log_severity: warnings
+      ntp_serve: true
+      forward_cache: true
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.13/30, ip_mtu: 1454, tcp_mss: auto, port_description: sample uplink port}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 198.51.100.1/24, description: sample-lan, port_description: sample lan port}
+findings: [G-614]

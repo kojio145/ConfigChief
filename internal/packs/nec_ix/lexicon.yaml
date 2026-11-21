@@ -10,9 +10,15 @@ ospf_network:
   nbma: nonbroadcast
   point_to_point: point-to-point
 
+# "ipsec-ikev2" is the tunnel of IPsec with IKE version 2 (CRM p.12-5): the
+# row of IPsec says which version it is.
 tunnel_mode:
   gre: gre
   ipsec: ipsec
+  ipv4_over_ipv6: 4-over-6
+  ipv6_over_ipv4: 6-over-4
+  ipsec: {out: ipsec, aliases: [ipsec-ikev2]}
+  etherip: "ether-ip ip"
 
 ike_encryption:
   des: des
@@ -47,3 +53,78 @@ esp_hash:
   md5: esp-md5
   sha1: esp-sha
   sha256: esp-sha2-256
+  sha384: esp-sha2-384
+  sha512: esp-sha2-512
+
+# What a caller of an LNS is asked for (appendix A 3.21. CRM p.7-5,
+# "authentication request"). The device has no MS-CHAP there.
+ppp_auth:
+  chap: chap
+  pap: pap
+  chap_pap: chap-pap
+# The well-known communities (appendix A 3.19). CRM 23-3: NO_EXPORT_SUBCONFED
+# is what other devices call "local-as".
+community:
+  no-export: no-export
+  no-advertise: no-advertise
+  local-as: no-export-subconfed
+# The kinds of ICMPv6 messages an IPv6 access list names (CRM p.24-17). The
+# neutral words are those of appendix A 5.2.
+icmp6_type:
+  echo-request: echo
+  echo-reply: echo-reply
+  destination-unreachable: unreachable
+  packet-too-big: packet-too-big
+  time-exceeded: time-exceeded
+  parameter-problem: parameter-problem
+  router-solicitation: router-solicitation
+  router-advertisement: router-advertisement
+  neighbor-solicitation: neighbor-solicitation
+  neighbor-advertisement: neighbor-advertisement
+  port-unreachable: port-unreachable
+  no-route: no-route
+
+# What a DHCPv6 client asks for (CRM p.9-37, "option-request").
+dhcp6_option:
+  dns: dns-servers
+  domain: domain-search-list
+  ntp: ntp-servers
+
+# AH in a proposal of IPsec (CRM p.13-25).
+ah_hash:
+  md5: ah-md5
+  sha1: ah-sha
+  sha256: ah-sha2-256
+  sha384: ah-sha2-384
+  sha512: ah-sha2-512
+
+# IKE version 2 (CRM p.13-56 and p.13-62 to p.13-64).
+ikev2_encryption:
+  3des: 3des-cbc
+  aes128: aes-cbc-128
+  aes192: aes-cbc-192
+  aes256: aes-cbc-256
+  aes128gcm: aes-gcm-128-16
+  aes256gcm: aes-gcm-256-16
+  "null": "null"
+
+ikev2_hash:
+  md5: md5
+  sha1: sha1
+  sha256: sha2-256
+  sha384: sha2-384
+  sha512: sha2-512
+
+ikev2_dh:
+  dh1: 768-bit
+  dh2: 1024-bit
+  dh5: 1536-bit
+  dh14: 2048-bit
+  dh15: 3072-bit
+# The severities of the log (CRM p.32-20): the device has five of them.
+log_level:
+  debugging: debug
+  informational: info
+  notifications: notice
+  warnings: warn
+  errors: error

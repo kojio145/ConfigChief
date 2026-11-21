@@ -1,0 +1,22 @@
+# RIP as the other vendor has it (made-up values): the version of the
+# process is written on the interfaces, "passive by default" turns into "does
+# not send" on the interfaces that do not say "sends" (told as G-614), the
+# hold-down timer is left out (told when it is not the default of the other
+# vendor), and the OSPF process of a redistribution is the one the device has.
+tables:
+  devices:
+    - hostname: ix-r04
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 192.0.2.1/30}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 192.0.2.129/25}
+  ospf_processes:
+    - {process_id: 1, router_id: 203.0.113.1}
+  rip_processes:
+    - {family: ipv4, version: 2, auto_summary: false, passive_default: true, timer_update: 10, timer_invalid: 60, timer_holddown: 60, timer_flush: 80}
+  rip_interfaces:
+    - {family: ipv4, if_name: GigaEthernet0.0, send: true, receive_version: ["1", "2"]}
+    - {family: ipv4, if_name: GigaEthernet1.0}
+  rip_redistribute:
+    - {family: ipv4, source: ospf}
+findings: [G-614, G-614]

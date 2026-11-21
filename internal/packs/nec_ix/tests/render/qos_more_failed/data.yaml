@@ -1,0 +1,23 @@
+# QoS this device cannot write (made-up values; appendix A 3.26): each
+# tells why, and how it is put right.
+tables:
+  devices:
+    - hostname: ix-q23
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.29/30}
+  qos_classes:
+    - {name: cm-f-a, match: any}
+  qos_class_matches:
+    # Conditions of another vendor.
+    - {class: cm-f-a, seq: 10, protocol: rtp}
+    # Two conditions on a row; two values of CoS; a group out of the range.
+    - {class: cm-f-a, seq: 20, input_if: GigaEthernet0.0, qos_group: 5}
+    - {class: cm-f-a, seq: 30, cos: [1, 2]}
+    - {class: cm-f-a, seq: 40, qos_group: 0}
+  qos_policies:
+    - {policy: pm-f-out, class: cm-f-a, seq: 10, set_qos_group: 0}
+  qos_bindings:
+    - {if_name: GigaEthernet0.0, direction: output, policy: pm-f-out}
+    - {if_name: GigaEthernet0.0, direction: input, ngn_default: true}
+findings: [G-601, G-606]

@@ -1,0 +1,46 @@
+hostname ix-h02
+!
+ip access-list sec-sample-a permit ip src any dest any
+!
+ikev2 authentication psk id ipv4 203.0.113.9 key char dummy-psk-sample-a
+ikev2 authentication psk id ipv4 203.0.113.20 key char dummy-psk-sample-a
+!
+ike proposal ike-prop-sample-1 encryption aes-256 hash sha2-256 group 2048-bit
+ike proposal ike-prop-sample-2 encryption aes hash sha group 1024-bit
+ike policy ike-sample-b peer 203.0.113.30 key dummy-psk-sample-b ike-prop-sample-1,ike-prop-sample-2
+!
+ipsec autokey-proposal ipsec-prop-sample-1 esp-aes-256 esp-sha
+ipsec autokey-proposal ipsec-prop-sample-2 esp-aes-192 esp-sha
+ipsec autokey-proposal ipsec-prop-sample-3 esp-aes esp-sha
+ipsec autokey-proposal ipsec-prop-sample-4 esp-3des esp-sha
+ipsec autokey-proposal ipsec-prop-sample-5 esp-aes-256 esp-sha2-256
+ipsec autokey-proposal ipsec-prop-sample-6 esp-aes esp-sha2-256
+ipsec autokey-map ipsec-sample-b sec-sample-a peer 203.0.113.30 ipsec-prop-sample-1,ipsec-prop-sample-2,ipsec-prop-sample-3,ipsec-prop-sample-4,ipsec-prop-sample-5,ipsec-prop-sample-6
+!
+ikev2 profile ikev2-sample-a
+  child-pfs 2048-bit 1536-bit
+  child-proposal enc aes-cbc-256 aes-cbc-128
+  child-proposal integrity sha2-256 sha1
+  local-authentication psk
+  sa-proposal dh 2048-bit 1536-bit
+  sa-proposal enc aes-cbc-256 aes-cbc-128
+  sa-proposal integrity sha2-512 sha2-256
+  sa-proposal prf sha2-512 sha2-256
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.9/29
+  no shutdown
+!
+interface Tunnel0.0
+  tunnel mode ipsec-ikev2
+  ip unnumbered GigaEthernet0.0
+  ikev2 binding ikev2-sample-a
+  ikev2 peer 203.0.113.20 authentication psk
+  ikev2 source-address GigaEthernet0.0
+  no shutdown
+!
+interface Tunnel1.0
+  tunnel mode ipsec
+  ip unnumbered GigaEthernet0.0
+  ipsec policy tunnel ipsec-sample-b out
+  no shutdown

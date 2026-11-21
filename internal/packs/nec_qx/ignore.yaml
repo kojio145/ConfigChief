@@ -1,0 +1,4 @@
+# Only lines that carry no setting: what the device writes by itself and the
+# end mark (appendix B 3.5).
+ignore:
+  - {match: '^return$', reason: 終わりの印}

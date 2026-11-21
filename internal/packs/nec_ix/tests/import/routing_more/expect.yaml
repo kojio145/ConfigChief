@@ -1,0 +1,30 @@
+# The rest of the route maps and of OSPF (appendix A 3.19, the part added
+# on 2026-11-21): the communities to take off, the IPv6 lines and IPv6
+# policy routing; the distances of OSPF, what goes into the routing table,
+# virtual links and the rest of the default route. Made-up values.
+tables:
+  devices:
+    - {hostname: ix-m01, local_policy_route_v6: rm-m-pbr6}
+  ipv6_interfaces:
+    - {if_name: GigaEthernet1.0, tcp_mss: auto, policy_route: rm-m-pbr6}
+  ospf_processes:
+    - {process_id: 1, router_id: 192.0.2.1, distance_intra: 100, distance_inter: 105, distance_external: 120, filter_in_prefix_list: pl-m-ospf, filter_in_policy: "", default_originate: always, default_metric: 50, default_metric_type: "1", default_filter: rm-m-def}
+    - {process_id: 2, filter_in_policy: rm-m-def, distance_external: ""}
+  ospf_virtual_links:
+    - {process_id: 1, area: "1", router_id: 192.0.2.9, hello: "", dead: ""}
+    - {process_id: 1, area: "2", router_id: 192.0.2.10, hello: 5, dead: 20}
+  ospfv3_processes:
+    - {process_id: 5, router_id: 192.0.2.1, redistribute: [connected, static]}
+  ospfv3_redistribute:
+    - {process_id: 5, source: static, metric: 20, metric_type: "1", tag: 30, filter: rm-m-def}
+  route_policies:
+    - {name: rm-m-def, seq: 10, action: permit}
+    - {name: rm-m-more, seq: 10, action: permit, match_ipv6_prefix_list: [pl6-m], set_community: [], set_community_delete: ["64497:100", "64497:200"]}
+    - {name: rm-m-more, seq: 20, action: permit, set_community: ["64496:60"], set_community_additive: true, set_community_delete: ["64497:300", no-export]}
+    - {name: rm-m-pbr6, seq: 10, action: permit, match_ipv6_acl: [acl6-m-pbr], set_ipv6_next_hop: ["2001:db8:0:1::2"], set_ipv6_default_next_hop: ["2001:db8:0:1::9"]}
+    - {name: rm-m-nh6, seq: 10, action: permit, match_ipv6_next_hop_prefix_list: pl6-m}
+unknown:
+  # No column: authentication of a virtual link, the distance of the NSSA
+  # external routes.
+  - "area 3 virtual-link 192.0.2.11 authentication message-digest message-digest-key 1 dummy-sample-key"
+  - "distance external 130 nssa-external 140"

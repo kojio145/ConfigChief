@@ -1,0 +1,30 @@
+# The rest of IPsec (made-up values; appendix A 3.13 and 3.20). expect.txt
+# is the configuration the tables must turn into: rows on tunnel interfaces
+# with a selector (an access list for "tunnel protection ipsec policy
+# ipv4"), with identities of IKE version 1 (a keyring and an ISAKMP profile
+# that the IPsec profile names), with GCM beside an ESP hash another vendor
+# lists (the hash is not written, which is told), with the SHA-2 words, and
+# with "bound to this IKE peer", which this device has no line for (told).
+# NAT traversal is off on every row: one line for the device.
+tables:
+  devices:
+    - hostname: rt-h03
+      vendor: cisco_ios
+      domain_name: example.com
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.9/29}
+    - {name: Tunnel1, enabled: true, ipv4: 198.51.100.1/30}
+    - {name: Tunnel2, enabled: true, ipv4: 198.51.100.5/30}
+    - {name: Tunnel3, enabled: true, ipv4: 198.51.100.9/30}
+  tunnels:
+    - {if_name: Tunnel1, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.20}
+    - {if_name: Tunnel2, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.30}
+    - {if_name: Tunnel3, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.40}
+  ipsec_tunnels:
+    - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: 203.0.113.20, ike_version: 2, psk: dummy-psk-sample-a, ike_lifetime: 86400, esp_encryption: aes256gcm, esp_hash: sha256, pfs: none, ipsec_lifetime: 3600, nat_traversal: false}
+    - {name: Tunnel2, style: tunnel_if, tunnel_if: Tunnel2, peer_address: 203.0.113.30, ike_version: 1, psk: dummy-psk-sample-b, local_id: "fqdn:rt-h03.example.com", ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha384, pfs: none, ipsec_lifetime: 3600, nat_traversal: false, ike_bind: true}
+    - {name: Tunnel3, style: tunnel_if, tunnel_if: Tunnel3, peer_address: 203.0.113.40, ike_version: 1, psk: dummy-psk-sample-c, local_id: "address:203.0.113.9", remote_id: "fqdn:rt-h04.example.com", ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha512, pfs: none, ipsec_lifetime: 3600, nat_traversal: false}
+  ipsec_selectors:
+    - {tunnel: Tunnel1, seq: 10, local_net: 192.0.2.0/25, remote_net: 198.51.100.128/25, protocol: ip}
+    - {tunnel: Tunnel3, seq: 10, local_net: 192.0.2.0/25, remote_net: 198.51.100.129/32, protocol: udp, remote_port: 1701}
+findings: [G-614]

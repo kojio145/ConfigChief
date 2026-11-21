@@ -1,0 +1,70 @@
+# A QX-type layer-3 switch (made-up values): static routes, OSPF, VRRP, DHCP (pools and relay) and access lists.
+tables:
+  devices:
+    - {hostname: l3-q02, vendor: nec_qx}
+  remote_access:
+    - {acl: 2000, protocols: [ssh, telnet]}
+  l2_settings:
+    - {stp_enabled: false}
+  vlans:
+    - {vlan_id: 10, name: sample-office}
+    - {vlan_id: 20}
+  interfaces:
+    - {name: LoopBack0, enabled: true, ipv4: 198.51.100.254/32}
+    - {name: Vlan-interface10, acl_in: 3000, acl_out: sample-out, enabled: true, ipv4: 192.0.2.1/25, vlan_id: 10}
+    - {name: Vlan-interface20, dhcp_relay: [198.51.100.67, 198.51.100.68], enabled: true, ipv4: 203.0.113.129/25, vlan_id: 20}
+    - {name: GigabitEthernet1/0/1, description: to l3-q02, enabled: true, ipv4: 198.51.100.1/30}
+    - {name: GigabitEthernet1/0/2, enabled: true, ipv4: 198.51.100.5/30}
+    - {name: GigabitEthernet1/0/3, enabled: true}
+  switchports:
+    - {if_name: GigabitEthernet1/0/1, mode: routed}
+    - {if_name: GigabitEthernet1/0/2, mode: routed}
+    - {if_name: GigabitEthernet1/0/3, access_vlan: 10, mode: access}
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: 198.51.100.2}
+    - {prefix: 203.0.113.0/25, next_hop: 198.51.100.6, description: sample backup, distance: 100, tag: 20}
+    - {prefix: 203.0.113.128/25, out_if: Null0}
+    - {prefix: 198.51.100.128/26, next_hop: 198.51.100.6, out_if: GigabitEthernet1/0/2}
+    - {prefix: 198.51.100.192/26, next_hop: 198.51.100.2, permanent: true}
+  ospf_processes:
+    - {process_id: 1, default_metric: 10, default_originate: always, reference_bandwidth: 10000, router_id: 198.51.100.254}
+  ospf_interfaces:
+    - {process_id: 1, if_name: Vlan-interface10, area: 0.0.0.1, passive: true}
+    - {process_id: 1, if_name: GigabitEthernet1/0/1, area: 0.0.0.0, auth_key: dummy-ospf-key, auth_key_id: 1, auth_type: md5, cost: 50, dead: 20, hello: 5, network_type: point_to_point, priority: 0}
+    - {process_id: 1, if_name: GigabitEthernet1/0/2, area: 0.0.0.0}
+  ospf_areas:
+    - {process_id: 1, area: 0.0.0.1, type: totally_stub}
+    - {process_id: 1, area: 0.0.0.2, type: nssa}
+  ospf_ranges:
+    - {process_id: 1, area: 0.0.0.0, prefix: 192.0.2.0/24, advertise: true}
+    - {process_id: 1, area: 0.0.0.1, prefix: 203.0.113.0/24, advertise: false}
+  ospf_redistribute:
+    - {process_id: 1, source: static, metric: 20, metric_type: 1}
+  fhrp:
+    - {if_name: Vlan-interface10, group: 10, advert_interval: 3, auth_key: Example-Vrrp-1, auth_type: simple, preempt: true, preempt_delay: 5, priority: 120, protocol: vrrp, version: 2, virtual_ip: 192.0.2.126}
+    - {if_name: Vlan-interface10, group: 11, advert_interval: 1, preempt: false, priority: 100, protocol: vrrp, version: 2, virtual_ip: 192.0.2.125}
+  dhcp_pools:
+    - {name: sample-office, default_router: 192.0.2.1, dns_servers: [192.0.2.53, 192.0.2.54], domain: example.com, excluded: [192.0.2.1-192.0.2.10, 192.0.2.126-192.0.2.126], lease: 12h, network: 192.0.2.0/25, range_end: 192.0.2.100, range_start: 192.0.2.11}
+    - {name: sample-guest, lease: 3d, network: 203.0.113.0/25}
+  acls:
+    - {name: 2000, type: standard}
+    - {name: 2001, type: standard}
+    - {name: 3000, description: sample office in, type: extended}
+    - {name: sample-out, type: extended}
+  acl_entries:
+    - {acl: 2000, seq: 0, action: permit, src: 192.0.2.0/25}
+    - {acl: 2001, seq: 0, action: permit, src: 192.0.2.10}
+    - {acl: 2001, seq: 5, action: deny, flags: [log], src: any}
+    - {acl: 3000, seq: 0, action: permit, dst: 198.51.100.10, dst_port: 80, protocol: tcp, src: 192.0.2.0/25}
+    - {acl: 3000, seq: 5, action: permit, dst: any, dst_port: 8000-8080, protocol: tcp, src: 192.0.2.0/25, src_port: ">1023"}
+    - {acl: 3000, seq: 10, action: permit, dst: 198.51.100.53, dst_port: 53, protocol: udp, src: any}
+    - {acl: 3000, seq: 15, action: permit, dst: 198.51.100.0/24, flags: [established], protocol: tcp, src: any}
+    - {acl: 3000, seq: 20, action: permit, dst: any, icmp_type: echo, protocol: icmp, src: any}
+    - {acl: 3000, seq: 30, action: permit, dst: any, protocol: ospf, src: any}
+    - {acl: 3000, seq: 35, action: permit, dst: 203.0.113.2, protocol: esp, src: 192.0.2.2}
+    - {acl: 3000, seq: 40, action: permit, dscp: 46, dst: 203.0.113.0/24, protocol: ip, src: any}
+    - {acl: 3000, seq: 45, action: deny, dst: any, dst_port: "!53", flags: [log], protocol: udp, src: any}
+    - {acl: 3000, seq: 100, action: deny, dst: any, protocol: ip, src: any}
+    - {acl: sample-out, seq: 0, action: permit, dst: any, protocol: ip, src: 192.0.2.0/25}
+    - {acl: sample-out, seq: 5, action: deny, dst: any, flags: [fragments, log], protocol: ip, src: any}
+    - {acl: sample-out, seq: 10, action: permit, dst: any, protocol: ip, src: any}   # a packet filter passes what no rule matches: said in full

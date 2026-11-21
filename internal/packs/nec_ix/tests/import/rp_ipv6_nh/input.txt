@@ -1,0 +1,11 @@
+hostname ix-v05
+!
+ipv6 prefix-list pl6-sample-nh 10 permit 2001:db8:0:1::/64 max 128
+!
+route-map rm6-sample-nh permit 10
+  match ipv6 next-hop prefix-list pl6-sample-nh
+!
+interface GigaEthernet0.0
+  no ip address
+  no shutdown
+!

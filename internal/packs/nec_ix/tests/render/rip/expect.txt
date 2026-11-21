@@ -1,0 +1,59 @@
+hostname ix-r02
+!
+ip router ospf 1
+  router-id 203.0.113.1
+!
+router bgp 64496
+  router-id 203.0.113.1
+!
+ip router rip
+  auto-summary
+  default-metric 3
+  distance 130
+  distribute-list prefix pl-sample-in in
+  originate-default 2
+  redistribute bgp 64496 metric 5
+  redistribute ospf 1
+  redistribute static metric 2 tag 10 route-map rm-sample-rip
+  timers 10 60 20
+!
+ipv6 router rip
+  distance 130
+  distribute-list prefix pl6-sample-in in
+  originate-default
+  redistribute ospf 1
+  redistribute static metric 2 route-map rm-sample-rip tag 10
+!
+ipv6 router ospf 1
+  router-id 203.0.113.1
+!
+interface GigaEthernet0.0
+  ip address 192.0.2.1/30
+  ipv6 enable
+  ip rip enable
+  ip rip send version 1 2
+  ip rip receive version 2
+  ip rip authentication text Example-Rip-0
+  ip rip metric-offset 2
+  ip rip split-type none
+  ip rip summary-address 198.51.100.0/24
+  ip rip originate-default 3
+  ip rip distribute-list prefix pl-sample-out out
+  ipv6 rip enable
+  ipv6 rip metric-offset 2
+  ipv6 rip split-type split-horizon
+  ipv6 rip summary-address 2001:db8:10::/48
+  ipv6 rip originate-default 3
+  ipv6 rip distribute-list prefix pl6-sample-out out
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 192.0.2.129/25
+  ipv6 enable
+  ip rip enable
+  no ip rip send
+  ip rip send version compatible
+  ipv6 rip enable
+  no ipv6 rip receive
+  no shutdown
+!

@@ -1,0 +1,79 @@
+hostname rt-r02
+!
+ipv6 unicast-routing
+!
+interface GigabitEthernet0/0
+ ip address 192.0.2.1 255.255.255.252
+ ipv6 address 2001:db8:0:1::1/64
+ ip rip send version 1 2
+ ip rip receive version 2
+ ip rip authentication mode text
+ ip rip authentication key-chain RIP-Gi0-0
+ ip summary-address rip 198.51.100.0 255.255.255.0
+ no ip split-horizon
+ ipv6 rip ripng enable
+ ipv6 rip ripng default-information originate metric 3
+ ipv6 rip ripng metric-offset 2
+ ipv6 rip ripng summary-address 2001:db8:10::/48
+ no shutdown
+!
+interface GigabitEthernet0/1
+ ip address 192.0.2.129 255.255.255.128
+ ipv6 address 2001:db8:0:2::1/64
+ ip rip v2-broadcast
+ ip rip authentication mode md5
+ ip rip authentication key-chain RIP-Gi0-1
+ ipv6 rip ripng enable
+ no shutdown
+!
+interface GigabitEthernet0/2
+ ip address 198.51.100.1 255.255.255.0
+ no shutdown
+!
+interface Loopback0
+ ip address 203.0.113.1 255.255.255.255
+ no shutdown
+!
+router ospf 1
+ router-id 203.0.113.1
+!
+router bgp 64496
+ bgp router-id 203.0.113.1
+!
+key chain RIP-Gi0-0
+ key 1
+  key-string Example-Rip-1
+!
+key chain RIP-Gi0-1
+ key 5
+  key-string Example-Rip-5
+!
+router rip
+ version 2
+ timers basic 10 60 180 80
+ distance 130 0.0.0.0 255.255.255.255
+ default-metric 3
+ redistribute bgp 64496 metric 5
+ redistribute ospf 1
+ redistribute static metric 2 route-map RM-SAMPLE-RIP
+ passive-interface default
+ no passive-interface GigabitEthernet0/0
+ network 192.0.2.0
+ distribute-list prefix PL-SAMPLE-IN in
+ distribute-list prefix PL-SAMPLE-OUT out GigabitEthernet0/0
+ default-information originate route-map RM-SAMPLE-DEF
+ no auto-summary
+!
+ipv6 router rip ripng
+ timers 10 60 0 40
+ distance 130
+ redistribute ospf 1 route-map RM-SAMPLE-RIP
+ redistribute static metric 2
+ distribute-list prefix-list PL6-SAMPLE-IN in
+ distribute-list prefix-list PL6-SAMPLE-OUT out GigabitEthernet0/1
+ poison-reverse
+!
+ipv6 router ospf 1
+ router-id 203.0.113.1
+!
+end

@@ -1,0 +1,31 @@
+# Access lists, NAT and line monitoring as another vendor has them (made-up
+# values): several lists for one direction of an interface, a pool without
+# a length, an interval for the time a target is down. adapt.yaml rewrites
+# them and tells it (G-614). What the device has no line for is told as a
+# value that is not written (G-602): the interface a probe leaves by, the
+# interface to shut, the list of one protocol of the remote login.
+tables:
+  devices:
+    - hostname: rt-f03
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.1/27, nat_role: outside, acl_in: acl-f-mgmt, acl_in_more: [acl-f-wan, acl-f-lan]}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 198.51.100.1/24, nat_role: inside}
+  remote_access:
+    - {protocols: [ssh, telnet], acl_ssh: acl-f-mgmt}
+  acls:
+    - {name: acl-f-mgmt, type: extended}
+    - {name: acl-f-wan, type: extended}
+    - {name: acl-f-lan, type: extended, seq_step: 100}
+  acl_entries:
+    - {acl: acl-f-mgmt, seq: 10, action: permit, protocol: ip, src: 192.0.2.0/25, dst: any}
+    - {acl: acl-f-wan, seq: 10, action: permit, protocol: tcp, src: any, dst: any, flags: [established]}
+    - {acl: acl-f-wan, seq: 20, action: permit, protocol: icmp, src: any, dst: any, icmp_type: "3", icmp_code: 4}
+    - {acl: acl-f-lan, seq: 100, action: permit, protocol: udp, src: any, src_port: "53", dst: 198.51.100.0/24, tos: 4}
+    - {acl: acl-f-lan, seq: 200, action: deny, protocol: ip, src: any, dst: any}
+  nat_rules:
+    - {name: pool-f-a, type: dynamic_pool, outside_if: GigabitEthernet0/0, match_acl: acl-f-lan, pool_start: 203.0.113.17, pool_end: 203.0.113.22}
+  tracks:
+    - {id: "1", type: icmp, target: 203.0.113.2, interval: 10, restore_interval: 30, timeout: 2000, threshold: 2000}
+    - {id: "2", type: icmp, target: 203.0.113.3, via_if: GigabitEthernet0/0, via_next_hop: 203.0.113.2, interval: 10, shutdown_ifs: [GigabitEthernet0/1]}
+findings: [G-602, G-614]

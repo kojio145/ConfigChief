@@ -1,0 +1,14 @@
+# Data of another vendor (as NEC IX has it; made-up values): an IPv4 group
+# of version 2 and an IPv6 group on a device without "VRRP の版（IPv4）". The
+# pack moves the device to version 3 and lets the IPv4 group talk to version
+# 2 too (G-614 twice).
+tables:
+  devices:
+    - {hostname: rt-w03, vendor: cisco_ios}
+  interfaces:
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 192.0.2.4/24, ipv6: ["2001:db8:0:1::4/64"]}
+  fhrp:
+    - {if_name: GigabitEthernet0/1, group: 1, protocol: vrrp, virtual_ip: 192.0.2.1, priority: 100, preempt: true, advert_interval: 1}
+  ipv6_fhrp:
+    - {if_name: GigabitEthernet0/1, group: 2, link_local: "fe80::1", priority: 100, preempt: true, advert_interval: 1000}
+findings: [G-614, G-614]

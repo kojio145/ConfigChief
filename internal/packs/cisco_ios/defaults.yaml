@@ -15,12 +15,22 @@ defaults:
   - {table: fhrp, column: advert_interval, value: 1, when: "row.protocol == 'vrrp'"} # 4.8
   - {table: tracks, column: interval, value: 60, when: "row.type == 'icmp'"}         # 7.9 (frequency)
   - {table: dhcp_pools, column: lease, value: 1d}              # 4.15
-  - {table: ipsec_tunnels, column: ike_encryption, value: des} # 7.2
-  - {table: ipsec_tunnels, column: ike_hash, value: sha1}      # 7.2
-  - {table: ipsec_tunnels, column: ike_dh, value: dh1}         # 7.2
-  - {table: ipsec_tunnels, column: ike_lifetime, value: 86400} # 7.2
+  # IKE version 1 (7.2). With version 2 an empty proposal is left to the
+  # device (appendix A 3.20); the lifetime of version 2 is that of the IKEv2
+  # profile (Security Command Reference D to L, "lifetime (IKEv2 profile)").
+  - {table: ipsec_tunnels, column: ike_encryption, value: des, when: "(row.ike_version | string) != '2'"}
+  - {table: ipsec_tunnels, column: ike_hash, value: sha1, when: "(row.ike_version | string) != '2'"}
+  - {table: ipsec_tunnels, column: ike_dh, value: dh1, when: "(row.ike_version | string) != '2'"}
+  - {table: ipsec_tunnels, column: ike_lifetime, value: 86400}
+  # "crypto isakmp keepalive" without a word is "on-demand" (Security
+  # Command Reference A to C).
+  - {table: ipsec_tunnels, column: dpd_mode, value: on_demand, when: "(row.ike_version | string) != '2' and row.dpd_interval"}
   - {table: ipsec_tunnels, column: ipsec_lifetime, value: 3600} # 4.13
   - {table: ipsec_tunnels, column: pfs, value: none}           # 7.4
+  # The device wraps IPsec in UDP by itself where it finds NAT on the way
+  # ("crypto ipsec nat-transparency": "UDP encapsulation is enabled by
+  # default", Security Command Reference A to C).
+  - {table: ipsec_tunnels, column: nat_traversal, value: true}
   - {table: ipsec_selectors, column: protocol, value: ip}      # the template writes "permit ip"
   # Not a default of the device: a secret written without its form is written
   # out as a plain one (templates/system.j2).
@@ -28,3 +38,18 @@ defaults:
   - {table: users, column: secret_form, value: plain, when: "row.secret"}
   - {table: qos_classes, column: match, value: all}            # 7.16 (1)
   - {table: qos_policies, column: police_exceed, value: drop, when: "row.police_bps"}  # 7.16 (3)
+  # "L2TP tunnel authentication is enabled" (VPDN Command Reference).
+  - {table: l2tp_groups, column: tunnel_auth, value: true}
+  # IPv6 Command Reference, "ipv6 nd prefix": 30 days and 7 days, with both flags set.
+  - {table: ipv6_ra_prefixes, column: valid_lifetime, value: 2592000}
+  - {table: ipv6_ra_prefixes, column: preferred_lifetime, value: 604800}
+  - {table: ipv6_ra_prefixes, column: on_link, value: true}
+  - {table: ipv6_ra_prefixes, column: autonomous, value: true}
+  # RIP Command Reference, "auto-summary (RIP)": enabled. Only "no
+  # auto-summary" is shown.
+  - {table: rip_processes, column: auto_summary, value: true, when: "row.family == 'ipv4'"}
+  # IPv6 VRRP (version 3; Network Services Configuration Guide, "VRRPv3
+  # Protocol Support": priority 100, preemption on, 1000 milliseconds).
+  - {table: ipv6_fhrp, column: priority, value: 100}
+  - {table: ipv6_fhrp, column: preempt, value: true}
+  - {table: ipv6_fhrp, column: advert_interval, value: 1000}

@@ -1,0 +1,199 @@
+{# L2TP (appendix A 3.21). Syntax: Wide-Area Networking Command Reference
+   (l2tp-class, pseudowire-class), VPDN Command Reference (vpdn-group), Dial
+   Technologies Command Reference (ip local pool). The lines under an
+   interface ("xconnect", and those of a Virtual-Template) are written by
+   interfaces.j2. #}
+{# ---- L2TPv3: a pseudowire class for a profile, written at its first row.
+   The class of the control channel takes the same name. ---- #}
+{% for x in t.l2tpv3 %}
+{% set what = 'L2 延伸 ' ~ x.if_name %}
+{% set prof = x.profile | required(what ~ ' の設定名') %}
+{% set n = namespace(first=true, before=true, seen=false) %}
+{% for i in t.interfaces %}
+{% if i.name == x.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail(what ~ ' が、インタフェースの表にありません（延伸する IF の行を足してください）') }}
+{% endif %}
+{% if ' ' in prof or ' ' in x.password or ' ' in x.local_name %}
+{{ fail(what ~ ' の設定名・トンネルのパスワード・自分の名前のどれかに、空白があります') }}
+{% endif %}
+{% if x.signaling == 'manual' %}
+{% if x.local_session_id == '' or x.remote_session_id == '' %}
+{{ fail(what ~ ' は張り方が manual ですが、セッション ID がありません（自分と相手の 2 つを書いてください）') }}
+{% endif %}
+{% if x.password or x.local_name %}
+{{ fail(what ~ ' は張り方が manual なので、トンネルのパスワードと自分の名前は書けません（制御の通信をしません。セルを空にするか、張り方を dynamic にしてください）') }}
+{% endif %}
+{% elif x.local_session_id != '' or x.remote_session_id != '' or x.local_cookie or x.remote_cookie %}
+{{ fail(what ~ ' は張り方が dynamic なので、セッション ID とクッキーは書けません（両端が自分で決めます。セルを空にするか、張り方を manual にしてください）') }}
+{% endif %}
+{% if x.pmtu == false or x.df_bit == false %}
+{{ fail(what ~ ' の「経路 MTU の検出」「DF ビットを立てる」の「無効」は書けません（書かないことが無効です。セルを空にしてください）') }}
+{% endif %}
+{% for y in t.l2tpv3 %}
+{% if y.if_name == x.if_name %}
+{% set n.before = false %}
+{% elif y.profile == x.profile %}
+{% if n.before %}
+{% set n.first = false %}
+{% elif y.local_if != x.local_if or y.signaling != x.signaling or y.password != x.password or y.local_name != x.local_name or y.hello != x.hello or y.sequencing != x.sequencing or y.pmtu != x.pmtu or y.df_bit != x.df_bit %}
+{{ fail(what ~ ' と ' ~ y.if_name ~ ' は設定名が同じ「' ~ prof ~ '」ですが、設定（送信元 IF・張り方・パスワード・名前・Hello・順序の確認・MTU の検出・DF ビット）が違います（そろえるか、設定名を分けてください）') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if n.first %}
+{% set cls = x.password or x.local_name or x.hello != '' %}
+{% if cls %}
+l2tp-class {{ prof }}
+{% if x.password %}
+ authentication
+ password {{ x.password }}
+{% endif %}
+{% if x.local_name %}
+ hostname {{ x.local_name }}
+{% endif %}
+{% if x.hello != '' %}
+ hello {{ x.hello }}
+{% endif %}
+!
+{% endif %}
+pseudowire-class {{ prof }}
+ encapsulation l2tpv3
+{% if x.signaling == 'manual' %}
+ protocol none
+{% else %}
+ protocol l2tpv3{{ ' ' ~ prof if cls else '' }}
+{% endif %}
+ ip local interface {{ x.local_if | required(what ~ ' の送信元 IF') }}
+{% if x.pmtu == true %}
+ ip pmtu
+{% endif %}
+{% if x.df_bit == true %}
+ ip dfbit set
+{% endif %}
+{% if x.sequencing %}
+ sequencing {{ x.sequencing }}
+{% endif %}
+!
+{% endif %}
+{% endfor %}
+{# ---- VPDN: an LNS accepts, a LAC requests. ---- #}
+{% if t.l2tp_groups %}
+vpdn enable
+!
+{% endif %}
+{# A group of PPPoE for the ports under a LAC (appendix A 3.26): it takes
+   the name of the LAC, and names the Virtual-Template of the row. #}
+{% for g in t.l2tp_groups %}
+{% if g.role == 'lac' and g.access_ifs %}
+{% set what = 'L2TP ' ~ g.name %}
+{% if g.logical_ifs | length != 1 or not (g.logical_ifs | first is startingwith('Virtual-Template')) %}
+{{ fail(what ~ ' は PPPoE を受ける IF がありますが、受け口の IF が Virtual-Template 1 つではありません（Cisco は、PPPoE でつないできた相手を Virtual-Template で受けます。「受け口の IF」を Virtual-Template1 のような名前 1 つにし、インタフェースの表にその行を作ってください）') }}
+{% else %}
+{% if g.name == 'global' %}
+{{ fail(what ~ ': 名前 global は、PPPoE のグループの名前に使えません（別の名前にしてください）') }}
+{% endif %}
+bba-group pppoe {{ g.name }}
+ virtual-template {{ g.logical_ifs | first | replace('Virtual-Template', '') }}
+!
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for g in t.l2tp_groups %}
+{% set what = 'L2TP ' ~ g.name %}
+{% if ' ' in g.name or ' ' in g.password or ' ' in g.local_name or ' ' in g.peer_name %}
+{{ fail(what ~ ' の名前・トンネルのパスワード・自分の名前・相手の名前のどれかに、空白があります') }}
+{% endif %}
+vpdn-group {{ g.name }}
+{% if g.role == 'lns' %}
+{# The row of IPsec that protects the callers (appendix A 3.21): the device
+   does not point at it from here; the crypto map of that row does the work
+   (ipsec.j2). adapt.yaml has brought the cell to the row the import finds. #}
+{% if g.ipsec_policy %}
+{% set sec = namespace(ok=false) %}
+{% for r in t.ipsec_tunnels %}
+{% if r.name == g.ipsec_policy and r.style == 'policy' and r.peer_address == 'any' and r.ipsec_mode == 'transport' %}
+{% set sec.ok = true %}
+{% endif %}
+{% endfor %}
+{% if not sec.ok %}
+{{ fail(what ~ ' の IPsec の設定名「' ~ g.ipsec_policy ~ '」は、IPsec の表で、方式が policy・相手アドレスが any・IPsec のモードが transport の行ではありません') }}
+{% endif %}
+{% endif %}
+{% if g.logical_ifs | length != 1 or not (g.logical_ifs | first is startingwith('Virtual-Template')) %}
+{{ fail(what ~ ' の受け口の IF は書けません（Cisco の LNS は、Virtual-Template を 1 つだけ使います。「受け口の IF」を Virtual-Template1 のような名前 1 つにし、インタフェースの表にもその行を置いてください）') }}
+{% else %}
+{% set n = namespace(seen=false) %}
+{% for i in t.interfaces %}
+{% if i.name == g.logical_ifs | first %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail(what ~ ' の受け口の IF ' ~ (g.logical_ifs | first) ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+ accept-dialin
+  protocol l2tp
+  virtual-template {{ g.logical_ifs | first | replace('Virtual-Template', '') }}
+{% endif %}
+{% if g.peer_name %}
+ terminate-from hostname {{ g.peer_name }}
+{% endif %}
+{% else %}
+{% set peer = g.peer_address | required(what ~ ' の相手アドレス') %}
+{% if peer and (peer | split('.') | select('digits') | list | length != 4 or peer | split('.') | length != 4) %}
+{{ fail(what ~ ' の相手アドレス「' ~ peer ~ '」は書けません（Cisco の LAC は、LNS をアドレスで指します。名前ではなくアドレスを書いてください）') }}
+{% endif %}
+ request-dialin
+  protocol l2tp
+{% for d in g.domains %}
+  domain {{ d }}
+{% endfor %}
+ initiate-to ip {{ peer }}
+{% endif %}
+{% if g.local_name %}
+ local name {{ g.local_name }}
+{% endif %}
+{% if g.tunnel_auth == false %}
+{% if g.password %}
+{{ fail(what ~ ' はトンネルの認証が無効ですが、トンネルのパスワードがあります（どちらかを直してください）') }}
+{% endif %}
+ no l2tp tunnel authentication
+{% elif g.password %}
+ l2tp tunnel password {{ g.password }}
+{% endif %}
+!
+{% if g.role == 'lns' and (g.pool_start or g.pool_end) %}
+ip local pool l2tp-{{ g.name }} {{ g.pool_start | required(what ~ ' の払い出すアドレスの先頭') }} {{ g.pool_end | required(what ~ ' の払い出すアドレスの末尾') }}
+!
+{% endif %}
+{% endfor %}
+{# ---- the callers an LNS checks by itself: with "password", as CHAP needs
+   the password itself. The device keeps them with its own users. ---- #}
+{% for u in t.l2tp_users %}
+{% set what = 'L2TP 接続ユーザ ' ~ u.name %}
+{% for v in t.users %}
+{% if v.name == u.name %}
+{{ fail(what ~ ' と同じ名前が、ユーザの表にもあります（Cisco は、L2TP の利用者とログインのユーザを同じ username の行で持ちます。どちらかを消してください）') }}
+{% endif %}
+{% endfor %}
+{% set g = namespace(seen=false) %}
+{% for r in t.l2tp_groups %}
+{% if r.name == u.group and r.role == 'lns' %}
+{% set g.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not g.seen %}
+{{ fail(what ~ ' の L2TP の名前「' ~ u.group ~ '」が、L2TP の表に役割 lns の行としてありません') }}
+{% endif %}
+{% if ' ' in u.name or ' ' in u.password %}
+{{ fail(what ~ ' の接続 ID か接続パスワードに、空白があります') }}
+{% endif %}
+username {{ u.name }} password 0 {{ u.password | required(what ~ ' の接続パスワード') }}
+{% endfor %}
+{% if t.l2tp_users %}
+!
+{% endif %}

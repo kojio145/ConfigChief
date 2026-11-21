@@ -1,0 +1,24 @@
+hostname ix-w05
+!
+ip route default 192.0.2.2
+!
+vrrp enable
+!
+interface GigaEthernet0.0
+  ip address 192.0.2.1/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.2/24
+  ipv6 address 2001:db8:0:10::2/64
+  vrrp 1 ip 198.51.100.1
+  vrrp 1 priority 110
+  vrrp 1 preempt
+  vrrp 1 timers advertisement 2
+  vrrp 2 ipv6 fe80::1
+  vrrp 2 ipv6 2001:db8:0:10::1
+  vrrp 2 priority 110
+  vrrp 2 preempt
+  vrrp 2 timers advertisement csec 50
+  no shutdown
+!

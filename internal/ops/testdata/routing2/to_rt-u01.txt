@@ -1,0 +1,58 @@
+hostname rt-u01
+!
+interface GigabitEthernet0/0
+ description to sample upstream
+ ip address 203.0.113.1 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description sample lan
+ ip address 198.51.100.1 255.255.255.0
+ ip ospf 1 area 0
+ ip ospf priority 1
+ ip ospf hello-interval 10
+ ip ospf dead-interval 40
+ no shutdown
+!
+interface Loopback0
+ ip address 192.0.2.1 255.255.255.255
+ no shutdown
+!
+router ospf 1
+ router-id 192.0.2.1
+ distance ospf intra-area 100 inter-area 105 external 120
+ distribute-list prefix pl-u-ospf in
+ area 1 virtual-link 192.0.2.9 hello-interval 5 dead-interval 20
+ default-information originate always metric 50 metric-type 1
+ no passive-interface GigabitEthernet0/1
+!
+router bgp 64496
+ bgp router-id 192.0.2.1
+ timers bgp 20 60
+ distance bgp 30 190 200
+ neighbor 192.0.2.2 remote-as 64496
+ neighbor 192.0.2.2 update-source Loopback0
+ neighbor 192.0.2.2 next-hop-self
+ neighbor 192.0.2.2 timers 10 30
+ neighbor 192.0.2.2 route-reflector-client
+ neighbor 192.0.2.3 remote-as 64496
+ neighbor 192.0.2.3 update-source Loopback0
+ neighbor 192.0.2.3 next-hop-self
+ neighbor 192.0.2.3 timers 10 30
+ neighbor 192.0.2.3 route-reflector-client
+ neighbor 203.0.113.2 remote-as 64497
+ neighbor 203.0.113.2 route-map rm-u-out out
+ neighbor 203.0.113.2 default-originate
+ neighbor 203.0.113.2 advertisement-interval 15
+ network 198.51.100.0 mask 255.255.255.0
+ aggregate-address 198.51.100.0 255.255.254.0 summary-only
+!
+ip prefix-list pl-u-ospf seq 5 permit 198.51.100.0/24 le 28
+!
+ip community-list standard CD-rm-u-out-10 permit 64497:100
+ip community-list standard CD-rm-u-out-10 permit 64497:200
+!
+route-map rm-u-out permit 10
+ set comm-list CD-rm-u-out-10 delete
+!
+end

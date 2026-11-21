@@ -1,0 +1,40 @@
+# The rest of QoS, appendix A 3.26 (made-up values): the conditions by an
+# IPv6 list, the input interface, CoS (alone and with a list), the QoS group,
+# the packets of the device itself, the RTP ports and NGN; the queues sub-a to
+# sub-d; marking CoS, the QoS group and IPv6; the class of dynamic QoS; the
+# policy the device has for NGN.
+tables:
+  devices:
+    - hostname: ix-q22
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.29/30}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.1/24}
+    - {name: Tunnel0.0, enabled: true}
+  acls:
+    - {name: al-m-voice, type: extended}
+  acl_entries:
+    - {acl: al-m-voice, seq: 10, action: permit, protocol: udp, src: any, dst: any, dst_port: 5060}
+  qos_classes:
+    - {name: cm-m-voice, match: any}
+    - {name: cm-m-ctl, match: any}
+    - {name: cm-m-ngn, match: any}
+  qos_class_matches:
+    - {class: cm-m-voice, seq: 10, acl: al-m-voice, cos: [5], queue: high}
+    - {class: cm-m-voice, seq: 20, rtp_port_start: 16384, rtp_port_range: 16383}
+    - {class: cm-m-voice, seq: 30, cos: [5], queue: sub_a}
+    - {class: cm-m-ctl, seq: 10, local_generated: true, queue: high}
+    - {class: cm-m-ctl, seq: 20, qos_group: 10, queue: medium}
+    - {class: cm-m-ctl, seq: 30, input_if: GigaEthernet1.0, queue: sub_b}
+    - {class: cm-m-ctl, seq: 40, ipv6_acl: al-m-v6, queue: low}
+    - {class: cm-m-ngn, seq: 10, ngn_if: Tunnel0.0, qos_group: 20}
+  qos_policies:
+    - {policy: pm-m-in, class: cm-m-voice, seq: 10, set_qos_group: 10, set_cos: 5, set_ipv6_dscp: 46}
+    - {policy: pm-m-in, class: cm-m-ctl, seq: 20, set_ipv6_precedence: 6}
+    - {policy: pm-m-out, class: cm-m-voice, seq: 10, priority: true, queue_limit: [10, 20, 30, 40, 50, 60, 70, 80]}
+    - {policy: pm-m-out, class: cm-m-ctl, seq: 20, bandwidth_percent: 20}
+    - {policy: pm-m-out, class: dynamic, seq: 30}
+  qos_bindings:
+    - {if_name: GigaEthernet0.0, direction: output, policy: pm-m-out}
+    - {if_name: GigaEthernet1.0, direction: input, policy: pm-m-in}
+    - {if_name: Tunnel0.0, direction: output, ngn_default: true}

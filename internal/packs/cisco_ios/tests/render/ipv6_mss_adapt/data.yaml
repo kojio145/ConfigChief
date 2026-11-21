@@ -1,0 +1,15 @@
+# "auto" for the MSS of IPv6 (as NEC IX has it) is not a value on this
+# device: the pack writes the IPv6 MTU (or the MTU) less 60 and tells
+# (G-614). Made-up values.
+tables:
+  devices:
+    - hostname: rt-m03
+      vendor: cisco_ios
+      ipv6_routing: true
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv6: ["2001:db8:0:1::1/64"]}
+    - {name: GigabitEthernet0/1, enabled: true, mtu: 1500, ipv6: ["2001:db8:0:10::1/64"]}
+  ipv6_interfaces:
+    - {if_name: GigabitEthernet0/0, mtu: 1454, tcp_mss: auto}
+    - {if_name: GigabitEthernet0/1, tcp_mss: auto}
+findings: [G-614]

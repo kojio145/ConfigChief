@@ -5,11 +5,11 @@ hostname rt-a01
 interface GigabitEthernet0/0
  description sample uplink
  ip address 192.0.2.1 255.255.255.0
- no cdp enable
+ no mop enabled
 !
 interface GigabitEthernet0/1
  ip address 198.51.100.1 255.255.255.0
- no cdp enable
+ no mop enabled
 !
 ip sla 10
  icmp-echo 192.0.2.254

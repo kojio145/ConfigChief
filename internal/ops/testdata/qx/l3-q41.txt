@@ -1,0 +1,89 @@
+#
+ version 7.1.070, Release 1201
+#
+ sysname l3-q41
+#
+ stp global enable
+#
+ time-range sample-hours 08:00 to 18:00 working-day
+#
+acl basic 2000
+ rule 0 permit source 192.0.2.0 0.0.0.127
+#
+acl advanced 3000
+ rule 0 permit tcp source 192.0.2.0 0.0.0.127 destination-port eq 443 time-range sample-hours
+ rule 0 comment sample office in
+ rule 5 permit icmp icmp-type 8 0
+#
+vlan 10
+ name sample-office
+#
+vlan 20
+#
+ ip prefix-list sample-in index 10 permit 198.51.100.0 24 less-equal 28
+#
+route-policy sample-policy permit node 10
+ if-match ip address prefix-list sample-in
+ apply tag 30
+#
+nqa entry admin sample
+ type icmp-echo
+  destination ip 192.0.2.126
+  frequency 5000
+  reaction 1 checked-element probe-fail threshold-type consecutive 3 action-type trigger-only
+#
+ nqa schedule admin sample start-time now lifetime forever
+#
+interface Vlan-interface10
+ description sample office
+ ip address 192.0.2.2 255.255.255.128
+ packet-filter 3000 inbound
+ vrrp vrid 10 virtual-ip 192.0.2.1
+ vrrp vrid 10 authentication-mode simple cipher $c$3$sampleSampleSampleSample
+#
+interface GigabitEthernet1/0/1
+ port link-mode bridge
+ port link-type hybrid
+ undo port hybrid vlan 1
+ port hybrid vlan 20 tagged
+ port hybrid vlan 10 untagged
+ port hybrid pvid vlan 10
+ broadcast-suppression pps 500
+#
+interface GigabitEthernet1/0/24
+ port link-mode bridge
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20
+#
+ ip route-static 0.0.0.0 0 192.0.2.126 track 1
+#
+ospf 1 router-id 198.51.100.41
+ import-route static route-policy sample-policy
+ area 0.0.0.0
+  network 192.0.2.0 0.0.0.127
+#
+ track 1 nqa entry admin sample reaction 1
+#
+local-user admin class manage
+ password simple Example-Secret-1
+ service-type ssh
+ authorization-attribute user-role network-admin
+#
+ snmp-agent
+ snmp-agent community read cipher $c$3$sampleSampleSampleSampleSample acl 2000
+ snmp-agent sys-info version v2c
+#
+ header motd %sample notice: authorized use only%
+#
+ ssh server enable
+ ssh server acl 2000
+#
+line aux 0
+ idle-timeout 5 30
+#
+line vty 0 63
+ authentication-mode scheme
+ idle-timeout 10
+#
+return

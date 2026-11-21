@@ -1,0 +1,15 @@
+hostname ix-e13
+!
+ppp profile ppp-sample-a
+  authentication myname example-user@example.net
+  authentication password example-user@example.net dummy-ppp-password-a
+  authentication accept chap
+!
+interface GigaEthernet0.0
+  no shutdown
+!
+interface GigaEthernet0.1
+  ip address ipcp
+  ppp binding ppp-sample-a
+  no shutdown
+!

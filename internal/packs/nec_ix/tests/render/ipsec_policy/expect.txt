@@ -1,0 +1,66 @@
+hostname ix-h01
+!
+ip access-list sec-p1 permit ip src any dest any
+ike proposal ike-prop-p1 encryption aes-256 hash sha2-256 group 2048-bit lifetime 28800
+ike proposal ike-prop-p1-2 encryption aes hash sha group 1024-bit
+ike policy ike-p1 peer any key dummy-psk-sample-ra ike-prop-p1,ike-prop-p1-2
+ipsec autokey-proposal ipsec-prop-p1 esp-aes-256 esp-sha
+ipsec autokey-proposal ipsec-prop-p1-2 esp-aes esp-sha
+ipsec autokey-proposal ipsec-prop-p1-3 esp-3des esp-sha
+ipsec dynamic-map CMAP-SAMPLE-10 sec-p1 ipsec-prop-p1,ipsec-prop-p1-2,ipsec-prop-p1-3
+!
+ip access-list sec-p2 10 permit ip src 192.0.2.0/25 dest 198.51.100.0/25
+ip access-list sec-p2 20 permit ip src 192.0.2.0/25 dest 198.51.100.128/25
+ike proposal ike-prop-p2 encryption aes-256 hash sha2-256 group 2048-bit lifetime 28800
+ike policy ike-p2 peer 203.0.113.20 key dummy-psk-sample-b ike-prop-p2
+ike keepalive ike-p2 30 3
+ipsec autokey-proposal ipsec-prop-p2 esp-aes-256 esp-sha
+ipsec autokey-map ipsec-sample-b sec-p2 peer 203.0.113.20 pfs 2048-bit ipsec-prop-p2
+!
+ip access-list sec-p3 10 permit udp src 203.0.113.9/32 sport eq 1701 dest 203.0.113.30/32 dport eq 1701
+ike proposal ike-prop-p3 encryption aes-256 hash sha2-256 group 2048-bit lifetime 28800
+ike policy ike-p3 peer 203.0.113.30 key dummy-psk-sample-c ike-prop-p3
+ipsec autokey-proposal ipsec-prop-p3 esp-aes-256 esp-sha
+ipsec autokey-map ipsec-sample-c sec-p3 peer 203.0.113.30 ipsec-prop-p3
+!
+ike nat-traversal
+!
+ppp profile lns-sample
+  authentication request chap
+  authentication password example-user dummy-l2tp-user-secret-1
+  lcp pfc
+  lcp acfc
+  ipcp ip-compression
+  ipcp provide-ip-address range 192.0.2.131 192.0.2.190
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.2/29
+  ipsec policy tunnel ipsec-sample-b out
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 192.0.2.1/25
+  no shutdown
+!
+interface GigaEthernet2.0
+  ip address 203.0.113.9/29
+  ipsec policy transport ipsec-sample-c
+  no shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.129/25
+!
+interface Tunnel0.0
+  ip unnumbered Loopback0.0
+  ppp binding lns-sample
+  tunnel mode l2tp-lns ipsec
+  ipsec policy transport CMAP-SAMPLE-10
+  no shutdown
+!
+interface Tunnel1.0
+  ip unnumbered Loopback0.0
+  ppp binding lns-sample
+  tunnel mode l2tp-lns ipsec
+  ipsec policy transport CMAP-SAMPLE-10
+  no shutdown
+!

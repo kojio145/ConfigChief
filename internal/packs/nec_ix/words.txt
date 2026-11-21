@@ -3,16 +3,18 @@
 # leaves a site keeps the words of the pack's files and these, and hides every
 # other word (spec 8.6). One word or more on a line; "#" starts a note.
 # Made by a script of the maintainers from the public command references; words added by hand are kept.
-activate adaptive addressname addrname adjacency aggregate algorithm alias ambiguous asnotation
-assignment association average based bba bdi bri bridge brief building byte callin cautiously change
-changes channel classify client clock code comp compatibility compatible con concentrator conform
-console continue cos crypto custom definition detail detected dial dialer directed discovery drop
-dynamic ecdsa eigrp encr encrypt exec extendable fecn fhp force forced fragments frequency gcm
-generate generating gigabitethernet gigaethernetn gmac hairpinning hmac http iap ibgp idname igmp
-inbound incomplete information invoke ipaddr ipicmpecho irb iri isakmp keyring lac license linenum
-link lns login lzs master minimum mnemonic modulus mru msec native non nsap packet packets pad path
-payload peak permanent persistent pir platform poll poor portfast precendence previous provide pvc
-random ratio reconfiguration redirects release request resequence reserved restoration reversible
-ring rsa rtp rtr seal secondaries security segment sent severity should sig size sla soft stability
-standby state stateful subnets suppress sync threshold tpid transform translate transmit transport
-tunneln updown very violate vpnv vty yyyy
+absolute accesslist activate adaptive addressname addrname algorithm alias ambiguous asnotation
+assignment association attempts autoselect average based basic bba bdi biff bootpc bootps border bri
+brief building byte cautiously cef change channel chargen classify clock cmd comp compatibility con
+concentrator conform conversion cookie crypto custom dad daily day daytime definition delegation
+detected dfbit dgm dialer dialin directed discard dnsix duid ecdsa eigrp encr encrypt evaluate exec
+fecn fhp finger flow forced frequency generating gigabitethernet gigaethernetn gmac gopher
+hairpinning history hoplimit iap ident identifier idname igmp initiate invoke ipaddr ipicmpecho irc
+iri isakmp isatap keyring klogin kshell label license linenum linkmtu llt lpd lzs mapping master
+minimum mld mnemonic mobile mobility modulus monday monetary month mru nameserver netbios nntp non
+ns nsap object outgoing parameters persistent pim platform pmtu poll poor pop portfast precendence
+previous pseudowire pvc ratio reachable reconfiguration reconfigure records redirects reflect
+refresh release reliability resequence restoration retrans ring room routine rsa rtr seal
+secondaries security segment setup should sig sla smtp snmptrap soft stability standby state
+stateful subnets sunday sunrpc sync tacacs talk terminate tftp throughput tunneln updown uucp very
+vpdn vpnv vty weekdays weekend whois www xdmcp year yyyy

@@ -1,0 +1,68 @@
+hostname ix-h03
+!
+ikev2 authentication psk id ipv4 203.0.113.9 key char dummy-psk-sample-a
+ikev2 authentication psk id ipv4 203.0.113.20 key char dummy-psk-sample-a
+ikev2 authentication psk id ipv4 203.0.113.50 key char dummy-psk-sample-a
+!
+ikev2 profile ikev2-0
+  child-lifetime 28800
+  local-authentication psk
+  local-ts ipv4 address 192.0.2.0/25
+  remote-ts ipv4 address 198.51.100.128/25
+  sa-lifetime 86400
+!
+ip access-list sec-1 permit ip src any dest any
+ike proposal ike-prop-1 encryption aes-256 hash sha2-256 group 2048-bit lifetime 28800
+ike policy ike-1 peer 203.0.113.30 key dummy-psk-sample-b ike-prop-1
+ipsec autokey-proposal ipsec-prop-1 esp-aes-256 esp-sha
+ipsec autokey-map ipsec-1 sec-1 peer 203.0.113.30 ipsec-prop-1
+ipsec local-id ipsec-1 192.0.2.0/25
+ipsec remote-id ipsec-1 198.51.100.129
+!
+ip access-list sec-2 permit ip src any dest any
+ike proposal ike-prop-2 encryption aes-256 hash sha2-256 group 2048-bit lifetime 28800
+ike policy ike-2 peer any key dummy-psk-sample-c mode aggressive ike-prop-2
+ike remote-id ike-2 keyid sample-site-c
+ipsec autokey-proposal ipsec-prop-2 esp-aes-256 esp-sha
+ipsec dynamic-map ipsec-2 sec-2 ike-binding ike-2 ipsec-prop-2
+ipsec remote-id ipsec-2 198.51.100.0/25
+!
+ikev2 profile ikev2-3
+  child-lifetime 28800
+  local-authentication psk
+  local-ts ipv4 protocol udp address 192.0.2.0/25
+  remote-ts ipv4 protocol udp port 1701 1701
+  sa-lifetime 86400
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.9/29
+  no shutdown
+!
+interface Tunnel0.0
+  ip unnumbered GigaEthernet0.0
+  tunnel mode ipsec-ikev2
+  ikev2 binding ikev2-0
+  ikev2 peer 203.0.113.20 authentication psk
+  ikev2 source-address GigaEthernet0.0
+  no shutdown
+!
+interface Tunnel1.0
+  ip unnumbered GigaEthernet0.0
+  tunnel mode ipsec
+  ipsec policy tunnel ipsec-1 out
+  no shutdown
+!
+interface Tunnel2.0
+  ip unnumbered GigaEthernet0.0
+  tunnel mode ipsec
+  ipsec policy tunnel ipsec-2 out
+  no shutdown
+!
+interface Tunnel3.0
+  ip unnumbered GigaEthernet0.0
+  tunnel mode ipsec-ikev2
+  ikev2 binding ikev2-3
+  ikev2 peer 203.0.113.50 authentication psk
+  ikev2 source-address GigaEthernet0.0
+  no shutdown
+!

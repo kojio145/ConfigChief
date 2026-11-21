@@ -27,7 +27,7 @@ func lintOf(t *testing.T, dir string) (*Pack, *LintResult) {
 func TestLint(t *testing.T) {
 	p, res := lintOf(t, "testdata/lint")
 	want := []string{
-		"規則 if.fast: interfaces の speed: 「fast」は選択肢（auto, 10, 100, 1000, 10000）にありません",
+		"規則 if.fast: interfaces の speed: 「fast」は選択肢（auto, 10, 100, 1000, 2500, 5000, 10000）にありません",
 		"規則 if.shelf: 表 interfaces に、shelf_{{ dir }} に当たる列がありません",
 		"規則 if.relay: interfaces の dhcp_relay: 「standard」は IPv4 アドレスではありません",
 		"規則 route.default: static_routes の prefix: 「everything」は IPv4 の「アドレス/長さ」の形ではありません",

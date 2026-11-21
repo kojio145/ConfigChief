@@ -1,0 +1,97 @@
+hostname rt-h03
+!
+ip domain name example.com
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+ lifetime 86400
+!
+crypto keyring KR-Tunnel2
+ pre-shared-key address 203.0.113.30 key dummy-psk-sample-b
+crypto isakmp profile ISAKMP-Tunnel2
+ keyring KR-Tunnel2
+ self-identity fqdn
+ match identity address 203.0.113.30 255.255.255.255
+!
+crypto keyring KR-Tunnel3
+ pre-shared-key address 203.0.113.40 key dummy-psk-sample-c
+crypto isakmp profile ISAKMP-Tunnel3
+ keyring KR-Tunnel3
+ self-identity address
+ match identity host rt-h04.example.com
+!
+crypto ikev2 keyring IKEV2-KEYS
+ peer Tunnel1
+  address 203.0.113.20
+  pre-shared-key dummy-psk-sample-a
+!
+crypto ikev2 profile IKEV2-Tunnel1
+ match identity remote address 203.0.113.20 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS
+ lifetime 86400
+!
+no crypto ipsec nat-transparency udp-encaps
+!
+crypto ipsec transform-set TS-Tunnel1 esp-gcm 256
+!
+crypto ipsec transform-set TS-Tunnel2 esp-aes 256 esp-sha384-hmac
+!
+crypto ipsec transform-set TS-Tunnel3 esp-aes 256 esp-sha512-hmac
+!
+ip access-list extended ACL-Tunnel1
+ 10 permit ip 192.0.2.0 0.0.0.127 198.51.100.128 0.0.0.127
+!
+crypto ipsec profile PROF-Tunnel1
+ set transform-set TS-Tunnel1
+ set security-association lifetime seconds 3600
+ set ikev2-profile IKEV2-Tunnel1
+!
+crypto ipsec profile PROF-Tunnel2
+ set transform-set TS-Tunnel2
+ set security-association lifetime seconds 3600
+ set isakmp-profile ISAKMP-Tunnel2
+!
+ip access-list extended ACL-Tunnel3
+ 10 permit udp 192.0.2.0 0.0.0.127 host 198.51.100.129 eq 1701
+!
+crypto ipsec profile PROF-Tunnel3
+ set transform-set TS-Tunnel3
+ set security-association lifetime seconds 3600
+ set isakmp-profile ISAKMP-Tunnel3
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.9 255.255.255.248
+ no shutdown
+!
+interface Tunnel1
+ ip address 198.51.100.1 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.20
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec policy ipv4 ACL-Tunnel1
+ tunnel protection ipsec profile PROF-Tunnel1
+ no shutdown
+!
+interface Tunnel2
+ ip address 198.51.100.5 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.30
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-Tunnel2
+ no shutdown
+!
+interface Tunnel3
+ ip address 198.51.100.9 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.40
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec policy ipv4 ACL-Tunnel3
+ tunnel protection ipsec profile PROF-Tunnel3
+ no shutdown
+!
+end

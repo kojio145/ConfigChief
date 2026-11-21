@@ -40,8 +40,38 @@ class-map match-{{ c.match | required('QoS のクラス ' ~ c.name ~ ' の合わ
 {% if m.seq != k.i * 10 %}
 {{ fail(what ~ ': 順番が 10 刻みではありません（コンフィグには番号を書かず、上から順に書きます。順番を 10、20、30… に振り直してください。評価の順は変わりません）') }}
 {% endif %}
-{% set q = ' ' ~ m.queue if m.queue else '' %}
-{% if m.dscp or m.precedence %}
+{% set q = ' ' ~ (m.queue | replace('_', '-')) if m.queue else '' %}
+{% if m.protocol or m.class_ref or m.negate == true %}
+{{ fail(what ~ ': プロトコル・ほかのクラス・「条件を逆にする」の条件は NEC IX にありません（ACL などで書き直してください）') }}
+{% endif %}
+{% set kinds = (1 if m.acl else 0) + (1 if m.dscp else 0) + (1 if m.precedence else 0) + (1 if m.ipv6_acl else 0) + (1 if m.input_if else 0) + (1 if m.local_generated == true else 0) + (1 if m.rtp_port_start != '' else 0) + (1 if m.ngn_if else 0) + (1 if (m.cos and not m.acl) else 0) + (1 if (m.qos_group != '' and not m.ngn_if) else 0) %}
+{% if kinds > 1 %}
+{{ fail(what ~ ': 条件は 1 行に 1 つだけ書きます（一緒に書けるのは「ACL と CoS」「NGN のトンネル IF と QoS グループ」だけです。行を分けてください）') }}
+{% endif %}
+{% if m.cos | length > 1 %}
+{{ fail(what ~ ': CoS は、NEC IX では 1 行に 1 つです（行を分けてください）') }}
+{% endif %}
+{% if m.qos_group != '' and m.qos_group < 1 %}
+{{ fail(what ~ ': QoS グループは、NEC IX では 1〜65535 です') }}
+{% endif %}
+{% if m.cos and (m.dscp or m.precedence) %}
+{{ fail(what ~ ': DSCP・precedence と CoS は一緒に書けません（行を分けてください）') }}
+{% endif %}
+{% if m.ipv6_acl %}
+  match ipv6 access-list {{ m.ipv6_acl }}{{ q }}
+{% elif m.input_if %}
+  match input-interface {{ m.input_if }}{{ q }}
+{% elif m.local_generated == true %}
+  match local-generate-packet{{ q }}
+{% elif m.rtp_port_start != '' %}
+  match rtp port {{ m.rtp_port_start }} {{ m.rtp_port_range | required(what ~ ' の「RTP のポートの幅」') }}{{ q }}
+{% elif m.ngn_if %}
+  match ngn {{ m.ngn_if }}{{ ' qos-group ' ~ m.qos_group if m.qos_group != '' else '' }}{{ q }}
+{% elif m.cos and not m.acl %}
+  match cos {{ m.cos[0] }}{{ q }}
+{% elif m.qos_group != '' %}
+  match qos-group {{ m.qos_group }}{{ q }}
+{% elif m.dscp or m.precedence %}
 {% set at = namespace(i=0) %}
 {% for key in made.keys %}
 {% if key == m.class ~ '/' ~ m.seq %}
@@ -50,7 +80,7 @@ class-map match-{{ c.match | required('QoS のクラス ' ~ c.name ~ ' の合わ
 {% endfor %}
   match ip access-list qos-d{{ at.i }}{{ q }}
 {% elif m.acl %}
-  match ip access-list {{ m.acl }}{{ q }}
+  match ip access-list {{ m.acl }}{{ ' cos ' ~ m.cos[0] if m.cos else '' }}{{ q }}
 {% else %}
   match any{{ q }}
 {% endif %}
@@ -66,13 +96,13 @@ class-map match-{{ c.match | required('QoS のクラス ' ~ c.name ~ ' の合わ
 {% set seen.names = seen.names + [first.policy] %}
 policy-map {{ first.policy }}
 {# The classes in their order, then the two classes of the device. #}
-{% for pass in ['named', 'local', 'default'] %}
+{% for pass in ['named', 'dynamic', 'local', 'default'] %}
 {% set wrote = namespace(v=false) %}
 {% for r in t.qos_policies | sort(attribute='seq') %}
-{% if r.policy == first.policy and ((r.class if r.class in ['local', 'default'] else 'named') == pass) %}
+{% if r.policy == first.policy and ((r.class if r.class in ['dynamic', 'local', 'default'] else 'named') == pass) %}
 {% set wrote.v = true %}
 {% set what = 'QoS のポリシー ' ~ r.policy ~ ' のクラス ' ~ r.class %}
-  class {{ 'class-' ~ r.class if r.class in ['local', 'default'] else r.class }}
+  class {{ 'class-' ~ r.class if r.class in ['dynamic', 'local', 'default'] else r.class }}
 {% set bw = (1 if r.bandwidth_kbps != '' else 0) + (1 if r.bandwidth_percent != '' else 0) + (1 if r.bandwidth_remaining != '' else 0) %}
 {% if bw > 1 %}
 {{ fail(what ~ ': 帯域（kbps・%・残りの %）は 1 つだけ書きます') }}
@@ -111,14 +141,29 @@ policy-map {{ first.policy }}
 {% if r.set_precedence != '' %}
     set ip precedence {{ r.set_precedence }}
 {% endif %}
-{% if r.queue_limit | length > 4 %}
-{{ fail(what ~ ': キューの長さは 4 つ（high・medium・normal・low）までです') }}
+{% if r.set_ipv6_dscp != '' %}
+    set ipv6 dscp {{ r.set_ipv6_dscp }}
+{% endif %}
+{% if r.set_ipv6_precedence != '' %}
+    set ipv6 precedence {{ r.set_ipv6_precedence }}
+{% endif %}
+{% if r.set_cos != '' %}
+    set cos {{ r.set_cos }}
+{% endif %}
+{% if r.set_qos_group != '' %}
+{% if r.set_qos_group < 1 %}
+{{ fail(what ~ ': 付ける QoS グループは、NEC IX では 1〜65535 です') }}
+{% endif %}
+    set qos-group {{ r.set_qos_group }}
+{% endif %}
+{% if r.queue_limit | length > 8 %}
+{{ fail(what ~ ': キューの長さは 8 つ（high・medium・normal・low・sub-a〜sub-d）までです') }}
 {% elif r.queue_limit %}
     queue-limit {{ r.queue_limit | join(' ') }}
 {% endif %}
 {% endif %}
 {% endfor %}
-{% if pass != 'named' and not wrote.v %}
+{% if pass in ['local', 'default'] and not wrote.v %}
   class class-{{ pass }}
 {% endif %}
 {% endfor %}

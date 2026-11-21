@@ -1,0 +1,76 @@
+# IPv6 (appendix A 3.23; made-up values): the forms the template does not
+# write are read too ("router ospfv3", "ospfv3 <n> ipv6 area", the number of
+# an entry at the head of the line, a prefix list without "seq").
+tables:
+  devices:
+    - {hostname: rt-v02, ipv6_routing: true}
+  interfaces:
+    - {name: Loopback0, ipv4: 192.0.2.2/32, ipv6: ["2001:db8::2/128"]}
+    - {name: GigabitEthernet0/0, ipv6: ["2001:db8:0:1::2/64"]}
+    - {name: GigabitEthernet0/1}
+    - {name: GigabitEthernet0/2}
+    - {name: GigabitEthernet0/3}
+    - {name: Tunnel1, ipv4: 192.0.2.213/30}
+  ipv6_interfaces:
+    - {if_name: GigabitEthernet0/0, link_local: "fe80::1", acl_in: V6-SAMPLE-IN, ra: "off"}
+    - if_name: GigabitEthernet0/1
+      enabled: true
+      eui64: ["2001:db8:0:11::/64"]
+      anycast: ["2001:db8:0:12::1/64"]
+      mtu: 1400
+      ra_interval: 200
+      ra_interval_min: 50
+      ra_lifetime: 1800
+      ra_managed: true
+      ra_other: true
+      ra_dns: ["2001:db8::53"]
+      ra_dns_lifetime: 600
+      dhcp_server: pool-sample-v6
+      dhcp_dns: ["2001:db8::53", dhcp]
+      dhcp_domain: example.com
+      dhcp_address_prefix: ["2001:db8:0:10::/64"]
+    - {if_name: GigabitEthernet0/2, autoconfig: true, autoconfig_default: true, pd_request: pd-sample, rapid_commit: true}
+    - {if_name: GigabitEthernet0/3, pd_from: pd-sample, pd_suffix: "::1/64", ra: reply_only}
+  ipv6_ra_prefixes:
+    - {if_name: GigabitEthernet0/1, prefix: "2001:db8:0:11::/64", valid_lifetime: 86400, preferred_lifetime: 14400, on_link: true, autonomous: false}
+    - {if_name: GigabitEthernet0/1, prefix: "2001:db8:0:12::/64", valid_lifetime: 2592000, preferred_lifetime: 604800, on_link: true, autonomous: true}
+  ipv6_routes:
+    - {prefix: "::/0", next_hop: "2001:db8:0:1::1", out_if: ""}
+    - {prefix: "2001:db8:100::/48", next_hop: "fe80::2", out_if: GigabitEthernet0/0, distance: 10, description: to-sample}
+    - {prefix: "2001:db8:200::/48", next_hop: "", out_if: Null0}
+  ipv6_acl_entries:
+    - {acl: V6-SAMPLE-IN, seq: 10, action: permit, protocol: tcp, src: any, dst: "2001:db8:0:10::/64", dst_port: "443", flags: [established]}
+    - {acl: V6-SAMPLE-IN, seq: 20, action: permit, protocol: udp, src: "2001:db8::53", src_port: "53", dst: any, dst_port: "1024-65535"}
+    - {acl: V6-SAMPLE-IN, seq: 30, action: permit, protocol: icmp, src: any, dst: any, icmp_type: neighbor-solicitation}
+    - {acl: V6-SAMPLE-IN, seq: 40, action: permit, protocol: icmp, src: any, dst: any, icmp_type: "134"}
+    - {acl: V6-SAMPLE-IN, seq: 44, action: permit, protocol: tcp, src: any, dst: any, dst_port: "80", flags: [syn, log_input]}
+    - {acl: V6-SAMPLE-IN, seq: 46, action: permit, protocol: udp, src: any, src_port: "53", dst: any}
+    - {acl: V6-SAMPLE-IN, seq: 50, action: deny, protocol: ip, src: any, dst: any, flags: [log]}
+    - {acl: V6-SAMPLE-OLD, seq: 10, action: remark, remark: sample filter}
+    - {acl: V6-SAMPLE-OLD, seq: 20, action: permit, protocol: ip, src: "2001:db8:1::/48", dst: any, dscp: 46}
+    - {acl: V6-SAMPLE-OLD, seq: 100, action: deny, protocol: esp, src: any, dst: "2001:db8::1"}
+  ipv6_prefix_lists:
+    - {name: PL6-SAMPLE, seq: 5, action: permit, prefix: "2001:db8::/32", ge: 48, le: 64}
+    - {name: PL6-SAMPLE, seq: 10, action: deny, prefix: "::/0", le: 128}
+    - {name: PL6-NOSEQ, seq: 5, action: permit, prefix: "2001:db8:1::/48"}
+  ospfv3_processes:
+    - {process_id: 1, router_id: 192.0.2.2, default_originate: when_present, default_metric: 10, redistribute: [connected, static]}
+  ospfv3_redistribute:
+    - {process_id: 1, source: static, metric: 20, filter: ""}
+  ospfv3_interfaces:
+    - {process_id: 1, if_name: Loopback0, area: "0"}
+    - {process_id: 1, if_name: GigabitEthernet0/0, area: "0", cost: 20, hello: 5, network_type: point_to_point}
+    - {process_id: 1, if_name: GigabitEthernet0/1, area: "1", passive: true}
+  ospfv3_areas:
+    - {process_id: 1, area: "1", type: totally_stub, ranges: ["2001:db8:0:10::/60"]}
+  bgp_processes:
+    - {vrf: "", asn: 64496, router_id: 192.0.2.2, ipv6_networks: ["2001:db8:10::/48"], ipv6_redistribute: [connected]}
+  bgp_ipv6_neighbors:
+    - {neighbor: "2001:db8:0:1::1", remote_as: 64497, description: sample upstream, update_source: Loopback0, prefix_list_in: PL6-SAMPLE, filter_out: RM-SAMPLE-OUT}
+  tunnels:
+    - {if_name: Tunnel1, type: ipv4_over_ipv6, source: GigabitEthernet0/0, destination_fqdn: aftr.example.jp}
+unknown:
+  - "ipv6 cef"
+  - "ipv6 nd router-preference High"
+  - "ipv6 dhcp client pd hint 2001:DB8:1000::/48"
+  - "ipv6 route 2001:DB8:300::/48 2001:DB8:0:1::1 tag 5"

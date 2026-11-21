@@ -1,0 +1,67 @@
+hostname ix-s01
+!
+bridge irb enable
+!
+ip route default 203.0.113.1
+!
+device GigaEthernet0
+!
+device GigaEthernet1
+!
+device GigaEthernet2
+  vlan-group 1 port 1 2
+  vlan-group 2 port 3
+  vlan-group 4 port 4
+  port 1 speed 100
+  port 1 duplex full
+  port 3 shutdown
+  port 5 link-aggregation 1
+  port 6 link-aggregation 1
+  port 7 mdi-mdix mdi
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.2/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  no ip address
+  no shutdown
+!
+interface GigaEthernet1.1
+  encapsulation dot1q 10 tpid 88a8
+  ip address 198.51.100.129/25
+  no shutdown
+!
+interface GigaEthernet1.2
+  encapsulation dot1q 20
+  bridge-group 20
+  no shutdown
+!
+interface GigaEthernet2.0
+  no ip address
+  shutdown
+!
+interface GigaEthernet2:1.0
+  ip address 192.0.2.1/25
+  no shutdown
+!
+interface GigaEthernet2:2.0
+  no ip address
+  bridge-group 20
+  no shutdown
+!
+interface GigaEthernet2:4.0
+  no ip address
+  no shutdown
+!
+interface GigaEthernet2:4.1
+  encapsulation dot1q 20
+  bridge-group 20
+  bridge-group 20 port-protected
+  no shutdown
+!
+interface BVI0
+  ip address 192.0.2.129/25
+  bridge-group 20
+  no shutdown
+!

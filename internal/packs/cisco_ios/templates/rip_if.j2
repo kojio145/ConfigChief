@@ -1,0 +1,67 @@
+{# RIP and RIPng, the lines under an interface (appendix A 3.27). Included
+   from ipv6_if.j2: the interface is i. #}
+{% for r in t.rip_interfaces %}
+{% if r.if_name == i.name %}
+{% set what = i.name ~ ' の RIP' %}
+{% if r.family == 'ipv4' %}
+{% if r.receive == false %}
+{{ fail(what ~ ': 「受ける」を無効にする書き方は、Cisco にありません（受信フィルタで絞るか、セルを空にしてください）') }}
+{% endif %}
+{% if r.send_version %}
+ ip rip send version {{ r.send_version | join(' ') }}
+{% endif %}
+{% if r.receive_version %}
+ ip rip receive version {{ r.receive_version | join(' ') }}
+{% endif %}
+{% if r.v2_broadcast == true %}
+ ip rip v2-broadcast
+{% endif %}
+{% if r.auth_key %}
+ ip rip authentication mode {{ r.auth_mode | required(what ~ ' の「認証」') }}
+ ip rip authentication key-chain RIP-{{ i.name | ifshort | replace('/', '-') | replace('.', '-') }}
+{% elif r.auth_mode or r.auth_key_id or r.auth_key_id == 0 %}
+{{ fail(what ~ ': 「認証」「認証キーの番号」は、「認証キー」を書いた行にだけ書けます') }}
+{% endif %}
+{% for s in r.summary %}
+{% if ':' in s %}
+{{ fail(what ~ ': RIP（ipv4）の行の「集約して送る経路」に、IPv6 のプレフィックス ' ~ s ~ ' があります') }}
+{% else %}
+ ip summary-address rip {{ s | ip }} {{ s | mask }}
+{% endif %}
+{% endfor %}
+{% if r.split_horizon == 'split_horizon' %}
+ ip split-horizon
+{% elif r.split_horizon == 'none' %}
+ no ip split-horizon
+{% elif r.split_horizon %}
+{{ fail(what ~ ': スプリットホライズンの poisoned_reverse は、Cisco の RIP（ipv4）では書けません（split_horizon か none にしてください）') }}
+{% endif %}
+{% if r.default_originate == true or r.default_originate_metric %}
+{{ fail(what ~ ': Cisco の RIP（ipv4）は、デフォルト経路の広告を IF ごとには書けません。シート「RIP」の「デフォルト経路を広告する」に書いてください') }}
+{% endif %}
+{% else %}
+{% if r.send == false or r.receive == false %}
+{{ fail(what ~ '（RIPng）: 「送る」「受ける」を無効にする書き方は、Cisco の RIPng にありません（セルを空にしてください）') }}
+{% endif %}
+{% if r.send_version or r.receive_version or r.v2_broadcast == true or r.auth_mode or r.auth_key or r.auth_key_id or r.auth_key_id == 0 %}
+{{ fail(what ~ '（RIPng）: 版・認証は RIP（ipv4）だけの設定です（セルを空にしてください）') }}
+{% endif %}
+ ipv6 rip ripng enable
+{% if r.default_originate == true %}
+ ipv6 rip ripng default-information originate{{ ' metric ' ~ r.default_originate_metric if r.default_originate_metric else '' }}
+{% elif r.default_originate_metric %}
+{{ fail(what ~ '（RIPng）: 「広告するデフォルト経路のメトリック」は、「この IF でデフォルト経路を広告する」が有効な行にだけ書けます') }}
+{% endif %}
+{% if r.metric_offset %}
+ ipv6 rip ripng metric-offset {{ r.metric_offset }}
+{% endif %}
+{% for s in r.summary %}
+{% if ':' in s %}
+ ipv6 rip ripng summary-address {{ s }}
+{% else %}
+{{ fail(what ~ '（RIPng）: 「集約して送る経路」に、IPv4 のネットワーク ' ~ s ~ ' があります') }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endfor %}

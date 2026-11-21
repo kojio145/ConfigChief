@@ -1,0 +1,12 @@
+table: ipv6_ra_prefixes
+title: {ja: RA のプレフィックス, en: RA prefixes}
+since: M7
+key: [device, if_name, prefix]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: if_name, title: {ja: IF 名, en: Interface}, type: ifname, required: true}
+  - {name: prefix, title: {ja: プレフィックス, en: Prefix}, type: net6, required: true, note: {ja: "例 2001:db8:0:1::/64。IF のアドレスのプレフィックスは、行がなくても機器が RA に載せる", en: "e.g. 2001:db8:0:1::/64. The prefix of an address of the interface is advertised without a row"}}
+  - {name: valid_lifetime, title: {ja: 有効時間（秒）, en: Valid lifetime (s)}, type: int, explicit: true}
+  - {name: preferred_lifetime, title: {ja: 推奨時間（秒）, en: Preferred lifetime (s)}, type: int, explicit: true}
+  - {name: on_link, title: {ja: オンリンク, en: On-link}, type: bool, explicit: true, note: {ja: "このプレフィックスが同じリンクにあると端末に伝える", en: "Tells the hosts the prefix is on the link"}}
+  - {name: autonomous, title: {ja: 端末の自動設定に使う, en: Autonomous}, type: bool, explicit: true, note: {ja: "端末がこのプレフィックスでアドレスを作ってよい", en: "The hosts may make an address from the prefix"}}

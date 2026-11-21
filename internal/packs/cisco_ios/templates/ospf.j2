@@ -11,6 +11,29 @@ router ospf {{ p.process_id }}{{ ' vrf ' ~ p.vrf if p.vrf else '' }}
 {% if p.reference_bandwidth != '' %}
  auto-cost reference-bandwidth {{ p.reference_bandwidth }}
 {% endif %}
+{% if p.log_adjacency == 'detail' %}
+ log-adjacency-changes detail
+{% elif p.log_adjacency == 'off' %}
+ no log-adjacency-changes
+{% endif %}
+{% if p.max_metric == true %}
+ max-metric router-lsa
+{% endif %}
+{% if p.distance != '' %}
+ distance {{ p.distance }}
+{% endif %}
+{% if p.distance_intra != '' or p.distance_inter != '' or p.distance_external != '' %}
+ distance ospf{{ ' intra-area ' ~ p.distance_intra if p.distance_intra != '' else '' }}{{ ' inter-area ' ~ p.distance_inter if p.distance_inter != '' else '' }}{{ ' external ' ~ p.distance_external if p.distance_external != '' else '' }}
+{% endif %}
+{% if (1 if p.filter_in_prefix_list else 0) + (1 if p.filter_in_acl else 0) + (1 if p.filter_in_policy else 0) > 1 %}
+{{ fail(what ~ ': 「経路表に入れる経路の絞り込み」は、プレフィックスリスト・ACL・経路制御の方針のどれか 1 つだけ書けます') }}
+{% elif p.filter_in_prefix_list %}
+ distribute-list prefix {{ p.filter_in_prefix_list }} in
+{% elif p.filter_in_acl %}
+ distribute-list {{ p.filter_in_acl }} in
+{% elif p.filter_in_policy %}
+ distribute-list route-map {{ p.filter_in_policy }} in
+{% endif %}
 {% for a in t.ospf_areas %}
 {% if a.process_id == p.process_id %}
 {% if a.type in ['stub', 'totally_stub'] %}
@@ -23,6 +46,11 @@ router ospf {{ p.process_id }}{{ ' vrf ' ~ p.vrf if p.vrf else '' }}
 {% for r in t.ospf_ranges %}
 {% if r.process_id == p.process_id %}
  area {{ r.area }} range {{ r.prefix | ip }} {{ r.prefix | mask }}{{ ' advertise' if r.advertise == true else (' not-advertise' if r.advertise == false else '') }}
+{% endif %}
+{% endfor %}
+{% for v in t.ospf_virtual_links %}
+{% if v.process_id == p.process_id %}
+ area {{ v.area }} virtual-link {{ v.router_id }}{{ ' hello-interval ' ~ v.hello if v.hello != '' else '' }}{{ ' dead-interval ' ~ v.dead if v.dead != '' else '' }}
 {% endif %}
 {% endfor %}
 {% for r in t.ospf_redistribute %}
@@ -40,13 +68,13 @@ router ospf {{ p.process_id }}{{ ' vrf ' ~ p.vrf if p.vrf else '' }}
 {% endif %}
 {% set src = 'bgp ' ~ asn.v %}
 {% endif %}
- redistribute {{ src }}{{ ' metric ' ~ r.metric if r.metric != '' else '' }}{{ ' metric-type ' ~ r.metric_type if r.metric_type else '' }}{{ ' route-map ' ~ r.filter if r.filter else '' }} subnets
+ redistribute {{ src }}{{ ' metric ' ~ r.metric if r.metric != '' else '' }}{{ ' metric-type ' ~ r.metric_type if r.metric_type else '' }}{{ ' tag ' ~ r.tag if r.tag != '' else '' }}{{ ' route-map ' ~ r.filter if r.filter else '' }} subnets
 {% endif %}
 {% endfor %}
 {% if p.default_originate in ['when_present', 'always'] %}
- default-information originate{{ ' always' if p.default_originate == 'always' else '' }}{{ ' metric ' ~ p.default_metric if p.default_metric != '' else '' }}
-{% elif p.default_metric != '' %}
-{{ fail(what ~ ' の広告のメトリックは、デフォルト経路の広告が when_present か always のときだけ書けます') }}
+ default-information originate{{ ' always' if p.default_originate == 'always' else '' }}{{ ' metric ' ~ p.default_metric if p.default_metric != '' else '' }}{{ ' metric-type ' ~ p.default_metric_type if p.default_metric_type else '' }}{{ ' route-map ' ~ p.default_filter if p.default_filter else '' }}
+{% elif p.default_metric != '' or p.default_metric_type or p.default_filter %}
+{{ fail(what ~ ' の広告のメトリック・メトリックの種類・条件は、デフォルト経路の広告が when_present か always のときだけ書けます') }}
 {% endif %}
 {% if p.passive_default == true %}
  passive-interface default
@@ -72,5 +100,16 @@ router ospf {{ p.process_id }}{{ ' vrf ' ~ p.vrf if p.vrf else '' }}
 {% endfor %}
 {% if not known.v %}
 {{ fail('OSPF インタフェース ' ~ o.if_name ~ ' のプロセス番号 ' ~ o.process_id ~ ' が、OSPF の表にありません') }}
+{% endif %}
+{% endfor %}
+{% for v in t.ospf_virtual_links %}
+{% set known = namespace(v=false) %}
+{% for p in t.ospf_processes %}
+{% if p.process_id == v.process_id %}
+{% set known.v = true %}
+{% endif %}
+{% endfor %}
+{% if not known.v %}
+{{ fail('OSPF バーチャルリンク ' ~ v.router_id ~ ' のプロセス番号 ' ~ v.process_id ~ ' が、OSPF の表にありません') }}
 {% endif %}
 {% endfor %}

@@ -1,0 +1,123 @@
+hostname ix-f01
+!
+ip route default GigaEthernet0.0 dhcp
+ip route 192.0.2.64/26 203.0.113.2
+ip route 192.0.2.128/26 203.0.113.6
+ip dhcp enable
+!
+ip access-list acl-f-wan permit tcp established src any sport any dest any dport any
+ip access-list acl-f-wan permit tcp syn src any dest 203.0.113.10/32 dport eq 443
+ip access-list acl-f-wan permit tcp src any sport range 1024 65535 dest 203.0.113.10/32 dport eq 25
+ip access-list acl-f-wan permit udp src any sport eq 53 dest any dport range 67 68
+ip access-list acl-f-wan permit icmp echo-reply src any dest any
+ip access-list acl-f-wan permit icmp type 3 code 4 src any dest any
+ip access-list acl-f-wan permit icmp type 11 src any dest any
+ip access-list acl-f-wan permit 50 src any dest 203.0.113.1/32
+ip access-list acl-f-wan permit 47 src any dest 203.0.113.1/32
+ip access-list acl-f-wan deny udp src any dest any tos 4 fragments
+ip access-list acl-f-wan deny ip src any dest any
+ip access-list acl-f-lan sequence-mode
+ip access-list acl-f-lan 100 permit ip src 198.51.100.0/24 dest any
+ip access-list acl-f-lan 200 deny ip src any dest any
+ip access-list acl-f-mgmt permit ip src 192.0.2.0/25 dest any
+ip access-list acl-f-ssh permit ip src 192.0.2.128/25 dest any
+ip access-list acl-f-nat permit ip src 198.51.100.0/25 dest any
+ip access-list acl-f-nat2 permit ip src 198.51.100.128/25 dest any
+ip access-list acl-f-wild permit ip src 192.0.2.0 0.0.0.255 dest any
+ip access-list acl-f-dom permit ip src-domain host1.example.com dest any
+!
+ip nat pool pool-f-a 203.0.113.33 203.0.113.38
+ip nat pool pool-f-b 203.0.113.41 203.0.113.42
+ip nat pool pool-f-b 203.0.113.45 203.0.113.46
+!
+telnet-server ip enable
+telnet-server ip access-list acl-f-mgmt
+ssh-server ip enable
+ssh-server ip access-list acl-f-ssh
+!
+vrrp enable
+!
+watch-group wg-f-host 10
+  event 10 ip unreach-host 203.0.113.2 GigaEthernet0.0 203.0.113.1 source GigaEthernet1.0
+  action 10 ip shutdown-route 192.0.2.64/26 203.0.113.2
+  action 20 shutdown-interface GigaEthernet2.0
+  action 30 ip decrement-vrrp-priority 1 30
+  probe-counter variance 3
+  probe-timer variance 10
+  probe-timer restorer 30
+!
+watch-group wg-f-or 20
+  event 10 ip unreach-host 203.0.113.6
+  event 20 ip unreach-route 198.18.10.0/24 203.0.113.6
+  event 30 interface-down GigaEthernet2.0
+  action 10 ip shutdown-route 192.0.2.128/26 203.0.113.6
+  probe-counter variance 2
+!
+watch-group wg-f-and 30
+  event 10 sub 10 ip unreach-host 203.0.113.9
+  event 10 sub 20 ip unreach-host 203.0.113.10
+  action 10 shutdown-interface GigaEthernet2.0
+!
+watch-group wg-f-mix 40
+  event 10 sub 10 ip unreach-host 203.0.113.11
+  event 20 ip unreach-host 203.0.113.12
+!
+network-monitor wg-f-host enable
+network-monitor wg-f-or enable
+network-monitor wg-f-and enable
+network-monitor wg-f-mix enable
+!
+ip dhcp profile dhcp-f-a
+  assignable-range 198.51.100.100 198.51.100.199
+  default-gateway 198.51.100.1
+  lease-time 5400
+!
+ip dhcp profile dhcp-f-b
+  lease-time infinite
+!
+ip dhcp profile dhcp-f-c
+  lease-time 100
+!
+device GigaEthernet0
+!
+device GigaEthernet1
+!
+device GigaEthernet2
+!
+interface GigaEthernet0.0
+  ip address dhcp
+  bandwidth 100000
+  ip napt enable
+  ip napt inside list acl-f-nat
+  ip napt inside list acl-f-nat2 outside 203.0.113.20
+  ip napt static 198.51.100.21 tcp 443
+  ip napt service web-f 198.51.100.22 8080 tcp 80
+  ip napt service dns 198.51.100.23
+  ip napt service ping 198.51.100.24
+  ip nat enable
+  ip nat dynamic list acl-f-nat pool pool-f-a
+  ip nat dynamic list acl-f-nat2 pool pool-f-b
+  ip nat static network 198.51.100.64/26 203.0.113.64/26
+  ip filter acl-f-wan 10 in
+  ip filter acl-f-lan 20 in
+  ip filter acl-f-mgmt 5 in
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.1/24
+  ip dhcp binding dhcp-f-a
+  vrrp 1 ip 198.51.100.254
+  no shutdown
+!
+interface GigaEthernet2.0
+  ip address 192.0.2.129/25
+  ip dhcp binding dhcp-f-b
+  ip napt enable
+  ip napt address 203.0.113.50
+  no shutdown
+!
+interface GigaEthernet2.1
+  encapsulation dot1q 10
+  ip address 192.0.2.1/25
+  ip dhcp binding dhcp-f-c
+  no shutdown

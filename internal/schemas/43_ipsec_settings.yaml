@@ -1,0 +1,12 @@
+table: ipsec_settings
+title: {ja: IPsec の全体設定, en: IPsec settings}
+since: M7
+key: [device]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: anti_replay, title: {ja: 再送攻撃の検出, en: Anti-replay}, type: bool, note: {ja: "同じパケットをもう一度受けたら捨てる。空 = 機器の既定（有効）", en: "A packet received twice is dropped. Empty = the default of the device (on)"}}
+  - {name: replay_window, title: {ja: 再送攻撃の検出の窓, en: Anti-replay window}, type: int, min: 64, max: 1024, note: {ja: "順番の入れ替わりを許すパケットの数（64・128・256・512・1024）", en: "How many packets may arrive out of order (64, 128, 256, 512 or 1024)"}}
+  - {name: df_bit, title: {ja: 外側の DF ビット, en: DF bit of the outer header}, type: enum, values: [copy, set, clear], note: {ja: "暗号化したパケットの外側のヘッダの DF ビット。copy = 元のパケットから写す、set = 立てる、clear = 立てない（途中で分割できる）", en: "The DF bit of the header around an encrypted packet. copy = as the inner packet has it, set, clear (the packet may be fragmented on the way)"}}
+  - {name: idle_time, title: {ja: 通信が無いときに切るまでの時間（秒）, en: Idle time (s)}, type: int, min: 60, max: 86400, note: {ja: "この時間だけ通信が無い相手の IPsec を切る。空 = 切らない", en: "The IPsec of a peer without traffic for this long is taken down. Empty = never"}}
+  - {name: aggressive_mode, title: {ja: アグレッシブモードを受け付ける, en: Aggressive mode allowed}, type: bool, note: {ja: "無効 = IKE 版 1 のアグレッシブモードを、受けることも始めることもしない。空 = 機器の既定（受け付ける）", en: "Off = aggressive mode of IKE version 1 is neither taken nor started. Empty = the default of the device (allowed)"}}
+  - {name: invalid_spi_recovery, title: {ja: 知らない SPI を受けたら IKE をつなぎ直す, en: Invalid SPI recovery}, type: bool, note: {ja: "相手が再起動した後などに、知らない SPI のパケットを受けたら、IKE をつないで相手に知らせる", en: "On a packet with an unknown SPI (the peer restarted, for one), IKE is brought up to tell the peer"}}

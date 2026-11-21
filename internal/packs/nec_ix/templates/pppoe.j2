@@ -37,6 +37,9 @@
 ppp profile {{ p.name }}
   authentication myname {{ user }}
   authentication password {{ user }} {{ pw }}
+{% if p.auth_both == true %}
+  authentication request {{ p.auth | required(what ~ ' の認証方式（「相手も認証する」は、認証方式を書いたときだけ書けます）') | replace('_', '-') }}
+{% endif %}
 {% if p.auth %}
   authentication accept {{ p.auth | replace('_', '-') }}
 {% endif %}

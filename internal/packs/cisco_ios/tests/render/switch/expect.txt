@@ -1,0 +1,88 @@
+hostname sw-a02
+!
+switch 1 provision sample-48p
+switch 2 provision sample-48p
+ip routing
+ip default-gateway 192.0.2.126
+vtp domain sample-domain
+vtp mode transparent
+spanning-tree mode rapid-pvst
+spanning-tree portfast default
+spanning-tree portfast bpduguard default
+spanning-tree extend system-id
+spanning-tree vlan 10,20 priority 4096
+spanning-tree vlan 30 priority 8192
+spanning-tree vlan 30 hello-time 2
+spanning-tree vlan 30 forward-time 15
+spanning-tree vlan 30 max-age 20
+!
+vlan 10
+ name sample-office
+!
+vlan 20
+ name sample-voice
+!
+vlan 30
+!
+interface GigabitEthernet1/0/1
+ description office desk
+ switchport access vlan 10
+ switchport mode access
+ switchport voice vlan 20
+ switchport port-security maximum 3
+ switchport port-security violation restrict
+ switchport port-security mac-address sticky
+ switchport port-security
+ storm-control broadcast level 5.00
+ storm-control multicast level 10
+ storm-control unicast level 20.5
+ storm-control action shutdown
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+!
+interface GigabitEthernet1/0/2
+ switchport access vlan 20
+ switchport mode access
+ spanning-tree portfast disable
+ spanning-tree bpduguard disable
+ shutdown
+!
+interface GigabitEthernet1/0/3
+ no switchport
+ ip address 198.51.100.1 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet1/0/4
+ switchport
+ no shutdown
+!
+interface GigabitEthernet1/0/47
+ switchport trunk encapsulation dot1q
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,20,30-32
+ switchport mode trunk
+ switchport nonegotiate
+ spanning-tree portfast trunk
+ channel-group 1 mode active
+ no shutdown
+!
+interface GigabitEthernet2/0/47
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,20,30-32
+ switchport mode trunk
+ channel-group 1 mode active
+ no shutdown
+!
+interface Port-channel1
+ description to sw-b02
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,20,30-32
+ switchport mode trunk
+ no shutdown
+!
+interface Vlan10
+ ip address 192.0.2.1 255.255.255.128
+ no shutdown
+!
+end

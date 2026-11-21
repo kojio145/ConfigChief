@@ -1,0 +1,5 @@
+# The next hop of an IPv6 route as a condition of a route policy (made-up
+# values).
+tables:
+  route_policies:
+    - {name: rm6-sample-nh, seq: 10, action: permit, match_ipv6_next_hop_prefix_list: pl6-sample-nh}

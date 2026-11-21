@@ -1,0 +1,41 @@
+hostname ix-y01
+!
+ip route default 203.0.113.10
+ip route 192.0.2.0/25 Tunnel0.0
+!
+ikev2 authentication psk id fqdn rt-y01.example.com key char dummy-psk-site-y01
+ikev2 authentication psk id fqdn ix-y02.example.com key char dummy-psk-site-y02
+!
+ikev2 profile ikev2-0
+  child-lifetime 3600
+  child-pfs 2048-bit
+  child-proposal enc aes-cbc-256
+  child-proposal integrity sha1
+  dpd interval 30
+  local-authentication psk id fqdn rt-y01.example.com
+  nat-traversal
+  retransmit count 3 interval 5
+  sa-lifetime 43200
+  sa-proposal dh 2048-bit
+  sa-proposal enc aes-cbc-256
+  sa-proposal integrity sha2-256
+!
+interface GigaEthernet0.0
+  description sample wan
+  ip address 203.0.113.9/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  description sample lan
+  ip address 198.51.100.1/24
+  no shutdown
+!
+interface Tunnel0.0
+  description sample vpn
+  ip address 192.0.2.209/30
+  tunnel mode ipsec-ikev2
+  ikev2 binding ikev2-0
+  ikev2 peer 203.0.113.20 authentication psk id fqdn ix-y02.example.com
+  ikev2 source-address GigaEthernet0.0
+  no shutdown
+!

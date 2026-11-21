@@ -1,0 +1,46 @@
+# The rest of the route maps and of OSPF (appendix A 3.19, the part added
+# on 2026-11-21): the next hop by an access list, the kind of a route,
+# "continue", the communities to take off (a standard list with one
+# community on every line becomes the values of the entry and leaves the
+# dataset; a list of another shape is not taken apart), extended
+# communities, the IPv6 lines and IPv6 policy routing; the distances of
+# OSPF, what goes into the routing table, virtual links and the rest of the
+# default route; what a kind of route is redistributed with into OSPFv3 and
+# into BGP for IPv6 (the kinds stay in the list of the process, the options
+# go into their own table). Made-up values.
+tables:
+  devices:
+    - {hostname: rt-m01, local_policy_route_v6: RM-SAMPLE-PBR6}
+  ipv6_interfaces:
+    - {if_name: GigabitEthernet0/1, tcp_mss: 1380, policy_route: RM-SAMPLE-PBR6}
+  ospf_processes:
+    - {process_id: 1, router_id: 192.0.2.1, max_metric: true, distance: 115, distance_intra: 100, distance_inter: 105, distance_external: 120, filter_in_prefix_list: PL-SAMPLE-OSPF, filter_in_acl: "", filter_in_policy: "", default_originate: always, default_metric: 50, default_metric_type: "1", default_filter: RM-SAMPLE-DEF}
+    - {process_id: 2, filter_in_acl: ACL-SAMPLE-STD, filter_in_prefix_list: ""}
+    - {process_id: 3, filter_in_policy: RM-SAMPLE-DEF}
+  ospf_virtual_links:
+    - {process_id: 1, area: "1", router_id: 192.0.2.9, hello: "", dead: ""}
+    - {process_id: 1, area: "2", router_id: 192.0.2.10, hello: 5, dead: 20}
+  ospfv3_processes:
+    - {process_id: 5, router_id: 192.0.2.1, redistribute: [connected, static]}
+  ospfv3_redistribute:
+    - {process_id: 5, source: static, metric: 20, metric_type: "1", tag: 30, filter: RM-SAMPLE-DEF}
+  bgp_processes:
+    - {vrf: "", asn: 64496, ipv6_redistribute: [connected, static]}
+  bgp_ipv6_redistribute:
+    - {source: static, metric: 40, filter: RM-SAMPLE-DEF}
+  community_lists:
+    - {name: CL-SAMPLE-DELRE, seq: 10, action: permit, type: expanded, regex: "64497:9[0-9]"}
+  route_policies:
+    - {name: RM-SAMPLE-DEF, seq: 10, action: permit}
+    - {name: RM-SAMPLE-MORE, seq: 10, action: permit, match_next_hop_acl: [ACL-SAMPLE-STD], match_route_type: [external_type1, internal], set_community_delete: ["64497:100", "64497:200"], set_extcommunity_rt: ["64496:100", "64496:200"], set_extcommunity_rt_additive: true, set_extcommunity_soo: "64496:1", continue_to: "30"}
+    - {name: RM-SAMPLE-MORE, seq: 20, action: permit, match_ipv6_prefix_list: [PL6-SAMPLE], set_community_delete: [], continue_to: next}
+    - {name: RM-SAMPLE-MORE, seq: 30, action: permit, match_route_type: []}
+    - {name: RM-SAMPLE-PBR6, seq: 10, action: permit, match_ipv6_acl: [ACL6-SAMPLE-PBR], set_ipv6_next_hop: ["2001:db8:0:1::2", "2001:db8:0:1::3"], set_ipv6_default_next_hop: ["2001:db8:0:1::9"]}
+unknown:
+  # No column: authentication of a virtual link, the routes that are sent.
+  - "area 3 virtual-link 192.0.2.11 authentication key-chain sample-chain"
+  - "distribute-list ACL-SAMPLE-STD out static"
+  # A list that is not "one community on every line" is not taken apart.
+  - "set comm-list CL-SAMPLE-DELRE delete"
+  # A kind of IS-IS.
+  - "match route-type level-1"

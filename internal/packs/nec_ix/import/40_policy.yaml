@@ -2,13 +2,16 @@
 # Syntax: cmdref 4.9 and 4.10.
 rules:
   # One entry on a line, with "src" and "dest"; the list has no line of its
-  # own. Without numbers the entries are numbered 10, 20, ... in the order of
-  # the lines. Read: one port with eq / lt / gt / neq, and "precedence" and
-  # "dscp" at the end (stage M6, cmdref 7.15). A range of ports, the ICMP
-  # type, "tos", "established" and the other options stay unknown.
+  # own (CRM 24-3 to 24-5). Without numbers the entries are numbered 10, 20,
+  # ... in the order of the lines. Read: the TCP flag before "src" (one of
+  # them, or "established"), a port with eq / lt / gt / neq or a range
+  # ("sport any" and "dport any" say nothing and are read as no port), the
+  # ICMP type with its code or the name of the message, and "tos",
+  # "precedence", "dscp" and "fragments" at the end. An address with a
+  # wildcard, "src-domain" / "dest-domain" and "linkmgr" stay unknown.
   - id: acl.entry
-    match: '^ip access-list (?P<acl>\S+)(?: (?P<seq>\d+))? (?P<action>permit|deny) (?P<proto>ip|tcp|udp|icmp) src (?P<src>any|\d+\.\d+\.\d+\.\d+/\d+)(?: sport (?P<sop>eq|lt|gt|neq) (?P<sp>\d+))? dest (?P<dst>any|\d+\.\d+\.\d+\.\d+/\d+)(?: dport (?P<dop>eq|lt|gt|neq) (?P<dp>\d+))?(?: precedence (?P<prec>\d+))?(?: dscp (?P<dscp>\d+))?$'
-    when: "proto in ['tcp', 'udp'] or not (sp or dp)"
+    match: '^ip access-list (?P<acl>\S+)(?: (?P<seq>\d+))? (?P<action>permit|deny) tcp(?: (?P<flag>established|ack|fin|psh|rst|syn|urg))? src (?P<src>any|\d+\.\d+\.\d+\.\d+/\d+)(?: sport any| sport (?P<sop>eq|lt|gt|neq) (?P<sp>\d+)| sport range (?P<sp1>\d+) (?P<sp2>\d+))? dest (?P<dst>any|\d+\.\d+\.\d+\.\d+/\d+)(?: dport any| dport (?P<dop>eq|lt|gt|neq) (?P<dp>\d+)| dport range (?P<dp1>\d+) (?P<dp2>\d+))?(?: tos (?P<tos>\d+))?(?: precedence (?P<prec>\d+))?(?: dscp (?P<dscp>\d+))?(?P<frag> fragments)?$'
+    when: "acl not in ['cache', 'dynamic', 'option', 'disregard-case']"
     row:
       table: acl_entries
       key:
@@ -16,22 +19,101 @@ rules:
         seq: "{{ seq if seq else (rows('acl_entries', acl=acl) | length + 1) * 10 }}"
     set:
       action: "{{ action }}"
-      protocol: "{{ proto }}"
+      protocol: tcp
+      src_port: "{{ (sop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ sp }}{{ (sp1 ~ '-' ~ sp2) if sp1 else '' }}"
+      dst_port: "{{ (dop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ dp }}{{ (dp1 ~ '-' ~ dp2) if dp1 else '' }}"
       src: "{{ src | replace('/32', '') }}"
-      src_port: "{{ (sop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ sp }}"
       dst: "{{ dst | replace('/32', '') }}"
-      dst_port: "{{ (dop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ dp }}"
-      dscp: "{{ dscp }}"
+      tos: "{{ tos }}"
       precedence: "{{ prec }}"
-    # The device has one kind of list; with a source and a destination it is
-    # the "extended" kind of the dataset.
+      dscp: "{{ dscp }}"
+    append: {flags: "{{ flag }} {{ 'fragments' if frag else '' }}"}
     emit:
       - table: acls
         key: {name: "{{ acl }}"}
         set: {type: extended}
+  - id: acl.entry.udp
+    match: '^ip access-list (?P<acl>\S+)(?: (?P<seq>\d+))? (?P<action>permit|deny) udp src (?P<src>any|\d+\.\d+\.\d+\.\d+/\d+)(?: sport any| sport (?P<sop>eq|lt|gt|neq) (?P<sp>\d+)| sport range (?P<sp1>\d+) (?P<sp2>\d+))? dest (?P<dst>any|\d+\.\d+\.\d+\.\d+/\d+)(?: dport any| dport (?P<dop>eq|lt|gt|neq) (?P<dp>\d+)| dport range (?P<dp1>\d+) (?P<dp2>\d+))?(?: tos (?P<tos>\d+))?(?: precedence (?P<prec>\d+))?(?: dscp (?P<dscp>\d+))?(?P<frag> fragments)?$'
+    when: "acl not in ['cache', 'dynamic', 'option', 'disregard-case']"
+    row:
+      table: acl_entries
+      key:
+        acl: "{{ acl }}"
+        seq: "{{ seq if seq else (rows('acl_entries', acl=acl) | length + 1) * 10 }}"
+    set:
+      action: "{{ action }}"
+      protocol: udp
+      src_port: "{{ (sop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ sp }}{{ (sp1 ~ '-' ~ sp2) if sp1 else '' }}"
+      dst_port: "{{ (dop | replace('neq', '!') | replace('eq', '') | replace('gt', '>') | replace('lt', '<')) ~ dp }}{{ (dp1 ~ '-' ~ dp2) if dp1 else '' }}"
+      src: "{{ src | replace('/32', '') }}"
+      dst: "{{ dst | replace('/32', '') }}"
+      tos: "{{ tos }}"
+      precedence: "{{ prec }}"
+      dscp: "{{ dscp }}"
+    append: {flags: "{{ 'fragments' if frag else '' }}"}
+    emit:
+      - table: acls
+        key: {name: "{{ acl }}"}
+        set: {type: extended}
+  - id: acl.entry.icmp
+    match: '^ip access-list (?P<acl>\S+)(?: (?P<seq>\d+))? (?P<action>permit|deny) icmp(?: type (?P<type>\d+)(?: code (?P<code>\d+))?| (?P<msg>administratively-prohibited|dod-host-prohibited|dod-net-prohibited|echo-reply|echo|general-parameter-problem|host-isolated|host-precedence-unreachable|host-redirect|host-tos-redirect|host-tos-unreachable|host-unknown|host-unreachable|information-reply|information-request|mask-reply|mask-request|net-redirect|net-tos-redirect|net-tos-unreachable|net-unreachable|network-unknown|option-missing|packet-too-big|parameter-problem|port-unreachable|precedence-unreachable|protocol-unreachable|reassembly-timeout|redirect|router-advertisement|router-solicitation|source-quench|source-route-failed|time-exceeded|timestamp-reply|timestamp-request|ttl-exceeded|unreachable))? src (?P<src>any|\d+\.\d+\.\d+\.\d+/\d+) dest (?P<dst>any|\d+\.\d+\.\d+\.\d+/\d+)(?: tos (?P<tos>\d+))?(?: precedence (?P<prec>\d+))?(?: dscp (?P<dscp>\d+))?(?P<frag> fragments)?$'
+    when: "acl not in ['cache', 'dynamic', 'option', 'disregard-case']"
+    row:
+      table: acl_entries
+      key:
+        acl: "{{ acl }}"
+        seq: "{{ seq if seq else (rows('acl_entries', acl=acl) | length + 1) * 10 }}"
+    set:
+      action: "{{ action }}"
+      protocol: icmp
+      icmp_type: "{{ type if type else msg }}"
+      icmp_code: "{{ code }}"
+      src: "{{ src | replace('/32', '') }}"
+      dst: "{{ dst | replace('/32', '') }}"
+      tos: "{{ tos }}"
+      precedence: "{{ prec }}"
+      dscp: "{{ dscp }}"
+    append: {flags: "{{ 'fragments' if frag else '' }}"}
+    emit:
+      - table: acls
+        key: {name: "{{ acl }}"}
+        set: {type: extended}
+  # A protocol is "ip" or a number; the numbers the manuals name (47 GRE,
+  # 50 ESP) become the words of the dataset.
+  - id: acl.entry.ip
+    match: '^ip access-list (?P<acl>\S+)(?: (?P<seq>\d+))? (?P<action>permit|deny) (?P<proto>ip|\d+) src (?P<src>any|\d+\.\d+\.\d+\.\d+/\d+) dest (?P<dst>any|\d+\.\d+\.\d+\.\d+/\d+)(?: tos (?P<tos>\d+))?(?: precedence (?P<prec>\d+))?(?: dscp (?P<dscp>\d+))?(?P<frag> fragments)?$'
+    when: "acl not in ['cache', 'dynamic', 'option', 'disregard-case']"
+    row:
+      table: acl_entries
+      key:
+        acl: "{{ acl }}"
+        seq: "{{ seq if seq else (rows('acl_entries', acl=acl) | length + 1) * 10 }}"
+    set:
+      action: "{{ action }}"
+      protocol: "{{ 'ip' if proto == 'ip' else ('gre' if proto == '47' else ('esp' if proto == '50' else proto)) }}"
+      src: "{{ src | replace('/32', '') }}"
+      dst: "{{ dst | replace('/32', '') }}"
+      tos: "{{ tos }}"
+      precedence: "{{ prec }}"
+      dscp: "{{ dscp }}"
+    append: {flags: "{{ 'fragments' if frag else '' }}"}
+    emit:
+      - table: acls
+        key: {name: "{{ acl }}"}
+        set: {type: extended}
+  # The list keeps the numbers of its entries ("Sequence mode", CRM 24-8).
+  # Without a step the device takes 100.
+  - id: acl.sequence_mode
+    match: '^ip access-list (?P<acl>\S+) sequence-mode(?: (?P<n>\d+))?$'
+    row: {table: acls, key: {name: "{{ acl }}"}}
+    set: {type: extended, seq_step: "{{ n if n else 100 }}"}
 
   # "min" and "max" are the shortest and the longest prefix; the form with
-  # "any" stays unknown.
+  # "any" is every prefix: the same as 0.0.0.0/0 min 0 max 32 (CRM 23-14).
+  - id: prefix_list.any
+    match: '^ip prefix-list (?P<name>\S+) (?P<seq>\d+) (?P<action>permit|deny) any$'
+    row: {table: prefix_lists, key: {name: "{{ name }}", seq: "{{ seq }}"}}
+    set: {action: "{{ action }}", prefix: 0.0.0.0/0, le: 32}
   - id: prefix_list
     match: '^ip prefix-list (?P<name>\S+) (?P<seq>\d+) (?P<action>permit|deny) (?P<prefix>\d+\.\d+\.\d+\.\d+/\d+)(?: min (?P<ge>\d+))?(?: max (?P<le>\d+))?$'
     row: {table: prefix_lists, key: {name: "{{ name }}", seq: "{{ seq }}"}}
@@ -41,20 +123,114 @@ rules:
       ge: "{{ ge }}"
       le: "{{ le }}"
 
+  # The range of a pool (CRM 8-30). A pool with several ranges (the name
+  # written more than once) stays unknown.
+  - id: nat.pool
+    match: '^ip nat pool (?P<name>\S+) (?P<start>\d+\.\d+\.\d+\.\d+) (?P<end>\d+\.\d+\.\d+\.\d+)$'
+    emit:
+      - table: x_nat_pool
+        key: {name: "{{ name }}", start: "{{ start }}"}
+        set: {end: "{{ end }}"}
+
 derive:
+  # The lists of the servers for remote login (10_system.yaml).
+  - id: remote.acl.common
+    for: x_remote_acl
+    as: a
+    let:
+      op: "'ssh' if a.proto == 'telnet' else 'telnet'"
+      other: "lookup('x_remote_acl', proto=op)"
+      ra: "lookup('remote_access')"
+    when: "a.acl and (other.acl == a.acl or (not other.acl and op not in ra.protocols))"
+    row: {table: remote_access, key: {}}
+    set: {acl: "{{ a.acl }}"}
+  - id: remote.acl.own
+    for: x_remote_acl
+    as: a
+    let:
+      op: "'ssh' if a.proto == 'telnet' else 'telnet'"
+      other: "lookup('x_remote_acl', proto=op)"
+      ra: "lookup('remote_access')"
+    when: "a.acl and not (other.acl == a.acl or (not other.acl and op not in ra.protocols))"
+    row: {table: remote_access, key: {}}
+    set: {"acl_{{ a.proto }}": "{{ a.acl }}"}
+
+  # The lists of an interface are looked at in the order of their numbers
+  # (CRM 13-3): the first is the list of the direction, the others follow in
+  # "more". The numbers themselves are not kept.
+  - id: if.filter.in
+    for: interfaces
+    as: i
+    let:
+      fs: "rows('x_filter', if_name=i.name, dir='in') | natural(attribute='n')"
+    each: {f: "fs"}
+    when: "f.n"
+    row: {table: interfaces, key: {name: "{{ i.name }}"}}
+    set: {acl_in: "{{ f.acl if f_n == 1 else '' }}"}
+    append: {acl_in_more: "{{ f.acl if f_n > 1 else '' }}"}
+  - id: if.filter.out
+    for: interfaces
+    as: i
+    let:
+      fs: "rows('x_filter', if_name=i.name, dir='out') | natural(attribute='n')"
+    each: {f: "fs"}
+    when: "f.n"
+    row: {table: interfaces, key: {name: "{{ i.name }}"}}
+    set: {acl_out: "{{ f.acl if f_n == 1 else '' }}"}
+    append: {acl_out_more: "{{ f.acl if f_n > 1 else '' }}"}
+  - id: if.ipv6.filter.in
+    for: interfaces
+    as: i
+    let:
+      fs: "rows('x_filter6', if_name=i.name, dir='in') | natural(attribute='n')"
+    each: {f: "fs"}
+    when: "f.n"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ i.name }}"}}
+    set: {acl_in: "{{ f.acl if f_n == 1 else '' }}"}
+    append: {acl_in_more: "{{ f.acl if f_n > 1 else '' }}"}
+  - id: if.ipv6.filter.out
+    for: interfaces
+    as: i
+    let:
+      fs: "rows('x_filter6', if_name=i.name, dir='out') | natural(attribute='n')"
+    each: {f: "fs"}
+    when: "f.n"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ i.name }}"}}
+    set: {acl_out: "{{ f.acl if f_n == 1 else '' }}"}
+    append: {acl_out_more: "{{ f.acl if f_n > 1 else '' }}"}
+
   # The lines stand under an interface (20_interfaces.yaml) and are joined
-  # here. "ip napt enable" translates to the address of that interface.
+  # here. "ip napt enable" translates to the address of that interface, or
+  # to the address of "ip napt address": that is a pool of one address.
   - id: nat.pat
     for: x_nat
     as: n
     let:
       l: "lookup('x_napt_list', if_name=n.if_name)"
+      ad: "lookup('x_napt_addr', if_name=n.if_name)"
     when: "n.kind == 'pat'"
     row: {table: nat_rules, key: {name: "{{ n.name }}"}}
     set:
-      type: pat_interface
+      type: "{{ 'pat_pool' if ad.addr else 'pat_interface' }}"
       outside_if: "{{ n.if_name }}"
       match_acl: "{{ l.acl }}"
+      pool_start: "{{ ad.addr }}"
+      pool_end: "{{ ad.addr }}"
+
+  # A second translation with an address of its own needs "ip napt enable".
+  - id: nat.pat.address
+    for: x_nat
+    as: n
+    let:
+      on: "lookup('x_nat', kind='pat', if_name=n.if_name)"
+    when: "n.kind == 'pat_addr' and on.name"
+    row: {table: nat_rules, key: {name: "{{ n.name }}"}}
+    set:
+      type: pat_pool
+      outside_if: "{{ n.if_name }}"
+      match_acl: "{{ n.acl }}"
+      pool_start: "{{ n.global_ip }}"
+      pool_end: "{{ n.global_ip }}"
 
   # A forwarded port needs "ip napt enable" on the same interface.
   - id: nat.static_port
@@ -71,8 +247,23 @@ derive:
       local_ip: "{{ n.local_ip }}"
       local_port: "{{ n.port }}"
       global_port: "{{ n.port }}"
+  - id: nat.service
+    for: x_nat
+    as: n
+    let:
+      on: "lookup('x_nat', kind='pat', if_name=n.if_name)"
+    when: "n.kind == 'service' and on.name"
+    row: {table: nat_rules, key: {name: "{{ n.name }}"}}
+    set:
+      type: static_port
+      outside_if: "{{ n.if_name }}"
+      protocol: "{{ n.protocol }}"
+      local_ip: "{{ n.local_ip }}"
+      local_port: "{{ n.local_port }}"
+      global_port: "{{ n.port }}"
 
-  # A static pair needs "ip nat enable" on the same interface.
+  # A static pair, a static network and a pool need "ip nat enable" on the
+  # same interface.
   - id: nat.static
     for: x_nat
     as: n
@@ -85,3 +276,31 @@ derive:
       outside_if: "{{ n.if_name }}"
       local_ip: "{{ n.local_ip }}"
       global_ip: "{{ n.global_ip }}"
+  - id: nat.static.network
+    for: x_nat
+    as: n
+    let:
+      on: "lookup('x_nat_enable', if_name=n.if_name)"
+    when: "n.kind == 'static_network' and on.on"
+    row: {table: nat_rules, key: {name: "{{ n.name }}"}}
+    set:
+      type: static_network
+      outside_if: "{{ n.if_name }}"
+      local_ip: "{{ n.local_ip }}"
+      global_ip: "{{ n.global_ip }}"
+      pool_prefix: "{{ n.prefix }}"
+  - id: nat.dynamic
+    for: x_nat
+    as: n
+    let:
+      on: "lookup('x_nat_enable', if_name=n.if_name)"
+      pools: "rows('x_nat_pool', name=n.pool)"
+      pool: "pools | first"
+    when: "n.kind == 'dynamic' and on.on and pools | length == 1 and pool.end"
+    row: {table: nat_rules, key: {name: "{{ n.name }}"}}
+    set:
+      type: dynamic_pool
+      outside_if: "{{ n.if_name }}"
+      match_acl: "{{ n.acl }}"
+      pool_start: "{{ pool.start }}"
+      pool_end: "{{ pool.end }}"

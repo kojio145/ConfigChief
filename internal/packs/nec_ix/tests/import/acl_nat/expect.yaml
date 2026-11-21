@@ -1,0 +1,83 @@
+# The rest of the access lists, NAT, the static routes, line monitoring and
+# DHCP (appendix A 3.25; made-up values). "tables" lists some rows per table;
+# "unknown" is the whole list of lines that may stay unknown.
+tables:
+  interfaces:
+    - name: GigaEthernet0.0
+      ipv4: dhcp
+      bandwidth: 100000
+      acl_in: acl-f-mgmt
+      acl_in_more: [acl-f-wan, acl-f-lan]
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: dhcp, out_if: GigaEthernet0.0}
+    - {prefix: 192.0.2.64/26, next_hop: 203.0.113.2, track: wg-f-host}
+    - {prefix: 192.0.2.128/26, next_hop: 203.0.113.6, track: wg-f-or}
+  remote_access:
+    - {protocols: [telnet, ssh], acl: "", acl_telnet: acl-f-mgmt, acl_ssh: acl-f-ssh}
+  acls:
+    - {name: acl-f-wan, type: extended, seq_step: ""}
+    - {name: acl-f-lan, type: extended, seq_step: 100}
+  acl_entries:
+    - {acl: acl-f-wan, seq: 10, action: permit, protocol: tcp, src: any, src_port: "", dst: any, dst_port: "", flags: [established]}
+    - {acl: acl-f-wan, seq: 20, action: permit, protocol: tcp, src: any, dst: 203.0.113.10, dst_port: "443", flags: [syn]}
+    - {acl: acl-f-wan, seq: 30, action: permit, protocol: tcp, src: any, src_port: 1024-65535, dst: 203.0.113.10, dst_port: "25"}
+    - {acl: acl-f-wan, seq: 40, action: permit, protocol: udp, src: any, src_port: "53", dst: any, dst_port: 67-68}
+    - {acl: acl-f-wan, seq: 50, action: permit, protocol: icmp, src: any, dst: any, icmp_type: echo-reply}
+    - {acl: acl-f-wan, seq: 60, action: permit, protocol: icmp, src: any, dst: any, icmp_type: "3", icmp_code: 4}
+    - {acl: acl-f-wan, seq: 70, action: permit, protocol: icmp, src: any, dst: any, icmp_type: "11", icmp_code: ""}
+    - {acl: acl-f-wan, seq: 80, action: permit, protocol: esp, src: any, dst: 203.0.113.1}
+    - {acl: acl-f-wan, seq: 90, action: permit, protocol: gre, src: any, dst: 203.0.113.1}
+    - {acl: acl-f-wan, seq: 100, action: deny, protocol: udp, src: any, dst: any, tos: 4, flags: [fragments]}
+    - {acl: acl-f-wan, seq: 110, action: deny, protocol: ip, src: any, dst: any}
+    - {acl: acl-f-lan, seq: 100, action: permit, protocol: ip, src: 198.51.100.0/24, dst: any}
+    - {acl: acl-f-lan, seq: 200, action: deny, protocol: ip, src: any, dst: any}
+  nat_rules:
+    - {type: pat_interface, outside_if: GigaEthernet0.0, match_acl: acl-f-nat}
+    - {type: pat_pool, outside_if: GigaEthernet0.0, match_acl: acl-f-nat2, pool_start: 203.0.113.20, pool_end: 203.0.113.20, pool_prefix: ""}
+    - {type: static_port, outside_if: GigaEthernet0.0, protocol: tcp, local_ip: 198.51.100.21, local_port: 443, global_port: 443}
+    - {type: static_port, outside_if: GigaEthernet0.0, protocol: tcp, local_ip: 198.51.100.22, local_port: 8080, global_port: 80}
+    - {type: static_port, outside_if: GigaEthernet0.0, protocol: udp, local_ip: 198.51.100.23, local_port: 53, global_port: 53}
+    - {type: dynamic_pool, outside_if: GigaEthernet0.0, match_acl: acl-f-nat, pool_start: 203.0.113.33, pool_end: 203.0.113.38}
+    - {type: static_network, outside_if: GigaEthernet0.0, local_ip: 198.51.100.64, global_ip: 203.0.113.64, pool_prefix: 26}
+    - {type: pat_pool, outside_if: GigaEthernet2.0, match_acl: "", pool_start: 203.0.113.50, pool_end: 203.0.113.50}
+  fhrp:
+    - {if_name: GigaEthernet1.0, group: 1, protocol: vrrp, virtual_ip: 198.51.100.254, track: wg-f-host, track_decrement: 30}
+  tracks:
+    - id: wg-f-host
+      type: icmp
+      target: 203.0.113.2
+      via_if: GigaEthernet0.0
+      via_next_hop: 203.0.113.1
+      source_if: GigaEthernet1.0
+      interval: 10
+      restore_interval: 30
+      fail_count: 3
+      shutdown_ifs: [GigaEthernet2.0]
+    - {id: wg-f-or, type: list, list_rule: all_up, members: [wg-f-or-1, wg-f-or-2, wg-f-or-3]}
+    - {id: wg-f-or-1, type: icmp, target: 203.0.113.6, fail_count: 2}
+    - {id: wg-f-or-2, type: route, target: 198.18.10.0/24, via_next_hop: 203.0.113.6, fail_count: 2}
+    - {id: wg-f-or-3, type: interface, target: GigaEthernet2.0}
+    - {id: wg-f-and, type: list, list_rule: any_up, members: [wg-f-and-1, wg-f-and-2], shutdown_ifs: [GigaEthernet2.0]}
+    - {id: wg-f-and-1, type: icmp, target: 203.0.113.9}
+    - {id: wg-f-and-2, type: icmp, target: 203.0.113.10}
+  dhcp_pools:
+    - {name: dhcp-f-a, network: 198.51.100.0/24, default_router: 198.51.100.1, lease: 90m}
+    - {name: dhcp-f-b, network: 192.0.2.128/25, lease: infinite}
+    - {name: dhcp-f-c, network: 192.0.2.0/25, lease: 100s}
+
+unknown:
+  # An address with a wildcard, and a domain.
+  - "ip access-list acl-f-wild permit ip src 192.0.2.0 0.0.0.255 dest any"
+  - "ip access-list acl-f-dom permit ip src-domain host1.example.com dest any"
+  # A pool with two ranges, and the translation that uses it.
+  - "ip nat pool pool-f-b 203.0.113.41 203.0.113.42"
+  - "ip nat pool pool-f-b 203.0.113.45 203.0.113.46"
+  - "ip nat dynamic list acl-f-nat2 pool pool-f-b"
+  # A reserved service that is not TCP or UDP.
+  - "ip napt service ping 198.51.100.24"
+  # A group that mixes events with and without "sub".
+  - "watch-group wg-f-mix 40"
+  - "event 10 sub 10 ip unreach-host 203.0.113.11"
+  - "event 20 ip unreach-host 203.0.113.12"
+  - "network-monitor wg-f-mix enable"
+ignored_min: 0

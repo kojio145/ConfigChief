@@ -1,0 +1,32 @@
+hostname ix-v01
+!
+ip name-server 192.0.2.53
+ipv6 name-server 2001:db8:0:53::1
+!
+snmp-agent ip enable
+snmp-agent ip community example-ro ro
+snmp-agent ipv6 enable
+snmp-agent ipv6 community example-ro ro
+snmp-agent ipv6 host 2001:db8:0:162::1 example-ro version 2
+snmp-agent ipv6 trap-source GigaEthernet1.0
+!
+ntp server 2001:db8:0:123::1
+!
+syslog ipv6 host 2001:db8:0:50::1
+syslog ipv6 source 2001:db8:0:2::1
+!
+watch-group wg-v6-host 10
+  event 10 ipv6 unreach-host 2001:db8:ff::10 GigaEthernet1.0 source 2001:db8:0:2::1
+  probe-timer variance 10
+!
+watch-group wg-v6-route 10
+  event 10 ipv6 unreach-route 2001:db8:100::/48 GigaEthernet1.0
+!
+network-monitor wg-v6-host enable
+network-monitor wg-v6-route enable
+!
+interface GigaEthernet1.0
+  ipv6 enable
+  ipv6 address 2001:db8:0:2::1/64
+  no shutdown
+!

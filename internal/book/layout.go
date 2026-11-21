@@ -160,7 +160,8 @@ func note(t *schema.Table, c *schema.Column, lang string) string {
 	// An example of the way of writing (spec 6.6), where the type has one
 	// and the note of the column does not show it already.
 	if ex := map[string]string{"ip4": "192.0.2.1", "cidr4": "192.0.2.1/24", "net4": "192.0.2.0/24",
-		"ip6": "2001:db8::1", "cidr6": "2001:db8::1/64", "net6": "2001:db8::/64"}[c.Type]; ex != "" && !strings.Contains(c.Note.In(lang), ex) {
+		"ip6": "2001:db8::1", "cidr6": "2001:db8::1/64", "net6": "2001:db8::/64",
+		"ip": "192.0.2.1", "net": "192.0.2.0/24"}[c.Type]; ex != "" && !strings.Contains(c.Note.In(lang), ex) {
 		if lang == "en" {
 			parts = append(parts, "Example: "+ex)
 		} else {

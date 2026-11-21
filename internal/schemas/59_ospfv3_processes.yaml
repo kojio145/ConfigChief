@@ -1,0 +1,12 @@
+table: ospfv3_processes
+title: {ja: OSPFv3, en: OSPFv3}
+since: M7
+key: [device, process_id]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: process_id, title: {ja: プロセス番号, en: Process ID}, type: int, required: true}
+  - {name: router_id, title: {ja: ルータ ID, en: Router ID}, type: ip4, note: {ja: "IPv4 アドレスの形（例 192.0.2.1）", en: "Written like an IPv4 address, e.g. 192.0.2.1"}}
+  - {name: passive_default, title: {ja: 既定を受動にする, en: Passive by default}, type: bool}
+  - {name: default_originate, title: {ja: デフォルト経路の広告, en: Default originate}, type: enum, values: [none, when_present, always]}
+  - {name: default_metric, title: {ja: 広告のメトリック, en: Default metric}, type: int}
+  - {name: redistribute, title: {ja: 再配布する経路, en: Redistribute}, type: "list<enum>", values: [connected, static, bgp, rip]}

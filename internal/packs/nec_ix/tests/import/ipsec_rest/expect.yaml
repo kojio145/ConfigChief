@@ -1,0 +1,17 @@
+# The rest of IPsec (made-up values; appendix A 3.13 and 3.20): the
+# identities of the second phase of a map on a tunnel interface ("ipsec
+# local-id", "ipsec remote-id": a selector of the row, a side that is not
+# written being everything), a dynamic map bound to its IKE policy
+# ("ike-binding", written after the proposal as in the examples of the
+# vendor), and the traffic selectors of IKE version 2 ("local-ts",
+# "remote-ts").
+tables:
+  ipsec_tunnels:
+    - {name: Tunnel0.0, style: tunnel_if, tunnel_if: Tunnel0.0, peer_address: 203.0.113.20, ike_version: 2, psk: dummy-psk-sample-a}
+    - {name: Tunnel1.0, style: tunnel_if, tunnel_if: Tunnel1.0, peer_address: 203.0.113.30, ike_version: 1, psk: dummy-psk-sample-b, ike_bind: ""}
+    - {name: Tunnel2.0, style: tunnel_if, tunnel_if: Tunnel2.0, peer_address: any, ike_version: 1, ike_mode: aggressive, remote_id: "keyid:sample-site-c", psk: dummy-psk-sample-c, ike_bind: true}
+  ipsec_selectors:
+    - {tunnel: Tunnel0.0, seq: 10, local_net: 192.0.2.0/25, remote_net: 198.51.100.128/25, protocol: ip}
+    - {tunnel: Tunnel1.0, seq: 10, local_net: 192.0.2.0/25, remote_net: 198.51.100.129/32, protocol: ip}
+    - {tunnel: Tunnel2.0, seq: 10, local_net: 0.0.0.0/0, remote_net: 198.51.100.0/25, protocol: ip}
+unknown: []

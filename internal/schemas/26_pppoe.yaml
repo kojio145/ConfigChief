@@ -13,3 +13,9 @@ columns:
   - {name: service_name, title: {ja: サービス名, en: Service name}, type: string}
   - {name: default_route, title: {ja: デフォルト経路を作る, en: Default route}, type: bool}
   - {name: keepalive, title: {ja: 監視間隔（秒）, en: Keepalive (s)}, type: int}
+  - {name: auth_both, title: {ja: 相手も認証する, en: Authenticate the peer}, type: bool, note: {ja: "こちらからも相手に認証を求める", en: "This side asks the peer to authenticate too"}}
+  - {name: on_demand, title: {ja: 通信があるときだけつなぐ, en: On demand}, type: bool}
+  - {name: idle_timeout, title: {ja: 無通信で切る時間（秒）, en: Idle timeout (s)}, type: int, min: 0}
+  - {name: dial_trigger, title: {ja: つなぐきっかけの通信, en: Dial trigger}, type: string, note: {ja: "ip（IP の通信すべて）か、ACL の名前", en: "ip (every IP packet) or the name of an ACL"}}
+  - {name: restart_delay, title: {ja: つなぎ直すまでの待ち（秒）, en: Restart delay (s)}, type: int, min: 1, max: 3600}
+  - {name: mac_override, title: {ja: MAC アドレスを論理 IF のものにする, en: MAC override}, type: bool}

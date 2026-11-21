@@ -41,7 +41,7 @@ const usage = `usage:
   ConfigChief.exe [<案件フォルダ>]          (画面を開く)
   ConfigChief.exe version
   ConfigChief.exe init    <dir> [--name <案件名>] [--kind migration|new]
-  ConfigChief.exe import  --project <dir> [--source old|new] [--pack <ID>]
+  ConfigChief.exe import  --project <dir> [--source old|new] [--pack <ID>] [--use <ファイル>]
   ConfigChief.exe book    --project <dir> [--from old|new] [--replace]
   ConfigChief.exe book    --project <dir> --new
   ConfigChief.exe clone   --project <dir> --from <ホスト名> --to <ホスト名>[,<ホスト名>…]

@@ -1,0 +1,24 @@
+# What this device cannot write (made-up values; appendix A 3.26): each
+# tells why, and how it is put right.
+tables:
+  devices:
+    - hostname: rt-d04
+      vendor: cisco_ios
+      log_buffer: true
+      # The device overwrites the oldest lines; it cannot stop.
+      log_buffer_mode: one_time
+      console_timeout_sec: 30
+  users:
+    # A hash cannot be turned back.
+    - {name: sample-user, secret: "$1$dummy$SampleHashForTestsOnly555", secret_form: hashed, reversible: true}
+    # The encrypted form is of "password" only.
+    - {name: example-user, secret: dummy7sample8A9B, secret_form: encrypted}
+  interfaces:
+    # "auto" without an MTU to take it from.
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.17/30, tcp_mss: auto}
+  ospf_processes:
+    - {process_id: 1}
+  ospf_interfaces:
+    # The encrypted form of another vendor.
+    - {process_id: 1, if_name: GigabitEthernet0/0, area: 0, auth_type: simple, auth_key: "secret dummySampleOtherVendor"}
+findings: [G-601]

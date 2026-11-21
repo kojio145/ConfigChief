@@ -55,7 +55,7 @@ func TestTypedUnknown(t *testing.T) {
 	res := loadTyped(t)
 	want := []struct{ text, reason string }{
 		{"mtu big", "interfaces の mtu: 「big」は整数ではありません"},
-		{"speed 2500", "「2500」は選択肢（auto, 10, 100, 1000, 10000）にありません"},
+		{"speed 40000", "「40000」は選択肢（auto, 10, 100, 1000, 2500, 5000, 10000）にありません"},
 		{"address 192.0.2.300/24", "アドレス/長さ"},
 		{"proxy maybe", "有効・無効として読めません"},
 		{"relay 192.0.2.67 not-an-address", "「not-an-address」は IPv4 アドレスではありません"},

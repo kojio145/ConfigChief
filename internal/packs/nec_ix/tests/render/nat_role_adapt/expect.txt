@@ -1,0 +1,16 @@
+hostname ix-n06
+!
+ip access-list acl-n-nat permit ip src 192.0.2.128/25 dest any
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.45/30
+  ip napt enable
+  ip napt inside list acl-n-nat
+  ip nat enable
+  ip nat static 192.0.2.130 198.51.100.130
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 192.0.2.129/25
+  no shutdown
+!

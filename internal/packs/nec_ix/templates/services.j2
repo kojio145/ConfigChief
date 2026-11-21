@@ -16,7 +16,7 @@ snmp-agent ip community {{ c.community }}{{ ' ' ~ c.acl if c.acl else '' }}{{ ' 
 {{ fail('SNMP 通知先の送信元 IF は、NEC IX では機器に 1 つです。全部の行で同じ値にしてください') }}
 {% endif %}
 {% endfor %}
-{% for h in traps %}
+{% for h in traps if ':' not in h.host %}
 {% if h.version == '3' %}
 {{ fail('SNMP 通知先 ' ~ h.host ~ ' の版 3 は書けません（NEC IX の通知先の版は 1 と 2 です）') }}
 {% endif %}
@@ -32,8 +32,44 @@ snmp-agent ip community {{ c.community }}{{ ' ' ~ c.acl if c.acl else '' }}{{ ' 
 {% endif %}
 snmp-agent ip host {{ h.host }} {{ h.community | required('SNMP 通知先のコミュニティ') }}{{ ' version 2' if h.version == '2c' else (' version 1' if h.version == '1' else '') }}
 {% endfor %}
-{% if traps and traps[0].source_if %}
+{% set fam = namespace(v4=[], v6=[]) %}
+{% for h in traps %}
+{% if ':' in h.host %}
+{% set fam.v6 = fam.v6 + [h] %}
+{% else %}
+{% set fam.v4 = fam.v4 + [h] %}
+{% endif %}
+{% endfor %}
+{% set traps4 = fam.v4 %}
+{% set traps6 = fam.v6 %}
+{% if traps4 and traps[0].source_if %}
 snmp-agent ip trap-source {{ traps[0].source_if }}
+{% endif %}
+{# SNMP over IPv6 has its own switch and communities (CRM p.22-17): the
+   communities the IPv6 destinations use are written for IPv6 too. #}
+{% if traps6 %}
+snmp-agent ipv6 enable
+{% set done = namespace(names=[]) %}
+{% for h in traps6 %}
+{% if h.community and h.community not in done.names %}
+{% set done.names = done.names + [h.community] %}
+{% for c in comms if c.community == h.community %}
+{% if c.acl %}
+{{ fail('SNMP 通知先 ' ~ h.host ~ ': コミュニティに「接続元の制限」があります。NEC IX の IPv6 のコミュニティには IPv6 のリストを当てるので、IPv4 の ACL のままでは書けません（制限の無いコミュニティを使うか、追加コンフィグに書いてください）') }}
+{% endif %}
+snmp-agent ipv6 community {{ c.community }}{{ ' ' ~ c.access if c.access else '' }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% for h in traps6 %}
+{% if h.version == '3' %}
+{{ fail('SNMP 通知先 ' ~ h.host ~ ' の版 3 は書けません（NEC IX の通知先の版は 1 と 2 です）') }}
+{% endif %}
+snmp-agent ipv6 host {{ h.host }} {{ h.community | required('SNMP 通知先のコミュニティ') }}{{ ' version 2' if h.version == '2c' else (' version 1' if h.version == '1' else '') }}
+{% endfor %}
+{% if traps[0].source_if %}
+snmp-agent ipv6 trap-source {{ traps[0].source_if }}
+{% endif %}
 {% endif %}
 {% if device.snmp_location %}
 snmp-agent location {{ device.snmp_location }}
@@ -47,12 +83,22 @@ snmp-agent contact {{ device.snmp_contact }}
 {% if comms or traps or device.snmp_location or device.snmp_contact %}
 !
 {% endif %}
+{% if device.ntp_serve == true %}
+ntp ip enable
+{% elif device.ntp_serve == false %}
+{{ fail('「NTP サーバとして動く」の無効は書けません（機器の既定です。セルを空にしてください）') }}
+{% endif %}
 {% set ntps = t.ntp_servers %}
+{% if device.ntp_serve == true and not ntps %}
+!
+{% endif %}
 {% if ntps %}
 {% set one = namespace(source=true) %}
 {% for n in ntps %}
-{% if ':' in n.server or not ((n.server ~ '/32') is cidr) %}
-{{ fail('NTP サーバ ' ~ n.server ~ ' は IPv4 アドレスで書きます（名前や IPv6 の書き方を確かめていません）') }}
+{% if not ((n.server ~ ('/128' if ':' in n.server else '/32')) is cidr) %}
+{{ fail('NTP サーバ ' ~ n.server ~ ' は IPv4 か IPv6 のアドレスで書きます（名前の書き方を確かめていません）') }}
+{% elif ':' in n.server and n.vrf %}
+{{ fail('NTP サーバ ' ~ n.server ~ ': IPv6 のサーバには VRF を付けられません（CRM の ntp server に、VRF を付けた IPv6 は書けないとあります）') }}
 {% endif %}
 {% if n.source_if != ntps[0].source_if %}
 {% set one.source = false %}
@@ -69,16 +115,67 @@ ntp source {{ ntps[0].source_if }}
 {% set logs = t.syslog_servers %}
 {% if logs %}
 {% for s in logs %}
-{% if ':' in s.server or not ((s.server ~ '/32') is cidr) %}
-{{ fail('ログ転送先 ' ~ s.server ~ ' は IPv4 アドレスで書きます（名前や IPv6 の書き方を確かめていません）') }}
+{% if not ((s.server ~ ('/128' if ':' in s.server else '/32')) is cidr) %}
+{{ fail('ログ転送先 ' ~ s.server ~ ' は IPv4 か IPv6 のアドレスで書きます（名前の書き方を確かめていません）') }}
+{% elif ':' in s.server and s.vrf %}
+{{ fail('ログ転送先 ' ~ s.server ~ ': IPv6 の転送先には VRF を付けられません（NEC IX の syslog ipv6 host に VRF の指定がありません）') }}
 {% endif %}
 {% if s.facility != logs[0].facility %}
 {{ fail('ログ転送先のファシリティは、NEC IX では機器に 1 つです。全部の行で同じ値にしてください') }}
 {% endif %}
 {% endfor %}
 {% for s in logs %}
+{% if ':' in s.server %}
+syslog ipv6 host {{ s.server }}
+{% else %}
 syslog{{ ' vrf ' ~ s.vrf if s.vrf else '' }} ip host {{ s.server }}
+{% endif %}
 {% endfor %}
+{# The source is an address of this device (CRM p.32-26): the address of
+   the source interface, one for the global table and one for each VRF. #}
+{% set srcs = namespace(vrfs=[]) %}
+{% for s in logs if ':' not in s.server %}
+{% if s.source_if and s.vrf not in srcs.vrfs %}
+{% set srcs.vrfs = srcs.vrfs + [s.vrf] %}
+{% set found = namespace(addr='') %}
+{% for i in t.interfaces %}
+{% if i.name == s.source_if and i.ipv4 is cidr %}
+{% set found.addr = i.ipv4 | ip %}
+{% endif %}
+{% endfor %}
+{% if not found.addr %}
+{{ fail('ログ転送先 ' ~ s.server ~ ' の送信元 IF ' ~ s.source_if ~ ' に、IPv4 アドレスがありません（NEC IX は、送信元をアドレスで書きます。その IF の行にアドレスを書いてください）') }}
+{% endif %}
+{% for o in logs if ':' not in o.server %}
+{% if o.vrf == s.vrf and o.source_if != s.source_if %}
+{{ fail('ログ転送先の送信元 IF は、NEC IX では VRF ごとに 1 つです（' ~ s.source_if ~ ' と ' ~ (o.source_if if o.source_if else '空') ~ '）。同じ値にしてください') }}
+{% endif %}
+{% endfor %}
+syslog{{ ' vrf ' ~ s.vrf if s.vrf else '' }} ip source {{ found.addr }}
+{% endif %}
+{% endfor %}
+{# The IPv6 source is an IPv6 address of this device (CRM p.32-27): the
+   first fixed IPv6 address of the source interface. #}
+{% set fam6 = namespace(rows=[]) %}
+{% for o in logs if ':' in o.server %}
+{% set fam6.rows = fam6.rows + [o] %}
+{% endfor %}
+{% set logs6 = fam6.rows %}
+{% if logs6 and logs6[0].source_if %}
+{% for o in logs6 %}
+{% if o.source_if != logs6[0].source_if %}
+{{ fail('IPv6 のログ転送先の送信元 IF は、NEC IX では機器に 1 つです（' ~ logs6[0].source_if ~ ' と ' ~ (o.source_if if o.source_if else '空') ~ '）。同じ値にしてください') }}
+{% endif %}
+{% endfor %}
+{% set found6 = namespace(addr='') %}
+{% for i in t.interfaces if i.name == logs6[0].source_if and i.ipv6 %}
+{% set found6.addr = i.ipv6[0] | ip %}
+{% endfor %}
+{% if not found6.addr %}
+{{ fail('ログ転送先 ' ~ logs6[0].server ~ ' の送信元 IF ' ~ logs6[0].source_if ~ ' に、固定の IPv6 アドレスがありません（NEC IX は、IPv6 の送信元をアドレスで書きます）') }}
+{% endif %}
+syslog ipv6 source {{ found6.addr }}
+{% endif %}
 {% if logs[0].facility %}
 syslog facility {{ logs[0].facility }}
 {% endif %}

@@ -1,0 +1,101 @@
+{# BGP for IPv6 (appendix A 3.23): read into bgp.j2, at the end of the block
+   "router bgp". The session of a neighbor stands right under "router bgp",
+   what it does with IPv6 routes under "address-family ipv6". Syntax: Cisco
+   IOS IP Routing: BGP Command Reference, "neighbor activate" (README). #}
+{% set g6 = namespace(row='', nets=false) %}
+{% for b in procs %}
+{% if not b.vrf %}
+{% set g6.row = b %}
+{% if b.ipv6_networks or b.ipv6_redistribute %}
+{% set g6.nets = true %}
+{% endif %}
+{% else %}
+{% if b.ipv6_networks or b.ipv6_redistribute %}
+{{ fail('BGP（VRF ' ~ b.vrf ~ '）の IPv6 の広告経路・再配布は、このパックでは書けません（VRF の中の IPv6 の BGP）') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for n in t.bgp_ipv6_neighbors %}
+{% if n.vrf or not g6.row %}
+{{ fail('BGP IPv6 ネイバー ' ~ n.neighbor ~ (' （VRF ' ~ n.vrf ~ '）は、このパックでは書けません（VRF の中の IPv6 の BGP）' if n.vrf else ' は、BGP の表に VRF が空の行（AS 番号）が要ります')) }}
+{% else %}
+{% set nb = ' neighbor ' ~ n.neighbor %}
+{{ nb }} remote-as {{ n.remote_as }}
+{% if n.description %}
+{{ nb }} description {{ n.description }}
+{% endif %}
+{% if n.password %}
+{{ nb }} password {{ n.password }}
+{% endif %}
+{% if n.ebgp_multihop != '' %}
+{{ nb }} ebgp-multihop {{ n.ebgp_multihop }}
+{% endif %}
+{% if n.update_source %}
+{{ nb }} update-source {{ n.update_source }}
+{% endif %}
+{% if n.enabled == false %}
+{{ nb }} shutdown
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if g6.row and (t.bgp_ipv6_neighbors or g6.nets) %}
+ address-family ipv6
+{% for n in t.bgp_ipv6_neighbors %}
+{% if not n.vrf %}
+{% set nb = '  neighbor ' ~ n.neighbor %}
+{{ nb }} activate
+{% if n.next_hop_self == true %}
+{{ nb }} next-hop-self
+{% endif %}
+{% if n.soft_reconfig_in == true %}
+{{ nb }} soft-reconfiguration inbound
+{% endif %}
+{% if n.prefix_list_in %}
+{{ nb }} prefix-list {{ n.prefix_list_in }} in
+{% endif %}
+{% if n.prefix_list_out %}
+{{ nb }} prefix-list {{ n.prefix_list_out }} out
+{% endif %}
+{% if n.filter_in %}
+{{ nb }} route-map {{ n.filter_in }} in
+{% endif %}
+{% if n.filter_out %}
+{{ nb }} route-map {{ n.filter_out }} out
+{% endif %}
+{% if n.send_community == true and n.send_ext_community == true %}
+{{ nb }} send-community both
+{% elif n.send_ext_community == true %}
+{{ nb }} send-community extended
+{% elif n.send_community == true %}
+{{ nb }} send-community
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for w in g6.row.ipv6_networks %}
+  network {{ w }}
+{% endfor %}
+{% for s in g6.row.ipv6_redistribute %}
+{% set opt = namespace(v='') %}
+{% for o in t.bgp_ipv6_redistribute %}
+{% if o.source == s %}
+{% set opt.v = (' metric ' ~ o.metric if o.metric != '' else '') ~ (' route-map ' ~ o.filter if o.filter else '') %}
+{% endif %}
+{% endfor %}
+{% if s == 'ospf' %}
+{# The line names the OSPFv3 process: the device has to have just one. #}
+{% if t.ospfv3_processes | length != 1 %}
+{{ fail('BGP の IPv6 の再配布の元 ospf は、OSPFv3 のプロセスがちょうど 1 つのときだけ書けます（今は ' ~ (t.ospfv3_processes | length) ~ ' つ）') }}
+{% else %}
+  redistribute ospf {{ t.ospfv3_processes[0].process_id }}{{ opt.v }}
+{% endif %}
+{% else %}
+  redistribute {{ s }}{{ opt.v }}
+{% endif %}
+{% endfor %}
+ exit-address-family
+{% endif %}
+{% for o in t.bgp_ipv6_redistribute %}
+{% if not g6.row or o.source not in g6.row.ipv6_redistribute %}
+{{ fail('BGP の IPv6 の再配布の指定（' ~ o.source ~ '）は、BGP の表（VRF が空の行）の「IPv6 の再配布」に ' ~ o.source ~ ' があるときだけ書けます') }}
+{% endif %}
+{% endfor %}

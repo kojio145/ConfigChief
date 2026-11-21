@@ -1,0 +1,29 @@
+# The built-in switch (made-up values): port VLANs, the settings of a port,
+# a static LAG, tagged subinterfaces, and a bridge group with its BVI.
+tables:
+  l2_settings:
+    - {bridge_irb: true}
+  interfaces:
+    - {name: GigaEthernet1.1, kind: subif, encap_vlan: 10, encap_tpid: 88a8, ipv4: 198.51.100.129/25}
+    - {name: GigaEthernet1.2, kind: subif, encap_vlan: 20, encap_tpid: "", bridge_group: 20}
+    - {name: "GigaEthernet2:1.0", kind: physical, ipv4: 192.0.2.1/25, vlan_id: 1, enabled: true}
+    - {name: "GigaEthernet2:2.0", vlan_id: 2, bridge_group: 20}
+    - {name: "GigaEthernet2:4.0", vlan_id: 4, bridge_group: ""}
+    - {name: "GigaEthernet2:4.1", kind: subif, encap_vlan: 20, bridge_group: 20, vlan_id: ""}
+    - {name: BVI0, kind: bvi, ipv4: 192.0.2.129/25, bridge_group: 20, enabled: true, vlan_id: ""}
+    - {name: "GigaEthernet2:port1", kind: physical, speed: 100, duplex: full, enabled: true}
+    - {name: "GigaEthernet2:port2", enabled: true}
+    - {name: "GigaEthernet2:port3", enabled: false}
+    - {name: "GigaEthernet2:port4", enabled: true}
+    - {name: "GigaEthernet2:port5", enabled: true}
+  switchports:
+    - {if_name: "GigaEthernet2:port1", mode: access, access_vlan: 1}
+    - {if_name: "GigaEthernet2:port2", mode: access, access_vlan: 1}
+    - {if_name: "GigaEthernet2:port3", mode: access, access_vlan: 2}
+    - {if_name: "GigaEthernet2:port4", mode: access, access_vlan: 4}
+    - {if_name: "GigaEthernet2:port5", mode: routed, access_vlan: ""}
+    - {if_name: "GigaEthernet2:port6", mode: routed}
+  lags:
+    - {if_name: "GigaEthernet2:port5", group: 1, mode: "on"}
+    - {if_name: "GigaEthernet2:port6", group: 1, mode: "on"}
+unknown: []

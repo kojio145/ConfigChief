@@ -1,0 +1,108 @@
+# QoS: traffic classes, traffic behaviors and the policies that tie them.
+# Syntax: README, "参照した資料" (QoS policy commands).
+#
+# A policy names a class and a behavior for it; the dataset keeps what is
+# done to a class in the row of the policy (appendix A 3.18), so the
+# behavior is joined in below and its name is not kept.
+rules:
+  # "and" (all the criteria) is what the device takes without the word.
+  - id: qos.class
+    match: '^traffic classifier (?P<name>\S+)(?: operator (?P<op>and|or))?$'
+    row: {table: qos_classes, key: {name: "{{ name }}"}}
+    set: {match: "{{ 'any' if op == 'or' else 'all' }}"}
+    children:
+      - id: qos.class.any
+        match: '^if-match any$'
+        row: {table: qos_class_matches, key: {class: "{{ name }}", seq: "{{ (rows('qos_class_matches', class=name) | length + 1) * 10 }}"}}
+      - id: qos.class.acl
+        match: '^if-match acl (?:name )?(?P<acl>\S+)$'
+        when: "acl not in ['name', 'ipv6', 'mac']"
+        row: {table: qos_class_matches, key: {class: "{{ name }}", seq: "{{ (rows('qos_class_matches', class=name) | length + 1) * 10 }}"}}
+        set: {acl: "{{ acl }}"}
+      - id: qos.class.acl6
+        match: '^if-match acl ipv6 (?:name )?(?P<acl>\S+)$'
+        when: "acl != 'name'"
+        row: {table: qos_class_matches, key: {class: "{{ name }}", seq: "{{ (rows('qos_class_matches', class=name) | length + 1) * 10 }}"}}
+        set: {ipv6_acl: "{{ acl }}"}
+      # DSCP values as numbers (up to eight), or one value by its name.
+      - id: qos.class.dscp
+        match: '^if-match dscp (?P<list>\d+(?: \d+)*)$'
+        row: {table: qos_class_matches, key: {class: "{{ name }}", seq: "{{ (rows('qos_class_matches', class=name) | length + 1) * 10 }}"}}
+        append: {dscp: "{{ list }}"}
+      - id: qos.class.dscp.name
+        match: '^if-match dscp (?P<word>[a-z][a-z0-9]*)$'
+        row: {table: qos_class_matches, key: {class: "{{ name }}", seq: "{{ (rows('qos_class_matches', class=name) | length + 1) * 10 }}"}}
+        append: {dscp: "{{ word | unlex('dscp') }}"}
+      # The 802.1p priority of the outer tag is what the dataset calls CoS.
+      - id: qos.class.cos
+        match: '^if-match service-dot1p (?P<list>[0-7](?: [0-7])*)$'
+        row: {table: qos_class_matches, key: {class: "{{ name }}", seq: "{{ (rows('qos_class_matches', class=name) | length + 1) * 10 }}"}}
+        append: {cos: "{{ list }}"}
+      - id: qos.class.protocol
+        match: '^if-match protocol (?P<p>ip|ipv6)$'
+        row: {table: qos_class_matches, key: {class: "{{ name }}", seq: "{{ (rows('qos_class_matches', class=name) | length + 1) * 10 }}"}}
+        set: {protocol: "{{ p }}"}
+
+  # What is done to a class. The rate is in kbps on the device and in bps in
+  # the dataset; the bursts are in bytes on both sides. "filter",
+  # "accounting", "redirect" and the other actions stay unknown.
+  - id: qos.behavior
+    match: '^traffic behavior (?P<name>\S+)$'
+    emit:
+      - table: x_qos_behavior
+        key: {name: "{{ name }}"}
+        set: {seen: "true"}
+    children:
+      # Packets over the rate: dropped (what the device does without a
+      # word), passed, or passed with another DSCP.
+      - id: qos.behavior.car
+        match: '^car cir (?P<cir>\d+)(?: cbs (?P<cbs>\d+)| ebs (?P<ebs>\d+)| green pass| red (?:(?P<rdisc>discard)|(?P<rpass>pass)|remark-dscp-pass (?P<rdscp>\d+)))*$'
+        emit:
+          - table: x_qos_behavior
+            key: {name: "{{ name }}"}
+            set:
+              police_bps: "{{ cir | int * 1000 }}"
+              police_bc: "{{ cbs }}"
+              police_be: "{{ ebs }}"
+              police_exceed: "{{ 'transmit' if rpass else ('set_dscp' if rdscp else ('drop' if rdisc else '')) }}"
+              police_exceed_value: "{{ rdscp }}"
+      - id: qos.behavior.dscp
+        match: '^remark dscp (?P<v>[\w-]+)$'
+        emit:
+          - table: x_qos_behavior
+            key: {name: "{{ name }}"}
+            set: {set_dscp: "{{ v if v is digits else v | unlex('dscp') }}"}
+      - id: qos.behavior.cos
+        match: '^remark dot1p (?P<v>[0-7])$'
+        emit:
+          - table: x_qos_behavior
+            key: {name: "{{ name }}"}
+            set: {set_cos: "{{ v }}"}
+
+  - id: qos.policy
+    match: '^qos policy (?P<name>\S+)$'
+    children:
+      - id: qos.policy.class
+        match: '^classifier (?P<class>\S+) behavior (?P<behavior>\S+)$'
+        emit:
+          - table: x_qos_cb
+            key: {policy: "{{ name }}", class: "{{ class }}"}
+            set: {behavior: "{{ behavior }}", n: "{{ (rows('x_qos_cb', policy=name) | length + 1) * 10 }}"}
+
+derive:
+  - id: qos.policy.join
+    for: x_qos_cb
+    as: x
+    let:
+      b: "lookup('x_qos_behavior', name=x.behavior)"
+    when: "b.seen"
+    row: {table: qos_policies, key: {policy: "{{ x.policy }}", class: "{{ x.class }}"}}
+    set:
+      seq: "{{ x.n }}"
+      police_bps: "{{ b.police_bps }}"
+      police_bc: "{{ b.police_bc }}"
+      police_be: "{{ b.police_be }}"
+      police_exceed: "{{ b.police_exceed }}"
+      police_exceed_value: "{{ b.police_exceed_value }}"
+      set_dscp: "{{ b.set_dscp }}"
+      set_cos: "{{ b.set_cos }}"

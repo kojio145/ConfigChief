@@ -1,0 +1,37 @@
+# The rest of IPsec (appendix A 3.20, made-up values): IKE version 2 on a
+# tunnel interface and in a crypto map, a peer "any" (a dynamic map) for
+# each version, a peer by name, identities, AH, the transport mode and a
+# lifetime in kilobytes. expect.txt is the configuration the tables must
+# turn into.
+tables:
+  devices:
+    - hostname: rt-c01
+      vendor: cisco_ios
+      domain_name: example.com
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.9/29}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 198.51.100.1/24}
+    - {name: Tunnel1, enabled: true, ipv4: 192.0.2.209/30}
+    - {name: Tunnel2, enabled: true, ipv4: 192.0.2.213/30}
+  tunnels:
+    - {if_name: Tunnel1, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.20}
+    - {if_name: Tunnel2, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.21}
+  ipsec_tunnels:
+    # Version 2 on a tunnel interface: one key for both ways.
+    - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: 203.0.113.20, psk: dummy-psk-v2-a, ike_version: 2, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_prf: sha384, ike_lifetime: 43200, esp_encryption: aes256, esp_hash: sha1, ipsec_mode: tunnel, pfs: dh14, ipsec_lifetime: 3600, ipsec_lifetime_kb: 4608000, dpd_interval: 30, dpd_retry_interval: 5, dpd_mode: periodic}
+    # A key each way, identities, a key in hexadecimal.
+    - {name: Tunnel2, style: tunnel_if, tunnel_if: Tunnel2, peer_address: 203.0.113.21, local_id: "keyid:sample-site-a", remote_id: "email:netops@example.com", psk: 64756d6d792d6b65792d61, psk_remote: 64756d6d792d6b65792d62, psk_form: hex, ike_version: 2, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_prf: sha384, ike_lifetime: 86400, esp_encryption: aes192, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
+    # Version 2 in a crypto map, with AH and the transport mode.
+    - {name: CMAP-SAMPLE/10, style: policy, local_if: GigabitEthernet0/0, peer_address: 203.0.113.30, local_id: "fqdn:rt-c01.example.com", remote_id: "fqdn:rt-c03.example.com", psk: dummy-psk-v2-b, psk_remote: dummy-psk-v2-c, ike_version: 2, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_prf: sha384, ike_lifetime: 86400, esp_encryption: aes128, esp_hash: sha1, ah_hash: sha1, ipsec_mode: transport, pfs: none, ipsec_lifetime: 7200, nat_keepalive: 20}
+    # Version 1: a peer by name.
+    - {name: CMAP-SAMPLE/20, style: policy, local_if: GigabitEthernet0/0, peer_address: rt-c06.example.com, psk: dummy-psk-v1-b, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: 3des, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600, dpd_interval: 20, dpd_retry_interval: 3, dpd_mode: periodic, nat_keepalive: 25}
+    # Version 1 with identities: a keyring and an ISAKMP profile.
+    - {name: CMAP-SAMPLE/30, style: policy, local_if: GigabitEthernet0/0, peer_address: 203.0.113.70, local_id: "fqdn:rt-c01.example.com", remote_id: "fqdn:rt-c07.example.com", psk: dummy-psk-v1-c, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600, dpd_interval: 20, dpd_retry_interval: 3, dpd_mode: periodic, nat_keepalive: 25}
+    # A peer whose address is not known, for each version: a dynamic map.
+    - {name: CMAP-SAMPLE/80, style: policy, local_if: GigabitEthernet0/0, peer_address: any, local_id: "address:203.0.113.9", psk: dummy-psk-v2-d, ike_version: 2, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_prf: sha384, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, pfs: none, ipsec_lifetime: 3600}
+    - {name: CMAP-SAMPLE/90, style: policy, local_if: GigabitEthernet0/0, peer_address: any, psk: dummy-psk-v1-a, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: 3des, esp_hash: sha1, pfs: dh5, ipsec_lifetime: 3600, dpd_interval: 20, dpd_retry_interval: 3, dpd_mode: periodic, nat_keepalive: 25}
+  ipsec_selectors:
+    - {tunnel: CMAP-SAMPLE/10, seq: 10, local_net: 198.51.100.0/24, remote_net: 192.0.2.0/25}
+    - {tunnel: CMAP-SAMPLE/20, seq: 10, local_net: 198.51.100.0/24, remote_net: 192.0.2.200/32}
+    - {tunnel: CMAP-SAMPLE/30, seq: 10, local_net: 198.51.100.0/24, remote_net: 192.0.2.192/29}
+    - {tunnel: CMAP-SAMPLE/90, seq: 10, local_net: 198.51.100.0/24, remote_net: 192.0.2.128/26}

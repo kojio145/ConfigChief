@@ -1,0 +1,28 @@
+hostname ix-c05
+!
+ip access-list sec-sample permit ip src any dest any
+!
+ike proposal ike-prop-sample-a encryption aes-256 hash sha2-256 group 2048-bit
+ike proposal ike-prop-sample-b encryption aes hash sha group 2048-bit lifetime 28800
+ike proposal ike-prop-sample-c
+ike policy ike-sample peer 203.0.113.20 key dummy-psk-more-a ike-prop-sample-a,ike-prop-sample-b,ike-prop-sample-c
+!
+ipsec autokey-proposal ipsec-prop-sample-a esp-aes-256 esp-sha lifetime time 3600
+ipsec autokey-proposal ipsec-prop-sample-b esp-aes esp-sha lifetime both 7200 100000
+ipsec autokey-proposal ipsec-prop-sample-c esp-3des ah-sha
+ipsec autokey-map ipsec-sample sec-sample peer 203.0.113.20 pfs 2048-bit ipsec-prop-sample-a,ipsec-prop-sample-b,ipsec-prop-sample-c
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.9/29
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.1/24
+  no shutdown
+!
+interface Tunnel0.0
+  tunnel mode ipsec
+  ip unnumbered GigaEthernet1.0
+  ipsec policy tunnel ipsec-sample out
+  no shutdown
+!

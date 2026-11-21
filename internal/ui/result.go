@@ -44,6 +44,7 @@ type FindingView struct {
 	Line     int    `json:"line"` // the line of the configuration (0 = none)
 	Text     string `json:"text"` // that line, the secrets masked
 	Message  string `json:"message"`
+	Fix      string `json:"fix"` // how the finding is put right
 	Evidence []Pair `json:"evidence"`
 	// State: "open" (a person has to look at it), "fix" (open, and it cannot
 	// be approved: the value or the text is put right), "approved", "info".
@@ -345,7 +346,7 @@ func findingView(e *ops.Env, o *ops.GenerateOutcome, f ops.Judged) FindingView {
 		Key: f.Key, Rule: f.RuleID, Title: rule.Title, Kind: check.KindTitle(check.Kind(f.RuleID)),
 		Severity: f.Severity, Word: check.SeverityTitle(f.Severity), Device: f.Device,
 		Table: p.Table, Row: p.Row, Column: p.Column, At: f.At, Line: f.Line, Text: p.Text,
-		Message: f.Message, Evidence: []Pair{},
+		Message: f.Message, Fix: rule.Fix, Evidence: []Pair{},
 	}
 	for _, kv := range f.Evidence {
 		fv.Evidence = append(fv.Evidence, Pair{kv.Name, kv.Value})

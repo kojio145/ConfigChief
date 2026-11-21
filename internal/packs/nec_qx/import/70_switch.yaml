@@ -1,0 +1,268 @@
+# VLANs, spanning tree for the device as a whole, and what joins the lines of
+# the ports (import/20_interfaces.yaml) into rows.
+# Syntax: README, "参照した資料" (VLAN commands, Spanning tree commands).
+rules:
+  # ---- VLANs ----
+  # One number on the line opens the VLAN. A list ("vlan 10 to 20", "vlan
+  # 2 4 10 to 20") makes every VLAN of it (the derive below); "vlan all"
+  # stays unknown.
+  - id: vlan.list
+    match: '^vlan (?P<list>\d+(?: to \d+)?(?: \d+(?: to \d+)?)*)$'
+    when: "' ' in list"
+    emit:
+      - table: x_vlan_list
+        key: {list: "{{ list | replace(' to ', '-') | replace(' ', ',') }}"}
+        set: {made: "true"}
+  - id: vlan
+    match: '^vlan (?P<id>\d+)$'
+    row: {table: vlans, key: {vlan_id: "{{ id }}"}}
+    children:
+      - id: vlan.name
+        match: '^name (?P<text>.+)$'
+        set: {name: "{{ text }}"}
+      - id: vlan.description
+        match: '^description (?P<text>.+)$'
+        set: {description: "{{ text }}"}
+
+  # ---- spanning tree ----
+  # "stp enable" for the device is the form of the generation before
+  # Version 7.
+  - id: stp.enable
+    match: '^(?P<no>undo )?stp (?:global )?enable$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_enabled: "{{ 'false' if no else 'true' }}"}
+  - id: stp.mode
+    match: '^stp mode (?P<mode>mstp|pvst|rstp|stp)$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_mode: "{{ mode | unlex('stp_mode') }}"}
+  - id: stp.bpdu
+    match: '^stp bpdu-protection$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_bpdu_guard_default: true}
+  # The priority of the device in the one tree of STP and RSTP, and in the
+  # common tree of MSTP.
+  - id: stp.priority
+    match: '^stp priority (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_priority: "{{ n }}"}
+  - id: stp.root
+    match: '^stp root (?P<what>primary|secondary)$'
+    row: {table: l2_settings, key: {}}
+    set: {stp_root: "{{ what }}"}
+  # The timers of the same tree, in centiseconds on the device.
+  - id: stp.timer
+    match: '^stp timer (?P<what>hello|forward-delay|max-age) (?P<cs>\d+)$'
+    when: "cs | int % 100 == 0"
+    row: {table: l2_settings, key: {}}
+    set: {"{{ 'stp_hello' if what == 'hello' else ('stp_forward' if what == 'forward-delay' else 'stp_max_age') }}": "{{ cs | int // 100 }}"}
+  # MSTP: the region (its name, its revision, which VLANs go to which
+  # instance) and what the device is in an instance. An instance is named by
+  # one number here; a line for several ("stp instance 1 to 3 ...") stays
+  # unknown.
+  - id: stp.region
+    match: '^stp region-configuration$'
+    row: {table: l2_settings, key: {}}
+    children:
+      - id: stp.region.name
+        match: '^region-name (?P<text>\S+)$'
+        set: {mst_name: "{{ text }}"}
+      - id: stp.region.revision
+        match: '^revision-level (?P<n>\d+)$'
+        set: {mst_revision: "{{ n }}"}
+      - id: stp.region.instance
+        match: '^instance (?P<i>\d+) vlan (?P<list>\d+(?: to \d+)?(?: \d+(?: to \d+)?)*)$'
+        row: {table: stp_instances, key: {instance: "{{ i }}"}}
+        append: {vlans: "{{ list | replace(' to ', '-') }}"}
+      # The line that puts the region to work: it carries no value.
+      - id: stp.region.active
+        match: '^active region-configuration$'
+  - id: stp.instance.priority
+    match: '^stp instance (?P<i>\d+) priority (?P<n>\d+)$'
+    row: {table: stp_instances, key: {instance: "{{ i }}"}}
+    set: {priority: "{{ n }}"}
+  - id: stp.instance.root
+    match: '^stp instance (?P<i>\d+) root (?P<what>primary|secondary)$'
+    row: {table: stp_instances, key: {instance: "{{ i }}"}}
+    set: {root: "{{ what }}"}
+  # Per VLAN (PVST): "10 20 30 to 40" becomes 10,20,30-40. The timers are in
+  # centiseconds on the device and in seconds in the dataset.
+  - id: stp.vlan.priority
+    match: '^stp vlan (?P<vlans>\d+(?: to \d+)?(?: \d+(?: to \d+)?)*) priority (?P<n>\d+)$'
+    row: {table: stp_vlans, key: {vlans: "{{ vlans | replace(' to ', '-') | replace(' ', ',') }}"}}
+    set: {priority: "{{ n }}"}
+  - id: stp.vlan.timer
+    match: '^stp vlan (?P<vlans>\d+(?: to \d+)?(?: \d+(?: to \d+)?)*) timer (?P<what>hello|forward-delay|max-age) (?P<cs>\d+)$'
+    when: "cs | int % 100 == 0"
+    row: {table: stp_vlans, key: {vlans: "{{ vlans | replace(' to ', '-') | replace(' ', ',') }}"}}
+    set: {"{{ 'hello_time' if what == 'hello' else ('forward_time' if what == 'forward-delay' else 'max_age') }}": "{{ cs | int // 100 }}"}
+
+  - id: stp.vlan.root
+    match: '^stp vlan (?P<vlans>\d+(?: to \d+)?(?: \d+(?: to \d+)?)*) root (?P<what>primary|secondary)$'
+    row: {table: stp_vlans, key: {vlans: "{{ vlans | replace(' to ', '-') | replace(' ', ',') }}"}}
+    set: {root: "{{ what }}"}
+  - id: stp.vlan.enable
+    match: '^(?P<no>undo )?stp vlan (?P<vlans>\d+(?: to \d+)?(?: \d+(?: to \d+)?)*) enable$'
+    row: {table: stp_vlans, key: {vlans: "{{ vlans | replace(' to ', '-') | replace(' ', ',') }}"}}
+    set: {enabled: "{{ 'false' if no else 'true' }}"}
+
+  # ---- loop detection, DHCP snooping, port security, LACP ----
+  - id: loop.global
+    match: '^loopback-detection global enable vlan (?P<list>all|\d+(?: to \d+)?(?: \d+(?: to \d+)?)*)$'
+    row: {table: l2_settings, key: {}}
+    append: {loop_detect_vlans: "{{ list | replace(' to ', '-') }}"}
+  - id: loop.global.action
+    match: '^loopback-detection global action shutdown$'
+    row: {table: l2_settings, key: {}}
+    set: {loop_detect_action: shutdown}
+  - id: loop.interval
+    match: '^loopback-detection interval-time (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {loop_detect_interval: "{{ n }}"}
+  - id: snooping.enable
+    match: '^dhcp snooping enable$'
+    row: {table: l2_settings, key: {}}
+    set: {dhcp_snooping: true}
+  - id: psec.enable
+    match: '^port-security enable$'
+    row: {table: l2_settings, key: {}}
+    set: {port_security: true}
+  - id: lacp.priority
+    match: '^lacp system-priority (?P<n>\d+)$'
+    row: {table: l2_settings, key: {}}
+    set: {lacp_system_priority: "{{ n }}"}
+
+  # ---- the stack (IRF) ----
+  # A member with its priority and its description. How the members are
+  # wired ("irf-port", "port group interface") and the domain stay unknown.
+  - id: irf.priority
+    match: '^irf member (?P<m>\d+) priority (?P<n>\d+)$'
+    row: {table: stack_members, key: {member: "{{ m }}"}}
+    set: {priority: "{{ n }}"}
+  - id: irf.description
+    match: '^irf member (?P<m>\d+) description (?P<text>.+)$'
+    row: {table: stack_members, key: {member: "{{ m }}"}}
+    set: {description: "{{ text }}"}
+
+  # ---- port mirroring ----
+  # A local group, its source ports and its destination port (the forms of
+  # the system view, with one port on a line; the forms of the interface
+  # view are read in import/20_interfaces.yaml). The remote groups and a
+  # list of ports ("... to ...") stay unknown.
+  - id: mirror.group
+    match: '^mirroring-group (?P<n>\d+) local$'
+    row: {table: mirror_sessions, key: {session: "{{ n }}"}}
+  - id: mirror.source
+    match: '^mirroring-group (?P<n>\d+) mirroring-port (?P<ifn>[A-Za-z][A-Za-z-]*\d[\d/.:]*) (?P<dir>both|inbound|outbound)$'
+    emit:
+      - table: x_mirror
+        key: {session: "{{ n }}", if_name: "{{ ifn | ifname }}"}
+        set: {dir: "{{ dir }}"}
+  - id: mirror.monitor
+    match: '^mirroring-group (?P<n>\d+) monitor-port (?P<ifn>[A-Za-z][A-Za-z-]*\d[\d/.:]*)$'
+    emit:
+      - table: x_mirror
+        key: {session: "{{ n }}", if_name: "{{ ifn | ifname }}"}
+        set: {dir: monitor}
+
+derive:
+  # A list of VLANs on one line makes each of them.
+  - id: vlan.list.each
+    for: x_vlan_list
+    as: x
+    each: {v: "x.list | ranges"}
+    when: "x.made"
+    row: {table: vlans, key: {vlan_id: "{{ v }}"}}
+  # The ports of a local mirroring group.
+  - id: mirror.port
+    for: x_mirror
+    as: x
+    let:
+      m: "lookup('mirror_sessions', session=x.session)"
+    when: "m.session | string != '' and x.dir != 'monitor'"
+    row: {table: mirror_sessions, key: {session: "{{ x.session }}"}}
+    append: {"{{ 'sources_both' if x.dir == 'both' else ('sources_rx' if x.dir == 'inbound' else 'sources_tx') }}": "{{ x.if_name }}"}
+  - id: mirror.port.monitor
+    for: x_mirror
+    as: x
+    let:
+      m: "lookup('mirror_sessions', session=x.session)"
+    when: "m.session | string != '' and x.dir == 'monitor'"
+    row: {table: mirror_sessions, key: {session: "{{ x.session }}"}}
+    set: {destination_if: "{{ x.if_name }}"}
+  # "interface Vlan-interface10" is the layer-3 interface of VLAN 10: the
+  # number is kept in a column, for a vendor whose interface has another name.
+  - id: vlan.interface
+    for: interfaces
+    as: i
+    let:
+      n: "i.name | replace('Vlan-interface', '')"
+    when: "i.name is startingwith('Vlan-interface') and n is digits and n | int >= 1 and n | int <= 4094"
+    row: {table: interfaces, key: {name: "{{ i.name }}"}}
+    set: {vlan_id: "{{ n }}"}
+  # Every Ethernet port and every layer-2 aggregate interface is a switch
+  # port, with a line of its own or without (a port in its default state has
+  # no line below it): its row is opened, and the default fills the mode.
+  - id: sw.port
+    for: interfaces
+    as: i
+    when: "i.name is startingwith('GigabitEthernet') or i.name is startingwith('Ethernet') or i.name is startingwith('Ten-GigabitEthernet') or i.name is startingwith('FortyGigE') or i.name is startingwith('Bridge-Aggregation')"
+    row: {table: switchports, key: {if_name: "{{ i.name }}"}}
+  # A device with switch ports has its row of layer-2 settings, so that the
+  # default can say that spanning tree is off (it is, until "stp global
+  # enable" is written).
+  - id: sw.l2
+    for: devices
+    as: d
+    when: "rows('switchports') | rejectattr('mode', 'equalto', 'routed') | list | length > 0"
+    row: {table: l2_settings, key: {}}
+  # A trunk carries VLAN 1 unless "undo port trunk permit vlan 1" took it
+  # out: the list says so in full.
+  - id: sw.trunk.vlan1
+    for: switchports
+    as: p
+    let:
+      out: "lookup('x_trunk_no1', if_name=p.if_name)"
+    when: "p.mode == 'trunk' and not out.out and 'all' not in p.allowed_vlans and 1 not in (p.allowed_vlans | ranges)"
+    row: {table: switchports, key: {if_name: "{{ p.if_name }}"}}
+    append: {allowed_vlans: "1"}
+  - id: sw.trunk.none
+    for: x_trunk_no1
+    as: x
+    let:
+      p: "lookup('switchports', if_name=x.if_name)"
+    when: "x.out and p.mode == 'trunk'"
+    row: {table: switchports, key: {if_name: "{{ x.if_name }}"}}
+    append: {allowed_vlans: "{{ '' if p.allowed_vlans else 'none' }}"}
+  # A hybrid port carries VLAN 1 without a tag unless "undo port hybrid
+  # vlan 1" took it out.
+  - id: sw.hybrid.vlan1
+    for: switchports
+    as: p
+    let:
+      out: "lookup('x_hybrid_no1', if_name=p.if_name)"
+    when: "p.mode == 'hybrid' and not out.out and 1 not in (p.hybrid_untagged | ranges) and 1 not in (p.hybrid_tagged | ranges)"
+    row: {table: switchports, key: {if_name: "{{ p.if_name }}"}}
+    append: {hybrid_untagged: "1"}
+  - id: sw.hybrid.no1
+    for: x_hybrid_no1
+    as: x
+    let:
+      p: "lookup('switchports', if_name=x.if_name)"
+    when: "x.out and p.mode == 'hybrid'"
+    row: {table: switchports, key: {if_name: "{{ x.if_name }}"}}
+  - id: lag.lacp_short
+    for: x_lacp
+    as: x
+    let:
+      l: "lookup('lags', if_name=x.if_name)"
+    when: "x.short and l.group | string != ''"
+    row: {table: lags, key: {if_name: "{{ x.if_name }}"}}
+    set: {lacp_short: true}
+  # Static unless the aggregate interface of the group says "dynamic" (LACP).
+  - id: lag.mode
+    for: lags
+    as: l
+    let:
+      g: "lookup('x_lag_mode', group=l.group)"
+    row: {table: lags, key: {if_name: "{{ l.if_name }}"}}
+    set: {mode: "{{ 'active' if g.dynamic else 'on' }}"}

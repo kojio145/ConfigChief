@@ -1,0 +1,85 @@
+# A QX-type switch (made-up values): the management settings, VLANs, spanning
+# tree, access and trunk ports, two LAGs, a routed port and the interface of
+# a VLAN.
+tables:
+  devices:
+    - {hostname: sw-q01, vendor: nec_qx, timezone: JST +9, domain_name: example.com, name_servers: [192.0.2.53, 192.0.2.54], enable_secret: Example-Super-1, secret_form: plain, snmp_contact: netops@example.com, snmp_location: sample room 1, banner: "sample banner: authorized use only"}
+  users:
+    - {name: admin, privilege: admin, secret: Example-Secret-1, secret_form: plain, services: [ssh, telnet, terminal]}
+    - {name: monitor, privilege: operator, secret_form: hashed, services: [telnet]}
+    - {name: operator, privilege: level-3, secret: Example-Secret-2, secret_form: plain, services: [ftp, terminal]}
+  remote_access:
+    - {protocols: [telnet], acl: "2000", auth: local, idle_timeout: 15}
+  ntp_servers:
+    - {server: 192.0.2.10, prefer: true, source_if: Vlan-interface10}
+    - {server: 192.0.2.11, source_if: Vlan-interface10}
+  syslog_servers:
+    - {server: 192.0.2.20, facility: local7, source_if: Vlan-interface10}
+    - {server: 192.0.2.21, facility: local5, source_if: Vlan-interface10}
+  snmp_communities:
+    - {community: example-ro, access: ro, acl: "2000"}
+    - {community: "cipher $c$3$sampleSampleSampleSampleSampleSample", access: rw}   # as the device saved it
+  snmp_hosts:
+    - {host: 192.0.2.30, version: 2c, community: example-trap, source_if: Vlan-interface10}
+  l2_settings:
+    - {stp_enabled: true, stp_mode: rapid_pvst, stp_bpdu_guard_default: true}
+  stp_vlans:
+    - {vlans: "10,20", priority: 4096}
+    - {vlans: "30-32", priority: 8192, hello_time: 2}
+  vlans:
+    - {vlan_id: 1}
+    - {vlan_id: 10, name: sample-office, description: sample office floor}
+    - {vlan_id: 20, name: sample-voice}
+    # "vlan 30 to 32": each VLAN of the list.
+    - {vlan_id: 30}
+    - {vlan_id: 31}
+    - {vlan_id: 32}
+  interfaces:
+    - {name: Bridge-Aggregation1, kind: lag, description: to sw-q02, enabled: true}
+    - {name: Bridge-Aggregation2, kind: lag}
+    - {name: Vlan-interface10, kind: vlan, vlan_id: 10, description: sample office, ipv4: 192.0.2.1/25, ipv4_secondary: [192.0.2.129/25]}
+    - {name: GigabitEthernet1/0/1, kind: physical, description: office desk}
+    - {name: GigabitEthernet1/0/2, enabled: false, speed: 100, duplex: full}
+    - {name: GigabitEthernet1/0/3}
+    - {name: GigabitEthernet1/0/4}
+    - {name: GigabitEthernet1/0/5}
+    - {name: GigabitEthernet1/0/6}
+    - {name: GigabitEthernet1/0/23}
+    - {name: GigabitEthernet1/0/24}
+    - {name: Ten-GigabitEthernet1/0/25}
+    - {name: Ten-GigabitEthernet1/0/26, ipv4: 198.51.100.1/30}
+  switchports:
+    - {if_name: Bridge-Aggregation1, mode: trunk, native_vlan: 99, allowed_vlans: [10, 20, 30-32]}
+    - {if_name: Bridge-Aggregation2, mode: trunk, allowed_vlans: [all]}
+    - {if_name: GigabitEthernet1/0/1, mode: access, access_vlan: 10, storm_broadcast: "5", storm_multicast: "500pps", stp_edge: "on", stp_bpdu_guard: true}
+    - {if_name: GigabitEthernet1/0/2, mode: access, access_vlan: 20, stp_bpdu_guard: false, stp_enabled: false}
+    # No line below the port: an access port in VLAN 1, by the defaults.
+    - {if_name: GigabitEthernet1/0/3, mode: access}
+    # A hybrid port carries VLAN 1 without a tag unless a line takes it out.
+    - {if_name: GigabitEthernet1/0/4, mode: hybrid, hybrid_untagged: [10, 1]}
+    # A trunk carries VLAN 1 unless a line takes it out.
+    - {if_name: GigabitEthernet1/0/5, mode: trunk, allowed_vlans: [10, 20, 1]}
+    - {if_name: GigabitEthernet1/0/6, mode: trunk, allowed_vlans: [none]}
+    - {if_name: GigabitEthernet1/0/23, mode: trunk, native_vlan: 99, allowed_vlans: [10, 20, 30-32]}
+    - {if_name: GigabitEthernet1/0/24, mode: trunk, native_vlan: 99, allowed_vlans: [10, 20, 30-32]}
+    - {if_name: Ten-GigabitEthernet1/0/25, mode: trunk, allowed_vlans: [all]}
+    - {if_name: Ten-GigabitEthernet1/0/26, mode: routed}
+  lags:
+    - {if_name: GigabitEthernet1/0/23, group: 1, mode: active}
+    - {if_name: GigabitEthernet1/0/24, group: 1, mode: active}
+    - {if_name: Ten-GigabitEthernet1/0/25, group: 2, mode: "on"}
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: 192.0.2.126}
+  acls:
+    - {name: "2000", type: standard, description: sample management hosts}
+  acl_entries:
+    - {acl: "2000", seq: 0, action: permit, src: 192.0.2.0/25}
+    - {acl: "2000", seq: 5, action: permit, src: 198.51.100.10}
+    - {acl: "2000", seq: 10, action: deny, src: any}
+  stp_instances:
+    - {instance: 1, priority: 4096}
+unknown:
+  - "stp vlan 40 timer hello 250"
+  - "info-center loghost 192.0.2.22 port 1514"
+  - "user-role network-operator"
+ignored_min: 1

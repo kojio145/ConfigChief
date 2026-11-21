@@ -1,0 +1,12 @@
+table: ospfv3_redistribute
+title: {ja: OSPFv3 再配布の指定, en: OSPFv3 redistribute options}
+since: M7
+key: [device, process_id, source]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: process_id, title: {ja: プロセス番号, en: Process ID}, type: int, required: true}
+  - {name: source, title: {ja: 再配布の元, en: Source}, type: enum, values: [connected, static, bgp, rip], required: true, note: {ja: "OSPFv3 の表の「再配布する経路」に入っている種類。行が無い種類は、指定なしで再配布する", en: "A kind named in the column of the OSPFv3 table. A kind without a row is redistributed as it is"}}
+  - {name: metric, title: {ja: メトリック, en: Metric}, type: int}
+  - {name: metric_type, title: {ja: メトリックの種類, en: Metric type}, type: enum, values: ["1", "2"]}
+  - {name: tag, title: {ja: タグ, en: Tag}, type: int}
+  - {name: filter, title: {ja: 経路制御の条件, en: Filter}, type: string, note: {ja: "経路制御の方針の表の名前。方針を追加コンフィグに書くときは、その名前", en: "A name of the table of route policies, or of a policy written in the extra config"}}

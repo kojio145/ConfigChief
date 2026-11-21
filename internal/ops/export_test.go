@@ -193,3 +193,50 @@ func TestExportSheets(t *testing.T) {
 		t.Errorf("the PPPoE row of rt-w01: %q, %q", a, b)
 	}
 }
+
+// The table for the other side of IPsec with IKE version 2 and with more
+// candidates than one (appendix A 3.20): the lists of values, the further
+// combinations, the selectors of a tunnel interface.
+func TestExportPeerIPsecCandidates(t *testing.T) {
+	e := newCase(t, map[string]string{"input/old/rt-p01.txt": siteFile(t, "ipsec_h", "rt-p01.txt")})
+	if _, err := e.RunImport("old", "", at); err != nil {
+		t.Fatal(err)
+	}
+	setCell(t, e, "機器対応", "旧ホスト名", "rt-p01", "新ホスト名", "rt-p01")
+	if _, err := e.RunImport("old", "", at); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"GigabitEthernet0/0", "GigabitEthernet0/1", "Tunnel1"} {
+		setCell(t, e, "IF 対応", "旧 IF 名", name, "新 IF 名", name)
+	}
+	if b, err := e.MakeBook("old", false, at); err != nil || len(b.Problems) != 0 {
+		t.Fatalf("the book: %v, %+v", err, b)
+	}
+	o, err := e.ExportPeer(false, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := excelize.OpenFile(e.Proj.Path(o.Files.XLSX))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	rows, _ := f.GetRows("一覧")
+	all := ""
+	for _, r := range rows {
+		all += strings.Join(r, "|") + "\n"
+	}
+	for _, want := range []string{
+		"203.0.113.30|IPsec（Tunnel1）|IKE の版|rt-p01|2|2",
+		"203.0.113.30|IPsec（Tunnel1）|IKE 暗号|rt-p01|aes256、aes128|aes256、aes128|並べた値のどれでもよい",
+		"203.0.113.30|IPsec（Tunnel1）|IKE DH グループ|rt-p01|dh14、dh5|dh14、dh5|",
+		"203.0.113.30|IPsec（Tunnel1）|IPsec の追加の候補 2|rt-p01|暗号 aes128、ハッシュ sha1|暗号 aes128、ハッシュ sha1|",
+		"203.0.113.30|IPsec（Tunnel1）|対象通信 10（自分側 → 相手側）|rt-p01|192.0.2.0/25 → 198.51.100.128/25（ip）|198.51.100.128/25 → 192.0.2.0/25（ip）|",
+		"203.0.113.20|IPsec（CMAP-SAMPLE/10）|IKE の追加の候補 2|rt-p01|暗号 aes128、ハッシュ sha1、DH グループ dh2|",
+		"203.0.113.20|IPsec（CMAP-SAMPLE/10）|NAT 越え|rt-p01|",
+	} {
+		if !strings.Contains(all, want) {
+			t.Errorf("the list lacks %q:\n%s", want, all)
+		}
+	}
+}

@@ -12,23 +12,51 @@ rules:
     row: {table: qos_classes, key: {name: "{{ name }}"}}
     set: {match: "{{ m | replace('match-', '') }}"}
     children:
+      # "match not <criterion>" is the same line with "not": the row is marked
+      # (appendix A 3.26).
       - id: qos.class.acl
-        match: '^match access-group (?:name (?P<name>\S+)|(?P<n>\d+))$'
+        match: '^match (?P<neg>not )?access-group (?:name (?P<name>\S+)|(?P<n>\d+))$'
         row: {table: qos_class_matches, key: {class: "{{ parent.name }}", seq: "{{ (rows('qos_class_matches', class=parent.name) | length + 1) * 10 }}"}}
-        set: {acl: "{{ name if name else n }}"}
+        set: {acl: "{{ name if name else n }}", negate: "{{ 'true' if neg else '' }}"}
       # Up to 8 values on a line; names are turned into numbers.
       - id: qos.class.dscp
-        match: '^match (?:ip )?dscp (?P<v>\S+(?: \S+){0,7})$'
+        match: '^match (?P<neg>not )?(?:ip )?dscp (?P<v>\S+(?: \S+){0,7})$'
         row: {table: qos_class_matches, key: {class: "{{ parent.name }}", seq: "{{ (rows('qos_class_matches', class=parent.name) | length + 1) * 10 }}"}}
+        set: {negate: "{{ 'true' if neg else '' }}"}
         append: {dscp: "{% for d in v | split(' ') %}{{ d if d is digits else d | unlex('dscp') }} {% endfor %}"}
       - id: qos.class.precedence
-        match: '^match (?:ip )?precedence (?P<v>\S+(?: \S+){0,3})$'
+        match: '^match (?P<neg>not )?(?:ip )?precedence (?P<v>\S+(?: \S+){0,3})$'
         row: {table: qos_class_matches, key: {class: "{{ parent.name }}", seq: "{{ (rows('qos_class_matches', class=parent.name) | length + 1) * 10 }}"}}
+        set: {negate: "{{ 'true' if neg else '' }}"}
         append: {precedence: "{% for d in v | split(' ') %}{{ d if d is digits else d | unlex('precedence') }} {% endfor %}"}
       # A condition with no column filled is "every packet".
       - id: qos.class.any
         match: '^match any$'
         row: {table: qos_class_matches, key: {class: "{{ parent.name }}", seq: "{{ (rows('qos_class_matches', class=parent.name) | length + 1) * 10 }}"}}
+      # ---- the other conditions (appendix A 3.26) ----
+      - id: qos.class.input_if
+        match: '^match (?P<neg>not )?input-interface (?P<ifn>\S+)$'
+        row: {table: qos_class_matches, key: {class: "{{ parent.name }}", seq: "{{ (rows('qos_class_matches', class=parent.name) | length + 1) * 10 }}"}}
+        set: {input_if: "{{ ifn | ifname }}", negate: "{{ 'true' if neg else '' }}"}
+      # Up to 4 values on a line.
+      - id: qos.class.cos
+        match: '^match (?P<neg>not )?cos (?P<v>[0-7](?: [0-7]){0,3})$'
+        row: {table: qos_class_matches, key: {class: "{{ parent.name }}", seq: "{{ (rows('qos_class_matches', class=parent.name) | length + 1) * 10 }}"}}
+        set: {negate: "{{ 'true' if neg else '' }}"}
+        append: {cos: "{{ v }}"}
+      - id: qos.class.qos_group
+        match: '^match (?P<neg>not )?qos-group (?P<v>\d+)$'
+        row: {table: qos_class_matches, key: {class: "{{ parent.name }}", seq: "{{ (rows('qos_class_matches', class=parent.name) | length + 1) * 10 }}"}}
+        set: {qos_group: "{{ v }}", negate: "{{ 'true' if neg else '' }}"}
+      # The name alone; the forms with more words after it stay unknown.
+      - id: qos.class.protocol
+        match: '^match (?P<neg>not )?protocol (?P<v>\S+)$'
+        row: {table: qos_class_matches, key: {class: "{{ parent.name }}", seq: "{{ (rows('qos_class_matches', class=parent.name) | length + 1) * 10 }}"}}
+        set: {protocol: "{{ v }}", negate: "{{ 'true' if neg else '' }}"}
+      - id: qos.class.class_ref
+        match: '^match (?P<neg>not )?class-map (?P<v>\S+)$'
+        row: {table: qos_class_matches, key: {class: "{{ parent.name }}", seq: "{{ (rows('qos_class_matches', class=parent.name) | length + 1) * 10 }}"}}
+        set: {class_ref: "{{ v }}", negate: "{{ 'true' if neg else '' }}"}
 
   # A policy has a row per class; "class-default" is "default" in the
   # dataset.
@@ -63,44 +91,84 @@ rules:
           - id: qos.policy.bandwidth.remaining
             match: '^bandwidth remaining percent (?P<p>\d+)$'
             set: {bandwidth_remaining: "{{ p }}"}
-          # bps, or a number with k / m / g. Bc and Be are bits.
+          # bps, or a number with k / m / g. Bc and Be are bits. "peak" is
+          # marked; "average" is what an empty cell means.
           - id: qos.policy.shape
-            match: '^shape average (?P<v>\d+[kmg]?)(?: (?P<bc>\d+)(?: (?P<be>\d+))?)?$'
+            match: '^shape (?P<mode>average|peak) (?P<v>\d+[kmg]?)(?: (?P<bc>\d+)(?: (?P<be>\d+))?)?$'
             set:
+              shape_mode: "{{ 'peak' if mode == 'peak' else '' }}"
               shape_bps: "{{ (v[:-1] | int * (1000 if v[-1] == 'k' else (1000000 if v[-1] == 'm' else 1000000000))) if v[-1] in 'kmg' else v }}"
               shape_bc: "{{ bc }}"
               shape_be: "{{ be }}"
+          # A share of the interface. The bursts in milliseconds after it have
+          # no column: such a line stays unknown.
+          - id: qos.policy.shape.percent
+            match: '^shape (?P<mode>average|peak) percent (?P<p>\d+)$'
+            set:
+              shape_mode: "{{ 'peak' if mode == 'peak' else '' }}"
+              shape_percent: "{{ p }}"
           # On one line, or with the actions on the lines below. The bursts
           # are bytes. "conform-action transmit" is what the device does
-          # without the word.
+          # without the word. "pir" is the peak rate of the two-rate form.
           - id: qos.policy.police
-            match: '^police (?:cir |rate )?(?P<v>\d+[kmg]?)(?: (?:bc )?(?P<bc>\d+))?(?: (?:be )?(?P<be>\d+))?(?: conform-action transmit)?(?: exceed-action (?:(?P<ex>drop|transmit)|set-dscp-transmit (?P<exd>\S+)|set-prec-transmit (?P<exp>\S+)))?$'
+            match: '^police (?:cir |rate )?(?P<v>\d+[kmg]?)(?: (?:bc )?(?P<bc>\d+))?(?: pir (?P<pir>\d+[kmg]?))?(?: (?:be )?(?P<be>\d+))?(?: conform-action transmit)?(?: exceed-action (?:(?P<ex>drop|transmit)|set-dscp-transmit (?P<exd>\S+)|set-prec-transmit (?P<exp>\S+)))?(?: violate-action (?:(?P<vx>drop|transmit)|set-dscp-transmit (?P<vxd>\S+)|set-prec-transmit (?P<vxp>\S+)))?$'
             set:
               police_bps: "{{ (v[:-1] | int * (1000 if v[-1] == 'k' else (1000000 if v[-1] == 'm' else 1000000000))) if v[-1] in 'kmg' else v }}"
               police_bc: "{{ bc }}"
+              police_pir_bps: "{% if pir %}{{ (pir[:-1] | int * (1000 if pir[-1] == 'k' else (1000000 if pir[-1] == 'm' else 1000000000))) if pir[-1] in 'kmg' else pir }}{% endif %}"
               police_be: "{{ be }}"
               police_exceed: "{{ ex if ex else ('set_dscp' if exd else ('set_precedence' if exp else '')) }}"
               police_exceed_value: "{{ (exd if exd is digits else exd | unlex('dscp')) if exd else ((exp if exp is digits else exp | unlex('precedence')) if exp else '') }}"
+              police_violate: "{{ vx if vx else ('set_dscp' if vxd else ('set_precedence' if vxp else '')) }}"
+              police_violate_value: "{{ (vxd if vxd is digits else vxd | unlex('dscp')) if vxd else ((vxp if vxp is digits else vxp | unlex('precedence')) if vxp else '') }}"
             children:
               - id: qos.policy.police.conform
                 match: '^conform-action transmit$'
               - id: qos.policy.police.exceed
                 match: '^exceed-action (?:(?P<ex>drop|transmit)|set-dscp-transmit (?P<exd>\S+)|set-prec-transmit (?P<exp>\S+))$'
                 set:
-                  police_exceed: "{{ ex if ex else ('set_dscp' if exd else 'set_precedence') }}"
+                  police_exceed: "{{ ex if ex else ('set_dscp' if exd else ('set_precedence' if exp else '')) }}"
                   police_exceed_value: "{{ (exd if exd is digits else exd | unlex('dscp')) if exd else ((exp if exp is digits else exp | unlex('precedence')) if exp else '') }}"
+              - id: qos.policy.police.violate
+                match: '^violate-action (?:(?P<vx>drop|transmit)|set-dscp-transmit (?P<vxd>\S+)|set-prec-transmit (?P<vxp>\S+))$'
+                set:
+                  police_violate: "{{ vx if vx else ('set_dscp' if vxd else ('set_precedence' if vxp else '')) }}"
+                  police_violate_value: "{{ (vxd if vxd is digits else vxd | unlex('dscp')) if vxd else ((vxp if vxp is digits else vxp | unlex('precedence')) if vxp else '') }}"
+          # A share of the interface. The bursts in milliseconds and
+          # "pir percent" have no column: such a line stays unknown.
+          - id: qos.policy.police.percent
+            match: '^police cir percent (?P<p>\d+)(?: conform-action transmit)?(?: exceed-action (?:(?P<ex>drop|transmit)|set-dscp-transmit (?P<exd>\S+)|set-prec-transmit (?P<exp>\S+)))?(?: violate-action (?:(?P<vx>drop|transmit)|set-dscp-transmit (?P<vxd>\S+)|set-prec-transmit (?P<vxp>\S+)))?$'
+            set:
+              police_percent: "{{ p }}"
+              police_exceed: "{{ ex if ex else ('set_dscp' if exd else ('set_precedence' if exp else '')) }}"
+              police_exceed_value: "{{ (exd if exd is digits else exd | unlex('dscp')) if exd else ((exp if exp is digits else exp | unlex('precedence')) if exp else '') }}"
+              police_violate: "{{ vx if vx else ('set_dscp' if vxd else ('set_precedence' if vxp else '')) }}"
+              police_violate_value: "{{ (vxd if vxd is digits else vxd | unlex('dscp')) if vxd else ((vxp if vxp is digits else vxp | unlex('precedence')) if vxp else '') }}"
+            children_from: qos.policy.police
           - id: qos.policy.set.dscp
             match: '^set (?:ip )?dscp (?P<v>\S+)$'
             set: {set_dscp: "{{ v if v is digits else v | unlex('dscp') }}"}
           - id: qos.policy.set.precedence
             match: '^set (?:ip )?precedence (?P<v>\S+)$'
             set: {set_precedence: "{{ v if v is digits else v | unlex('precedence') }}"}
+          - id: qos.policy.set.cos
+            match: '^set cos (?P<v>[0-7])$'
+            set: {set_cos: "{{ v }}"}
+          - id: qos.policy.set.qos_group
+            match: '^set qos-group (?P<v>\d+)$'
+            set: {set_qos_group: "{{ v }}"}
+          # Packets when the unit is left out.
           - id: qos.policy.queue_limit
-            match: '^queue-limit (?P<v>\d+)(?: packets)?$'
+            match: '^queue-limit (?P<v>\d+)(?: (?P<u>packets|bytes|ms|us))?$'
+            set: {queue_limit_unit: "{{ u if u and u != 'packets' else '' }}"}
             append: {queue_limit: "{{ v }}"}
           - id: qos.policy.fair_queue
             match: '^fair-queue$'
             set: {fair_queue: true}
+          # WRED; the lines with thresholds per value stay unknown.
+          - id: qos.policy.random_detect
+            match: '^random-detect(?: (?P<by>dscp-based|prec-based))?$'
+            set: {random_detect: "{{ 'dscp' if by == 'dscp-based' else ('precedence' if by == 'prec-based' else 'on') }}"}
           # A child policy: joined below.
           - id: qos.policy.child
             match: '^service-policy (?P<child>\S+)$'
@@ -221,7 +289,7 @@ derive:
       n: "lookup('x_qos_nest', policy=b.policy, class='default')"
       p: "lookup('qos_policies', policy=b.policy, class='default')"
       count: "rows('qos_policies', policy=b.policy) | length"
-      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue"
+      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue or p.set_cos or p.set_qos_group or p.set_ipv6_dscp or p.set_ipv6_precedence or p.shape_mode or p.shape_percent or p.police_percent or p.police_pir_bps or p.police_violate or p.police_violate_value or p.random_detect or p.queue_limit_unit"
       inb: "first('x_qos_bind', policy=b.policy, direction='input')"
     when: "count == 1 and p.shape_bps and not more and b.direction == 'output' and not inb.policy and (n.child or not nest.child)"
     row: {table: qos_bindings, key: {if_name: "{{ b.if_name }}", direction: "{{ b.direction }}"}}
@@ -237,7 +305,7 @@ derive:
       nest: "first('x_qos_nest', policy=b.policy)"
       p: "lookup('qos_policies', policy=b.policy, class='default')"
       count: "rows('qos_policies', policy=b.policy) | length"
-      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue"
+      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue or p.set_cos or p.set_qos_group or p.set_ipv6_dscp or p.set_ipv6_precedence or p.shape_mode or p.shape_percent or p.police_percent or p.police_pir_bps or p.police_violate or p.police_violate_value or p.random_detect or p.queue_limit_unit"
       inb: "first('x_qos_bind', policy=b.policy, direction='input')"
     when: "not nest.child and not (count == 1 and p.shape_bps and not more and b.direction == 'output' and not inb.policy)"
     row: {table: qos_bindings, key: {if_name: "{{ b.if_name }}", direction: "{{ b.direction }}"}}
@@ -249,7 +317,7 @@ derive:
       nest: "first('x_qos_nest', policy=p.policy)"
       n: "lookup('x_qos_nest', policy=p.policy, class='default')"
       count: "rows('qos_policies', policy=p.policy) | length"
-      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue"
+      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue or p.set_cos or p.set_qos_group or p.set_ipv6_dscp or p.set_ipv6_precedence or p.shape_mode or p.shape_percent or p.police_percent or p.police_pir_bps or p.police_violate or p.police_violate_value or p.random_detect or p.queue_limit_unit"
       outb: "first('x_qos_bind', policy=p.policy, direction='output')"
       inb: "first('x_qos_bind', policy=p.policy, direction='input')"
     when: "p.class == 'default' and count == 1 and p.shape_bps and not more and outb.policy and not inb.policy and (n.child or not nest.child)"
@@ -260,7 +328,7 @@ derive:
     as: p
     let:
       n: "lookup('x_qos_nest', policy=p.policy, class=p.class)"
-      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue"
+      more: "p.priority or p.priority_level or p.bandwidth_kbps or p.bandwidth_percent or p.bandwidth_remaining or p.priority_burst or p.police_bps or p.police_bc or p.police_be or p.police_exceed or p.police_exceed_value or p.set_dscp or p.set_precedence or p.queue_limit or p.fair_queue or p.set_cos or p.set_qos_group or p.set_ipv6_dscp or p.set_ipv6_precedence or p.shape_mode or p.shape_percent or p.police_percent or p.police_pir_bps or p.police_violate or p.police_violate_value or p.random_detect or p.queue_limit_unit"
     when: "p.class == 'default' and not more and not p.shape_bps and not p.shape_bc and not p.shape_be and not n.child"
     remove: true
 

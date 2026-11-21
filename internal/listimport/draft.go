@@ -60,7 +60,7 @@ func yamlText(s string) string {
 func Draft(s *sheet.Sheet, file string) string {
 	row, devices, t := Suggest(s, Rule{})
 	var sb strings.Builder
-	sb.WriteString("# お客様の一覧の列対応（仕様書 6.5）。下書きです: 見出しの行と行き先を確かめて直してください。\n")
+	sb.WriteString("# 外部一覧の列対応（仕様書 6.5）。下書きです: 見出しの行と行き先を確かめて直してください。\n")
 	sb.WriteString("version: 1\n")
 	fmt.Fprintf(&sb, "file: %s\n", yamlText(file))
 	fmt.Fprintf(&sb, "sheet: %s\n", yamlText(s.Name))

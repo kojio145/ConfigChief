@@ -1,0 +1,12 @@
+# EtherIP is not of this device (made-up values; appendix A 3.26): the pack
+# stops and tells what to do.
+tables:
+  devices:
+    - hostname: rt-f04
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.65/30}
+    - {name: Tunnel0, enabled: true}
+  tunnels:
+    - {if_name: Tunnel0, type: etherip, source: 203.0.113.65, destination: 203.0.113.61}
+findings: [G-601, G-603]

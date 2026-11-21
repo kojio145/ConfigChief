@@ -1,0 +1,86 @@
+hostname rt-c01
+!
+l2tp-class PW-SAMPLE-A
+ authentication
+ password dummy-l2tpv3-secret-a
+ hostname rt-c01
+ hello 30
+!
+pseudowire-class PW-SAMPLE-A
+ encapsulation l2tpv3
+ protocol l2tpv3 PW-SAMPLE-A
+ ip local interface Loopback0
+ ip pmtu
+ ip dfbit set
+ sequencing both
+!
+l2tp-class PW-SAMPLE-M
+ hello 60
+!
+pseudowire-class PW-SAMPLE-M
+ encapsulation l2tpv3
+ protocol none
+ ip local interface Loopback0
+!
+vpdn enable
+!
+vpdn-group LAC-SAMPLE
+ request-dialin
+  protocol l2tp
+  domain example.com
+  domain example.net
+ initiate-to ip 198.51.100.1
+ local name rt-c01
+ l2tp tunnel password dummy-l2tp-secret-c
+!
+vpdn-group RA-SAMPLE
+ accept-dialin
+  protocol l2tp
+  virtual-template 1
+ no l2tp tunnel authentication
+!
+ip local pool l2tp-RA-SAMPLE 192.0.2.100 192.0.2.150
+!
+username example-user password 0 dummy-l2tp-user-secret-1
+username sample-user password 0 dummy-l2tp-user-secret-2
+!
+interface GigabitEthernet0/0
+ description sample-wan
+ ip address 203.0.113.9 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description sample-l2-a
+ xconnect 203.0.113.2 101 pw-class PW-SAMPLE-A
+ no shutdown
+!
+interface GigabitEthernet0/2
+ no shutdown
+!
+interface GigabitEthernet0/2.10
+ description sample-l2-b
+ encapsulation dot1Q 10
+ xconnect 203.0.113.2 102 pw-class PW-SAMPLE-A
+ no shutdown
+!
+interface GigabitEthernet0/3
+ description sample-l2-c
+ xconnect 203.0.113.3 201 encapsulation l2tpv3 manual pw-class PW-SAMPLE-M
+  l2tp id 222 111
+  l2tp cookie local 4 54321
+  l2tp cookie remote 8 12345 67890
+  l2tp hello PW-SAMPLE-M
+ no shutdown
+!
+interface Loopback0
+ ip address 203.0.113.1 255.255.255.255
+ no shutdown
+!
+interface Virtual-Template1
+ ip unnumbered Loopback0
+ peer default ip address pool l2tp-RA-SAMPLE
+ ppp authentication ms-chap-v2
+ ppp ipcp dns 192.0.2.53 192.0.2.54
+ no shutdown
+!
+end

@@ -1,0 +1,12 @@
+table: community_lists
+title: {ja: コミュニティのリスト, en: Community lists}
+since: M7
+key: [device, name, seq]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: name, title: {ja: 名前, en: Name}, type: string, required: true, note: {ja: "番号も名前として持つ", en: "A number is kept as a name"}}
+  - {name: seq, title: {ja: 順番, en: Sequence}, type: int, required: true, note: {ja: "書いた順に 10 刻みで振る。行どうしは、どれかに合えばよい", en: "Counted in steps of 10 in the written order. Any row may match"}}
+  - {name: action, title: {ja: 動作, en: Action}, type: enum, values: [permit, deny], required: true}
+  - {name: type, title: {ja: 種類, en: Type}, type: enum, values: [standard, expanded], required: true, note: {ja: "standard = コミュニティを並べる。expanded = 正規表現", en: "standard = a list of communities. expanded = a regular expression"}}
+  - {name: communities, title: {ja: コミュニティ, en: Communities}, type: "list<string>", note: {ja: "standard の行。1 行に並べたものは「すべて持つ」。64496:100 の形か、no-export などの語", en: "For standard. All of one row must be carried. 64496:100, or a word like no-export"}}
+  - {name: regex, title: {ja: 正規表現, en: Regular expression}, type: string, note: {ja: "expanded の行", en: "For expanded"}}

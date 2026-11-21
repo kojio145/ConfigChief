@@ -1,0 +1,50 @@
+# What the pack refuses to write (made-up values).
+tables:
+  devices:
+    - {hostname: sw-q04, vendor: nec_qx, timezone: "+9", enable_secret: "$1$sample$dummyDummyDummyDummy", secret_form: hashed}
+  users:
+    - {name: admin, privilege: admin, secret: "$1$sample$dummyDummyDummyDummy", secret_form: hashed, services: [ssh]}   # a hash of another vendor
+    - {name: monitor, secret: dummyDummyDummy, secret_form: encrypted, services: [ssh]}   # the form another device (or the older generation) saved
+  remote_access:
+    - {protocols: [ssh], acl: ACL-SAMPLE, auth: aaa}      # a list by its name, AAA
+  l2_settings:
+    - {stp_enabled: true, stp_priority: 100}               # no multiple of 4096
+  stp_vlans:
+    - {vlans: "10", priority: 100}
+  interfaces:
+    - {name: GigabitEthernet1/0/1, enabled: true}
+    - {name: GigabitEthernet1/0/2, enabled: true, ipv4: 192.0.2.1/25}   # an address on a layer-2 port
+    - {name: GigabitEthernet1/0/3, enabled: true}
+    - {name: GigabitEthernet1/0/4, enabled: true}
+    - {name: Vlan20, enabled: true, vlan_id: 20}           # the name of another vendor
+    - {name: Vlan-interface30, enabled: true, vlan_id: 31} # the name and the number differ
+  switchports:
+    - {if_name: GigabitEthernet1/0/1, mode: dynamic_auto}  # no negotiation of the mode
+    - {if_name: GigabitEthernet1/0/2, mode: access, native_vlan: 99}   # a native VLAN on an access port
+    - {if_name: GigabitEthernet1/0/3, mode: trunk, allowed_vlans: [all, 10], trunk_encapsulation: isl}
+    - {if_name: GigabitEthernet1/0/4, mode: access, storm_broadcast: "20.5"}   # whole per cent only
+  fhrp:
+    - {if_name: Vlan-interface30, protocol: hsrp, group: 1, virtual_ip: 192.0.2.254}
+  acls:
+    - {name: "100", type: extended}                        # the number of another vendor
+    - {name: 9-sample, type: standard}                     # a name starts with a letter
+  acl_entries:
+    - {acl: "100", seq: 10, action: permit, protocol: tcp, src: any, dst: any, dst_port: www}
+  snmp_communities:
+    - {community: "7 dummyDummyDummy", access: ro}         # the saved form of another vendor
+  tracks:
+    - {id: "5", type: route, target: 192.0.2.0/24}         # only a ping and an interface can be watched
+  time_ranges:
+    - {name: sample-span, seq: 10, kind: periodic, days: [monday], start_time: "8:00", end_days: [friday], end_time: "20:00"}   # ends on another day
+  prefix_lists:
+    - {name: sample-a, seq: 10, action: permit, prefix: 192.0.2.0/24}
+    - {name: sample-b, seq: 10, action: permit, prefix: 198.51.100.0/24}
+  route_policies:
+    - {name: sample-two, seq: 10, action: permit, match_prefix_list: [sample-a, sample-b]}   # two clauses of a kind mean "both" here
+  qos_classes:
+    - {name: sample-class, match: any}
+  qos_class_matches:
+    - {class: sample-class, seq: 10, dscp: [46]}
+  qos_policies:
+    - {policy: sample-qos, class: default, seq: 10, police_bps: 64000}   # no class for the rest
+findings: [G-601, G-614]

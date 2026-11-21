@@ -1,0 +1,19 @@
+hostname ix-f02
+!
+bridge irb enable
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.61/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  bridge-group 1
+  no shutdown
+!
+interface Tunnel0.0
+  tunnel mode ether-ip ip
+  tunnel source 203.0.113.61
+  tunnel destination 203.0.113.65
+  bridge-group 1
+  no shutdown
+!

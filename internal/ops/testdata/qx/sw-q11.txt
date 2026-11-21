@@ -1,0 +1,85 @@
+#
+ version 7.1.070, Release 1201
+#
+ sysname sw-q11
+#
+ stp mode pvst
+ stp vlan 10 20 priority 4096
+ stp bpdu-protection
+ stp global enable
+#
+vlan 1
+#
+vlan 10
+ name sample-office
+ description sample office floor
+#
+vlan 20
+ name sample-voice
+#
+interface Bridge-Aggregation1
+ description to sw-q12
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20
+ link-aggregation mode dynamic
+#
+interface Vlan-interface10
+ description sample management
+ ip address 192.0.2.12 255.255.255.128
+ packet-filter name sample-in inbound
+#
+interface GigabitEthernet1/0/1
+ description office desk
+ port access vlan 10
+ stp edged-port
+#
+interface GigabitEthernet1/0/2
+ port access vlan 20
+ speed 100
+ duplex full
+ broadcast-suppression 5
+ stp port bpdu-protection enable
+#
+interface GigabitEthernet1/0/3
+ shutdown
+#
+interface GigabitEthernet1/0/23
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20
+ port link-aggregation group 1
+#
+interface GigabitEthernet1/0/24
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20
+ port link-aggregation group 1
+#
+ ip route-static 0.0.0.0 0 192.0.2.126
+#
+ info-center loghost 192.0.2.20
+#
+ snmp-agent
+ snmp-agent community read example-ro
+ snmp-agent sys-info version v2c
+#
+ ntp-service enable
+ ntp-service unicast-server 192.0.2.10
+#
+acl advanced name sample-in
+ rule 0 permit tcp source 192.0.2.0 0.0.0.127 destination-port eq 22
+ rule 5 deny ip
+#
+ ssh server enable
+#
+local-user admin class manage
+ password simple Example-Secret-1
+ service-type ssh terminal
+ authorization-attribute user-role network-admin
+#
+line vty 0 63
+ authentication-mode scheme
+ protocol inbound ssh
+#
+return

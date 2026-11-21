@@ -150,18 +150,17 @@ func TestCrossVendor(t *testing.T) {
 	unused := messages(o, "G-602")
 	for _, want := range []string{
 		"ドメイン名、特権パスワード、パスワードの形、バナー",
-		"MTU、帯域（kbps）",
+		"MTU",
 		"NAT の向き",
 		"優先",
 		"SSH の版、認証",
 		"説明",
-		"重要度、送信元 IF",
 	} {
 		if !strings.Contains(unused, want) {
 			t.Errorf("G-602 lacks %q:\n%s", want, unused)
 		}
 	}
-	if n := len(itemsOf(o, "G-602")); n != 8 || o.Unverified == "" {
+	if n := len(itemsOf(o, "G-602")); n != 6 || o.Unverified == "" {
 		t.Errorf("%d findings of G-602, mark %q:\n%s", n, o.Unverified, unused)
 	}
 	// They are approved one by one, not by a scope.
@@ -176,21 +175,21 @@ func TestCrossVendor(t *testing.T) {
 		{"機器", "ホスト名", "ix-c01", "パスワードの形"},
 		{"機器", "ホスト名", "ix-c01", "バナー"},
 		{"インタフェース", "IF 名", "GigaEthernet0.0", "MTU"},
-		{"インタフェース", "IF 名", "GigaEthernet0.0", "帯域（kbps）"},
 		{"インタフェース", "IF 名", "GigaEthernet1.0", "NAT の向き"},
 		{"NTP サーバ", "機器", "ix-c01", "優先"},
 		{"遠隔ログイン", "機器", "ix-c01", "SSH の版"},
 		{"遠隔ログイン", "機器", "ix-c01", "認証"},
 		{"スタティック経路", "機器", "ix-c01", "説明"},
-		{"ログ転送先", "機器", "ix-c01", "重要度"},
-		{"ログ転送先", "機器", "ix-c01", "送信元 IF"},
 	} {
 		setCell(t, e, c[0], c[1], c[2], c[3], "")
 	}
 	if o, err = e.Generate(GenOptions{}, at); err != nil {
 		t.Fatal(err)
 	}
-	if o.Devices[0].State != GenWritten || len(o.Items) != 0 || o.Unverified != "" {
+	// What is left is told as written in another way (appendix A 3.26): the
+	// level of the syslog destinations became the level of the device's log,
+	// and the source interface is written as its address.
+	if o.Devices[0].State != GenWritten || len(o.Items) != 1 || o.Items[0].RuleID != "G-614" || !strings.Contains(o.Items[0].Message, "ログに残す重要度") || o.Unverified == "" {
 		t.Errorf("after the cells were emptied: %+v, %d findings, mark %q", o.Devices[0], len(o.Items), o.Unverified)
 		for _, f := range o.Items {
 			t.Logf("  %s %s: %s", f.RuleID, f.Severity, f.Message)
@@ -209,7 +208,7 @@ func TestCrossVendor(t *testing.T) {
 		changed[d.Table+"."+d.Column] = true
 	}
 	for _, want := range []string{"devices.timezone", "devices.domain_name", "devices.banner", "interfaces.proxy_arp", "interfaces.nat_role",
-		"users.secret", "users.privilege", "ntp_servers.prefer", "syslog_servers.severity", "remote_access.ssh_version"} {
+		"users.secret", "users.privilege", "ntp_servers.prefer", "remote_access.ssh_version"} {
 		if !changed[want] {
 			t.Errorf("the comparison old - book lacks %s: %v", want, changed)
 		}

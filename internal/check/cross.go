@@ -17,7 +17,8 @@ import (
 var crossIDs = []string{"X-300", "X-301", "X-302", "X-303", "X-304", "X-305", "X-306", "X-307", "X-308", "X-309",
 	"X-311", "X-312", "X-313", "X-314", "X-321", "X-322", "X-323", "X-324", "X-325",
 	"X-331", "X-332", "X-333", "X-334", "X-335", "X-336", "X-337", "X-338",
-	"X-341", "X-342", "X-343", "X-344", "X-345", "X-346", "X-351"}
+	"X-341", "X-342", "X-343", "X-344", "X-345", "X-346", "X-351", "X-361", "X-362",
+	"X-365", "X-366", "X-381", "X-382", "X-383", "X-384", "X-385", "X-386", "X-387", "X-388"}
 
 // xIf is an interface with the addresses written on it.
 type xIf struct {
@@ -28,6 +29,9 @@ type xIf struct {
 	kind   string
 	mtu    string // the IP MTU if there is one, or else the MTU
 	addrs  []netip.Prefix
+	// addrs6 are the fixed IPv6 addresses (2026-11-21): they only find the
+	// owner of an address (has), the far end of a tunnel over IPv6.
+	addrs6 []netip.Prefix
 }
 
 type cross struct {
@@ -44,7 +48,7 @@ func Cross(in Input, tally *Tally) []Finding {
 		in.Data = in.Filled
 	}
 	c := &cross{values: &values{in: in, tally: tally}, byDev: map[string]map[string]*xIf{}}
-	for _, id := range crossIDs {
+	for _, id := range append(append(append([]string{}, crossIDs...), l2tpCrossIDs...), basicsCrossIDs...) {
 		tally.Look(id, "", 0)
 	}
 	for _, r := range c.rows("interfaces") {
@@ -61,6 +65,13 @@ func Cross(in Input, tally *Tally) []Finding {
 				}
 			}
 		}
+		if cell := r.Cells["ipv6"]; cell != nil {
+			for _, v := range cell.Values {
+				if p, err := netip.ParsePrefix(v); err == nil && p.Addr().Is6() {
+					i.addrs6 = append(i.addrs6, p)
+				}
+			}
+		}
 		c.ifs = append(c.ifs, i)
 		if c.byDev[i.device] == nil {
 			c.byDev[i.device] = map[string]*xIf{}
@@ -70,8 +81,16 @@ func Cross(in Input, tally *Tally) []Finding {
 	c.bgp()
 	c.ospf()
 	c.fhrp()
+	c.fhrp6()
 	c.subnets()
 	c.tunnels(c.ipsec())
+	c.l2tpv3Pairs()
+	c.l2tpPairs()
+	c.etherIPPairs()
+	c.redistLoops()
+	c.l2()
+	c.ipv6()
+	c.l3()
 	return c.out
 }
 
@@ -105,6 +124,11 @@ func (c *cross) others(a *xIf) []*xIf {
 // has tells whether an address is written on an interface.
 func (i *xIf) has(addr netip.Addr) bool {
 	for _, p := range i.addrs {
+		if p.Addr() == addr {
+			return true
+		}
+	}
+	for _, p := range i.addrs6 {
 		if p.Addr() == addr {
 			return true
 		}
@@ -220,6 +244,7 @@ func (c *cross) bgp() {
 					model.KV{Name: where(peer.device, "のネイバー"), Value: back.String()})
 			}
 		}
+		c.bgpCommunities(r, rev)
 		if index[r] > index[rev] {
 			continue // the pair was looked at from the other side
 		}
@@ -457,6 +482,12 @@ func (c *cross) fhrp() {
 				diff("X-342", "protocol", fmt.Sprintf("グループ %s の方式が、%s と違います", no, wb))
 			} else if x, y := get("version"); both(x, y) {
 				diff("X-342", "version", fmt.Sprintf("グループ %s の版が、%s と違います", no, wb))
+			}
+			c.tally.Look("X-405", dev, 1)
+			if v3, v2, ok := c.versionClash(a.row, b.row); ok {
+				c.add("X-405", t, a.row, "protocol", fmt.Sprintf("グループ %s: %s は VRRP の版 3 だけで動き（「VRRP の版（IPv4）」が 3 で、「版 2 の相手とも話す」が有効でない）、%s は版 2 です。両方の機器がそろっても、版が違うのでつながりません",
+					no, where(v3.Get("device"), v3.Get("if_name")), where(v2.Get("device"), v2.Get("if_name"))),
+					model.KV{Name: where(v3.Get("device"), v3.Get("if_name")), Value: "版 3"}, model.KV{Name: where(v2.Get("device"), v2.Get("if_name")), Value: "版 2"})
 			}
 			if x, y := get("priority"); x != "" && x == y {
 				diff("X-343", "priority", fmt.Sprintf("グループ %s の優先度が、%s と同じです（どちらが主になるかが決まりません）", no, wb))

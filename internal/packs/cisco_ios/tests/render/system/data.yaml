@@ -1,0 +1,40 @@
+# The device as a whole, appendix A 3.26 (made-up values): the time stamps,
+# the encryption of the passwords, the log the device keeps, the name servers
+# of a VRF, the three banners, the console, timeouts with seconds, a user the
+# device keeps the password of, and secrets in the encrypted form of the
+# device ("7 <value>").
+tables:
+  devices:
+    - hostname: rt-d02
+      vendor: cisco_ios
+      log_timestamp: datetime
+      log_timestamp_options: [msec, localtime, show_timezone, year]
+      debug_timestamp: uptime
+      password_encryption: true
+      log_buffer: true
+      log_buffer_size: 65536
+      log_severity: informational
+      name_servers: [192.0.2.53, 192.0.2.54]
+      name_servers_vrf: VRF-SAMPLE-M
+      banner: sample login banner
+      banner_motd: sample motd banner
+      banner_exec: sample exec banner
+      console_timeout: 5
+      console_timeout_sec: 30
+  vrfs:
+    - {name: VRF-SAMPLE-M}
+  users:
+    - {name: admin, privilege: admin, secret: "$1$dummy$SampleHashForTestsOnly444", secret_form: hashed}
+    - {name: example-user, secret: dummy7sample0A1B2C3D, secret_form: encrypted, reversible: true}
+    - {name: sample-user, secret: dummy-chap-password, secret_form: plain, reversible: true}
+    - {name: operator, privilege: 1, secret: dummy-operator-password, secret_form: plain}
+  remote_access:
+    - {protocols: [telnet], idle_timeout: 9, idle_timeout_sec: 30, auth: password, line_password: "7 dummy7sample6E7F"}
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.9/30}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 198.51.100.1/24}
+  ospf_processes:
+    - {process_id: 1}
+  ospf_interfaces:
+    - {process_id: 1, if_name: GigabitEthernet0/0, area: 0, auth_type: md5, auth_key_id: 1, auth_key: "7 dummy7sample0E1F2A3B"}
+    - {process_id: 1, if_name: GigabitEthernet0/1, area: 0, auth_type: simple, auth_key: "7 dummy7sample4C5D"}

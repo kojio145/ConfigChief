@@ -1,0 +1,57 @@
+!
+hostname rt-g01
+!
+service timestamps debug datetime msec
+service timestamps log datetime msec localtime
+service password-encryption
+!
+logging buffered 65536 warnings
+!
+username admin privilege 15 secret 0 dummy-admin-secret-1
+!
+class-map match-any cm-g-voice
+ match cos 5
+ match qos-group 10
+!
+policy-map pm-g-in
+ class cm-g-voice
+  set qos-group 10
+policy-map pm-g-out
+ class cm-g-voice
+  priority percent 20
+!
+interface GigabitEthernet0/0
+ description sample wan
+ no ip address
+ pppoe enable group global
+ pppoe-client dial-pool-number 1
+!
+interface GigabitEthernet0/1
+ description sample lan
+ ip address 198.51.100.1 255.255.255.0
+ service-policy input pm-g-in
+ service-policy output pm-g-out
+!
+interface Dialer1
+ description sample pppoe
+ ip address negotiated
+ ip mtu 1454
+ ip tcp adjust-mss 1414
+ encapsulation ppp
+ dialer pool 1
+ dialer-group 1
+ ppp authentication chap
+ ppp chap hostname example-user@example.net
+ ppp chap password 0 dummy-ppp-password
+!
+ip route 0.0.0.0 0.0.0.0 Dialer1
+!
+dialer-list 1 protocol ip permit
+!
+line con 0
+ exec-timeout 5 30
+line vty 0 4
+ exec-timeout 10 0
+ transport input ssh
+!
+end

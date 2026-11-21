@@ -1,0 +1,144 @@
+{# The rest of the switch as a whole (appendix A 3.22, 2026-11-21; README,
+   "VLAN とスイッチ"): spanning tree, MST, LAGs, VTP, the watch over the
+   ports, port mirroring. Included from switch.j2, which closes the part
+   with "!" when "any.line" is set. #}
+{% for g in t.l2_settings %}
+{% for flag in [['stp_loopguard_default', 'spanning-tree loopguard default', 'ループガードを全体の既定にする'], ['stp_bpdu_filter_default', 'spanning-tree portfast bpdufilter default', 'エッジポートの BPDU フィルタ'], ['stp_backbonefast', 'spanning-tree backbonefast', 'BackboneFast'], ['stp_uplinkfast', 'spanning-tree uplinkfast', 'UplinkFast'], ['vtp_pruning', 'vtp pruning', 'VTP プルーニング'], ['dhcp_snooping', 'ip dhcp snooping', 'DHCP スヌーピング']] %}
+{% if g[flag[0]] == true %}
+{% set any.line = true %}
+{{ flag[1] }}
+{% elif g[flag[0]] == false %}
+{{ fail('「' ~ flag[2] ~ '」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% endfor %}
+{% for one in [['stp_pathcost_method', 'spanning-tree pathcost method'], ['lag_load_balance', 'port-channel load-balance'], ['lacp_system_priority', 'lacp system-priority'], ['vtp_version', 'vtp version'], ['vtp_password', 'vtp password'], ['errdisable_recovery_interval', 'errdisable recovery interval'], ['udld', 'udld'], ['udld_message_time', 'udld message time'], ['cdp_timer', 'cdp timer'], ['cdp_holdtime', 'cdp holdtime'], ['lldp_timer', 'lldp timer'], ['lldp_holdtime', 'lldp holdtime'], ['lldp_reinit', 'lldp reinit'], ['mac_aging_time', 'mac address-table aging-time'], ['vlan_internal_allocation', 'vlan internal allocation policy'], ['system_mtu', 'system mtu']] %}
+{% if g[one[0]] != '' %}
+{% set any.line = true %}
+{% if one[0] == 'vtp_password' and ' ' in g.vtp_password %}
+{{ fail('VTP のパスワードに空白があります（このパックは 1 語のパスワードだけを書きます）') }}
+{% endif %}
+{{ one[1] }} {{ g[one[0]] }}
+{% endif %}
+{% endfor %}
+{% for c in g.errdisable_recovery_causes %}
+{% set any.line = true %}
+errdisable recovery cause {{ c }}
+{% endfor %}
+{% if g.cdp == true %}
+{% set any.line = true %}
+cdp run
+{% elif g.cdp == false %}
+{% set any.line = true %}
+no cdp run
+{% endif %}
+{% if g.lldp == true %}
+{% set any.line = true %}
+lldp run
+{% elif g.lldp == false %}
+{% set any.line = true %}
+no lldp run
+{% endif %}
+{% if g.dhcp_snooping_vlans %}
+{% set any.line = true %}
+ip dhcp snooping vlan {{ g.dhcp_snooping_vlans | join(',') }}
+{% endif %}
+{% if g.dhcp_snooping_option82 == true %}
+{% set any.line = true %}
+ip dhcp snooping information option
+{% elif g.dhcp_snooping_option82 == false %}
+{% set any.line = true %}
+no ip dhcp snooping information option
+{% endif %}
+{% if g.arp_inspection_vlans %}
+{% set any.line = true %}
+ip arp inspection vlan {{ g.arp_inspection_vlans | join(',') }}
+{% endif %}
+{% endfor %}
+{# The timers of the one tree of the device: the common tree of MST. With a
+   tree per VLAN they stand in the rows of the VLANs, and are not read here. #}
+{% for g in t.l2_settings %}
+{% if g.stp_mode == 'mst' %}
+{% for one in [['stp_hello', 'hello-time'], ['stp_forward', 'forward-time'], ['stp_max_age', 'max-age']] %}
+{% if g[one[0]] != '' %}
+{% set any.line = true %}
+spanning-tree mst {{ one[1] }} {{ g[one[0]] }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{# MST: the region and the VLANs of the instances, then the priorities. #}
+{% set mst = namespace(open=false) %}
+{% for g in t.l2_settings %}
+{% if g.mst_name or g.mst_revision != '' %}
+{% set mst.open = true %}
+{% endif %}
+{% endfor %}
+{% for x in t.stp_instances %}
+{% if x.vlans %}
+{% set mst.open = true %}
+{% endif %}
+{% endfor %}
+{% if mst.open %}
+{% set any.line = true %}
+spanning-tree mst configuration
+{% for g in t.l2_settings %}
+{% if g.mst_name %}
+{% if ' ' in g.mst_name %}
+{{ fail('MST のリージョン名に空白があります（このパックは 1 語の名前だけを書きます）') }}
+{% endif %}
+ name {{ g.mst_name }}
+{% endif %}
+{% if g.mst_revision != '' %}
+ revision {{ g.mst_revision }}
+{% endif %}
+{% endfor %}
+{% for x in t.stp_instances %}
+{% if x.vlans %}
+ instance {{ x.instance }} vlan {{ x.vlans | join(',') }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% for x in t.stp_instances %}
+{% if x.priority != '' %}
+{% set any.line = true %}
+{% if x.priority | int % 4096 != 0 %}
+{{ fail('MST インスタンス ' ~ x.instance ~ ' の優先度 ' ~ x.priority ~ ' は書けません（4096 刻みです）') }}
+{% endif %}
+spanning-tree mst {{ x.instance }} priority {{ x.priority }}
+{% endif %}
+{% if x.root %}
+{% set any.line = true %}
+spanning-tree mst {{ x.instance }} root {{ x.root }}
+{% endif %}
+{% endfor %}
+{% for s in t.stp_vlans %}
+{% if s.root %}
+{% set any.line = true %}
+spanning-tree vlan {{ s.vlans }} root {{ s.root }}{{ ' diameter ' ~ s.root_diameter if s.root_diameter != '' else '' }}
+{% elif s.root_diameter != '' %}
+{{ fail('VLAN ' ~ s.vlans ~ ' のスパニングツリー: 「ネットワークの直径」は、「ルートブリッジにする」と一緒に書きます') }}
+{% endif %}
+{% if s.enabled == false %}
+{% set any.line = true %}
+no spanning-tree vlan {{ s.vlans }}
+{% elif s.enabled == true %}
+{{ fail('VLAN ' ~ s.vlans ~ ' の「スパニングツリーを使う」の「有効」は書けません（有効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% endfor %}
+{# Port mirroring: a line for every source, one for the destination of a
+   session. #}
+{% for m in t.mirror_sessions %}
+{% set any.line = true %}
+{% for x in m.sources_both %}
+monitor session {{ m.session }} source interface {{ x }}
+{% endfor %}
+{% for x in m.sources_rx %}
+monitor session {{ m.session }} source interface {{ x }} rx
+{% endfor %}
+{% for x in m.sources_tx %}
+monitor session {{ m.session }} source interface {{ x }} tx
+{% endfor %}
+{% if m.destination_if %}
+monitor session {{ m.session }} destination interface {{ m.destination_if }}
+{% endif %}
+{% endfor %}

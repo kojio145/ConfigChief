@@ -1,0 +1,47 @@
+hostname ix-h03
+!
+ip access-list sec-sample-any permit ip src any dest any
+!
+ikev2 authentication psk id ipv4 203.0.113.9 key char dummy-psk-sample-a
+ikev2 authentication psk id ipv4 203.0.113.20 key char dummy-psk-sample-a
+!
+ike proposal ike-prop-sample encryption aes-256 hash sha2-256 group 2048-bit
+ike policy ike-sample-b peer 203.0.113.30 key dummy-psk-sample-b ike-prop-sample
+ike policy ike-sample-c peer any key dummy-psk-sample-c mode aggressive ike-prop-sample
+ike remote-id ike-sample-c keyid sample-site-c
+!
+ipsec autokey-proposal ipsec-prop-sample esp-aes-256 esp-sha
+ipsec autokey-map ipsec-sample-b sec-sample-any peer 203.0.113.30 ipsec-prop-sample
+ipsec local-id ipsec-sample-b 192.0.2.0/25
+ipsec remote-id ipsec-sample-b 198.51.100.129
+ipsec dynamic-map ipsec-sample-c sec-sample-any ipsec-prop-sample ike-binding ike-sample-c
+ipsec remote-id ipsec-sample-c 198.51.100.0/25
+!
+ikev2 profile ikev2-sample-a
+  local-authentication psk
+  local-ts ipv4 address 192.0.2.0/25
+  remote-ts ipv4 address 198.51.100.128/25
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.9/29
+  no shutdown
+!
+interface Tunnel0.0
+  tunnel mode ipsec-ikev2
+  ip unnumbered GigaEthernet0.0
+  ikev2 binding ikev2-sample-a
+  ikev2 peer 203.0.113.20 authentication psk
+  ikev2 source-address GigaEthernet0.0
+  no shutdown
+!
+interface Tunnel1.0
+  tunnel mode ipsec
+  ip unnumbered GigaEthernet0.0
+  ipsec policy tunnel ipsec-sample-b out
+  no shutdown
+!
+interface Tunnel2.0
+  tunnel mode ipsec
+  ip unnumbered GigaEthernet0.0
+  ipsec policy tunnel ipsec-sample-c out
+  no shutdown

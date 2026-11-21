@@ -1,0 +1,21 @@
+# What the pack writes in another way and tells (G-614): a community list of
+# one "permit" line becomes the values of the entry (the device has no
+# community list), and "send the communities" has no line here. The weight is
+# not of this device: it is told as a value that is not written (G-602).
+# Made-up values.
+tables:
+  devices:
+    - hostname: ix-r07
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.1/30}
+  bgp_processes:
+    - {asn: 64496, router_id: 192.0.2.1}
+  bgp_neighbors:
+    - {neighbor: 203.0.113.2, remote_as: 64497, send_community: true, filter_in: rm-r-in}
+  community_lists:
+    - {name: cl-r-one, seq: 10, action: permit, type: standard, communities: ["64497:100", local-as]}
+  route_policies:
+    - {name: rm-r-in, seq: 10, action: permit, match_community_list: cl-r-one, match_community_exact: true, set_local_preference: 200, set_weight: 100}
+    - {name: rm-r-in, seq: 20, action: permit, match_community_list: cl-r-one, set_local_preference: 150}
+findings: [G-614, G-602]

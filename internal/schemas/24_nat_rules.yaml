@@ -5,7 +5,7 @@ key: [device, name]
 columns:
   - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
   - {name: name, title: {ja: 名前, en: Name}, type: string, required: true, auto_name: true, note: {ja: "取り込み時は nat1 から自動で振る。比べるときは、名前でなく中身で行を合わせる", en: "Named nat1, nat2 … on import. Rows are matched by what they hold, not by this name"}}
-  - {name: type, title: {ja: 種類, en: Type}, type: enum, values: [pat_interface, pat_pool, dynamic_pool, static, static_port], required: true, note: {ja: "pat_interface = 外側 IF のアドレスへまとめて変換", en: "pat_interface = everything goes out with the address of the outside interface"}}
+  - {name: type, title: {ja: 種類, en: Type}, type: enum, values: [pat_interface, pat_pool, dynamic_pool, static, static_port, static_network], required: true, note: {ja: "pat_interface = 外側 IF のアドレスへまとめて変換。static_network = ネットワークごとの 1 対 1（内側・外側アドレスにネットワークのアドレス、範囲のプレフィックス長に長さ）", en: "pat_interface = everything goes out with the address of the outside interface. static_network = one to one for a whole network (the network addresses in the local and global address, its length in the pool prefix length)"}}
   - {name: outside_if, title: {ja: 外側 IF, en: Outside interface}, type: ifname}
   - {name: match_acl, title: {ja: 対象の通信, en: Match ACL}, type: ref, ref: acls.name, note: {ja: "空 = すべて", en: "Empty = everything"}}
   - {name: pool_start, title: {ja: 変換後アドレスの先頭, en: Pool start}, type: ip4}
@@ -16,3 +16,4 @@ columns:
   - {name: protocol, title: {ja: プロトコル, en: Protocol}, type: enum, values: [tcp, udp]}
   - {name: local_port, title: {ja: 内側ポート, en: Local port}, type: int, min: 1, max: 65535}
   - {name: global_port, title: {ja: 外側ポート, en: Global port}, type: int, min: 1, max: 65535}
+  - {name: extendable, title: {ja: 複数の外側アドレスに対応させる, en: Extendable}, type: bool, note: {ja: "同じ内側アドレスを、複数の外側アドレスに対応させる（Cisco の extendable）", en: "One local address for several global addresses (extendable of Cisco)"}}

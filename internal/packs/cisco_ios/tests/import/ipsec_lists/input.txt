@@ -1,0 +1,86 @@
+hostname rt-h02
+!
+crypto ikev2 proposal IKEV2-PROP-SAMPLE-A
+ encryption aes-cbc-256 aes-cbc-128
+ integrity sha512 sha256
+ group 19 14
+ prf sha512 sha256
+crypto ikev2 proposal IKEV2-PROP-SAMPLE-B
+ encryption aes-cbc-128
+ integrity sha1
+ group 14
+!
+crypto ikev2 policy IKEV2-POL-SAMPLE
+ proposal IKEV2-PROP-SAMPLE-A
+ proposal IKEV2-PROP-SAMPLE-B
+!
+crypto ikev2 keyring IKEV2-KEYS-SAMPLE
+ peer sample-peer-a
+  address 203.0.113.20
+  pre-shared-key dummy-psk-sample-a
+!
+crypto ikev2 profile IKEV2-PROF-SAMPLE-A
+ match identity remote address 203.0.113.20 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS-SAMPLE
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp policy 20
+ encryption aes 256
+ hash sha
+ authentication pre-share
+ group 14
+crypto isakmp policy 30
+ encryption aes
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp policy 40
+ encryption aes
+ hash sha
+ authentication pre-share
+ group 14
+crypto isakmp policy 50
+ encryption 3des
+ hash sha
+ authentication pre-share
+ group 5
+crypto isakmp key dummy-psk-sample-b address 203.0.113.30
+!
+crypto ipsec transform-set TS-SAMPLE-1 esp-aes 256 esp-sha-hmac
+crypto ipsec transform-set TS-SAMPLE-2 esp-aes 192 esp-sha-hmac
+crypto ipsec transform-set TS-SAMPLE-3 esp-aes esp-sha-hmac
+crypto ipsec transform-set TS-SAMPLE-4 esp-3des esp-sha-hmac
+crypto ipsec transform-set TS-SAMPLE-5 esp-aes 256 esp-sha256-hmac
+crypto ipsec transform-set TS-SAMPLE-6 esp-aes esp-sha256-hmac
+!
+crypto ipsec profile PROF-SAMPLE-A
+ set transform-set TS-SAMPLE-1 TS-SAMPLE-3
+ set ikev2-profile IKEV2-PROF-SAMPLE-A
+!
+crypto ipsec profile PROF-SAMPLE-B
+ set transform-set TS-SAMPLE-1 TS-SAMPLE-2 TS-SAMPLE-3 TS-SAMPLE-4 TS-SAMPLE-5 TS-SAMPLE-6
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.9 255.255.255.248
+!
+interface Tunnel1
+ ip address 198.51.100.1 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel mode ipsec ipv4
+ tunnel destination 203.0.113.20
+ tunnel protection ipsec profile PROF-SAMPLE-A
+!
+interface Tunnel2
+ ip address 198.51.100.5 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel mode ipsec ipv4
+ tunnel destination 203.0.113.30
+ tunnel protection ipsec profile PROF-SAMPLE-B
+!
+end

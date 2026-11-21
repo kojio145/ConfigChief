@@ -1,0 +1,76 @@
+hostname l3-c41
+!
+username admin privilege 15 secret 0 Example-Secret-1
+!
+vlan 10
+ name sample-office
+!
+vlan 20
+!
+interface GigabitEthernet1/0/1
+ switchport trunk native vlan 10
+ switchport trunk allowed vlan 20,10
+ switchport mode trunk
+ storm-control broadcast level pps 500
+ no shutdown
+!
+interface GigabitEthernet1/0/24
+ switchport trunk allowed vlan 10,20
+ switchport mode trunk
+ no shutdown
+!
+interface Vlan10
+ description sample office
+ ip address 192.0.2.2 255.255.255.128
+ ip access-group ACL-3000 in
+ ip ospf 1 area 0.0.0.0
+ vrrp 10 ip 192.0.2.1
+ vrrp 10 priority 100
+ vrrp 10 preempt
+ vrrp 10 timers advertise 1
+ no shutdown
+!
+ip sla 1
+ icmp-echo 192.0.2.126
+ frequency 5
+ip sla schedule 1 life forever start-time now
+track 1 ip sla 1 reachability
+!
+ip route 0.0.0.0 0.0.0.0 192.0.2.126 track 1
+!
+router ospf 1
+ router-id 198.51.100.41
+ redistribute static route-map sample-policy subnets
+!
+time-range sample-hours
+ periodic weekdays 8:00 to 18:00
+!
+ip access-list standard ACL-2000
+ permit 192.0.2.0 0.0.0.127
+!
+ip access-list extended ACL-3000
+ permit tcp 192.0.2.0 0.0.0.127 any eq 443 time-range sample-hours
+ permit icmp any any 8 0
+ permit ip any any
+!
+ip prefix-list sample-in seq 10 permit 198.51.100.0/24 le 28
+!
+route-map sample-policy permit 10
+ match ip address prefix-list sample-in
+ set tag 30
+!
+snmp-server community example-ro RO ACL-2000
+!
+banner motd #
+sample notice: authorized use only
+#
+!
+line con 0
+ exec-timeout 5 30
+line vty 0 4
+ access-class ACL-2000 in
+ exec-timeout 10 0
+ login local
+ transport input ssh
+!
+end

@@ -11,10 +11,18 @@ rules:
     row: {table: devices, key: {}}
     set: {domain_name: "{{ name }}"}
 
-  # The form with "vrf" has no column yet and stays unknown.
+  # Every server of a device is in the same VRF, or none is (appendix A
+  # 3.26): a line that does not agree with the lines before it stays unknown.
   - id: sys.name_server
-    match: '^ip name-server (?P<servers>\d[\d. ]*)$'
+    match: '^ip name-server (?P<servers>[0-9A-Fa-f:.]+(?: [0-9A-Fa-f:.]+)*)$'
+    when: "not first('devices').name_servers_vrf"
     row: {table: devices, key: {}}
+    append: {name_servers: "{{ servers }}"}
+  - id: sys.name_server.vrf
+    match: '^ip name-server vrf (?P<vrf>\S+) (?P<servers>[0-9A-Fa-f:.]+(?: [0-9A-Fa-f:.]+)*)$'
+    when: "first('devices').name_servers_vrf == vrf or not first('devices').name_servers"
+    row: {table: devices, key: {}}
+    set: {name_servers_vrf: "{{ vrf }}"}
     append: {name_servers: "{{ servers }}"}
 
   - id: sys.timezone
@@ -42,11 +50,58 @@ rules:
     row: {table: devices, key: {}}
     set: {snmp_contact: "{{ text }}"}
 
-  # The dataset has one banner. "banner exec" stays unknown.
+  # A banner of each kind (appendix A 3.26): before the login, on connect,
+  # after the login.
   - id: sys.banner
-    match: '^banner (?P<kind>login|motd) .*$'
+    match: '^banner login .*$'
     row: {table: devices, key: {}}
     set: {banner: "{{ body }}"}
+  - id: sys.banner.motd
+    match: '^banner motd .*$'
+    row: {table: devices, key: {}}
+    set: {banner_motd: "{{ body }}"}
+  - id: sys.banner.exec
+    match: '^banner exec .*$'
+    row: {table: devices, key: {}}
+    set: {banner_exec: "{{ body }}"}
+
+  # ---- the services of the device (appendix A 3.26) ----
+  # "service timestamps [debug | log] [uptime | datetime [msec]] [localtime]
+  # [show-timezone] [year]". The form without "debug" / "log" stays unknown.
+  - id: sys.timestamps.log
+    match: '^service timestamps log (?:(?P<up>uptime)|datetime(?P<opts>(?: (?:msec|localtime|show-timezone|year))*))$'
+    row: {table: devices, key: {}}
+    set: {log_timestamp: "{{ 'uptime' if up else 'datetime' }}"}
+    append: {log_timestamp_options: "{{ opts | replace('show-timezone', 'show_timezone') }}"}
+  - id: sys.timestamps.debug
+    match: '^service timestamps debug (?:(?P<up>uptime)|datetime(?P<opts>(?: (?:msec|localtime|show-timezone|year))*))$'
+    row: {table: devices, key: {}}
+    set: {debug_timestamp: "{{ 'uptime' if up else 'datetime' }}"}
+    append: {debug_timestamp_options: "{{ opts | replace('show-timezone', 'show_timezone') }}"}
+  - id: sys.password_encryption
+    match: '^(?P<no>no )?service password-encryption$'
+    row: {table: devices, key: {}}
+    set: {password_encryption: "{{ 'false' if no else 'true' }}"}
+
+  # The log the device keeps: "logging buffered [<bytes>] [<level>]".
+  - id: sys.log_buffer
+    match: '^logging buffered(?: (?P<size>\d+))?(?: (?P<level>emergencies|alerts|critical|errors|warnings|notifications|informational|debugging))?$'
+    row: {table: devices, key: {}}
+    set: {log_buffer: true, log_buffer_size: "{{ size }}", log_severity: "{{ level }}"}
+  - id: sys.log_buffer.off
+    match: '^no logging buffered$'
+    row: {table: devices, key: {}}
+    set: {log_buffer: false}
+
+  # The console: only the timeout has a column; the other lines under it
+  # stay unknown.
+  - id: con
+    match: '^line con 0$'
+    row: {table: devices, key: {}}
+    children:
+      - id: con.timeout
+        match: '^exec-timeout (?P<min>\d+)(?: (?P<sec>\d+))?$'
+        set: {console_timeout: "{{ min }}", console_timeout_sec: "{{ sec if sec and sec | int != 0 else '' }}"}
 
   # ---- users ----
   # Level 15 is the neutral word "admin" (lexicon.yaml); other levels stay numbers.
@@ -60,13 +115,24 @@ rules:
     row: {table: users, key: {name: "{{ name }}"}}
     set: {privilege: "{{ (priv | unlex('user_role')) if priv == '15' else priv }}", secret: "{{ value }}", secret_form: plain}
 
-  # "password 7" is a reversible form: there is no word for it in secret_form,
-  # so the line stays unknown.
+  # A user written with "password": the device keeps the password itself
+  # (PPP CHAP needs it), so the row is marked reversible and is written with
+  # "password" again. "password 7" is the encrypted form of the device.
+  - id: user.password.encrypted
+    match: '^username (?P<name>\S+)(?: privilege (?P<priv>\d+))? password 7 (?P<value>\S+)$'
+    row: {table: users, key: {name: "{{ name }}"}}
+    set: {privilege: "{{ (priv | unlex('user_role')) if priv == '15' else priv }}", secret: "{{ value }}", secret_form: encrypted, reversible: true}
   - id: user.password.plain
     match: '^username (?P<name>\S+)(?: privilege (?P<priv>\d+))? password (?:0 )?(?P<value>\S+)$'
     when: "value != '7'"
     row: {table: users, key: {name: "{{ name }}"}}
-    set: {privilege: "{{ (priv | unlex('user_role')) if priv == '15' else priv }}", secret: "{{ value }}", secret_form: plain}
+    set: {privilege: "{{ (priv | unlex('user_role')) if priv == '15' else priv }}", secret: "{{ value }}", secret_form: plain, reversible: true}
+    # The mark of this form: on a device with an LNS such a user is a caller
+    # of L2TP (import/70_l2tp.yaml).
+    emit:
+      - table: x_user_password
+        key: {name: "{{ name }}"}
+        set: {privilege: "{{ priv }}"}
 
   # ---- remote access ----
   - id: vty
@@ -88,10 +154,14 @@ rules:
       - id: vty.acl
         match: '^access-class (?P<acl>\S+) in$'
         set: {acl: "{{ acl }}"}
-      # The dataset keeps minutes; a line with seconds stays unknown.
       - id: vty.timeout
-        match: '^exec-timeout (?P<min>\d+)(?: 0)?$'
-        set: {idle_timeout: "{{ min }}"}
+        match: '^exec-timeout (?P<min>\d+)(?: (?P<sec>\d+))?$'
+        set: {idle_timeout: "{{ min }}", idle_timeout_sec: "{{ sec if sec and sec | int != 0 else '' }}"}
+      # The encrypted form is kept as the device shows it: "7 <value>"
+      # (appendix A 3.26).
+      - id: vty.password.encrypted
+        match: '^password 7 (?P<value>\S+)$'
+        set: {line_password: "7 {{ value }}"}
       - id: vty.password
         match: '^password (?:0 )?(?P<value>\S+)$'
         when: "value != '7'"
@@ -104,8 +174,8 @@ rules:
 
   # ---- NTP ----
   - id: ntp.server
-    match: '^ntp server(?: vrf (?P<vrf>\S+))? (?P<server>\d+\.\d+\.\d+\.\d+)(?:(?P<prefer> prefer)| source (?P<src>[A-Za-z]\S*))*$'
-    row: {table: ntp_servers, key: {server: "{{ server }}"}}
+    match: '^ntp server(?: vrf (?P<vrf>\S+))? (?P<server>\d+\.\d+\.\d+\.\d+|[0-9A-Fa-f]*:[0-9A-Fa-f:]+)(?:(?P<prefer> prefer)| source (?P<src>[A-Za-z]\S*))*$'
+    row: {table: ntp_servers, key: {server: "{{ server | lower }}"}}
     set:
       vrf: "{{ vrf }}"
       prefer: "{{ 'true' if prefer else '' }}"
@@ -124,6 +194,12 @@ rules:
     match: '^logging host (?P<server>\d+\.\d+\.\d+\.\d+)(?: vrf (?P<vrf>\S+))?$'
     row: {table: syslog_servers, key: {server: "{{ server }}"}}
     set: {vrf: "{{ vrf }}"}
+
+  # An IPv6 destination: "logging host ipv6 <address>" (Embedded Syslog
+  # Manager Command Reference; the IPv6 form has no VRF).
+  - id: syslog.host6
+    match: '^logging host ipv6 (?P<server>[0-9A-Fa-f]*:[0-9A-Fa-f:]+)$'
+    row: {table: syslog_servers, key: {server: "{{ server | lower }}"}}
 
   - id: syslog.host.short
     match: '^logging (?P<server>\d+\.\d+\.\d+\.\d+)$'
@@ -158,7 +234,7 @@ rules:
     set: {access: "{{ access | lower }}", acl: "{{ acl }}"}
 
   - id: snmp.host
-    match: '^snmp-server host (?P<host>\d+\.\d+\.\d+\.\d+)(?: version (?P<ver>1|2c))? (?P<community>\S+)$'
+    match: '^snmp-server host (?P<host>\d+\.\d+\.\d+\.\d+|[0-9A-Fa-f]*:[0-9A-Fa-f:]+)(?: version (?P<ver>1|2c))? (?P<community>\S+)$'
     when: "community not in ['traps', 'informs', 'version', 'vrf']"
     row: {table: snmp_hosts, key: {host: "{{ host }}"}}
     set: {version: "{{ ver }}", community: "{{ community }}"}

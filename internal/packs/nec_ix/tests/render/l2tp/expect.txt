@@ -1,0 +1,59 @@
+hostname ix-c01
+!
+url-list lac-sample permit domain *example.com
+!
+ppp profile lns-sample
+  authentication request chap
+  authentication password example-user dummy-l2tp-user-secret-1
+  authentication password sample-user dummy-l2tp-user-secret-2
+  lcp pfc
+  lcp acfc
+  ipcp ip-compression
+  ipcp provide-static-ip-address example-user 192.0.2.130
+  ipcp provide-ip-address range 192.0.2.131 192.0.2.190
+  ipcp provide-remote-dns 192.0.2.53 192.0.2.54
+!
+interface GigaEthernet0.0
+  description sample-wan
+  ip address 203.0.113.9/30
+  no shutdown
+!
+interface GigaEthernet2.0
+  description sample-access
+  ip address 198.51.100.129/25
+  no shutdown
+!
+interface GigaEthernet2.1
+  ip unnumbered GigaEthernet2.0
+  pppoe l2tp interface Tunnel2.0 url-list lac-sample
+  no shutdown
+!
+interface GigaEthernet2.2
+  ip unnumbered GigaEthernet2.0
+  pppoe l2tp interface Tunnel2.0 url-list lac-sample
+  no shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.129/25
+!
+interface Tunnel0.0
+  ip unnumbered Loopback0.0
+  ppp binding lns-sample
+  tunnel mode l2tp-lns ipsec
+  ipsec policy transport ipsec-sample-ra
+  no shutdown
+!
+interface Tunnel1.0
+  ip unnumbered Loopback0.0
+  ppp binding lns-sample
+  tunnel mode l2tp-lns ipsec
+  ipsec policy transport ipsec-sample-ra
+  no shutdown
+!
+interface Tunnel2.0
+  tunnel mode l2tp-lac ip
+  tunnel destination 198.51.100.1
+  l2tp password plain dummy-l2tp-secret-c
+  l2tp session idle-time 120
+  no shutdown
+!

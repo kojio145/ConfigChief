@@ -1,19 +1,20 @@
 # Static routes, OSPF and BGP (stages M1 and M3).
 # Syntax: cmdref 4.3, 4.5, 4.6 and 4.7.
 rules:
-  # The next hop and the interface stand in either order. "connected",
-  # "metric", "tag" and "dhcp" have no column: such a line stays unknown.
+  # The next hop and the interface stand in either order; "connected",
+  # "metric", "distance" and "tag" follow in the order of the syntax line
+  # (CRM 8-14). "dhcp" after the interface is the gateway learned by DHCP.
   - id: route.static
-    match: '^ip route(?: vrf (?P<vrf>\S+))? (?P<dst>default|\d+\.\d+\.\d+\.\d+/\d+)(?: (?P<nh>\d+\.\d+\.\d+\.\d+))?(?: (?P<ifn>[A-Za-z][A-Za-z-]*\d+(?::\d+)?\.\d+|BVI\d+))?(?: (?P<nh2>\d+\.\d+\.\d+\.\d+))?(?: distance (?P<dist>\d+))?$'
-    when: "(nh or ifn) and not (nh and nh2)"
+    match: '^ip route(?: vrf (?P<vrf>\S+))? (?P<dst>default|\d+\.\d+\.\d+\.\d+/\d+)(?: (?P<nh>\d+\.\d+\.\d+\.\d+))?(?: (?P<ifn>[A-Za-z][A-Za-z-]*\d+(?::\d+)?\.\d+|BVI\d+))?(?: (?P<nh2>\d+\.\d+\.\d+\.\d+)| (?P<nh3>dhcp))?(?P<conn> connected)?(?: metric (?P<metric>\d+))?(?: distance (?P<dist>\d+))?(?: tag (?P<tag>\d+))?$'
+    when: "(nh or ifn) and not (nh and (nh2 or nh3))"
     row:
       table: static_routes
       key:
         vrf: "{{ vrf }}"
         prefix: "{{ '0.0.0.0/0' if dst == 'default' else (dst | network) }}"
-        next_hop: "{{ nh if nh else nh2 }}"
+        next_hop: "{{ nh if nh else (nh2 if nh2 else nh3) }}"
         out_if: "{{ ifn | ifname }}"
-    set: {distance: "{{ dist }}"}
+    set: {distance: "{{ dist }}", metric: "{{ metric }}", tag: "{{ tag }}", connected_only: "{{ 'true' if conn else '' }}"}
 
   # ---- OSPF ----
   - id: ospf
@@ -34,16 +35,34 @@ rules:
           table: ospf_ranges
           key: {process_id: "{{ pid }}", area: "{{ area }}", prefix: "{{ prefix | network }}"}
         set: {advertise: "{{ 'true' if adv == 'advertise' else 'false' }}"}
-      # The AS number after "bgp" is read and not kept; "tag" has no column.
+      # The AS number after "bgp" is read and not kept.
       - id: ospf.redistribute
-        match: '^redistribute (?P<src>connected|static|rip|bgp(?: \d+)?)(?: metric (?P<metric>\d+))?(?: metric-type (?P<mtype>1|2))?(?: route-map (?P<map>\S+))?$'
+        match: '^redistribute (?P<src>connected|static|rip|bgp(?: \d+)?)(?: metric (?P<metric>\d+))?(?: metric-type (?P<mtype>1|2))?(?: tag (?P<tag>\d+))?(?: route-map (?P<map>\S+))?$'
         row:
           table: ospf_redistribute
           key: {process_id: "{{ pid }}", source: "{{ 'bgp' if src is startingwith('bgp') else src }}"}
-        set: {metric: "{{ metric }}", metric_type: "{{ mtype }}", filter: "{{ map }}"}
+        set: {metric: "{{ metric }}", metric_type: "{{ mtype }}", filter: "{{ map }}", tag: "{{ tag }}"}
       - id: ospf.default_originate
-        match: '^originate-default(?P<always> always)?(?: metric (?P<metric>\d+))?$'
-        set: {default_originate: "{{ 'always' if always else 'when_present' }}", default_metric: "{{ metric }}"}
+        match: '^originate-default(?P<always> always)?(?: metric (?P<metric>\d+))?(?: metric-type (?P<mtype>1|2))?(?: route-map (?P<map>\S+))?$'
+        set: {default_originate: "{{ 'always' if always else 'when_present' }}", default_metric: "{{ metric }}", default_metric_type: "{{ mtype }}", default_filter: "{{ map }}"}
+      # The distance of the NSSA external routes has no column (CRM 10-28).
+      - id: ospf.distance
+        match: '^distance(?: external (?P<c>\d+))?(?: inter-area (?P<b>\d+))?(?: intra-area (?P<a>\d+))?$'
+        when: "a or b or c"
+        set: {distance_intra: "{{ a }}", distance_inter: "{{ b }}", distance_external: "{{ c }}"}
+      # Which of the learned routes go into the routing table (CRM 10-29).
+      - id: ospf.distribute.prefix
+        match: '^distribute-list prefix (?P<list>\S+)$'
+        set: {filter_in_prefix_list: "{{ list }}"}
+      - id: ospf.distribute.route_map
+        match: '^distribute-list route-map (?P<map>\S+)$'
+        set: {filter_in_policy: "{{ map }}"}
+      # A virtual link, plain or with its two timers (CRM 10-27);
+      # authentication and the other timers have no column.
+      - id: ospf.virtual_link
+        match: '^area (?P<area>\S+) virtual-link (?P<rid>\d+\.\d+\.\d+\.\d+)(?: dead-interval (?P<dead>\d+))?(?: hello-interval (?P<hello>\d+))?$'
+        row: {table: ospf_virtual_links, key: {process_id: "{{ pid }}", area: "{{ area }}", router_id: "{{ rid }}"}}
+        set: {hello: "{{ hello }}", dead: "{{ dead }}"}
       - id: ospf.passive
         match: '^passive-interface (?P<ifn>[A-Za-z]\S*)$'
         emit:
@@ -66,74 +85,230 @@ rules:
 
   # ---- BGP ----
   # What belongs to the session stands under "router bgp"; what belongs to the
-  # routes stands under "address-family ipv4 unicast".
+  # routes stands under "address-family ipv4 unicast". The same lines stand
+  # under "vrf <name>" for the BGP of a VRF (CRM 10-66; the layout is that of
+  # FD 2.17.7). The rules are written once, under bgp.vrf (the place where
+  # "vrf" is in sight), and "router bgp" borrows them with children_from:
+  # there "vrf" reads as "", the global table.
   - id: bgp
     match: '^router bgp (?P<asn>\d+)$'
     row: {table: bgp_processes, key: {vrf: ""}}
     set: {asn: "{{ asn }}"}
+    children_from: bgp.vrf
     children:
       - id: bgp.router_id
         match: '^router-id (?P<id>\d+\.\d+\.\d+\.\d+)$'
         set: {router_id: "{{ id }}"}
-      - id: bgp.neighbor.remote_as
-        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) remote-as (?P<ras>\d+)$'
-        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
-        set: {remote_as: "{{ ras }}"}
-      - id: bgp.neighbor.update_source
-        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) update-source (?P<ifn>[A-Za-z]\S*)$'
-        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
-        set: {update_source: "{{ ifn | ifname }}"}
-      - id: bgp.neighbor.description
-        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) description (?P<text>.+)$'
-        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
-        set: {description: "{{ text }}"}
-      - id: bgp.neighbor.password
-        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) password (?P<pw>\S+)$'
-        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
-        set: {password: "{{ pw }}"}
-      - id: bgp.neighbor.ebgp_multihop
-        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) ebgp-multihop (?P<ttl>\d+)$'
-        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
-        set: {ebgp_multihop: "{{ ttl }}"}
-      - id: bgp.neighbor.timers
-        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) timers (?P<ka>\d+) (?P<hold>\d+)$'
-        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
+      # The timers of every neighbor (CRM 10-65: BGP config mode only).
+      - id: bgp.timers
+        match: '^timers (?P<ka>\d+) (?P<hold>\d+)$'
         set: {keepalive: "{{ ka }}", holdtime: "{{ hold }}"}
-      - id: bgp.neighbor.shutdown
-        match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) shutdown$'
-        row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
-        set: {enabled: false}
+      - id: bgp.default_local_preference
+        match: '^default-local-preference (?P<n>\d+)$'
+        set: {default_local_preference: "{{ n }}"}
 
-      # A line that only holds the lines under it.
-      - id: bgp.af
-        match: '^address-family ipv4(?: unicast)?$'
+      - id: bgp.vrf
+        match: '^vrf (?P<vrf>\S+)$'
+        row: {table: bgp_processes, key: {vrf: "{{ vrf }}"}}
+        set: {asn: "{{ asn }}"}
         children:
-          - id: bgp.af.network
-            match: '^network (?P<prefix>\d+\.\d+\.\d+\.\d+/\d+)$'
-            row: {table: bgp_networks, key: {vrf: "", prefix: "{{ prefix | network }}"}}
-          # With the number of an OSPF process the line stays unknown.
-          - id: bgp.af.redistribute
-            match: '^redistribute (?P<src>connected|static|rip|ospf)(?: metric (?P<metric>\d+))?(?: route-map (?P<map>\S+))?$'
-            row: {table: bgp_redistribute, key: {vrf: "", source: "{{ src }}"}}
-            set: {metric: "{{ metric }}", filter: "{{ map }}"}
-          - id: bgp.af.neighbor.prefix_list
-            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) distribute-list (?P<list>\S+) (?P<dir>in|out)$'
-            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
-            set: {"prefix_list_{{ dir }}": "{{ list }}"}
-          - id: bgp.af.neighbor.route_map
-            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) route-map (?P<map>\S+) (?P<dir>in|out)$'
-            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
-            set: {"filter_{{ dir }}": "{{ map }}"}
-          - id: bgp.af.neighbor.next_hop_self
-            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) next-hop-self$'
-            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
-            set: {next_hop_self: true}
-          - id: bgp.af.neighbor.send_default
-            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) send-default$'
-            row: {table: bgp_neighbors, key: {vrf: "", neighbor: "{{ addr }}"}}
-            set: {default_originate: true}
+          - id: bgp.neighbor.remote_as
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) remote-as (?P<ras>\d+)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {remote_as: "{{ ras }}"}
+          - id: bgp.neighbor.update_source
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) update-source (?P<ifn>[A-Za-z]\S*)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {update_source: "{{ ifn | ifname }}"}
+          - id: bgp.neighbor.description
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) description (?P<text>.+)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {description: "{{ text }}"}
+          - id: bgp.neighbor.password
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) password (?P<pw>\S+)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {password: "{{ pw }}"}
+          - id: bgp.neighbor.ebgp_multihop
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) ebgp-multihop (?P<ttl>\d+)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {ebgp_multihop: "{{ ttl }}"}
+          - id: bgp.neighbor.timers
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) timers (?P<ka>\d+) (?P<hold>\d+)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {keepalive: "{{ ka }}", holdtime: "{{ hold }}"}
+          - id: bgp.neighbor.shutdown
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) shutdown$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {enabled: false}
+          - id: bgp.neighbor.adv_interval
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) advertisement-interval (?P<n>\d+)$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {advertisement_interval: "{{ n }}"}
+          - id: bgp.neighbor.rr_client
+            match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) route-reflector-client$'
+            row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+            set: {route_reflector_client: true}
+
+          # ---- peer groups (CRM 10-68 to 10-72, FD 2.22, "peer groups"): a group
+          # holds what its members share, and FD shows the same settings
+          # written neighbor by neighbor as "the same configuration". The
+          # dataset has no groups: every member gets the values of its
+          # group (bgp.pg.member.fill), and the configuration is written
+          # without groups. A range of neighbors ("listen range") and the
+          # lines that have no column stay unknown.
+          - id: bgp.pg
+            match: '^peer-group (?P<pg>\S+) remote-as (?P<pgas>\d+)$'
+            emit:
+              - table: x_bgp_pg
+                key: {name: "{{ pg }}"}
+                set: {remote_as: "{{ pgas }}"}
+            children:
+              - id: bgp.pg.member
+                match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+)(?: remote-as (?P<ras>\d+))?$'
+                emit:
+                  - table: x_bgp_pg_member
+                    key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}
+                    set: {group: "{{ pg }}", remote_as: "{{ ras }}"}
+              - id: bgp.pg.description
+                match: '^description (?P<text>.+)$'
+                emit:
+                  - table: x_bgp_pg
+                    key: {name: "{{ pg }}"}
+                    set: {description: "{{ text }}"}
+              - id: bgp.pg.password
+                match: '^password (?P<pw>\S+)$'
+                emit:
+                  - table: x_bgp_pg
+                    key: {name: "{{ pg }}"}
+                    set: {password: "{{ pw }}"}
+              - id: bgp.pg.ebgp_multihop
+                match: '^ebgp-multihop (?P<ttl>\d+)$'
+                emit:
+                  - table: x_bgp_pg
+                    key: {name: "{{ pg }}"}
+                    set: {ebgp_multihop: "{{ ttl }}"}
+              - id: bgp.pg.update_source
+                match: '^update-source (?P<ifn>[A-Za-z]\S*)$'
+                emit:
+                  - table: x_bgp_pg
+                    key: {name: "{{ pg }}"}
+                    set: {update_source: "{{ ifn | ifname }}"}
+              - id: bgp.pg.timers
+                match: '^timers (?P<ka>\d+) (?P<hold>\d+)$'
+                emit:
+                  - table: x_bgp_pg
+                    key: {name: "{{ pg }}"}
+                    set: {keepalive: "{{ ka }}", holdtime: "{{ hold }}"}
+              - id: bgp.pg.shutdown
+                match: '^shutdown$'
+                emit:
+                  - table: x_bgp_pg
+                    key: {name: "{{ pg }}"}
+                    set: {enabled: "false"}
+              - id: bgp.pg.adv_interval
+                match: '^advertisement-interval (?P<n>\d+)$'
+                emit:
+                  - table: x_bgp_pg
+                    key: {name: "{{ pg }}"}
+                    set: {advertisement_interval: "{{ n }}"}
+              - id: bgp.pg.rr_client
+                match: '^route-reflector-client$'
+                emit:
+                  - table: x_bgp_pg
+                    key: {name: "{{ pg }}"}
+                    set: {route_reflector_client: "true"}
+              - id: bgp.pg.prefix_list
+                match: '^address-family ipv4 distribute-list (?P<list>\S+) (?P<dir>in|out)$'
+                emit:
+                  - table: x_bgp_pg
+                    key: {name: "{{ pg }}"}
+                    set: {"prefix_list_{{ dir }}": "{{ list }}"}
+              - id: bgp.pg.route_map
+                match: '^address-family ipv4 route-map (?P<map>\S+) (?P<dir>in|out)$'
+                emit:
+                  - table: x_bgp_pg
+                    key: {name: "{{ pg }}"}
+                    set: {"filter_{{ dir }}": "{{ map }}"}
+              - id: bgp.pg.next_hop_self
+                match: '^address-family ipv4 next-hop-self$'
+                emit:
+                  - table: x_bgp_pg
+                    key: {name: "{{ pg }}"}
+                    set: {next_hop_self: "true"}
+              - id: bgp.pg.send_default
+                match: '^address-family ipv4 send-default$'
+                emit:
+                  - table: x_bgp_pg
+                    key: {name: "{{ pg }}"}
+                    set: {default_originate: "true"}
+
+          # A line that only holds the lines under it.
+          - id: bgp.af
+            match: '^address-family ipv4(?: unicast)?$'
+            children:
+              # Address family mode (CRM 10-55, 10-56).
+              - id: bgp.af.aggregate
+                match: '^aggregate-address (?P<prefix>\d+\.\d+\.\d+\.\d+/\d+)(?P<as> as-set)?(?P<only> summary-only)?$'
+                row: {table: bgp_aggregates, key: {vrf: "{{ vrf }}", prefix: "{{ prefix | network }}"}}
+                set: {as_set: "{{ 'true' if as else '' }}", summary_only: "{{ 'true' if only else '' }}"}
+              - id: bgp.af.distance
+                match: '^distance(?: ebgp (?P<e>\d+))?(?: ibgp (?P<i>\d+))?$'
+                when: "e or i"
+                row: {table: bgp_processes, key: {vrf: "{{ vrf }}"}}
+                set: {distance_ebgp: "{{ e }}", distance_ibgp: "{{ i }}"}
+              - id: bgp.af.network
+                match: '^network (?P<prefix>\d+\.\d+\.\d+\.\d+/\d+)$'
+                row: {table: bgp_networks, key: {vrf: "{{ vrf }}", prefix: "{{ prefix | network }}"}}
+              # The number of the OSPF process can follow "ospf" (CRM 10-64).
+              - id: bgp.af.redistribute
+                match: '^redistribute (?P<src>connected|static|rip|ospf)(?: (?P<opid>\d+))?(?: metric (?P<metric>\d+))?(?: route-map (?P<map>\S+))?$'
+                when: "src == 'ospf' or not opid"
+                row: {table: bgp_redistribute, key: {vrf: "{{ vrf }}", source: "{{ src }}"}}
+                set: {metric: "{{ metric }}", filter: "{{ map }}", process_id: "{{ opid }}"}
+              - id: bgp.af.neighbor.prefix_list
+                match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) distribute-list (?P<list>\S+) (?P<dir>in|out)$'
+                row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+                set: {"prefix_list_{{ dir }}": "{{ list }}"}
+              - id: bgp.af.neighbor.route_map
+                match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) route-map (?P<map>\S+) (?P<dir>in|out)$'
+                row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+                set: {"filter_{{ dir }}": "{{ map }}"}
+              - id: bgp.af.neighbor.next_hop_self
+                match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) next-hop-self$'
+                row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+                set: {next_hop_self: true}
+              - id: bgp.af.neighbor.send_default
+                match: '^neighbor (?P<addr>\d+\.\d+\.\d+\.\d+) send-default$'
+                row: {table: bgp_neighbors, key: {vrf: "{{ vrf }}", neighbor: "{{ addr }}"}}
+                set: {default_originate: true}
 
 derive:
+  # A member of a peer group takes what the group sets and it does not set
+  # itself. Its AS number is its own, or that of the group.
+  - id: bgp.pg.member.fill
+    for: x_bgp_pg_member
+    as: m
+    let:
+      g: "lookup('x_bgp_pg', name=m.group)"
+    when: "m.group and g.remote_as"
+    row: {table: bgp_neighbors, key: {vrf: "{{ m.vrf }}", neighbor: "{{ m.neighbor }}"}}
+    set:
+      remote_as: "{{ (m.remote_as if m.remote_as else g.remote_as) if row.remote_as == '' else '' }}"
+      description: "{{ g.description if row.description == '' else '' }}"
+      password: "{{ g.password if row.password == '' else '' }}"
+      ebgp_multihop: "{{ g.ebgp_multihop if row.ebgp_multihop == '' else '' }}"
+      update_source: "{{ g.update_source if row.update_source == '' else '' }}"
+      enabled: "{{ g.enabled if row.enabled == '' else '' }}"
+      next_hop_self: "{{ g.next_hop_self if row.next_hop_self == '' else '' }}"
+      prefix_list_in: "{{ g.prefix_list_in if row.prefix_list_in == '' else '' }}"
+      prefix_list_out: "{{ g.prefix_list_out if row.prefix_list_out == '' else '' }}"
+      filter_in: "{{ g.filter_in if row.filter_in == '' else '' }}"
+      filter_out: "{{ g.filter_out if row.filter_out == '' else '' }}"
+      default_originate: "{{ g.default_originate if row.default_originate == '' else '' }}"
+      keepalive: "{{ g.keepalive if row.keepalive == '' else '' }}"
+      holdtime: "{{ g.holdtime if row.holdtime == '' else '' }}"
+      route_reflector_client: "{{ g.route_reflector_client if row.route_reflector_client == '' else '' }}"
+      advertisement_interval: "{{ g.advertisement_interval if row.advertisement_interval == '' else '' }}"
   # An interface runs OSPF when a "network" line names it, or has its address
   # inside. A process is not tied to a VRF here, so an interface in a VRF is
   # left out.

@@ -176,3 +176,64 @@ func TestNormalize(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+// A vendor that closes each part with "#" and indents the single lines of the
+// device by one space: the line after a mark is a child of the root.
+func TestCommentCloses(t *testing.T) {
+	src := strings.Join([]string{
+		"#",
+		" sysname sw-a01",
+		"#",
+		"vlan 10",
+		" name sample-office",
+		"#",
+		"interface GigabitEthernet1/0/1",
+		" port access vlan 10",
+		"#",
+		" ip route-static 0.0.0.0 0 192.0.2.1",
+		" ip route-static 198.51.100.0 24 192.0.2.2",
+		"#",
+		"return",
+	}, "\n")
+	want := "sysname sw-a01\nvlan 10\n. name sample-office\ninterface GigabitEthernet1/0/1\n. port access vlan 10\n" +
+		"ip route-static 0.0.0.0 0 192.0.2.1\nip route-static 198.51.100.0 24 192.0.2.2\nreturn\n"
+	tree, err := Parse("indent", src, Options{CommentPrefixes: []string{"#"}, CommentCloses: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := dump(tree); got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+	// Without the option the indented lines hang under the interface.
+	tree, _ = Parse("indent", src, Options{CommentPrefixes: []string{"#"}})
+	if got := dump(tree); !strings.Contains(got, ". ip route-static 0.0.0.0 0 192.0.2.1\n") {
+		t.Errorf("without the option:\n%s", got)
+	}
+}
+
+// An indented mark stands between the parts of one block (" #" before
+// "address-family" under "bgp"): the block stays open, and what stood as
+// deep as the mark is closed.
+func TestCommentClosesIndented(t *testing.T) {
+	src := strings.Join([]string{
+		"bgp 64496",
+		" peer 192.0.2.2 as-number 64497",
+		" #",
+		" address-family ipv4 unicast",
+		"  peer 192.0.2.2 enable",
+		" #",
+		" address-family ipv6 unicast",
+		"  network 2001:db8:: 32",
+		"#",
+		" ip route-static 0.0.0.0 0 192.0.2.1",
+	}, "\n")
+	want := "bgp 64496\n. peer 192.0.2.2 as-number 64497\n. address-family ipv4 unicast\n. . peer 192.0.2.2 enable\n" +
+		". address-family ipv6 unicast\n. . network 2001:db8:: 32\nip route-static 0.0.0.0 0 192.0.2.1\n"
+	tree, err := Parse("indent", src, Options{CommentPrefixes: []string{"#"}, CommentCloses: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := dump(tree); got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}

@@ -1,0 +1,13 @@
+# Data of Cisco on VRRP version 3 (made-up values): the device is written on
+# version 2 for its IPv4 group (G-614); "vrrpv2" is how this device works
+# anyway (not told).
+tables:
+  devices:
+    - {hostname: ix-w03, vendor: nec_ix, vrrp_version: "3"}
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 192.0.2.4/24, ipv6: ["2001:db8:0:1::4/64"]}
+  fhrp:
+    - {if_name: GigaEthernet0.0, group: 1, protocol: vrrp, virtual_ip: 192.0.2.1, priority: 100, preempt: true, vrrpv2: true}
+  ipv6_fhrp:
+    - {if_name: GigaEthernet0.0, group: 2, link_local: "fe80::1", priority: 100, preempt: true, advert_interval: 1000}
+findings: [G-614]

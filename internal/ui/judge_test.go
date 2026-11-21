@@ -65,7 +65,7 @@ func TestJudge(t *testing.T) {
 	if sla.Example.Text != "ip sla 10" || sla.ExampleFile != "input/old/rt-a01.txt" || len(sla.ExampleText) != 2 || sla.ExampleMore != 0 {
 		t.Errorf("example = %+v, %q", sla.Example, sla.ExampleText)
 	}
-	policy := judgeGroup(t, v, "no cdp enable")
+	policy := judgeGroup(t, v, "no mop enabled")
 	if policy.Path != "interface GigabitEthernet<n>" || policy.Heads != 3 || policy.Below != 0 {
 		t.Errorf("group below a line = %+v", policy)
 	}

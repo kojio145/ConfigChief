@@ -1,0 +1,58 @@
+hostname rt-y01
+!
+crypto ikev2 proposal IKEV2-PROP
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+ prf sha256
+!
+crypto ikev2 policy IKEV2-POL
+ proposal IKEV2-PROP
+!
+crypto ikev2 keyring IKEV2-KEYS
+ peer Tunnel1
+  address 203.0.113.20
+  pre-shared-key local dummy-psk-site-y01
+  pre-shared-key remote dummy-psk-site-y02
+!
+crypto ikev2 profile IKEV2-Tunnel1
+ match identity remote key-id sample-site-b
+ identity local key-id sample-site-a
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS
+ lifetime 86400
+ dpd 30 5 periodic
+!
+crypto ipsec transform-set TS-Tunnel1 esp-aes 256 esp-sha-hmac
+ mode tunnel
+!
+crypto ipsec profile PROF-Tunnel1
+ set transform-set TS-Tunnel1
+ set pfs group14
+ set security-association lifetime seconds 28800
+ set ikev2-profile IKEV2-Tunnel1
+!
+interface GigabitEthernet0/0
+ description sample wan
+ ip address 203.0.113.9 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description sample lan
+ ip address 198.51.100.1 255.255.255.0
+ no shutdown
+!
+interface Tunnel1
+ description sample vpn
+ ip unnumbered GigabitEthernet0/1
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.20
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-Tunnel1
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.10 1
+ip route 192.0.2.0 255.255.255.128 Tunnel1 1
+!
+end

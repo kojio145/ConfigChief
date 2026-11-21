@@ -1,0 +1,27 @@
+hostname ix-c06
+!
+ppp profile lns-sample
+  authentication request chap
+  lcp pfc
+  lcp acfc
+  ipcp ip-compression
+!
+interface Loopback0.0
+  ip address 192.0.2.129/25
+!
+interface Tunnel0.0
+  ip unnumbered Loopback0.0
+  ppp binding lns-sample
+  tunnel mode l2tp-lns ipsec
+  ipsec policy transport ipsec-sample-ra
+  l2tp password plain dummy-l2tp-secret-c
+  no shutdown
+!
+interface Tunnel1.0
+  ip unnumbered Loopback0.0
+  ppp binding lns-sample
+  tunnel mode l2tp-lns ipsec
+  ipsec policy transport ipsec-sample-ra
+  l2tp password plain dummy-l2tp-secret-c
+  no shutdown
+!

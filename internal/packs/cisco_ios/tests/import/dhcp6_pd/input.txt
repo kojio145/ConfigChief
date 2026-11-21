@@ -1,0 +1,31 @@
+!
+hostname rt-w01
+!
+ipv6 unicast-routing
+!
+ipv6 local pool PD-pool-sample-pd 2001:DB8:1000::/40 56
+ipv6 local pool pool-sample-shared 2001:DB8:2000::/40 56 shared
+!
+ipv6 dhcp pool pool-sample-pd
+ address prefix 2001:DB8:0:10::/64
+ prefix-delegation pool PD-pool-sample-pd lifetime 1800 600
+ prefix-delegation 2001:DB8:1200::/48 00030001000A0B0C0D0E
+ dns-server 2001:DB8::53
+ sntp address 2001:DB8::123
+!
+ipv6 dhcp pool pool-sample-inf
+ prefix-delegation pool pool-sample-other lifetime infinite infinite
+!
+ipv6 local pool pool-sample-other 2001:DB8:4000::/36 48
+!
+interface GigabitEthernet0/0
+ description sample downstream routers
+ ipv6 address 2001:DB8:0:1::1/64
+ ipv6 dhcp server pool-sample-pd
+!
+interface GigabitEthernet0/1
+ description sample downstream routers 2
+ ipv6 address 2001:DB8:0:2::1/64
+ ipv6 dhcp server pool-sample-inf
+!
+end

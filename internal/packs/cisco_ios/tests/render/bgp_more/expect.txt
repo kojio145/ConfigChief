@@ -1,0 +1,73 @@
+hostname rt-b02
+!
+vrf definition VRF-SAMPLE-B
+ rd 64496:20
+ address-family ipv4
+ exit-address-family
+!
+ipv6 unicast-routing
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.1 255.255.255.248
+ no shutdown
+!
+interface Loopback0
+ ip address 192.0.2.1 255.255.255.255
+ no shutdown
+!
+router bgp 64496
+ bgp router-id 192.0.2.1
+ no bgp log-neighbor-changes
+ bgp default local-preference 150
+ timers bgp 20 60
+ distance bgp 30 190 200
+ neighbor 192.0.2.2 remote-as 64496
+ neighbor 192.0.2.2 password 7 00SAMPLE00DUMMY00
+ neighbor 192.0.2.2 update-source Loopback0
+ neighbor 192.0.2.2 next-hop-self
+ neighbor 192.0.2.2 send-community both
+ neighbor 192.0.2.2 timers 10 30
+ neighbor 192.0.2.2 route-reflector-client
+ neighbor 203.0.113.2 remote-as 64497
+ neighbor 203.0.113.2 default-originate
+ neighbor 203.0.113.2 timers 30 90
+ neighbor 203.0.113.2 filter-list 10 in
+ neighbor 203.0.113.2 filter-list 20 out
+ neighbor 203.0.113.2 maximum-prefix 1000 80 restart 30
+ neighbor 203.0.113.2 weight 200
+ neighbor 203.0.113.2 advertisement-interval 15
+ neighbor 203.0.113.3 remote-as 64498
+ neighbor 203.0.113.3 send-community extended
+ neighbor 203.0.113.3 default-originate route-map RM-SAMPLE-DEF
+ neighbor 203.0.113.3 distribute-list ACL-SAMPLE-BGP in
+ neighbor 203.0.113.3 maximum-prefix 500 warning-only
+ neighbor 203.0.113.4 remote-as 64499
+ neighbor 203.0.113.4 maximum-prefix 200 discard-extra
+ network 198.51.100.0 mask 255.255.255.0
+ aggregate-address 192.0.2.0 255.255.255.0 as-set summary-only
+ aggregate-address 198.51.100.0 255.255.254.0 summary-only
+ address-family ipv4 vrf VRF-SAMPLE-B
+  distance bgp 40 180 180
+  neighbor 198.51.100.2 remote-as 64500
+  neighbor 198.51.100.2 distribute-list ACL-SAMPLE-BGP out
+  aggregate-address 203.0.113.128 255.255.255.128
+ exit-address-family
+ neighbor 3fff:a:b::2 remote-as 64497
+ neighbor 3fff:a:b::2 password 7 22SAMPLE22DUMMY22
+ neighbor 3fff:a:b::3 remote-as 64498
+ address-family ipv6
+  neighbor 3fff:a:b::2 activate
+  neighbor 3fff:a:b::2 send-community both
+  neighbor 3fff:a:b::3 activate
+  neighbor 3fff:a:b::3 send-community extended
+ exit-address-family
+!
+ip access-list standard ACL-SAMPLE-BGP
+ permit 198.51.100.0 0.0.0.255
+!
+ip as-path access-list 10 permit ^64497_
+ip as-path access-list 20 permit ^$
+!
+route-map RM-SAMPLE-DEF permit 10
+!
+end

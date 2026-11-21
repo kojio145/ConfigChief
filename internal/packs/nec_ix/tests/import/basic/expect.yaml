@@ -6,6 +6,12 @@ tables:
       vendor: nec_ix
       name_servers: [192.0.2.53, 192.0.2.54]
       timezone: "+9"
+      log_buffer: true
+      log_buffer_size: 131072
+      log_severity: warnings
+      log_timestamp: datetime
+      forward_cache: true
+      ntp_serve: true
       snmp_location: sample-site-a
       snmp_contact: netops@example.com
   interfaces:
@@ -16,14 +22,15 @@ tables:
       ipv4_secondary: [203.0.113.129/25]
       ipv6: ["2001:db8:1::2/64"]
       acl_in: acl-sample-in
+      acl_in_more: [acl-sample-seq]
       acl_out: acl-sample-out
       proxy_arp: true
       speed: 1000
       duplex: full
-    - {name: GigaEthernet2.0, ipv4: 203.0.113.1/30, ip_mtu: 1454, speed: "", duplex: ""}
+    - {name: GigaEthernet2.0, ipv4: 203.0.113.1/30, ip_mtu: 1454, speed: "", duplex: "", port_description: sample-uplink-port}
     - {name: GigaEthernet2.1, kind: subif, encap_vlan: 10, ipv4: 192.0.2.130/25, dhcp_relay: [192.0.2.67]}
     - {name: GigaEthernet2.2, kind: subif, encap_vlan: 20, vrf: vrf-sample-a, ipv4: 192.0.2.193/26, enabled: false}
-    - {name: GigaEthernet0.1, kind: subif, ipv4: negotiated, tcp_mss: ""}
+    - {name: GigaEthernet0.1, kind: subif, ipv4: negotiated, tcp_mss: auto}
     - {name: Loopback0.0, kind: loopback, ipv4: 192.0.2.1/32, enabled: true}
     - {name: Null0.0, kind: other, enabled: true}
     - {name: Tunnel0.0, kind: tunnel, ipv4: "unnumbered:GigaEthernet1.0", tcp_mss: 1300}
@@ -97,11 +104,13 @@ tables:
       priority: 110
       preempt: true
       advert_interval: 3
+      track: wg-sample-a
+      track_decrement: 20
       auth_type: simple
       auth_key: dummy-vrrp
   acls:
     - {name: acl-sample-in, type: extended}
-    - {name: acl-sample-seq, type: extended}
+    - {name: acl-sample-seq, type: extended, seq_step: 10}
   acl_entries:
     - {acl: acl-sample-in, seq: 10, action: permit, protocol: tcp, src: 198.51.100.0/24, dst: any, dst_port: 443}
     - {acl: acl-sample-in, seq: 20, action: permit, protocol: udp, src: any, src_port: 53, dst: 198.51.100.0/24}
@@ -109,6 +118,7 @@ tables:
     - {acl: acl-sample-in, seq: 40, action: permit, protocol: icmp, src: any, dst: any}
     - {acl: acl-sample-in, seq: 50, action: deny, protocol: ip, src: any, dst: any}
     - {acl: acl-sample-seq, seq: 10, action: permit, protocol: ip, src: 192.0.2.0/25, dst: any}
+    - {acl: acl-sample-seq, seq: 20, action: deny, protocol: tcp, src: any, dst: any, dst_port: 8000-8080}
     - {acl: acl-sample-seq, seq: 30, action: deny, protocol: udp, src: any, dst: any, dst_port: "!123"}
   prefix_lists:
     - {name: pl-sample-in, seq: 5, action: permit, prefix: 0.0.0.0/0}
@@ -130,6 +140,7 @@ tables:
       target: 203.0.113.2
       source_if: GigaEthernet2.0
       interval: 10
+      restore_interval: 10
       fail_count: 3
       restore_count: 2
     - {id: wg-sample-b, type: interface, target: GigaEthernet2.0}
@@ -167,6 +178,8 @@ tables:
       key: 100
       keepalive_interval: 10
       keepalive_retry: 3
+  ipv6_interfaces:
+    - {if_name: GigaEthernet1.0, enabled: true}
   dhcp_pools:
     - name: dhcp-sample-lan
       network: 198.51.100.0/24
@@ -180,18 +193,5 @@ tables:
 
 # Lines with no rule; the reason for each is in README.md.
 unknown:
-  - "logging buffered 131072"
-  - "logging subsystem all warn"
-  - "logging timestamp datetime"
-  - "ip ufs-cache enable"
-  - "ip access-list acl-sample-seq sequence-mode 10"
-  - "ip access-list acl-sample-seq 20 deny tcp src any dest any dport range 8000 8080"
-  - "ntp ip enable"
-  - "action 20 ip decrement-vrrp-priority 1 20"
-  - "probe-timer restorer 10"
-  - "description sample-uplink-port"
-  - "ipv6 enable"
-  - "ip filter acl-sample-seq 20 in"
-  - "ip tcp adjust-mss auto"
 
 ignored_min: 1

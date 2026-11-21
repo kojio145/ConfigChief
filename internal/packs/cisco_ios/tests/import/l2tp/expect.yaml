@@ -1,0 +1,22 @@
+# L2TP (made-up values; appendix A 3.21): L2TPv3 negotiated and set by hand,
+# an LNS with its Virtual-Template and its pool, a LAC. On a device with an
+# LNS, the users written with "password" are its callers.
+tables:
+  l2tpv3:
+    - {if_name: GigabitEthernet0/1, peer_address: 203.0.113.1, vc_id: 101, profile: PW-SAMPLE-A, local_if: Loopback0, signaling: dynamic, password: dummy-l2tpv3-secret-a, local_name: rt-c02, hello: 30, sequencing: both, pmtu: true, df_bit: true}
+    - {if_name: GigabitEthernet0/2.10, peer_address: 203.0.113.1, vc_id: 102, profile: PW-SAMPLE-A, local_if: Loopback0, signaling: dynamic, password: dummy-l2tpv3-secret-a, local_name: rt-c02, hello: 30, sequencing: both, pmtu: true, df_bit: true}
+    - {if_name: GigabitEthernet0/3, peer_address: 203.0.113.3, vc_id: 201, profile: PW-SAMPLE-M, local_if: Loopback0, signaling: manual, local_session_id: 111, remote_session_id: 222, local_cookie: "8 12345 67890", remote_cookie: "4 54321", hello: 60}
+  l2tp_groups:
+    - {name: LNS-SAMPLE, role: lns, logical_ifs: [Virtual-Template1], peer_name: rt-c09, local_name: rt-c02, tunnel_auth: true, password: dummy-l2tp-secret-c, auth: chap_pap, pool_start: 192.0.2.100, pool_end: 192.0.2.150, dns_servers: [192.0.2.53, 192.0.2.54]}
+    - {name: LAC-SAMPLE, role: lac, peer_address: 198.51.100.1, local_name: rt-c02, tunnel_auth: false, domains: [example.com, example.net]}
+  l2tp_users:
+    - {group: LNS-SAMPLE, name: example-user, password: dummy-l2tp-user-secret-1}
+    - {group: LNS-SAMPLE, name: sample-user, password: dummy-l2tp-user-secret-2}
+  users:
+    - {name: admin, privilege: admin, secret: dummy-admin-secret-1}
+  interfaces:
+    - {name: Virtual-Template1, kind: other, ipv4: "unnumbered:Loopback0"}
+unknown:
+  - "digest secret dummy-digest-secret-1 hash sha"
+  - "ip tos reflect"
+  - "session-limit 10"

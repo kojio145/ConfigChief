@@ -1,0 +1,56 @@
+{# DHCP: the switch for the device, the addresses kept back and the pools
+   (README, "コンフィグの書き出し"). The relay stands under its interface. #}
+{% set need = namespace(dhcp=false) %}
+{% for i in t.interfaces %}
+{% if i.dhcp_relay %}
+{% set need.dhcp = true %}
+{% endif %}
+{% endfor %}
+{% if t.dhcp_pools or need.dhcp %}
+ dhcp enable
+{% for p in t.dhcp_pools %}
+{% for e in p.excluded %}
+{% set ends = e | split('-') %}
+{% if ends | length != 2 %}
+{{ fail('DHCP プール ' ~ p.name ~ ' の除外範囲「' ~ e ~ '」は、192.0.2.1-192.0.2.10 の形で書きます') }}
+{% endif %}
+ dhcp server forbidden-ip {{ ends[0] }}{{ ' ' ~ ends[1] if ends[1] != ends[0] else '' }}
+{% endfor %}
+{% endfor %}
+#
+{% endif %}
+{% for p in t.dhcp_pools %}
+dhcp server ip-pool {{ p.name }}
+ network {{ p.network | required('DHCP プール ' ~ p.name ~ ' のネットワーク') | ip }} mask {{ p.network | mask }}
+{% if p.range_start or p.range_end %}
+ address range {{ p.range_start | required('DHCP プール ' ~ p.name ~ ' の範囲の始まり') }} {{ p.range_end | required('DHCP プール ' ~ p.name ~ ' の範囲の終わり') }}
+{% endif %}
+{% if p.default_router %}
+ gateway-list {{ p.default_router }}{{ ' ' ~ (p.default_routers_more | join(' ')) if p.default_routers_more else '' }}
+{% elif p.default_routers_more %}
+{{ fail('DHCP プール ' ~ p.name ~ ': 「デフォルトゲートウェイ（2 つ目以降）」は、1 つ目があるときだけ書けます') }}
+{% endif %}
+{% if p.dns_servers %}
+ dns-list {{ p.dns_servers | join(' ') }}
+{% endif %}
+{% if p.domain %}
+ domain-name {{ p.domain }}
+{% endif %}
+{% if p.lease %}
+{% set n = p.lease | replace('d', '') | replace('h', '') | replace('m', '') | replace('s', '') %}
+{% if p.lease == 'infinite' %}
+ expired unlimited
+{% elif n is not digits or p.lease | length != n | length + 1 %}
+{{ fail('DHCP プール ' ~ p.name ~ ' のリース「' ~ p.lease ~ '」は、1d・12h・90m・100s・infinite の形で書きます') }}
+{% elif p.lease is endingwith('d') %}
+ expired day {{ n }}
+{% elif p.lease is endingwith('h') %}
+ expired day {{ n | int // 24 }} hour {{ n | int % 24 }}
+{% elif p.lease is endingwith('m') %}
+ expired day {{ n | int // 1440 }} hour {{ n | int % 1440 // 60 }} minute {{ n | int % 60 }}
+{% else %}
+ expired day {{ n | int // 86400 }} hour {{ n | int % 86400 // 3600 }} minute {{ n | int % 3600 // 60 }} second {{ n | int % 60 }}
+{% endif %}
+{% endif %}
+#
+{% endfor %}

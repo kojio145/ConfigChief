@@ -34,6 +34,9 @@ type Env struct {
 	// device of a generation, with how many are done. An error it gives
 	// stops the step; nothing is written then.
 	Tick func(done, total int, file string) error
+	// Edit, if set, keeps the sheets of the book between the steps of the
+	// table of a screen (spec 14.6).
+	Edit *EditCache
 
 	// screen is set on the copy of the environment that makes the texts of
 	// the screens: they mask the secrets whatever the case says (spec 14).

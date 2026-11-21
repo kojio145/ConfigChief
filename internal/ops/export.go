@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -201,6 +202,9 @@ func (p *peerTable) add(peer, feature, dev, item, ours, theirs, note string) {
 // same adds the columns both sides write alike.
 func (p *peerTable) same(peer, feature string, t *schema.Table, r *model.Row, note string, cols ...string) {
 	for _, col := range cols {
+		if t.Column(col) == nil {
+			continue
+		}
 		v := p.value(t, r, col)
 		p.add(peer, feature, r.Get("device"), t.Column(col).Title.In(p.e.lang()), v, v, note)
 	}
@@ -228,7 +232,89 @@ func (p *peerTable) ipsec(t *schema.Table, r *model.Row) {
 		note = noLocal
 	}
 	p.add(peer, feature, dev, "相手アドレス", peer, local, note)
-	p.same(peer, feature, t, r, "", "ike_version", "ike_mode", "psk", "ike_encryption", "ike_hash", "ike_dh", "ike_lifetime", "esp_encryption", "esp_hash", "pfs", "ipsec_lifetime")
+	p.same(peer, feature, t, r, "", "ike_version", "ike_mode")
+	// The keys: with IKE version 2 each side may prove itself with a key
+	// of its own, and the two keys change places on the other device.
+	// A key in the form the device saved it ("<kind> <value>", appendix A
+	// 3.26) is of no use to the other side: the key itself has to be told.
+	saved := ""
+	if strings.Contains(r.Get("psk"), " ") || strings.Contains(r.Get("psk_remote"), " ") {
+		saved = "機器が暗号化して保存した形（種別と値）です。相手には、元の鍵を別に伝えてください"
+	}
+	if theirs := p.value(t, r, "psk_remote"); theirs != "" {
+		p.add(peer, feature, dev, title(t, "psk", p), p.value(t, r, "psk"), "", strings.TrimSuffix("相手の機器では「"+title(t, "psk_remote", p)+"」に書く。"+saved, "。"))
+		p.add(peer, feature, dev, title(t, "psk_remote", p), theirs, "", strings.TrimSuffix("相手の機器では「"+title(t, "psk", p)+"」に書く。"+saved, "。"))
+	} else {
+		p.same(peer, feature, t, r, saved, "psk")
+	}
+	p.same(peer, feature, t, r, "hex は 16 進で書いた鍵。両端で同じ書き方にする", "psk_form")
+	// A value with further candidates: the list, in the order of liking.
+	listed := func(col, more, note string) {
+		if t.Column(col) == nil {
+			return
+		}
+		v := p.value(t, r, col)
+		if c := r.Cells[more]; v != "" && c != nil && len(c.Values) > 0 {
+			v += "、" + strings.Join(c.Values, "、")
+			if note == "" {
+				note = "並べた値のどれでもよい（先に書いた値を優先）。相手の機器にも、折り合う値が 1 つは要る"
+			}
+		}
+		p.add(peer, feature, dev, title(t, col, p), v, v, note)
+	}
+	listed("ike_encryption", "ike_encryption_more", "")
+	listed("ike_hash", "ike_hash_more", "")
+	listed("ike_dh", "ike_dh_more", "")
+	listed("ike_prf", "ike_prf_more", "")
+	p.same(peer, feature, t, r, "", "ike_lifetime")
+	listed("esp_encryption", "esp_encryption_more", "")
+	listed("esp_hash", "esp_hash_more", "")
+	p.same(peer, feature, t, r, "", "ah_hash")
+	p.same(peer, feature, t, r, "空は tunnel", "ipsec_mode")
+	// What the tunnel carries, where it is not plain IP (EtherIP that this
+	// row protects in transport mode; appendix A 3.20).
+	if tun := p.find("tunnels", dev, "if_name", r.Get("tunnel_if")); tun != nil && r.Get("tunnel_if") != "" && tun.Get("type") == "etherip" {
+		p.add(peer, feature, dev, "守るトンネルの種類", "etherip", "etherip", "EtherIP（L2 の延伸）を IPsec のトランスポートモードで守る。相手の機器も同じ形にする")
+	}
+	listed("pfs", "pfs_more", "")
+	p.same(peer, feature, t, r, "", "ipsec_lifetime", "ipsec_lifetime_kb")
+	// The further candidates (one combination each), in their order.
+	if pt := p.e.Schema.Table("ipsec_proposals"); pt != nil {
+		var more []*model.Row
+		for _, x := range p.rows("ipsec_proposals", dev) {
+			if x.Get("tunnel") == r.Get("name") {
+				more = append(more, x)
+			}
+		}
+		sort.SliceStable(more, func(i, j int) bool {
+			if a, b := more[i].Get("phase"), more[j].Get("phase"); a != b {
+				return a < b
+			}
+			a, _ := strconv.Atoi(more[i].Get("seq"))
+			b, _ := strconv.Atoi(more[j].Get("seq"))
+			return a < b
+		})
+		n := map[string]int{}
+		for _, x := range more {
+			ph := x.Get("phase")
+			n[ph]++
+			var parts []string
+			for _, col := range []string{"encryption", "hash", "dh", "prf", "ah_hash", "lifetime", "lifetime_kb"} {
+				if v := p.value(pt, x, col); v != "" {
+					parts = append(parts, title(pt, col, p)+" "+v)
+				}
+			}
+			v := strings.Join(parts, "、")
+			if v == "" {
+				v = "（機器の既定の提案）"
+			}
+			what := "IKE"
+			if ph == "ipsec" {
+				what = "IPsec"
+			}
+			p.add(peer, feature, dev, fmt.Sprintf("%s の追加の候補 %d", what, n[ph]+1), v, v, "1 番目の候補（上の値）でまとまらないときに出す候補。相手の機器にも、折り合う候補が 1 つは要る")
+		}
+	}
 	if v := p.value(t, r, "local_id"); v != "" {
 		p.add(peer, feature, dev, "自分の ID", v, v, "相手の機器では「相手の ID」に書く")
 	}
@@ -243,14 +329,35 @@ func (p *peerTable) ipsec(t *schema.Table, r *model.Row) {
 		if proto == "" {
 			proto = "ip"
 		}
+		end := func(net, port string) string {
+			if port != "" {
+				return net + " ポート " + port
+			}
+			return net
+		}
+		mine, theirs := end(s.Get("local_net"), s.Get("local_port")), end(s.Get("remote_net"), s.Get("remote_port"))
 		p.add(peer, feature, dev, "対象通信 "+s.Get("seq")+"（自分側 → 相手側）",
-			s.Get("local_net")+" → "+s.Get("remote_net")+"（"+proto+"）", s.Get("remote_net")+" → "+s.Get("local_net")+"（"+proto+"）", "相手の機器では、自分側と相手側が入れ替わる")
+			mine+" → "+theirs+"（"+proto+"）", theirs+" → "+mine+"（"+proto+"）", "相手の機器では、自分側と相手側が入れ替わる")
 	}
-	p.same(peer, feature, t, r, "両端で同じ設定にするのが普通（違っていてもつながる）", "dpd_interval", "dpd_retry", "nat_traversal")
+	p.same(peer, feature, t, r, "両端で同じ設定にするのが普通（違っていてもつながる）", "dpd_interval", "dpd_retry", "dpd_retry_interval", "dpd_mode", "nat_traversal", "nat_keepalive", "nat_force")
+}
+
+// title gives the heading of a column in the language of the case.
+func title(t *schema.Table, col string, p *peerTable) string {
+	if c := t.Column(col); c != nil {
+		return c.Title.In(p.e.lang())
+	}
+	return col
 }
 
 func (p *peerTable) tunnel(t *schema.Table, r *model.Row) {
 	dev, peer := r.Get("device"), r.Get("destination")
+	// A tunnel over IPv6, or one whose other end is written by its name.
+	for _, col := range []string{"destination_v6", "destination_fqdn"} {
+		if peer == "" && t.Column(col) != nil {
+			peer = r.Get(col)
+		}
+	}
 	feature := "トンネル（" + r.Get("if_name") + "）"
 	p.same(peer, feature, t, r, "", "type")
 	src := r.Get("source")

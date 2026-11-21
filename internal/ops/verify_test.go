@@ -68,9 +68,9 @@ func TestVerify(t *testing.T) {
 	changed := texts["rt-s01"]
 	for _, r := range [][2]string{
 		{" vrrp 1 priority 110\n", " vrrp 1 priority 120\n"},                                    // R-803
-		{"ip route 0.0.0.0 0.0.0.0 203.0.113.50 track 1\n", ""},                               // R-801
+		{"ip route 0.0.0.0 0.0.0.0 203.0.113.50 track 1\n", ""},                                 // R-801
 		{"service sequence-numbers\n", ""},                                                      // R-804
-		{"hostname rt-s01\n", "hostname rt-s01\nservice timestamps log datetime msec\n"},        // R-805
+		{"hostname rt-s01\n", "hostname rt-s01\nservice tcp-keepalives-in\n"},                   // R-805
 		{"router ospf 1\n", "ip route 192.0.2.0 255.255.255.128 203.0.113.50\nrouter ospf 1\n"}, // R-802
 	} {
 		if !strings.Contains(changed, r[0]) {
@@ -112,7 +112,7 @@ func TestVerify(t *testing.T) {
 		t.Errorf("untold: %v", o.Untold)
 	}
 	html := read(t, e, o.Report.HTML)
-	for _, s := range []string{"反映確認", "service sequence-numbers", "service timestamps log datetime msec", "設定全体の表示"} {
+	for _, s := range []string{"反映確認", "service sequence-numbers", "service tcp-keepalives-in", "設定全体の表示"} {
 		if !strings.Contains(html, s) {
 			t.Errorf("the report lacks %q", s)
 		}

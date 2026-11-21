@@ -1,0 +1,22 @@
+# A terminal log: only the output of "display current-configuration" is read. Two lines follow a pager mark; their indentation must come out right.
+tables:
+  devices:
+    - {hostname: sw-q05, vendor: nec_qx}
+  l2_settings:
+    - {stp_enabled: true}
+  vlans:
+    - {vlan_id: 1}
+    - {vlan_id: 10, name: sample-office}
+  interfaces:
+    - {name: Vlan-interface10, enabled: true, ipv4: 192.0.2.5/25, kind: vlan, vlan_id: 10}
+    - {name: GigabitEthernet1/0/1, enabled: true, kind: physical}
+    - {name: GigabitEthernet1/0/2, enabled: false, kind: physical}
+    - {name: GigabitEthernet1/0/3, enabled: true, kind: physical}
+  switchports:
+    - {if_name: GigabitEthernet1/0/1, access_vlan: 10, mode: access, stp_edge: "on"}
+    - {if_name: GigabitEthernet1/0/2, mode: access}
+    - {if_name: GigabitEthernet1/0/3, allowed_vlans: [1, 10], mode: trunk}
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: 192.0.2.126}
+unknown:
+  - "undo info-center enable"

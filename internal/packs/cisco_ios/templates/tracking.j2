@@ -2,39 +2,78 @@
    operation and a track object that follows it; both get the number of the
    row. The device takes no timeout below its threshold (5000 ms unless
    changed), so a shorter timeout is written with a threshold of the same
-   value: with "reachability" the threshold does not change the state. #}
+   value: with "reachability" the threshold does not change the state. A row
+   of the type "list" is an object that holds other objects; the lists are
+   written after the objects they hold. The interface and the next hop a
+   probe has to leave by, and the interfaces to shut, have no line here:
+   those cells are not read. #}
+{% for pass in ['objects', 'lists'] %}
 {% for k in t.tracks %}
+{% if (k.type == 'list') == (pass == 'lists') %}
 {% set what = '回線監視 ' ~ k.id %}
 {% if not (k.id is digits) or (k.id | int) < 1 or (k.id | int) > 1000 %}
 {{ fail(what ~ ' の番号・名前は、Cisco では 1〜1000 の番号で書きます') }}
 {% elif k.type == 'icmp' %}
 {% set target = k.target | required(what ~ ' の監視先') %}
-{% if target and not ((target ~ '/32') is cidr) %}
-{{ fail(what ~ ' の監視先「' ~ target ~ '」は IPv4 アドレスで書きます') }}
+{% if target and not ((target ~ ('/128' if ':' in target else '/32')) is cidr) %}
+{{ fail(what ~ ' の監視先「' ~ target ~ '」は IPv4 か IPv6 のアドレスで書きます') }}
+{% endif %}
+{% if ':' in target and k.source_ip %}
+{{ fail(what ~ ': IPv6 の監視の送信元アドレスは書けません（IPv6 の icmp-echo の source-ip を確かめていません。そのアドレスを持つ IF を「送信元 IF」に書いてください）') }}
 {% endif %}
 {% if k.timeout != '' and k.timeout > (k.interval if k.interval != '' else 60) * 1000 %}
 {{ fail(what ~ ' の待ち時間（ミリ秒）が、間隔（秒。空なら 60）より長くなっています') }}
 {% endif %}
+{% if k.threshold != '' and k.timeout != '' and k.threshold > k.timeout %}
+{{ fail(what ~ ' のしきい値（ミリ秒）が、待ち時間（ミリ秒）より長くなっています') }}
+{% endif %}
+{% if k.source_if and k.source_ip %}
+{{ fail(what ~ ': 送信元 IF と送信元アドレスは、どちらか 1 つだけ書きます') }}
+{% endif %}
 ip sla {{ k.id }}
- icmp-echo {{ target }}{{ ' source-interface ' ~ k.source_if if k.source_if else '' }}
-{% if k.timeout != '' %}
-{% if k.timeout < 5000 %}
+ icmp-echo {{ target }}{{ ' source-interface ' ~ k.source_if if k.source_if else '' }}{{ ' source-ip ' ~ k.source_ip if k.source_ip else '' }}
+{% if k.threshold != '' %}
+ threshold {{ k.threshold }}
+{% elif k.timeout != '' and k.timeout < 5000 %}
  threshold {{ k.timeout }}
 {% endif %}
+{% if k.timeout != '' %}
  timeout {{ k.timeout }}
 {% endif %}
 {% if k.interval != '' %}
  frequency {{ k.interval }}
 {% endif %}
 ip sla schedule {{ k.id }} life forever start-time now
-track {{ k.id }} ip sla {{ k.id }} reachability
+track {{ k.id }} ip sla {{ k.id }} {{ 'state' if k.up_when == 'within_threshold' else 'reachability' }}
 {% elif k.type == 'interface' %}
 track {{ k.id }} interface {{ k.target | required(what ~ ' の監視先（IF 名）') }} line-protocol
-{% else %}
-{{ fail(what ~ ' の監視の方法「' ~ k.type ~ '」は、このパックでは書けません（書き方を確かめていません。追加コンフィグに書いてください）') }}
+{% elif k.type == 'route' %}
+{% set target = k.target | required(what ~ ' の監視先') %}
+{% if target and not (target is cidr) %}
+{{ fail(what ~ ' の監視先「' ~ target ~ '」は、192.0.2.0/24 か 2001:db8::/32 の形で書きます') }}
 {% endif %}
-{% if k.type in ['icmp', 'interface'] and (k.up_delay != '' or k.down_delay != '') %}
+track {{ k.id }} {{ 'ipv6' if ':' in target else 'ip' }} route {{ target }} reachability
+{% elif k.type == 'list' %}
+{% if not k.members %}
+{{ fail(what ~ ' の「まとめる監視」が空です') }}
+{% endif %}
+track {{ k.id }} list boolean {{ 'or' if k.list_rule == 'any_up' else 'and' }}
+{% for m in k.members %}
+{% if not (m is digits) %}
+{{ fail(what ~ ' がまとめる監視「' ~ m ~ '」は、Cisco では 1〜1000 の番号で書きます') }}
+{% endif %}
+ object {{ m }}
+{% endfor %}
+{% else %}
+{{ fail(what ~ ' の監視の方法「' ~ k.type ~ '」は書けません') }}
+{% endif %}
+{% if k.type != 'list' and k.members %}
+{{ fail(what ~ ' の「まとめる監視」は、監視の方法が list の行にだけ書けます') }}
+{% endif %}
+{% if k.up_delay != '' or k.down_delay != '' %}
  delay{{ ' up ' ~ k.up_delay if k.up_delay != '' else '' }}{{ ' down ' ~ k.down_delay if k.down_delay != '' else '' }}
 {% endif %}
 !
+{% endif %}
+{% endfor %}
 {% endfor %}

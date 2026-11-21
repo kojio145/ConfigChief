@@ -16,6 +16,8 @@ tunnel_mode:
   gre: "gre ip"
   ipip: ipip
   ipsec: "ipsec ipv4"
+  ipv4_over_ipv6: ipv6
+  ipv6_over_ipv4: ipv6ip
 
 ike_encryption:
   des: des
@@ -37,10 +39,37 @@ esp_encryption:
   aes192: "esp-aes 192"
   aes256: "esp-aes 256"
   "null": esp-null
+  # GCM: 128 bits unless "256" follows (Security Command Reference A to C,
+  # "crypto ipsec transform-set": "esp-gcm", and "esp-gcm 256" in the
+  # examples). It stands without an ESP hash.
+  aes128gcm: esp-gcm
+  aes256gcm: "esp-gcm 256"
 
+# The SHA-2 words: "esp-sha256-hmac" is in the examples of the vendor
+# (README.md, "参照した資料"); the 384 and 512 ones were found in the
+# vendor's page of the data model of the device only.
 esp_hash:
   md5: esp-md5-hmac
   sha1: esp-sha-hmac
+  sha256: esp-sha256-hmac
+  sha384: esp-sha384-hmac
+  sha512: esp-sha512-hmac
+
+# AH in a transform set (Security Command Reference A to C, "crypto ipsec
+# transform-set").
+ah_hash:
+  md5: ah-md5-hmac
+  sha1: ah-sha-hmac
+
+# IKE version 2 (Security Command Reference D to L, "encryption (IKEv2
+# proposal)"). The words of "integrity" and "prf" are the neutral ones.
+ikev2_encryption:
+  3des: 3des
+  aes128: aes-cbc-128
+  aes192: aes-cbc-192
+  aes256: aes-cbc-256
+  aes128gcm: aes-gcm-128
+  aes256gcm: aes-gcm-256
 
 # QoS (cmdref 7.16 (7)). The dataset has numbers; the names are read here.
 dscp:
@@ -75,3 +104,118 @@ precedence:
   "5": critical
   "6": internet
   "7": network
+
+# What a caller of an LNS is asked for (appendix A 3.21. Security Command
+# Reference, "ppp authentication" and "ppp authentication ms-chap-v2").
+ppp_auth:
+  chap: chap
+  pap: pap
+  chap_pap: "chap pap"
+  mschap_v2: ms-chap-v2
+# The kinds of ICMPv6 messages an IPv6 access list names (IPv6 Command
+# Reference, "permit (IPv6)"). The neutral words are those of appendix A 5.2.
+icmp6_type:
+  echo-request: echo-request
+  echo-reply: echo-reply
+  destination-unreachable: destination-unreachable
+  packet-too-big: packet-too-big
+  time-exceeded: time-exceeded
+  parameter-problem: parameter-problem
+  router-solicitation: router-solicitation
+  router-advertisement: router-advertisement
+  neighbor-solicitation: nd-ns
+  neighbor-advertisement: nd-na
+  port-unreachable: port-unreachable
+  no-route: no-route
+
+# The names of the TCP ports in an access list, with their numbers (Security
+# Command Reference D to L, "deny": the list under "eq"). "syslog" is listed
+# there with 514 as well. A name that is not here has no confirmed number,
+# and a line with it stays unknown. The template writes numbers.
+tcp_port:
+  "7": echo
+  "9": discard
+  "13": daytime
+  "19": chargen
+  "20": ftp-data
+  "21": ftp
+  "23": telnet
+  "25": smtp
+  "37": time
+  "43": whois
+  "49": tacacs
+  "53": domain
+  "70": gopher
+  "79": finger
+  "80": www
+  "101": hostname
+  "109": pop2
+  "110": pop3
+  "111": sunrpc
+  "113": ident
+  "119": nntp
+  "179": bgp
+  "194": irc
+  "496": pim-auto-rp
+  "512": exec
+  "513": login
+  "514": {out: cmd, aliases: [syslog]}
+  "515": lpd
+  "517": talk
+  "540": uucp
+  "543": klogin
+  "544": kshell
+
+# The names of the UDP ports. The command reference of IOS lists the names
+# without numbers; the numbers are those of the table "TCP and UDP Ports" of
+# the ASA configuration guide (README), for the names both documents have.
+udp_port:
+  "7": echo
+  "9": discard
+  "37": time
+  "42": nameserver
+  "49": tacacs
+  "53": domain
+  "67": bootps
+  "68": bootpc
+  "69": tftp
+  "111": sunrpc
+  "123": ntp
+  "137": netbios-ns
+  "138": netbios-dgm
+  "161": snmp
+  "162": snmptrap
+  "177": xdmcp
+  "195": dnsix
+  "434": mobile-ip
+  "496": pim-auto-rp
+  "500": isakmp
+  "512": biff
+  "513": who
+  "514": syslog
+  "517": talk
+  "520": rip
+
+# The names of the type of service (Security Command Reference M to R,
+# "permit").
+tos:
+  "0": normal
+  "1": min-monetary-cost
+  "2": max-reliability
+  "4": max-throughput
+  "8": min-delay
+
+# The months of a date in a time range ("absolute start 8:00 1 January 2026").
+month:
+  "01": January
+  "02": February
+  "03": March
+  "04": April
+  "05": May
+  "06": June
+  "07": July
+  "08": August
+  "09": September
+  "10": October
+  "11": November
+  "12": December

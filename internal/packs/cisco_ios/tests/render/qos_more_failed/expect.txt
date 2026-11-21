@@ -1,0 +1,9 @@
+hostname rt-q23
+!
+class-map match-any cm-f-a
+interface GigabitEthernet0/0
+ ip address 203.0.113.25 255.255.255.252
+ service-policy output pm-f-out
+ no shutdown
+!
+end

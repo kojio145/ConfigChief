@@ -1,0 +1,60 @@
+# The rest of the access lists, NAT, the static routes, line monitoring and
+# DHCP (appendix A 3.25; made-up values). expect.txt is the configuration
+# the tables must turn into.
+tables:
+  devices:
+    - hostname: rt-f02
+      vendor: cisco_ios
+  vrfs:
+    - {name: VRF-SAMPLE-F}
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: dhcp, nat_role: outside, acl_in: ACL-SAMPLE-WAN}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 198.51.100.1/24, nat_role: inside, acl_in: "101"}
+    - {name: GigabitEthernet0/2, enabled: true, ipv4: 192.0.2.129/25, vrf: VRF-SAMPLE-F}
+  time_ranges:
+    - {name: TR-SAMPLE-WORK, seq: 10, kind: periodic, days: [weekdays], start_time: "8:00", end_time: "18:00"}
+    - {name: TR-SAMPLE-WORK, seq: 20, kind: periodic, days: [monday], start_time: "8:00", end_days: [friday], end_time: "20:00"}
+    - {name: TR-SAMPLE-YEAR, seq: 10, kind: absolute, start_time: "8:00", start_date: "2026-01-01", end_time: "18:00", end_date: "2026-12-31"}
+  ospf_processes:
+    - {process_id: 1, router_id: 192.0.2.1, log_adjacency: detail}
+    - {process_id: 2, router_id: 192.0.2.2, log_adjacency: "off"}
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: dhcp}
+    - {prefix: 192.0.2.64/26, next_hop: dhcp, out_if: GigabitEthernet0/0, distance: 200}
+    - {vrf: VRF-SAMPLE-F, prefix: 203.0.113.64/26, next_hop: 198.51.100.254, next_hop_global: true}
+    - {prefix: 203.0.113.128/26, next_hop: 198.51.100.253, multicast: true}
+    - {prefix: 203.0.113.192/26, next_hop: 198.51.100.252, track: "10"}
+  acls:
+    - {name: "10", type: standard}
+    - {name: "101", type: extended}
+    - {name: ACL-SAMPLE-WAN, type: extended, seq_step: 10}
+  acl_entries:
+    - {acl: "10", seq: 10, action: permit, src: 198.51.100.0/24}
+    - {acl: "101", seq: 10, action: permit, protocol: tcp, src: 198.51.100.0/24, dst: any, dst_port: "80"}
+    - {acl: "101", seq: 20, action: deny, protocol: ip, src: any, dst: any, flags: [log]}
+    - {acl: ACL-SAMPLE-WAN, seq: 10, action: permit, protocol: tcp, src: any, dst: any, flags: [established]}
+    - {acl: ACL-SAMPLE-WAN, seq: 20, action: permit, protocol: tcp, src: any, dst: 203.0.113.10, dst_port: "443", flags: [syn]}
+    - {acl: ACL-SAMPLE-WAN, seq: 30, action: permit, protocol: tcp, src: any, src_port: ">1023", dst: 203.0.113.10, dst_port: "25", time_range: TR-SAMPLE-WORK}
+    - {acl: ACL-SAMPLE-WAN, seq: 40, action: permit, protocol: udp, src: any, src_port: "53", dst: any, dst_port: 67-68}
+    - {acl: ACL-SAMPLE-WAN, seq: 50, action: permit, protocol: udp, src: any, dst: any, dst_port: "123", dscp: 48}
+    - {acl: ACL-SAMPLE-WAN, seq: 60, action: permit, protocol: icmp, src: any, dst: any, icmp_type: echo-reply}
+    - {acl: ACL-SAMPLE-WAN, seq: 70, action: permit, protocol: icmp, src: any, dst: any, icmp_type: "3", icmp_code: 4}
+    - {acl: ACL-SAMPLE-WAN, seq: 80, action: deny, protocol: tcp, src: any, dst: any, dst_port: "23", tos: 8, flags: [log_input]}
+    - {acl: ACL-SAMPLE-WAN, seq: 90, action: deny, protocol: udp, src: any, dst: any, precedence: 5, flags: [fragments]}
+    - {acl: ACL-SAMPLE-WAN, seq: 100, action: deny, protocol: ip, src: any, dst: any, tos: 4, flags: [log]}
+  nat_rules:
+    - {name: nat1, type: pat_pool, match_acl: "10", pool_start: 203.0.113.17, pool_end: 203.0.113.22, pool_prefix: 29}
+    - {name: nat2, type: static, local_ip: 198.51.100.10, global_ip: 203.0.113.10, extendable: true}
+    - {name: nat3, type: static_port, protocol: tcp, local_ip: 198.51.100.11, local_port: 8080, global_ip: 203.0.113.10, global_port: 80, extendable: true}
+    - {name: nat4, type: static_network, local_ip: 198.51.100.64, global_ip: 203.0.113.64, pool_prefix: 26}
+  tracks:
+    - {id: "1", type: icmp, target: 203.0.113.2, source_ip: 198.51.100.1, interval: 5, timeout: 2000, threshold: 1000, up_when: within_threshold}
+    - {id: "2", type: icmp, target: 203.0.113.3, source_if: GigabitEthernet0/0, interval: 10, timeout: 2000}
+    - {id: "5", type: route, target: 203.0.113.0/24, down_delay: 10}
+    - {id: "10", type: list, list_rule: all_up, members: ["1", "2"], up_delay: 30}
+    - {id: "11", type: list, list_rule: any_up, members: ["1", "5"]}
+  dhcp_pools:
+    - {name: POOL-SAMPLE-LAN, network: 198.51.100.0/24, default_router: 198.51.100.1, default_routers_more: [198.51.100.2, 198.51.100.3], lease: 90m}
+    - {name: POOL-SAMPLE-B, network: 192.0.2.128/25, default_router: 192.0.2.129, lease: infinite}
+    - {name: POOL-SAMPLE-C, network: 203.0.113.0/25, lease: 36h}
+findings: []

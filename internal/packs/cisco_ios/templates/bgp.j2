@@ -18,13 +18,30 @@ router bgp {{ procs[0].asn }}
 {% endif %}
 {% if b.log_neighbor_changes == true %}
  bgp log-neighbor-changes
+{% elif b.log_neighbor_changes == false %}
+ no bgp log-neighbor-changes
+{% endif %}
+{% if b.default_local_preference != '' %}
+ bgp default local-preference {{ b.default_local_preference }}
+{% endif %}
+{% if b.keepalive != '' or b.holdtime != '' %}
+ timers bgp {{ b.keepalive | required('BGP の Keepalive（Hold と組で書きます）') }} {{ b.holdtime | required('BGP の Hold（Keepalive と組で書きます）') }}
 {% endif %}
 {% else %}
  address-family ipv4 vrf {{ b.vrf }}
+{% if b.keepalive != '' or b.holdtime != '' or b.default_local_preference != '' or b.log_neighbor_changes != '' %}
+{{ fail('BGP（VRF ' ~ b.vrf ~ '）の Keepalive・Hold・ローカルプリファレンスの既定値・ネイバーの変化の記録は、VRF が空の行にだけ書けます（Cisco では、機器の BGP 全体の設定です）') }}
+{% endif %}
+{% endif %}
+{# The three distances stand on one line: adapt.yaml has put the default
+   of the device into an empty one. #}
+{% if b.distance_ebgp != '' or b.distance_ibgp != '' or b.distance_local != '' %}
+{{ pad }}distance bgp {{ b.distance_ebgp }} {{ b.distance_ibgp }} {{ b.distance_local }}
 {% endif %}
 {% for n in t.bgp_neighbors %}
 {% if n.vrf == b.vrf %}
 {% set nb = pad ~ 'neighbor ' ~ n.neighbor %}
+{% set what = 'BGP ネイバー ' ~ n.neighbor %}
 {{ nb }} remote-as {{ n.remote_as }}
 {% if n.description %}
 {{ nb }} description {{ n.description }}
@@ -59,6 +76,51 @@ router bgp {{ procs[0].asn }}
 {% if n.filter_out %}
 {{ nb }} route-map {{ n.filter_out }} out
 {% endif %}
+{% if n.send_community == true and n.send_ext_community == true %}
+{{ nb }} send-community both
+{% elif n.send_ext_community == true %}
+{{ nb }} send-community extended
+{% elif n.send_community == true %}
+{{ nb }} send-community
+{% endif %}
+{% if n.default_originate == true %}
+{{ nb }} default-originate{{ ' route-map ' ~ n.default_originate_filter if n.default_originate_filter else '' }}
+{% elif n.default_originate_filter %}
+{{ fail(what ~ ' の「デフォルト経路の広告の条件」は、「デフォルト経路の広告」が有効の行にだけ書けます') }}
+{% endif %}
+{% if n.keepalive != '' or n.holdtime != '' %}
+{{ nb }} timers {{ n.keepalive | required(what ~ ' の Keepalive（Hold と組で書きます）') }} {{ n.holdtime | required(what ~ ' の Hold（Keepalive と組で書きます）') }}
+{% endif %}
+{% for d in ['in', 'out'] %}
+{% set fl = n['as_path_filter_' ~ d] %}
+{% if fl %}
+{% if fl is not digits %}
+{{ fail(what ~ ': AS パスのリストの名前「' ~ fl ~ '」は書けません（Cisco は 1〜500 の番号です）') }}
+{% endif %}
+{{ nb }} filter-list {{ fl }} {{ d }}
+{% endif %}
+{% set al = n['acl_' ~ d] %}
+{% if al %}
+{% if n['prefix_list_' ~ d] %}
+{{ fail(what ~ ': 同じ向きに、プレフィックスリストのフィルタと ACL のフィルタの両方は書けません（どちらか 1 つにします）') }}
+{% endif %}
+{{ nb }} distribute-list {{ al }} {{ d }}
+{% endif %}
+{% endfor %}
+{% if n.max_prefix != '' %}
+{{ nb }} maximum-prefix {{ n.max_prefix }}{{ ' ' ~ n.max_prefix_threshold if n.max_prefix_threshold != '' else '' }}{{ ' discard-extra' if n.max_prefix_action == 'discard_extra' else '' }}{{ ' restart ' ~ n.max_prefix_restart if n.max_prefix_restart != '' else '' }}{{ ' warning-only' if n.max_prefix_action == 'warning_only' else '' }}
+{% elif n.max_prefix_threshold != '' or n.max_prefix_action or n.max_prefix_restart != '' %}
+{{ fail(what ~ ': 上限の割合・動作・戻すまでの時間は、「受け取る経路数の上限」がある行にだけ書けます') }}
+{% endif %}
+{% if n.weight != '' %}
+{{ nb }} weight {{ n.weight }}
+{% endif %}
+{% if n.route_reflector_client == true %}
+{{ nb }} route-reflector-client
+{% endif %}
+{% if n.advertisement_interval != '' %}
+{{ nb }} advertisement-interval {{ n.advertisement_interval }}
+{% endif %}
 {% endif %}
 {% endfor %}
 {% for w in t.bgp_networks %}
@@ -66,11 +128,19 @@ router bgp {{ procs[0].asn }}
 {{ pad }}network {{ w.prefix | ip }} mask {{ w.prefix | mask }}
 {% endif %}
 {% endfor %}
+{% for a in t.bgp_aggregates %}
+{% if a.vrf == b.vrf %}
+{{ pad }}aggregate-address {{ a.prefix | ip }} {{ a.prefix | mask }}{{ ' as-set' if a.as_set == true else '' }}{{ ' summary-only' if a.summary_only == true else '' }}
+{% endif %}
+{% endfor %}
 {% for r in t.bgp_redistribute %}
 {% if r.vrf == b.vrf %}
 {% set src = r.source %}
-{% if src == 'ospf' %}
-{# The line names the OSPF process: the one of the same VRF. #}
+{% if src == 'ospf' and r.process_id != '' %}
+{% set src = 'ospf ' ~ r.process_id %}
+{% elif src == 'ospf' %}
+{# The line names the OSPF process: without a number in the row, the one of
+   the same VRF. #}
 {% set pid = namespace(v='', n=0) %}
 {% for p in t.ospf_processes %}
 {% if p.vrf == b.vrf %}
@@ -90,6 +160,7 @@ router bgp {{ procs[0].asn }}
  exit-address-family
 {% endif %}
 {% endfor %}
+{% include 'bgp_ipv6.j2' %}
 !
 {% endif %}
 {# A row that belongs to no process is written nowhere. #}
@@ -124,5 +195,16 @@ router bgp {{ procs[0].asn }}
 {% endfor %}
 {% if not known.v %}
 {{ fail('BGP 再配布 ' ~ r.source ~ ' の VRF「' ~ r.vrf ~ '」の行が、BGP の表にありません（AS 番号が要ります）') }}
+{% endif %}
+{% endfor %}
+{% for a in t.bgp_aggregates %}
+{% set known = namespace(v=false) %}
+{% for b in procs %}
+{% if b.vrf == a.vrf %}
+{% set known.v = true %}
+{% endif %}
+{% endfor %}
+{% if not known.v %}
+{{ fail('BGP 集約経路 ' ~ a.prefix ~ ' の VRF「' ~ a.vrf ~ '」の行が、BGP の表にありません（AS 番号が要ります）') }}
 {% endif %}
 {% endfor %}

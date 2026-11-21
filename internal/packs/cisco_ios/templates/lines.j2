@@ -1,20 +1,30 @@
 {# The banner and remote login. Syntax: cmdref 4.1 and 4.4. The banner is
    closed by one character that is not in its text. The lines 0 to 4 are
    written; more of them go into an extra configuration (README). #}
-{% if device.banner %}
+{% for kind in ['motd', 'login', 'exec'] %}
+{% set text = device.banner_motd if kind == 'motd' else (device.banner if kind == 'login' else device.banner_exec) %}
+{% if text %}
 {% set mark = namespace(c='') %}
 {% for c in ['#', '@', '%', '~', '|'] %}
-{% if not mark.c and c not in device.banner %}
+{% if not mark.c and c not in text %}
 {% set mark.c = c %}
 {% endif %}
 {% endfor %}
 {% if not mark.c %}
 {{ fail('バナーの区切りに使える文字がありません（# @ % ~ | のどれかを文面から外してください）') }}
 {% endif %}
-banner login {{ mark.c }}
-{{ device.banner }}
+banner {{ kind }} {{ mark.c }}
+{{ text }}
 {{ mark.c }}
 !
+{% endif %}
+{% endfor %}
+{# The console: only its timeout is written (appendix A 3.26). #}
+{% if device.console_timeout != '' %}
+line con 0
+ exec-timeout {{ device.console_timeout }} {{ device.console_timeout_sec if device.console_timeout_sec != '' else '0' }}
+{% elif device.console_timeout_sec != '' %}
+{{ fail('コンソールの無操作切断は、分を書いたときだけ秒の端数を書けます（分が無ければ 0 と書きます）') }}
 {% endif %}
 {% for ra in t.remote_access %}
 {% if ra.ssh_version %}
@@ -26,10 +36,16 @@ line vty 0 4
  access-class {{ ra.acl }} in
 {% endif %}
 {% if ra.idle_timeout != '' %}
- exec-timeout {{ ra.idle_timeout }} 0
+ exec-timeout {{ ra.idle_timeout }} {{ ra.idle_timeout_sec if ra.idle_timeout_sec != '' else '0' }}
+{% elif ra.idle_timeout_sec != '' %}
+{{ fail('無操作切断は、分を書いたときだけ秒の端数を書けます（分が無ければ 0 と書きます）') }}
 {% endif %}
 {% if ra.line_password %}
- password 0 {{ ra.line_password }}
+{# A value with a space is the encrypted form of a device ("7 <value>"). #}
+{% if ' ' in ra.line_password and not ra.line_password is startingwith('7 ') %}
+{{ fail('回線パスワードは、別メーカーの暗号化した形です（引き継げません。平文を入れ直してください）') }}
+{% endif %}
+ password {{ '' if ' ' in ra.line_password else '0 ' }}{{ ra.line_password }}
 {% endif %}
 {% if ra.auth == 'local' %}
  login local

@@ -19,5 +19,19 @@ columns:
   - {name: soft_reconfig_in, title: {ja: 受信経路の保持, en: Soft reconfiguration in}, type: bool}
   - {name: prefix_list_in, title: {ja: 受信フィルタ, en: Prefix list in}, type: ref, ref: prefix_lists.name}
   - {name: prefix_list_out, title: {ja: 送信フィルタ, en: Prefix list out}, type: ref, ref: prefix_lists.name}
-  - {name: filter_in, title: {ja: 受信の経路制御, en: Filter in}, type: string, note: {ja: "条件の名前。中身は追加コンフィグに書く", en: "The name of the policy. What it does goes into the extra config"}}
-  - {name: filter_out, title: {ja: 送信の経路制御, en: Filter out}, type: string, note: {ja: "条件の名前。中身は追加コンフィグに書く", en: "The name of the policy. What it does goes into the extra config"}}
+  - {name: filter_in, title: {ja: 受信の経路制御, en: Filter in}, type: string, note: {ja: "経路制御の方針の表の名前。方針を追加コンフィグに書くときは、その名前", en: "A name of the table of route policies, or of a policy written in the extra config"}}
+  - {name: filter_out, title: {ja: 送信の経路制御, en: Filter out}, type: string, note: {ja: "経路制御の方針の表の名前。方針を追加コンフィグに書くときは、その名前", en: "A name of the table of route policies, or of a policy written in the extra config"}}
+  - {name: send_community, title: {ja: コミュニティを送る, en: Send communities}, type: bool, note: {ja: "Cisco は、これが無いと相手にコミュニティを送らない。NEC IX には当たる行が無い", en: "Cisco sends no communities to the neighbor without it. NEC IX has no such line"}}
+  - {name: default_originate_filter, title: {ja: デフォルト経路の広告の条件, en: Default originate filter}, type: string, note: {ja: "デフォルト経路を送る条件にする経路制御の方針の名前。Cisco だけ", en: "The route policy that decides when the default route is sent. Cisco only"}}
+  - {name: as_path_filter_in, title: {ja: 受信の AS パスのリスト, en: AS path list in}, type: ref, ref: as_path_lists.name, note: {ja: "受け取る経路を AS パスのリストで絞る。Cisco だけ", en: "The routes taken from the neighbor are filtered by an AS path list. Cisco only"}}
+  - {name: as_path_filter_out, title: {ja: 送信の AS パスのリスト, en: AS path list out}, type: ref, ref: as_path_lists.name, note: {ja: "送る経路を AS パスのリストで絞る。Cisco だけ", en: "The routes sent to the neighbor are filtered by an AS path list. Cisco only"}}
+  - {name: acl_in, title: {ja: 受信フィルタ（ACL）, en: ACL in}, type: ref, ref: acls.name, note: {ja: "受け取る経路の宛先を ACL で絞る。Cisco だけ（NEC IX はプレフィックスリストで書く）", en: "The routes taken are filtered by an access list. Cisco only (NEC IX takes a prefix list)"}}
+  - {name: acl_out, title: {ja: 送信フィルタ（ACL）, en: ACL out}, type: ref, ref: acls.name, note: {ja: "送る経路の宛先を ACL で絞る。Cisco だけ", en: "The routes sent are filtered by an access list. Cisco only"}}
+  - {name: max_prefix, title: {ja: 受け取る経路数の上限, en: Maximum prefixes}, type: int, min: 1, note: {ja: "超えるとセッションを切る（動作の列で変えられる）。Cisco だけ", en: "The session goes down above it (the action column changes that). Cisco only"}}
+  - {name: max_prefix_threshold, title: {ja: 上限の警告を出す割合（%）, en: Maximum prefix threshold (%)}, type: int, min: 1, max: 100, note: {ja: "空 = 機器の既定（Cisco は 75）", en: "Empty = the default of the device (Cisco: 75)"}}
+  - {name: max_prefix_action, title: {ja: 上限を超えたときの動作, en: Maximum prefix action}, type: enum, values: [warning_only, discard_extra], note: {ja: "空 = セッションを切る。warning_only = 記録するだけ。discard_extra = 超えた分を捨てる", en: "Empty = the session goes down. warning_only = a log message only. discard_extra = the prefixes above the limit are dropped"}}
+  - {name: max_prefix_restart, title: {ja: 上限で切れた後に戻すまで（分）, en: Maximum prefix restart (min)}, type: int, min: 1, max: 65535}
+  - {name: weight, title: {ja: weight, en: Weight}, type: int, min: 0, max: 65535, note: {ja: "このネイバーから受け取った経路に付ける weight。Cisco だけ", en: "The weight of the routes learned from the neighbor. Cisco only"}}
+  - {name: send_ext_community, title: {ja: 拡張コミュニティを送る, en: Send extended communities}, type: bool, note: {ja: "Cisco の send-community extended（both は「コミュニティを送る」も有効）", en: "send-community extended of Cisco (both also sets the plain one)"}}
+  - {name: route_reflector_client, title: {ja: ルートリフレクタのクライアント, en: Route reflector client}, type: bool}
+  - {name: advertisement_interval, title: {ja: 経路の更新を送る最小間隔（秒）, en: Advertisement interval (s)}, type: int, min: 0, max: 600}

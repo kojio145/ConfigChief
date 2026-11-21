@@ -11,12 +11,70 @@ rules:
     row: {table: devices, key: {}}
     set: {timezone: "{{ '-' if sign == '-' else '+' }}{{ h | int }}{{ (':' ~ m) if (m and m | int != 0) else '' }}"}
 
-  # One server on a line. The forms with "vrf" or with an interface have no
-  # column and stay unknown.
+  # One server on a line (CRM, chapter 25). Every server of a device is in the
+  # same VRF, or none is (appendix A 3.26): a line that does not agree with
+  # the lines before it stays unknown. The form with an interface has no
+  # column and stays unknown.
   - id: sys.name_server
     match: '^ip name-server (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+    when: "not first('devices').name_servers_vrf"
     row: {table: devices, key: {}}
     append: {name_servers: "{{ addr }}"}
+  - id: sys.name_server.vrf
+    match: '^ip name-server vrf (?P<vrf>\S+) (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+    when: "first('devices').name_servers_vrf == vrf or not first('devices').name_servers"
+    row: {table: devices, key: {}}
+    set: {name_servers_vrf: "{{ vrf }}"}
+    append: {name_servers: "{{ addr }}"}
+  # An IPv6 server (CRM p.25-13, "ipv6 name-server ADDRESS"): it takes no
+  # VRF. The form with a link-local address and an interface stays unknown.
+  - id: sys.name_server6
+    match: '^ipv6 name-server (?P<addr>[0-9A-Fa-f]*:[0-9A-Fa-f:]+)$'
+    when: "not first('devices').name_servers_vrf"
+    row: {table: devices, key: {}}
+    append: {name_servers: "{{ addr | lower }}"}
+
+  # ---- the log the device keeps, and its switches (appendix A 3.26) ----
+  # "logging buffered [<bytes>] [cyclic | one-time]" (CRM p.32-17).
+  - id: sys.log_buffer
+    match: '^logging buffered(?: (?P<size>\d+))?(?: (?P<mode>cyclic|one-time))?$'
+    row: {table: devices, key: {}}
+    set: {log_buffer: true, log_buffer_size: "{{ size }}", log_buffer_mode: "{{ mode | replace('-', '_') }}"}
+  # "logging subsystem <subsystem> <severity>" (CRM, chapter 32): "all" is the
+  # severity of the device, another name is a row of its own. The forms
+  # with "include" / "exclude" (message numbers) stay unknown.
+  - id: sys.log_severity
+    match: '^logging subsystem all (?P<lv>debug|info|notice|warn|error)$'
+    row: {table: devices, key: {}}
+    set: {log_severity: "{{ lv | unlex('log_level') }}"}
+  - id: sys.log_subsystem
+    match: '^logging subsystem (?P<sub>[a-z0-9]+) (?P<lv>debug|info|notice|warn|error)$'
+    row: {table: log_subsystems, key: {subsystem: "{{ sub }}"}}
+    set: {severity: "{{ lv | unlex('log_level') }}"}
+  # "logging timestamp {timeofday | uptime | datetime}" (CRM p.32-20).
+  - id: sys.log_timestamp
+    match: '^logging timestamp (?P<how>timeofday|uptime|datetime)$'
+    row: {table: devices, key: {}}
+    set: {log_timestamp: "{{ 'time' if how == 'timeofday' else how }}"}
+  # CRM p.2-5.
+  - id: sys.password_encryption
+    match: '^(?P<no>no )?service password-encryption$'
+    row: {table: devices, key: {}}
+    set: {password_encryption: "{{ 'false' if no else 'true' }}"}
+  # The cache of the forwarding (CRM p.8-17; for IPv6 p.9-19).
+  - id: sys.forward_cache
+    match: '^ip ufs-cache enable$'
+    row: {table: devices, key: {}}
+    set: {forward_cache: true}
+  - id: sys.forward_cache.v6
+    match: '^ipv6 ufs-cache enable$'
+    row: {table: devices, key: {}}
+    set: {forward_cache_ipv6: true}
+  # The device answers NTP requests (CRM p.26-3).
+  - id: sys.ntp_serve
+    match: '^ntp ip enable$'
+    row: {table: devices, key: {}}
+    set: {ntp_serve: true}
 
   - id: sys.snmp.location
     match: '^snmp-agent location (?P<text>.+)$'
@@ -40,8 +98,17 @@ rules:
       secret_form: hashed
 
   # The form a password is entered in (CRM p.2-12); the device does not show
-  # it, the generated text has it. The form with a mode word after "plain"
-  # has one more word and stays unknown.
+  # it, the generated text has it. The mode after "plain" (0 = the old way
+  # of hashing, 1 = the new one) has no column: the device hashes the value
+  # either way (README, "読んで、表には入れない語").
+  - id: user.plain.mode
+    match: '^username (?P<name>\S+) password plain (?P<mode>[01]) (?P<value>\S+)(?: (?P<role>administrator|operator|monitor))?$'
+    when: "value not in ['administrator', 'operator', 'monitor']"
+    row: {table: users, key: {name: "{{ name }}"}}
+    set:
+      privilege: "{{ (role | unlex('user_role')) if role in ['administrator', 'operator'] else role }}"
+      secret: "{{ value }}"
+      secret_form: plain
   - id: user.plain
     match: '^username (?P<name>\S+) password plain (?P<value>\S+)(?: (?P<role>administrator|operator|monitor))?$'
     row: {table: users, key: {name: "{{ name }}"}}
@@ -56,12 +123,15 @@ rules:
     row: {table: remote_access, key: {}}
     append: {protocols: "{{ proto }}"}
 
-  # The dataset has one list for both servers; a second list with another
-  # name is reported as a second value.
+  # Each server takes its own list. The same list on both (or a list on
+  # the only server that is on) is the list of the row; different lists go
+  # to the columns of each protocol (40_policy.yaml).
   - id: remote.acl
-    match: '^(?:telnet|ssh)-server ip access-list (?P<acl>\S+)$'
-    row: {table: remote_access, key: {}}
-    set: {acl: "{{ acl }}"}
+    match: '^(?P<proto>telnet|ssh)-server ip access-list (?P<acl>\S+)$'
+    emit:
+      - table: x_remote_acl
+        key: {proto: "{{ proto }}"}
+        set: {acl: "{{ acl }}"}
 
   # Minutes, for every terminal of the device.
   - id: remote.timeout
@@ -79,6 +149,14 @@ rules:
       vrf: "{{ vrf }}"
       source_if: "{{ src | ifname }}"
 
+  # An IPv6 server: the same line without a VRF (CRM p.26-3: "an IPv6
+  # address cannot be set with a VRF name").
+  - id: ntp.server6
+    match: '^ntp server (?P<server>[0-9A-Fa-f]*:[0-9A-Fa-f:]+)(?: source (?P<src>\S+))?$'
+    row: {table: ntp_servers, key: {server: "{{ server | lower }}"}}
+    set:
+      source_if: "{{ src | ifname }}"
+
   # One line for the whole device: it is kept aside and put on each server.
   - id: ntp.source
     match: '^ntp source (?P<ifn>\S+)$'
@@ -93,6 +171,28 @@ rules:
     match: '^syslog(?: vrf (?P<vrf>\S+))? ip host (?P<server>\d+\.\d+\.\d+\.\d+)$'
     row: {table: syslog_servers, key: {server: "{{ server }}"}}
     set: {vrf: "{{ vrf }}"}
+
+  # The source of syslog is an address on this device (CRM p.32-26): the
+  # interface that has the address goes into the rows (derive syslog.source.each).
+  - id: syslog.source
+    match: '^syslog(?: vrf (?P<vrf>\S+))? ip source (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+    emit:
+      - table: x_syslog_src
+        key: {vrf: "{{ vrf if vrf else '-' }}"}
+        set: {addr: "{{ addr }}"}
+
+  # IPv6 (CRM p.32-26, 32-27): "syslog ipv6 host <address>" has no VRF; the
+  # source is an IPv6 address of this device. "port", "match" and the
+  # link-local form stay unknown.
+  - id: syslog.host6
+    match: '^syslog ipv6 host (?P<server>[0-9A-Fa-f]*:[0-9A-Fa-f:]+)$'
+    row: {table: syslog_servers, key: {server: "{{ server | lower }}"}}
+  - id: syslog.source6
+    match: '^syslog ipv6 source (?P<addr>[0-9A-Fa-f]*:[0-9A-Fa-f:]+)$'
+    emit:
+      - table: x_syslog_src6
+        key: {}
+        set: {addr: "{{ addr | lower }}"}
 
   - id: syslog.facility
     match: '^syslog facility (?P<f>\S+)$'
@@ -143,6 +243,38 @@ rules:
         key: {}
         set: {source_if: "{{ ifn | ifname }}"}
 
+  # SNMP over IPv6 (CRM p.22-17 to 22-19) has its own switch, communities,
+  # destinations and trap source. A community of IPv6 goes into the row of
+  # the community of that name (the table holds a community once, for both
+  # families); the form with a list or a view stays unknown (the list would
+  # be an IPv6 list, which the table does not hold).
+  - id: snmp6.enable
+    match: '^snmp-agent ipv6 enable$'
+    emit:
+      - table: x_enable
+        key: {}
+        set: {snmp6: "true"}
+  - id: snmp6.community
+    match: '^snmp-agent ipv6 community (?P<community>\S+)(?: (?P<access>ro|rw))?$'
+    emit:
+      - table: x_snmp6_community
+        key: {community: "{{ community }}"}
+        set: {access: "{{ access }}"}
+  - id: snmp6.host
+    match: '^snmp-agent ipv6 host (?P<host>[0-9A-Fa-f]*:[0-9A-Fa-f:]+) (?P<community>\S+)(?: version (?P<ver>1|2))?$'
+    emit:
+      - table: x_snmp6_host
+        key: {host: "{{ host | lower }}"}
+        set:
+          community: "{{ community }}"
+          version: "{{ '2c' if ver == '2' else ver }}"
+  - id: snmp6.trap_source
+    match: '^snmp-agent ipv6 trap-source (?P<ifn>[A-Za-z]\S*)$'
+    emit:
+      - table: x_snmp6
+        key: {}
+        set: {source_if: "{{ ifn | ifname }}"}
+
 derive:
   - id: ntp.source.each
     for: ntp_servers
@@ -162,6 +294,16 @@ derive:
     row: {table: syslog_servers, key: {server: "{{ s.server }}"}}
     set: {facility: "{{ g.facility }}"}
 
+  - id: syslog.source.each
+    for: syslog_servers
+    as: s
+    let:
+      g: "lookup('x_syslog_src', vrf=(s.vrf if s.vrf else '-'))"
+      i: "(rows('interfaces') | selectattr('ipv4', 'startingwith', g.addr ~ '/') | first) if g.addr else ''"
+    when: "g.addr and i.name"
+    row: {table: syslog_servers, key: {server: "{{ s.server }}"}}
+    set: {source_if: "{{ i.name }}"}
+
   - id: snmp.community.on
     for: x_snmp_community
     as: c
@@ -170,6 +312,37 @@ derive:
     when: "en.snmp"
     row: {table: snmp_communities, key: {community: "{{ c.community }}"}}
     set: {access: "{{ c.access }}", acl: "{{ c.acl }}"}
+
+  - id: snmp6.community.on
+    for: x_snmp6_community
+    as: c
+    let:
+      en: "lookup('x_enable')"
+    when: "en.snmp6"
+    row: {table: snmp_communities, key: {community: "{{ c.community }}"}}
+    set: {access: "{{ c.access }}"}
+  - id: snmp6.host.on
+    for: x_snmp6_host
+    as: h
+    let:
+      en: "lookup('x_enable')"
+      g: "lookup('x_snmp6')"
+    when: "en.snmp6"
+    row: {table: snmp_hosts, key: {host: "{{ h.host }}"}}
+    set:
+      version: "{{ h.version }}"
+      community: "{{ h.community }}"
+      source_if: "{{ g.source_if }}"
+  # The IPv6 source of syslog: the interface that has the address.
+  - id: syslog.source6.each
+    for: syslog_servers
+    as: s
+    let:
+      g: "lookup('x_syslog_src6')"
+    each: {i: "rows('interfaces')"}
+    when: "':' in s.server and g.addr and g.addr in (i.ipv6 | map('ip') | list)"
+    row: {table: syslog_servers, key: {server: "{{ s.server }}"}}
+    set: {source_if: "{{ i.name }}"}
 
   - id: snmp.host.on
     for: x_snmp_host

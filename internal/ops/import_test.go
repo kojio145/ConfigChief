@@ -55,7 +55,7 @@ func newCase(t *testing.T, files map[string]string) *Env {
 
 func TestOpen(t *testing.T) {
 	e := newCase(t, nil)
-	if want := []string{"cisco_ios", "nec_ix"}; !reflect.DeepEqual(e.PackIDs, want) {
+	if want := []string{"cisco_ios", "nec_ix", "nec_qx"}; !reflect.DeepEqual(e.PackIDs, want) {
 		t.Errorf("packs = %v, want %v", e.PackIDs, want)
 	}
 	if len(e.PackProblems) != 0 {
@@ -102,6 +102,51 @@ func TestImport(t *testing.T) {
 	if len(src.Files) != 5 {
 		t.Fatalf("files = %d", len(src.Files))
 	}
+	// Two files have the host name rt-a01: until a person chooses one,
+	// neither is taken (the tool does not pick one by itself).
+	if got, want := src.Devices(), []string{"ix-a01"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("devices before the choice = %v, want %v", got, want)
+	}
+	both := []string{"input/old/a_cisco.txt", "input/old/c_again.log"}
+	for _, i := range []int{0, 2} {
+		f := src.Files[i]
+		if f.Result != nil || f.Device != "rt-a01" || !reflect.DeepEqual(f.Same, both) || f.Left != "" ||
+			!strings.Contains(f.Err, "ホスト名 rt-a01 のファイルが 2 つあります（input/old/a_cisco.txt、input/old/c_again.log）。どれを取り込むか選んでください") {
+			t.Errorf("file %d before the choice = %+v", i, f)
+		}
+	}
+	if err := e.ChooseFile("old", "input/old/b_nec.txt", at); err == nil || !strings.Contains(err.Error(), "重なっていません") {
+		t.Errorf("choosing a file whose host name is its own: %v", err)
+	}
+	if err := e.ChooseFile("old", "input/old/nothing.txt", at); err == nil {
+		t.Error("no error for a file that is not there")
+	}
+	// The later file is chosen: it is taken, and the first one is left out
+	// without being a fault.
+	if err := e.ChooseFile("old", "input/old/c_again.log", at); err != nil {
+		t.Fatal(err)
+	}
+	src, err = e.Import("old", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := src.Devices(), []string{"ix-a01", "rt-a01"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("devices with the later file chosen = %v, want %v", got, want)
+	}
+	if f := src.Files[0]; f.Result != nil || f.Err != "" || !strings.Contains(f.Left, "ホスト名 rt-a01 は input/old/c_again.log を取り込みます") {
+		t.Errorf("the file left out = %+v", f)
+	}
+	if src.File("rt-a01") != src.Files[2] {
+		t.Error("the chosen file is not the one of the device")
+	}
+	// Chosen again: the first one.
+	if err := e.ChooseFile("old", "input/old/a_cisco.txt", at); err != nil {
+		t.Fatal(err)
+	}
+	src, err = e.Import("old", "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got, want := src.Devices(), []string{"rt-a01", "ix-a01"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("devices = %v, want %v", got, want)
 	}
@@ -112,10 +157,10 @@ func TestImport(t *testing.T) {
 	if b.Pack != "nec_ix" || b.Err != "" || b.Result == nil {
 		t.Errorf("b = %+v", b)
 	}
-	if c.Result != nil || !strings.Contains(c.Err, "ホスト名 rt-a01 が input/old/a_cisco.txt と同じです") {
-		t.Errorf("c.Err = %q", c.Err)
+	if c.Result != nil || c.Err != "" || !strings.Contains(c.Left, "ホスト名 rt-a01 は input/old/a_cisco.txt を取り込みます") {
+		t.Errorf("c = %+v", c)
 	}
-	if d.Result != nil || !strings.Contains(d.Err, "メーカーを判定できません（候補: cisco_ios 0 点、nec_ix 0 点）") {
+	if d.Result != nil || !strings.Contains(d.Err, "メーカーを判定できません（候補: cisco_ios 0 点、nec_ix 0 点、nec_qx 0 点）") {
 		t.Errorf("d.Err = %q", d.Err)
 	}
 	if empty.Err != "中身が空です" {
@@ -165,7 +210,7 @@ func TestImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "sources:\n  - file: input/old/d_short.txt\n    pack: cisco_ios\n"; string(data) != want {
+	if want := "sources:\n  - file: input/old/d_short.txt\n    pack: cisco_ios\nuse:\n  - source: old\n    device: rt-a01\n    file: input/old/a_cisco.txt\n"; string(data) != want {
 		t.Errorf("sources.yaml:\n%s", data)
 	}
 }
@@ -175,7 +220,7 @@ func TestImportErrors(t *testing.T) {
 	if _, err := e.Import("logs", ""); err == nil {
 		t.Error("no error for a source that cannot be imported")
 	}
-	if _, err := e.Import("old", "sample_os"); err == nil || !strings.Contains(err.Error(), "使えるパック: cisco_ios, nec_ix") {
+	if _, err := e.Import("old", "sample_os"); err == nil || !strings.Contains(err.Error(), "使えるパック: cisco_ios, nec_ix, nec_qx") {
 		t.Errorf("err = %v", err)
 	}
 	src, err := e.Import("new", "")

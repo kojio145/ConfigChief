@@ -1,0 +1,171 @@
+# Neutral word: the word of the device (appendix A 1.4, appendix B 4.2).
+# Source: the command manuals named in the README.
+# The two predefined roles that have a neutral word. Other roles (level-0 to
+# level-15, roles made on the device) are written by their own name.
+user_role:
+  admin: network-admin
+  operator: network-operator
+
+# "stp mode": the device's "pvst" runs RSTP in every VLAN (Operation Manual,
+# "PVST の動作"), which is what the dataset calls rapid_pvst.
+stp_mode:
+  rapid_pvst: pvst
+  mst: mstp
+  rstp: rstp
+  stp: stp
+
+ospf_network:
+  broadcast: broadcast
+  nbma: nbma
+  point_to_multipoint: p2mp
+  point_to_point: p2p
+
+snmp_access:
+  ro: read
+  rw: write
+
+snmp_version:
+  "1": v1
+  2c: v2c
+
+# "privacy-mode" of an SNMPv3 user.
+snmp_priv:
+  des: des56
+  3des: 3des
+  aes128: aes128
+
+# The keywords of the log levels (Information center commands, the table of
+# the log levels).
+severity:
+  emergencies: emergency
+  alerts: alert
+  critical: critical
+  errors: error
+  warnings: warning
+  notifications: notification
+  informational: informational
+  debugging: debugging
+
+acl_type:
+  standard: basic
+  extended: advanced
+
+# The protocols an advanced rule names by a word ("rule (IPv4 advanced ACL
+# view)"). ESP and AH have no word and go by their numbers.
+acl_protocol:
+  ip: ip
+  tcp: tcp
+  udp: udp
+  icmp: icmp
+  gre: gre
+  ospf: ospf
+  esp: "50"
+  ah: "51"
+
+# The names a rule may show for a port (the same section, table of the TCP
+# and UDP parameters). The dataset has numbers; the names are read here.
+tcp_port:
+  "7": echo
+  "9": discard
+  "13": daytime
+  "19": chargen
+  "20": ftp-data
+  "21": ftp
+  "23": telnet
+  "25": smtp
+  "37": time
+  "43": whois
+  "49": tacacs
+  "53": {out: dns, aliases: [domain]}
+  "70": gopher
+  "79": finger
+  "80": www
+  "101": hostname
+  "109": pop2
+  "110": pop3
+  "111": sunrpc
+  "119": nntp
+  "179": bgp
+  "194": irc
+  "512": exec
+  "513": login
+  "514": cmd
+  "515": lpd
+  "517": talk
+  "540": uucp
+  "543": klogin
+  "544": kshell
+
+udp_port:
+  "7": echo
+  "9": discard
+  "37": time
+  "42": nameserver
+  "53": dns
+  "65": tacacs-ds
+  "67": bootps
+  "68": bootpc
+  "69": tftp
+  "90": dnsix
+  "111": sunrpc
+  "123": ntp
+  "137": netbios-ns
+  "138": netbios-dgm
+  "139": netbios-ssn
+  "161": snmp
+  "162": snmptrap
+  "177": xdmcp
+  "434": mobilip-ag
+  "435": mobilip-mn
+  "512": biff
+  "513": who
+  "514": syslog
+  "517": talk
+  "520": rip
+
+# The same section: the words for DSCP and precedence.
+dscp:
+  "0": default
+  "8": cs1
+  "10": af11
+  "12": af12
+  "14": af13
+  "16": cs2
+  "18": af21
+  "20": af22
+  "22": af23
+  "24": cs3
+  "26": af31
+  "28": af32
+  "30": af33
+  "32": cs4
+  "34": af41
+  "36": af42
+  "38": af43
+  "40": cs5
+  "46": ef
+  "48": cs6
+  "56": cs7
+
+precedence:
+  "0": routine
+  "1": priority
+  "2": immediate
+  "3": flash
+  "4": flash-override
+  "5": critical
+  "6": internet
+  "7": network
+
+# The days of a periodic statement of a time range (Time range commands).
+weekday:
+  sunday: Sun
+  monday: Mon
+  tuesday: Tue
+  wednesday: Wed
+  thursday: Thu
+  friday: Fri
+  saturday: Sat
+  weekdays: working-day
+  weekend: off-day
+  daily: daily

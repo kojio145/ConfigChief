@@ -1,0 +1,123 @@
+# Route maps (the route policies of appendix A 3.19).
+# Syntax: CRM chapter 23 (pp. 23-3 to 23-10) and p. 8-11 / 8-12 (policy
+# routing), read on 2026-11-20. The device has no AS path list and no
+# community list: an entry names its communities itself.
+#
+# A line that is not named here has no column (match ip url-offload, the
+# IPv6 lines, "set community … delete") and stays unknown.
+rules:
+  # The action and the number can be left out when the line is typed; what
+  # the device shows then is not in the manuals, so only the full form is
+  # read (README).
+  - id: rp
+    match: '^route-map (?P<name>\S+) (?P<action>permit|deny) (?P<seq>\d+)$'
+    row: {table: route_policies, key: {name: "{{ name }}", seq: "{{ seq }}"}}
+    set: {action: "{{ action }}"}
+    children:
+      # ---- what the entry applies to ----
+      # ---- IPv6 (CRM 23-4, 23-9) ----
+      - id: rp.match.ipv6_prefix_list
+        match: '^match ipv6 address prefix-list (?P<list>\S+)$'
+        append: {match_ipv6_prefix_list: "{{ list }}"}
+      # CRM 23-5: "match ipv6 next-hop prefix-list <name>".
+      - id: rp.match.ipv6_next_hop
+        match: '^match ipv6 next-hop prefix-list (?P<list>\S+)$'
+        set: {match_ipv6_next_hop_prefix_list: "{{ list }}"}
+      - id: rp.match.ipv6_acl
+        match: '^match ipv6 address access-list (?P<list>\S+)$'
+        append: {match_ipv6_acl: "{{ list }}"}
+      - id: rp.set.ipv6_next_hop
+        match: '^set ipv6 next-hop (?P<nh>[0-9A-Fa-f]*:[0-9A-Fa-f:]+)$'
+        append: {set_ipv6_next_hop: "{{ nh }}"}
+      - id: rp.set.ipv6_default_next_hop
+        match: '^set ipv6 default next-hop (?P<nh>[0-9A-Fa-f]*:[0-9A-Fa-f:]+)$'
+        append: {set_ipv6_default_next_hop: "{{ nh }}"}
+      # The communities to take off the route (CRM 23-7): alone, or behind
+      # the communities that are added.
+      - id: rp.set.community.delete
+        match: '^set community delete (?P<del>[\w:-]+(?: [\w:-]+)*)$'
+        append: {set_community_delete: "{{ del }}"}
+      - id: rp.set.community.add_delete
+        match: '^set community (?P<vals>[\w:-]+(?: [\w:-]+)*?) additive delete (?P<del>[\w:-]+(?: [\w:-]+)*)$'
+        when: "vals != 'none' and not vals is startingwith('delete')"
+        set: {set_community_additive: true}
+        append: {set_community: "{{ vals }}", set_community_delete: "{{ del }}"}
+      - id: rp.match.prefix_list
+        match: '^match ip address prefix-list (?P<list>\S+)$'
+        append: {match_prefix_list: "{{ list }}"}
+      - id: rp.match.acl
+        match: '^match ip address access-list (?P<list>\S+)$'
+        append: {match_acl: "{{ list }}"}
+      - id: rp.match.next_hop
+        match: '^match ip next-hop prefix-list (?P<list>\S+)$'
+        set: {match_next_hop_prefix_list: "{{ list }}"}
+      # The words of the well-known communities go through the lexicon; a
+      # number or AA:NN is kept as it is.
+      - id: rp.match.community
+        match: '^match community (?P<vals>[\w:-]+(?: [\w:-]+)*?)(?P<exact> exact-match)?$'
+        when: "' exact-match ' not in (' ' ~ vals ~ ' ')"
+        set: {match_community_exact: "{{ 'true' if exact else '' }}"}
+        append:
+          match_community: "{% for v in vals | split(' ') %}{{ v if (':' in v or v is digits) else (v | unlex('community')) }} {% endfor %}"
+      - id: rp.match.interface
+        match: '^match interface (?P<ifn>[A-Za-z]\S*)$'
+        append: {match_interface: "{{ ifn }}"}
+      - id: rp.match.metric
+        match: '^match metric (?P<n>\d+)$'
+        set: {match_metric: "{{ n }}"}
+      - id: rp.match.tag
+        match: '^match tag (?P<n>\d+)$'
+        append: {match_tag: "{{ n }}"}
+
+      # ---- what the entry sets ----
+      - id: rp.set.local_preference
+        match: '^set local-preference (?P<n>\d+)$'
+        set: {set_local_preference: "{{ n }}"}
+      # With a sign the value is added to (taken from) the metric (CRM 23-9).
+      - id: rp.set.metric
+        match: '^set metric (?P<n>[+-]?\d+)$'
+        set: {set_metric: "{{ n }}"}
+      - id: rp.set.metric_type
+        match: '^set metric-type (?P<kind>type-1|type-2|internal)$'
+        set: {set_metric_type: "{{ kind | replace('type-', '') }}"}
+      - id: rp.set.as_path
+        match: '^set as-path prepend (?P<asns>\d+(?: \d+)*)$'
+        append: {set_as_path_prepend: "{{ asns }}"}
+      - id: rp.set.community.none
+        match: '^set community none$'
+        append: {set_community: none}
+      # The forms with "delete" have no column.
+      - id: rp.set.community
+        match: '^set community (?P<vals>[\w:-]+(?: [\w:-]+)*?)(?P<add> additive)?$'
+        when: "' delete ' not in (' ' ~ vals ~ ' ') and ' additive ' not in (' ' ~ vals ~ ' ') and vals != 'none'"
+        set: {set_community_additive: "{{ 'true' if add else '' }}"}
+        append:
+          set_community: "{% for v in vals | split(' ') %}{{ v if (':' in v or v is digits) else (v | unlex('community')) }} {% endfor %}"
+      - id: rp.set.origin
+        match: '^set origin (?P<kind>igp|incomplete)$'
+        set: {set_origin: "{{ kind }}"}
+      - id: rp.set.tag
+        match: '^set tag (?P<n>\d+)$'
+        set: {set_tag: "{{ n }}"}
+      - id: rp.set.next_hop
+        match: '^set ip next-hop (?P<nh>self|\d+\.\d+\.\d+\.\d+)$'
+        append: {set_next_hop: "{{ nh }}"}
+      - id: rp.set.default_next_hop
+        match: '^set ip default next-hop (?P<nh>\d+\.\d+\.\d+\.\d+)$'
+        append: {set_default_next_hop: "{{ nh }}"}
+      - id: rp.set.interface
+        match: '^set interface (?P<ifn>[A-Za-z]\S*)$'
+        append: {set_interface: "{{ ifn }}"}
+      - id: rp.set.default_interface
+        match: '^set default interface (?P<ifn>[A-Za-z]\S*)$'
+        append: {set_default_interface: "{{ ifn }}"}
+
+  # The packets the device itself sends (CRM 8-11).
+  - id: rp.self
+    match: '^ip local policy route-map (?P<map>\S+)$'
+    row: {table: devices, key: {}}
+    set: {local_policy_route: "{{ map }}"}
+  - id: rp.self.v6
+    match: '^ipv6 local policy route-map (?P<map>\S+)$'
+    row: {table: devices, key: {}}
+    set: {local_policy_route_v6: "{{ map }}"}

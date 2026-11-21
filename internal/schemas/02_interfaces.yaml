@@ -5,7 +5,7 @@ key: [device, name]
 columns:
   - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
   - {name: name, title: {ja: IF 名, en: Interface}, type: ifname, required: true, note: {ja: "メーカーの正式な書き方。例 GigabitEthernet0/0/0", en: "The full name the vendor uses, e.g. GigabitEthernet0/0/0"}}
-  - {name: kind, title: {ja: 種類, en: Kind}, type: enum, generate: false, values: [physical, subif, loopback, tunnel, dialer, vlan, lag, other], note: {ja: "空なら名前から決める", en: "Empty = worked out from the name"}}
+  - {name: kind, title: {ja: 種類, en: Kind}, type: enum, generate: false, values: [physical, subif, loopback, tunnel, dialer, vlan, lag, bvi, other], note: {ja: "空なら名前から決める", en: "Empty = worked out from the name"}}
   - {name: description, title: {ja: 説明, en: Description}, type: string}
   - {name: enabled, title: {ja: 有効, en: Enabled}, type: bool, required: true, explicit: true, note: {ja: "無効 = shutdown", en: "Off = shutdown"}}
   - {name: ipv4, title: {ja: IPv4 アドレス, en: IPv4 address}, type: cidr4, also: [dhcp, negotiated, "unnumbered:*"], note: {ja: "例 192.0.2.1/30。dhcp、negotiated、unnumbered:<IF 名> も書ける", en: "e.g. 192.0.2.1/30. Also dhcp, negotiated, unnumbered:<interface>"}}
@@ -13,15 +13,42 @@ columns:
   - {name: ipv6, title: {ja: IPv6 アドレス, en: IPv6 address}, type: "list<cidr6>"}
   - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name}
   - {name: encap_vlan, title: {ja: VLAN 番号（サブ IF）, en: VLAN ID (subinterface)}, type: int, min: 1, max: 4094}
+  - {name: encap_native, title: {ja: タグなしの VLAN（サブ IF）, en: Native VLAN (subinterface)}, type: bool, note: {ja: "このサブ IF の VLAN を、タグを付けずに送る（ネイティブ VLAN）", en: "The VLAN of this subinterface goes without a tag (the native VLAN)"}}
+  - {name: encap_tpid, title: {ja: タグの種別（TPID）, en: Tag protocol ID (TPID)}, type: string, note: {ja: "16 進数。空 = 8100", en: "Hexadecimal. Empty = 8100"}}
+  - {name: vlan_id, title: {ja: VLAN 番号（VLAN の IF）, en: VLAN ID (VLAN interface)}, type: int, min: 1, max: 4094, generate: false, note: {ja: "この IF が L3 の口になる VLAN の番号。取り込みが IF 名から入れる。別メーカーへ書き換えるときに、ポートの VLAN と IF を結ぶ", en: "The VLAN this interface is the layer-3 interface of. The import takes it from the name. It ties the ports of the VLAN to the interface when the data goes to another vendor"}}
+  - {name: bridge_group, title: {ja: ブリッジグループ, en: Bridge group}, type: int, min: 1, max: 65535, note: {ja: "同じ番号の IF どうしを L2 でつなぐ。BVI の行に書くと、そのグループの L3 の口になる", en: "Interfaces with the same number are bridged. On the row of a BVI: the layer-3 interface of the group"}}
+  - {name: peer_device, title: {ja: 対向機器, en: Peer device}, type: string, generate: false, compare: false, note: {ja: "このポートの先につながる機器のホスト名。両端の VLAN・LAG のチェック（X-381〜）に使う。生成には使わない", en: "The host name of the device at the other end of the port. Used by the checks of both ends (X-381 and on), not for generation"}}
+  - {name: peer_if, title: {ja: 対向 IF, en: Peer interface}, type: string, generate: false, compare: false, note: {ja: "対向機器の側の IF 名", en: "The interface at the other end"}}
+  - {name: encap_inner_vlans, title: {ja: 内側の VLAN（二重タグ）, en: Inner VLANs (Q-in-Q)}, type: "list<string>", note: {ja: "サブ IF が受ける二重タグの内側の VLAN。例 200、100-199,201-600。any = ほかのサブ IF に無いものすべて。「VLAN 番号（サブ IF）」が外側", en: "The inner VLANs of a double tag this subinterface takes, e.g. 200 or 100-199,201-600. any = all that no other subinterface takes. The VLAN ID of the subinterface is the outer one"}}
+  - {name: dot1q_min_frame, title: {ja: タグ付きフレームの最小の長さ, en: Minimum tagged frame size}, type: int, min: 64, max: 1522, note: {ja: "タグ付きで送るフレームの最小の長さ（オクテット）", en: "The least length of a tagged frame sent (octets)"}}
+  - {name: max_subinterfaces, title: {ja: サブ IF の数の上限, en: Maximum subinterfaces}, type: int, min: 1, note: {ja: "このポートに作れるサブ IF の数を増やす（対応する機種だけ。ポートの基本 IF の行に書く）", en: "Raises the number of subinterfaces of the port (only where the model has it; on the row of the base interface)"}}
+  - {name: bridge_protected, title: {ja: ブリッジの保護ポート, en: Protected bridge port}, type: bool, note: {ja: "同じブリッジグループの保護ポートどうしは通信させない", en: "Protected ports of one bridge group do not talk to each other"}}
+  - {name: bridge_table_size, title: {ja: このポートで覚える MAC の数, en: MAC addresses learnt on the port}, type: int, min: 1, note: {ja: "ブリッジグループの中で、このポートが覚える MAC アドレスの数の上限", en: "The most MAC addresses the bridge learns on this port"}}
+  - {name: cdp, title: {ja: CDP, en: CDP}, type: bool, note: {ja: "この IF で CDP を送受信する。空 = 機器の既定", en: "Runs CDP on this interface. Empty = the default of the device"}}
+  - {name: lldp_transmit, title: {ja: LLDP を送る, en: LLDP transmit}, type: bool, note: {ja: "空 = 機器の既定", en: "Empty = the default of the device"}}
+  - {name: lldp_receive, title: {ja: LLDP を受ける, en: LLDP receive}, type: bool, note: {ja: "空 = 機器の既定", en: "Empty = the default of the device"}}
+  - {name: loop_detect, title: {ja: ループ検出, en: Loop detection}, type: bool, note: {ja: "検出用のフレームを送り、戻ってきたらループとみなす", en: "Sends a frame of its own and takes its return for a loop"}}
+  - {name: loop_detect_action, title: {ja: ループを見つけたときの動作, en: Loop detection action}, type: enum, values: [shutdown, "none"], note: {ja: "shutdown = ポートを止める。none = 知らせるだけ", en: "shutdown = stops the port. none = only tells"}}
+  - {name: loop_detect_restore, title: {ja: ループ検出からの復帰（秒）, en: Loop detection restore (s)}, type: int, min: 0, max: 86400, note: {ja: "止めたポートを自動で戻すまでの秒。0 = 戻さない", en: "Seconds until a stopped port comes back by itself. 0 = never"}}
+  - {name: qos_default_priority, title: {ja: タグなしフレームの既定の優先度, en: Default priority of untagged frames}, type: int, min: 0, max: 7, note: {ja: "内蔵スイッチのポートが、優先度の無いフレームに付ける優先度（0〜7）", en: "The priority a port of the built-in switch gives a frame without one (0 to 7)"}}
+  - {name: switch_qos_scheduler, title: {ja: 内蔵スイッチの送信の順序, en: Scheduler of the built-in switch}, type: enum, values: [strict, wfq], note: {ja: "strict = 優先度の高い順。wfq = 重み付き。内蔵スイッチの基本 IF の行に書く", en: "strict = by priority. wfq = weighted. On the row of the base interface of the built-in switch"}}
+  - {name: switch_router_priority, title: {ja: ルータ側ポートの既定の優先度, en: Default priority of the router port}, type: int, min: 0, max: 7, note: {ja: "内蔵スイッチとルータの間のポートの、既定の優先度（0〜7）。内蔵スイッチの基本 IF の行に書く", en: "The default priority of the port between the built-in switch and the router (0 to 7). On the row of the base interface of the built-in switch"}}
   - {name: mtu, title: {ja: MTU, en: MTU}, type: int}
   - {name: ip_mtu, title: {ja: IP MTU, en: IP MTU}, type: int}
-  - {name: tcp_mss, title: {ja: TCP MSS 調整, en: TCP MSS adjust}, type: int}
-  - {name: speed, title: {ja: 速度, en: Speed}, type: enum, values: [auto, "10", "100", "1000", "10000"], note: {ja: "単位は Mbps", en: "In Mbps"}}
+  - {name: tcp_mss, title: {ja: TCP MSS 調整, en: TCP MSS adjust}, type: int, also: [auto], note: {ja: "数か auto（MTU から機器が決める）", en: "A number, or auto (the device takes it from the MTU)"}}
+  - {name: speed, title: {ja: 速度, en: Speed}, type: enum, values: [auto, "10", "100", "1000", "2500", "5000", "10000"], note: {ja: "単位は Mbps", en: "In Mbps"}}
   - {name: duplex, title: {ja: 二重, en: Duplex}, type: enum, values: [auto, full, half]}
+  - {name: speed_advertise, title: {ja: 自動交渉で名乗る速度, en: Speeds advertised}, type: "list<enum>", values: ["10", "100", "1000", "2500", "5000"], note: {ja: "速度が auto のとき、相手に名乗る速度を絞る（Mbps）", en: "With speed auto: the speeds offered to the other end (Mbps)"}}
+  - {name: speed_nonegotiate, title: {ja: 速度の自動交渉を止める, en: No speed negotiation}, type: bool, note: {ja: "光のポートなどで、自動交渉をせずに決まった速度で動かす", en: "Runs at its fixed speed without negotiating (e.g. a fibre port)"}}
+  - {name: mdi, title: {ja: MDI の向き, en: MDI}, type: enum, values: [mdi, mdix], note: {ja: "ケーブルの結線の向きを決め打ちにする。空 = 機器の既定", en: "Fixes the crossover of the port. Empty = the default of the device"}}
   - {name: bandwidth, title: {ja: 帯域（kbps）, en: Bandwidth (kbps)}, type: int, note: {ja: "経路計算用の値", en: "The value used for route metrics"}}
   - {name: acl_in, title: {ja: 入力 ACL, en: ACL in}, type: ref, ref: acls.name}
   - {name: acl_out, title: {ja: 出力 ACL, en: ACL out}, type: ref, ref: acls.name}
+  - {name: acl_in_more, title: {ja: 入力 ACL（2 つ目以降）, en: More ACLs in}, type: "list<ref>", ref: acls.name, note: {ja: "入力 ACL の後に、書いた順で見る ACL", en: "The lists looked at after the ACL in, in this order"}}
+  - {name: acl_out_more, title: {ja: 出力 ACL（2 つ目以降）, en: More ACLs out}, type: "list<ref>", ref: acls.name, note: {ja: "出力 ACL の後に、書いた順で見る ACL", en: "The lists looked at after the ACL out, in this order"}}
   - {name: nat_role, title: {ja: NAT の向き, en: NAT role}, type: enum, values: [inside, outside], note: {ja: "メーカーによっては使わない", en: "Not used by every vendor"}}
   - {name: dhcp_relay, title: {ja: DHCP 中継先, en: DHCP relay}, type: "list<ip4>"}
   - {name: proxy_arp, title: {ja: 代理 ARP, en: Proxy ARP}, type: bool}
+  - {name: policy_route, title: {ja: ポリシールーティング, en: Policy routing}, type: string, note: {ja: "この IF に入ってくる通信に当てる、経路制御の方針の名前", en: "The name of the route policy for the packets that come in on the interface"}}
+  - {name: port_description, title: {ja: ポートの説明, en: Port description}, type: string, note: {ja: "ポートと IF が別のメーカーの、ポートの側の説明。「ポート名.0」の行に書く", en: "The description of the port, for a vendor that keeps ports apart from interfaces. On the row of <port>.0"}}
   - {name: note, title: {ja: 備考, en: Note}, type: string, generate: false, note: {ja: "生成には使わない", en: "Not used for generation"}}

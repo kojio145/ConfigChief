@@ -9,6 +9,12 @@ vrf definition {{ v.name }}
 {% if v.rd %}
  rd {{ v.rd }}
 {% endif %}
+{% for x in v.rt_export %}
+ route-target export {{ x }}
+{% endfor %}
+{% for x in v.rt_import %}
+ route-target import {{ x }}
+{% endfor %}
  address-family ipv4
  exit-address-family
 !

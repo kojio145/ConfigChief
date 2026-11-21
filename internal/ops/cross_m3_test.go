@@ -60,34 +60,25 @@ func TestCrossVendorSite(t *testing.T) {
 		{
 			old: "rt-s01.txt", oldHost: "rt-s01", newHost: "ix-s01", pack: "nec_ix",
 			ifs: map[string]string{"GigabitEthernet0/0": "GigaEthernet0.0", "GigabitEthernet0/1": "GigaEthernet1.0", "Loopback0": "Loopback0.0"},
-			// The new vendor has no direction of NAT on an interface.
-			unused: []string{"NAT の向き"},
-			first:  2,
-			mend: [][5]string{
-				{"インタフェース", "IF 名", "GigaEthernet0.0", "NAT の向き", ""},
-				{"インタフェース", "IF 名", "GigaEthernet1.0", "NAT の向き", ""},
-			},
+			// The new vendor has no direction of NAT on an interface: the pack
+			// leaves it out and tells.
+			first: 1,
+			notes: []string{"GigaEthernet0.0: 「NAT の向き」は書きません"},
 		},
 		{
 			old: "ix-s01.txt", oldHost: "ix-s01", newHost: "rt-s01", pack: "cisco_ios",
 			ifs: map[string]string{"GigaEthernet0.0": "GigabitEthernet0/0", "GigaEthernet1.0": "GigabitEthernet0/1", "Loopback0.0": "Loopback0"},
-			// The new vendor numbers its watches, and marks the interfaces
-			// inside and outside of NAT.
-			stops: []string{
-				"回線監視 wg1 の番号・名前は、Cisco では 1〜1000 の番号で書きます",
-				"NAT の向きが「inside」と「outside」のインタフェースがそろっていません",
-				"NAT nat1 の外側 IF GigabitEthernet0/0 は、NAT の向きが「outside」ではありません",
-			},
-			first: 3,
-			mend: [][5]string{
-				{"回線監視", "番号・名前", "wg1", "番号・名前", "1"},
-				{"スタティック経路", "回線監視", "wg1", "回線監視", "1"},
-				{"インタフェース", "IF 名", "GigabitEthernet0/0", "NAT の向き", "outside"},
-				{"インタフェース", "IF 名", "GigabitEthernet0/1", "NAT の向き", "inside"},
-				// How often a probe may fail has no line on the new vendor (the
-				// old one writes its defaults into the book).
-				{"回線監視", "番号・名前", "1", "断と判断する回数", ""},
-				{"回線監視", "番号・名前", "1", "復旧と判断する回数", ""},
+			// The new vendor numbers its watches: the pack gives the named
+			// watch the next free number, and the route that names it
+			// follows (2026-11-21). The marks of the interfaces inside and
+			// outside of NAT, and the count of failed probes (written as a
+			// delay of the watch), come from the pack too.
+			first: 4,
+			notes: []string{
+				"回線監視 wg1: Cisco の監視は 1〜1000 の番号なので、1 番として書きます",
+				"GigabitEthernet0/0: 「NAT の向き」が空なので、outside として書きます",
+				"GigabitEthernet0/1: 「NAT の向き」が空なので、inside として書きます",
+				"「断と判断する回数」（6 回）は Cisco に無いので、「断の反映の待ち」25 秒（間隔 5 秒 × 5）にして書きます",
 			},
 		},
 	}

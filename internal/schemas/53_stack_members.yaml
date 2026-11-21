@@ -1,0 +1,10 @@
+table: stack_members
+title: {ja: スタックのメンバー, en: Stack members}
+since: M7
+key: [device, member]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: member, title: {ja: メンバー番号, en: Member number}, type: int, min: 1, required: true}
+  - {name: provision, title: {ja: 機種の種別, en: Provisioned type}, type: string, note: {ja: "そのメンバーの機種の種別（機器が設定に持つ語）", en: "The type of the member, as the device has it in its configuration"}}
+  - {name: priority, title: {ja: 優先度, en: Priority}, type: int, min: 1, note: {ja: "大きいほどマスターになりやすい", en: "The higher, the more likely the master"}}
+  - {name: description, title: {ja: 説明, en: Description}, type: string}

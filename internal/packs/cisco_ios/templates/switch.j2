@@ -1,0 +1,138 @@
+{# VLANs, the switch as a whole, spanning tree, stacks and bridging (README,
+   "VLAN とスイッチ"). The lines of a port stand under its interface
+   (switchport.j2). #}
+{% set any = namespace(line=false) %}
+{% for m in t.stack_members %}
+{% set any.line = true %}
+switch {{ m.member }} provision {{ m.provision | required('スタックのメンバー ' ~ m.member ~ ' の機種の種別') }}
+{% endfor %}
+{% for g in t.l2_settings %}
+{% if g.ip_routing != '' or g.default_gateway or g.vtp_domain or g.vtp_mode or g.stp_mode or g.stp_edge_default != '' or g.stp_bpdu_guard_default != '' or g.stp_extend_system_id != '' %}
+{% set any.line = true %}
+{% endif %}
+{% if g.ip_routing == true %}
+ip routing
+{% elif g.ip_routing == false %}
+no ip routing
+{% endif %}
+{% if g.default_gateway %}
+ip default-gateway {{ g.default_gateway }}
+{% endif %}
+{% if g.vtp_domain %}
+vtp domain {{ g.vtp_domain }}
+{% endif %}
+{% if g.vtp_mode %}
+vtp mode {{ g.vtp_mode }}
+{% endif %}
+{% if g.stp_mode %}
+spanning-tree mode {{ g.stp_mode | replace('_', '-') }}
+{% endif %}
+{% if g.stp_edge_default == true %}
+spanning-tree portfast default
+{% elif g.stp_edge_default == false %}
+{{ fail('「アクセスポートをすぐ転送にする」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if g.stp_bpdu_guard_default == true %}
+spanning-tree portfast bpduguard default
+{% elif g.stp_bpdu_guard_default == false %}
+{{ fail('「エッジポートの BPDU ガード」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if g.stp_extend_system_id == true %}
+spanning-tree extend system-id
+{% elif g.stp_extend_system_id == false %}
+{{ fail('「拡張システム ID」の「無効」は、このパックでは書けません（止める行の出方を確かめていません。セルを空にしてください）') }}
+{% endif %}
+{% endfor %}
+{% for s in t.stp_vlans %}
+{% if s.priority != '' %}
+spanning-tree vlan {{ s.vlans }} priority {{ s.priority }}
+{% endif %}
+{% if s.hello_time != '' %}
+spanning-tree vlan {{ s.vlans }} hello-time {{ s.hello_time }}
+{% endif %}
+{% if s.forward_time != '' %}
+spanning-tree vlan {{ s.vlans }} forward-time {{ s.forward_time }}
+{% endif %}
+{% if s.max_age != '' %}
+spanning-tree vlan {{ s.vlans }} max-age {{ s.max_age }}
+{% endif %}
+{% endfor %}
+{% include 'switch_more.j2' %}
+{% if any.line or t.stp_vlans %}
+!
+{% endif %}
+{% for v in t.vlans %}
+vlan {{ v.vlan_id }}
+{% if v.name %}
+{% if ' ' in v.name %}
+{{ fail('VLAN ' ~ v.vlan_id ~ ' の名前に空白があります（このパックは 1 語の名前だけを書きます）') }}
+{% endif %}
+ name {{ v.name }}
+{% endif %}
+{% if v.state %}
+ state {{ v.state }}
+{% endif %}
+{% if v.shutdown == true %}
+ shutdown
+{% elif v.shutdown == false %}
+{{ fail('VLAN ' ~ v.vlan_id ~ ' の「この機器で止める」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if v.remote_span == true %}
+ remote-span
+{% elif v.remote_span == false %}
+{{ fail('VLAN ' ~ v.vlan_id ~ ' の「遠隔ミラー用」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if v.private_vlan %}
+ private-vlan {{ v.private_vlan }}
+{% endif %}
+{% if v.private_vlan_secondaries %}
+ private-vlan association {{ v.private_vlan_secondaries | join(',') }}
+{% endif %}
+!
+{% endfor %}
+{# Bridging: the BVI of a group routes IP ("bridge <n> route ip"). The
+   spanning tree of a group ("bridge <n> protocol …") has no column and is
+   not written (README). #}
+{% set br = namespace(any=false) %}
+{% for g in t.l2_settings %}
+{% if g.bridge_irb == true %}
+bridge irb
+{% set br.any = true %}
+{% elif g.bridge_irb == false %}
+{{ fail('「ブリッジと L3 の併用」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% endfor %}
+{% for i in t.interfaces %}
+{% if i.name is startingwith('BVI') %}
+{% set n = i.name | replace('BVI', '') %}
+{% if i.bridge_group == '' %}
+{{ fail(i.name ~ ' のブリッジグループが空です（Cisco では BVI の番号と同じ番号です。' ~ n ~ ' と書いてください）') }}
+{% elif i.bridge_group | string != n %}
+{{ fail(i.name ~ ' のブリッジグループ ' ~ i.bridge_group ~ ' が、BVI の番号と違います（Cisco では、グループ ' ~ i.bridge_group ~ ' の L3 の口は BVI' ~ i.bridge_group ~ ' です。IF 名を直してください）') }}
+{% endif %}
+{% if not br.any %}
+{{ fail(i.name ~ ' を使うには、「L2 の全体設定」の「ブリッジと L3 の併用」を有効にします') }}
+{% endif %}
+bridge {{ n }} route ip
+{% elif i.bridge_group != '' and i.bridge_group | int > 255 %}
+{{ fail(i.name ~ ' のブリッジグループ ' ~ i.bridge_group ~ ' は書けません（Cisco では 1〜255 です）') }}
+{% endif %}
+{% endfor %}
+{# The spanning tree of a bridge group. What only another vendor has for a
+   group (its aging time, the size of its table) is not read here. #}
+{% for b in t.bridge_groups %}
+{% if b.group | int > 255 %}
+{{ fail('ブリッジグループ ' ~ b.group ~ ' は書けません（Cisco では 1〜255 です）') }}
+{% endif %}
+{% if b.protocol %}
+{% set br.any = true %}
+bridge {{ b.group }} protocol {{ b.protocol }}
+{% endif %}
+{% if b.priority != '' %}
+{% set br.any = true %}
+bridge {{ b.group }} priority {{ b.priority }}
+{% endif %}
+{% endfor %}
+{% if br.any %}
+!
+{% endif %}

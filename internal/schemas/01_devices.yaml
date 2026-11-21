@@ -10,11 +10,32 @@ columns:
   - {name: group, title: {ja: グループ, en: Group}, type: "list<string>", generate: false, note: {ja: "@グループ名 で行をまとめて当てるための名前。複数はカンマで区切る", en: "Names used as @group in the Device column. Separate with commas"}}
   - {name: site, title: {ja: 拠点, en: Site}, type: string, generate: false}
   - {name: domain_name, title: {ja: ドメイン名, en: Domain name}, type: string}
-  - {name: name_servers, title: {ja: DNS サーバ, en: Name servers}, type: "list<ip4>"}
+  - {name: name_servers, title: {ja: DNS サーバ, en: Name servers}, type: "list<ip>", note: {ja: "IPv4 か IPv6 のアドレス", en: "IPv4 or IPv6 addresses"}}
   - {name: timezone, title: {ja: 時刻帯, en: Time zone}, type: string, note: {ja: "例 JST +9。名前は省ける（+9）。分があれば +5:30", en: "e.g. JST +9. The name may be left out (+9). With minutes: +5:30"}}
   - {name: enable_secret, title: {ja: 特権パスワード, en: Enable secret}, type: secret}
-  - {name: secret_form, title: {ja: パスワードの形, en: Secret form}, type: enum, values: [plain, hashed], note: {ja: "取り込んだ値がハッシュのとき hashed。別メーカーへは引き継げない", en: "hashed when the imported value is a hash; it cannot go to another vendor"}}
+  - {name: secret_form, title: {ja: パスワードの形, en: Secret form}, type: enum, values: [plain, hashed, encrypted], note: {ja: "取り込んだ値がハッシュのとき hashed、機器が戻せる形で暗号化した値のとき encrypted。別メーカーへは引き継げない", en: "hashed when the imported value is a hash, encrypted when the device saved it in a form it can turn back; neither can go to another vendor"}}
   - {name: snmp_location, title: {ja: SNMP 設置場所, en: SNMP location}, type: string}
   - {name: snmp_contact, title: {ja: SNMP 連絡先, en: SNMP contact}, type: string}
+  - {name: ipv6_routing, title: {ja: IPv6 の転送, en: IPv6 routing}, type: bool, note: {ja: "IPv6 のパケットを転送する（ルータとして動かす）。メーカーによっては書く行が無い", en: "Forwards IPv6 packets (works as a router). Some vendors have no line for it"}}
   - {name: banner, title: {ja: バナー, en: Banner}, type: text, note: {ja: "ログインの前に出す文", en: "The text shown before login"}}
+  - {name: local_policy_route, title: {ja: 機器自身の通信のポリシールーティング, en: Local policy routing}, type: string, note: {ja: "機器が自分で出す通信に当てる、経路制御の方針の名前", en: "The name of the route policy for the packets the device itself sends"}}
+  - {name: banner_motd, title: {ja: バナー（接続したとき）, en: Banner (on connect)}, type: text, note: {ja: "つないだ端末に、ログインの前に出す文（motd）", en: "The text every terminal gets before the login (motd)"}}
+  - {name: banner_exec, title: {ja: バナー（ログインの後）, en: Banner (after login)}, type: text, note: {ja: "ログインの後に出す文", en: "The text shown after the login"}}
+  - {name: password_encryption, title: {ja: パスワードを暗号化して保存, en: Password encryption}, type: bool, note: {ja: "コンフィグの中のパスワードを、機器が暗号化して保存する", en: "The device keeps the passwords of its configuration encrypted"}}
+  - {name: log_timestamp, title: {ja: ログの時刻の付け方, en: Log timestamp}, type: enum, values: [datetime, time, uptime], note: {ja: "datetime = 日付と時刻、time = 時刻だけ、uptime = 起動してからの時間", en: "datetime = date and time, time = the time only, uptime = the time since the start"}}
+  - {name: log_timestamp_options, title: {ja: ログの時刻に足すもの, en: Log timestamp options}, type: "list<enum>", values: [msec, localtime, show_timezone, year], note: {ja: "msec = ミリ秒、localtime = 機器の時刻帯、show_timezone = 時刻帯の名前、year = 年", en: "msec = milliseconds, localtime = the zone of the device, show_timezone = the name of the zone, year = the year"}}
+  - {name: debug_timestamp, title: {ja: デバッグの時刻の付け方, en: Debug timestamp}, type: enum, values: [datetime, uptime], note: {ja: "デバッグの表示の時刻をログと分けるメーカーで使う", en: "For a vendor that stamps debug output apart from the log"}}
+  - {name: debug_timestamp_options, title: {ja: デバッグの時刻に足すもの, en: Debug timestamp options}, type: "list<enum>", values: [msec, localtime, show_timezone, year]}
+  - {name: log_buffer, title: {ja: 機器内にログを溜める, en: Log buffer}, type: bool}
+  - {name: log_buffer_size, title: {ja: 機器内ログの大きさ（バイト）, en: Log buffer size (bytes)}, type: int, min: 1}
+  - {name: log_buffer_mode, title: {ja: 機器内ログがいっぱいのとき, en: Log buffer when full}, type: enum, values: [cyclic, one_time], note: {ja: "cyclic = 古いものから上書き、one_time = 止める", en: "cyclic = overwrite the oldest, one_time = stop"}}
+  - {name: log_severity, title: {ja: ログに残す重要度, en: Log severity}, type: enum, values: [emergencies, alerts, critical, errors, warnings, notifications, informational, debugging], note: {ja: "機器がログに残す、いちばん低い重要度", en: "The lowest severity the device logs"}}
+  - {name: console_timeout, title: {ja: コンソールの無操作切断（分）, en: Console idle timeout (min)}, type: int, min: 0}
+  - {name: console_timeout_sec, title: {ja: コンソールの無操作切断（秒の端数）, en: Console idle timeout (extra s)}, type: int, min: 0, max: 59}
+  - {name: ntp_serve, title: {ja: NTP サーバとして動く, en: NTP server}, type: bool, note: {ja: "ほかの機器からの時刻の問い合わせに答える", en: "Answers the time requests of other devices"}}
+  - {name: forward_cache, title: {ja: 転送のキャッシュ, en: Forwarding cache}, type: bool, note: {ja: "転送を速くするキャッシュを使う（行が要るメーカーだけが書く）", en: "The cache that speeds up forwarding (written by the vendors that need a line)"}}
+  - {name: forward_cache_ipv6, title: {ja: 転送のキャッシュ（IPv6）, en: Forwarding cache (IPv6)}, type: bool, note: {ja: "IPv6 の転送を速くするキャッシュを使う（行が要るメーカーだけが書く）", en: "The cache that speeds up IPv6 forwarding (written by the vendors that need a line)"}}
+  - {name: name_servers_vrf, title: {ja: DNS サーバの VRF, en: Name server VRF}, type: ref, ref: vrfs.name, note: {ja: "空 = VRF なし。DNS サーバは全部が同じ VRF", en: "Empty = no VRF. Every name server is in the same VRF"}}
   - {name: note, title: {ja: 備考, en: Note}, type: string, generate: false, note: {ja: "生成には使わない", en: "Not used for generation"}}
+  - {name: local_policy_route_v6, title: {ja: 機器自身の通信のポリシールーティング（IPv6）, en: Local policy route (IPv6)}, type: string, note: {ja: "機器が自分で出す IPv6 の通信に当てる経路制御の方針の名前", en: "The route policy for the IPv6 packets the device itself sends"}}
+  - {name: vrrp_version, title: {ja: VRRP の版（IPv4）, en: VRRP version (IPv4)}, type: enum, values: ["2", "3"], note: {ja: "空 = 2。3 = 機器全体を VRRPv3 にする（Cisco の fhrp version vrrp v3。IPv6 の VRRP に要る）", en: "Empty = 2. 3 = the whole device on VRRPv3 (Cisco fhrp version vrrp v3; needed for IPv6 VRRP)"}}

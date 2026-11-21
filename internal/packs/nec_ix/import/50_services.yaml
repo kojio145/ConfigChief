@@ -1,39 +1,85 @@
-# Line monitoring, PPPoE, IPsec and DHCP (stages M3 and M4).
+# Line monitoring, PPPoE, IPsec and DHCP (stages M3 and M4; IKE version 2
+# and the rest of IPsec: appendix A 3.20).
 # Syntax: cmdref 4.11, 4.12, 4.13 and 4.15.
 rules:
   # ---- line monitoring ----
   # A watch group holds what is watched ("event") and what is done ("action")
-  # in one block; the dataset has one row for the watch, and the routes point
-  # to it. The numbers of the group, of the events and of the actions are
-  # read and not kept. One event for a group: a second one stays unknown.
-  # An event with an output interface or a next hop has no column.
+  # in one block (CRM 17, FD 2.28); the dataset has one row for the watch,
+  # and the routes point to it. The numbers of the group and of the actions
+  # are read and not kept. Every event goes to a work table; a group with one
+  # event is one row, a group with several is a row of the type "list" that
+  # holds one row for each event (derive below).
   - id: wg
     match: '^watch-group (?P<wg>\S+)(?: (?P<wseq>\d+))?$'
     row: {table: x_wg, key: {name: "{{ wg }}"}}
     children:
+      # The output interface and the next hop after the address fix where
+      # the probe leaves (CRM 17-15); "source" is the interface whose address
+      # the probe carries.
       - id: wg.event.host
-        match: '^event (?P<en>\d+) ip unreach-host (?P<addr>\d+\.\d+\.\d+\.\d+)(?: source (?P<sif>[A-Za-z]\S*))?$'
-        when: "not lookup('x_wg', name=wg).type"
-        set: {type: icmp, target: "{{ addr }}", source_if: "{{ sif | ifname }}"}
+        match: '^event (?P<en>\d+)(?: sub (?P<sub>\d+))?(?: vrf (?P<vrf>\S+))? ip unreach-host (?P<addr>\d+\.\d+\.\d+\.\d+)(?: (?P<vif>[A-Za-z][A-Za-z-]*\d+(?::\d+)?\.\d+|BVI\d+)(?: (?P<vnh>\d+\.\d+\.\d+\.\d+))?)?(?: source (?P<sif>[A-Za-z][A-Za-z-]*\d+(?::\d+)?\.\d+|BVI\d+))?$'
+        emit:
+          - table: x_wg_event
+            key: {wg: "{{ wg }}", ord: "{{ en }}.{{ sub if sub else 0 }}"}
+            set: {n: "{{ en }}", sub: "{{ sub }}", type: icmp, target: "{{ addr }}", vrf: "{{ vrf }}", via_if: "{{ vif | ifname }}", via_next_hop: "{{ vnh }}", source_if: "{{ sif | ifname }}"}
+      # The route is watched in the routing table; a next hop or an interface
+      # after it narrows the routes that count (CRM 17-15).
+      - id: wg.event.route
+        match: '^event (?P<en>\d+)(?: sub (?P<sub>\d+))?(?: vrf (?P<vrf>\S+))? ip unreach-route (?P<prefix>\d+\.\d+\.\d+\.\d+/\d+)(?: (?P<vnh>\d+\.\d+\.\d+\.\d+)| (?P<vif>[A-Za-z][A-Za-z-]*\d+(?::\d+)?\.\d+|BVI\d+))?$'
+        emit:
+          - table: x_wg_event
+            key: {wg: "{{ wg }}", ord: "{{ en }}.{{ sub if sub else 0 }}"}
+            set: {n: "{{ en }}", sub: "{{ sub }}", type: route, target: "{{ prefix | network }}", vrf: "{{ vrf }}", via_if: "{{ vif | ifname }}", via_next_hop: "{{ vnh }}"}
+      # IPv6 (CRM p.17-18; appendix A 3.23, 2026-11-21): the output
+      # interface is a must, the source is an address; no VRF.
+      - id: wg.event.host6
+        match: '^event (?P<en>\d+)(?: sub (?P<sub>\d+))? ipv6 unreach-host (?P<addr>[0-9A-Fa-f]*:[0-9A-Fa-f:]+) (?P<vif>[A-Za-z][A-Za-z-]*\d+(?::\d+)?\.\d+|BVI\d+)(?: (?P<vnh>[0-9A-Fa-f]*:[0-9A-Fa-f:]+))?(?: source (?P<sip>[0-9A-Fa-f]*:[0-9A-Fa-f:]+))?$'
+        emit:
+          - table: x_wg_event
+            key: {wg: "{{ wg }}", ord: "{{ en }}.{{ sub if sub else 0 }}"}
+            set: {n: "{{ en }}", sub: "{{ sub }}", type: icmp, target: "{{ addr | lower }}", via_if: "{{ vif | ifname }}", via_next_hop: "{{ vnh | lower }}", source_ip: "{{ sip | lower }}"}
+      - id: wg.event.route6
+        match: '^event (?P<en>\d+)(?: sub (?P<sub>\d+))? ipv6 unreach-route (?P<prefix>[0-9A-Fa-f:]+/\d+)(?: (?P<vnh>[0-9A-Fa-f]*:[0-9A-Fa-f:]+)| (?P<vif>[A-Za-z][A-Za-z-]*\d+(?::\d+)?\.\d+|BVI\d+))?$'
+        emit:
+          - table: x_wg_event
+            key: {wg: "{{ wg }}", ord: "{{ en }}.{{ sub if sub else 0 }}"}
+            set: {n: "{{ en }}", sub: "{{ sub }}", type: route, target: "{{ prefix | lower | network }}", via_if: "{{ vif | ifname }}", via_next_hop: "{{ vnh | lower }}"}
       - id: wg.event.interface
-        match: '^event (?P<en>\d+) interface-down (?P<ifn>[A-Za-z]\S*)$'
-        when: "not lookup('x_wg', name=wg).type"
-        set: {type: interface, target: "{{ ifn | ifname }}"}
+        match: '^event (?P<en>\d+)(?: sub (?P<sub>\d+))? interface-down (?P<ifn>[A-Za-z]\S*)$'
+        emit:
+          - table: x_wg_event
+            key: {wg: "{{ wg }}", ord: "{{ en }}.{{ sub if sub else 0 }}"}
+            set: {n: "{{ en }}", sub: "{{ sub }}", type: interface, target: "{{ ifn | ifname }}"}
       # "variance": how many probes fail before the action; "restorer": how
       # many succeed before the return.
       - id: wg.counter
         match: '^probe-counter (?P<what>variance|restorer) (?P<n>\d+)$'
         set: {"{{ 'fail_count' if what == 'variance' else 'restore_count' }}": "{{ n }}"}
-      # Seconds. The interval while waiting for the return ("restorer") has no
-      # column.
+      # Seconds: "variance" while all is well, "restorer" while the event
+      # lasts (CRM 17-23). The form in milliseconds stays unknown.
       - id: wg.timer
-        match: '^probe-timer variance (?P<s>\d+)$'
-        set: {interval: "{{ s }}"}
+        match: '^probe-timer (?P<what>variance|restorer) (?P<s>\d+)$'
+        set: {"{{ 'interval' if what == 'variance' else 'restore_interval' }}": "{{ s }}"}
       - id: wg.action.route
         match: '^action (?P<an>\d+) ip shutdown-route (?P<prefix>\d+\.\d+\.\d+\.\d+/\d+)(?: (?P<nh>\d+\.\d+\.\d+\.\d+))?$'
         emit:
           - table: x_wg_route
             key: {wg: "{{ wg }}", prefix: "{{ prefix | network }}", next_hop: "{{ nh }}"}
+      # The interface is shut while the event lasts (CRM 17-12).
+      - id: wg.action.shutdown
+        match: '^action (?P<an>\d+) shutdown-interface (?P<ifn>[A-Za-z][A-Za-z-]*\d+(?::\d+)?\.\d+|BVI\d+)$'
+        emit:
+          - table: x_wg_shut
+            key: {wg: "{{ wg }}", if_name: "{{ ifn | ifname }}"}
+            set: {"on": "true"}
+      # The priority of the virtual router goes down by the second number
+      # while the event lasts (CRM 17-4: "the priority to take off").
+      - id: wg.action.vrrp
+        match: '^action (?P<an>\d+) ip decrement-vrrp-priority (?P<vrid>\d+) (?P<dec>\d+)$'
+        emit:
+          - table: x_wg_vrrp
+            key: {wg: "{{ wg }}", vrid: "{{ vrid }}"}
+            set: {dec: "{{ dec }}"}
 
   - id: wg.enable
     match: '^network-monitor (?P<wg>\S+) enable$'
@@ -50,17 +96,47 @@ rules:
       - id: ppp.profile.myname
         match: '^authentication myname (?P<user>\S+)$'
         set: {username: "{{ user }}"}
+      # A profile of an LNS has a password for every caller (appendix A
+      # 3.21): the passwords are kept by the name, and a PPPoE row finds its
+      # own by "myname".
       - id: ppp.profile.password
         match: '^authentication password (?P<user>\S+) (?P<pw>\S+)$'
-        set: {password_of: "{{ user }}", password: "{{ pw }}"}
+        emit:
+          - table: x_ppp_user
+            key: {profile: "{{ prof }}", name: "{{ user }}"}
+            set: {password: "{{ pw }}"}
       - id: ppp.profile.accept
         match: '^authentication accept (?P<how>chap|pap|chap-pap)$'
         set: {auth: "{{ how | replace('-', '_') }}"}
       - id: ppp.profile.echo
         match: '^lcp echo-interval (?P<s>\d+)$'
         set: {keepalive: "{{ s }}"}
+      # ---- the side that asks: an LNS (joined in import/70_l2tp.yaml) ----
+      # With "callin" the line stays unknown.
+      - id: ppp.profile.request
+        match: '^authentication request (?P<how>chap|pap|chap-pap)$'
+        set: {request: "{{ how | unlex('ppp_auth') }}"}
+      # A range; the form with one address stays unknown.
+      - id: ppp.profile.pool
+        match: '^ipcp provide-ip-address range (?P<lo>\d+\.\d+\.\d+\.\d+) (?P<hi>\d+\.\d+\.\d+\.\d+)$'
+        set: {pool_start: "{{ lo }}", pool_end: "{{ hi }}"}
+      - id: ppp.profile.dns
+        match: '^ipcp provide-remote-dns (?P<list>\d+\.\d+\.\d+\.\d+(?: \d+\.\d+\.\d+\.\d+)?)$'
+        set: {dns: "{{ list }}"}
+      - id: ppp.profile.static
+        match: '^ipcp provide-static-ip-address (?P<user>\S+) (?P<addr>\d+\.\d+\.\d+\.\d+)$'
+        emit:
+          - table: x_ppp_user
+            key: {profile: "{{ prof }}", name: "{{ user }}"}
+            set: {address: "{{ addr }}"}
+      # What the vendor tells to write for an LNS as it is (FD 2.36):
+      # no column; the template writes the three lines for every LNS. In a
+      # profile of PPPoE they stay unknown.
+      - id: ppp.profile.lns
+        match: '^(?P<opt>lcp pfc|lcp acfc|ipcp ip-compression)$'
+        set: {"{{ opt | replace(' ', '_') | replace('-', '_') }}": "true"}
 
-  # ---- IPsec (IKEv1, on a tunnel interface) ----
+  # ---- IPsec: IKE version 1, on a tunnel interface ----
   # The options stand on one line, in the order of the command reference.
   - id: ike.proposal
     match: '^ike proposal (?P<prop>\S+)(?: encryption (?P<enc>aes-256|aes-192|aes|3des|des))?(?: hash (?P<hash>sha2-256|sha2-384|sha2-512|sha|md5))?(?: authentication pre-shared)?(?: group (?P<g>768-bit|1024-bit|1536-bit|2048-bit))?(?: lifetime (?P<s>\d+))?$'
@@ -71,15 +147,34 @@ rules:
       dh: "{{ (g | unlex('dh_group')) if g else '' }}"
       lifetime: "{{ s }}"
 
-  # One proposal; "key-type" and a list of proposals stay unknown.
+  # The peer: an address, "any" (its address is not known) or a name. The
+  # key is written as text or, with "key-type hex", in hexadecimal; the
+  # command reference shows "key-type" on both sides of the key. Up to four
+  # proposals (the second and the later ones become rows of
+  # ipsec_proposals). A key that the device has encrypted ("key-type secret
+  # 1") is kept as "secret <value>" (appendix A 3.26); "secret 0" is a key
+  # in plain text.
   - id: ike.policy
-    match: '^ike policy (?P<pol>\S+) peer (?P<peer>\d+\.\d+\.\d+\.\d+|any) key (?P<psk>\S+)(?: mode (?P<mode>main|aggressive))?(?: (?P<prop>[^\s,]+))?$'
+    match: '^ike policy (?P<pol>\S+) (?:peer (?P<peer>\d+\.\d+\.\d+\.\d+|any)|peer-fqdn-ipv4 (?P<host>[A-Za-z][\w.\-]*))(?: key-type (?P<kt1>char|hex|secret 0|secret 1))? key (?P<psk>\S+)(?: key-type (?P<kt2>char|hex|secret 0|secret 1))?(?: mode (?P<mode>main|aggressive))?(?: (?P<prop>[^\s,]+)(?:,(?P<more>[^\s,]+(?:,[^\s,]+){0,2}))?)?$'
+    when: "not (kt1 and kt2)"
     row: {table: x_ike_policy, key: {name: "{{ pol }}"}}
     set:
-      peer: "{{ peer }}"
-      psk: "{{ psk }}"
+      peer: "{{ peer or host }}"
+      psk: "{{ ('secret ' ~ psk) if (kt1 == 'secret 1' or kt2 == 'secret 1') else psk }}"
+      form: "{{ 'hex' if (kt1 == 'hex' or kt2 == 'hex') else '' }}"
       mode: "{{ mode }}"
       proposal: "{{ prop }}"
+      more: "{{ more }}"
+
+  # What the device calls itself, and what it expects of the peer, in the
+  # first phase.
+  - id: ike.id
+    match: '^ike (?P<side>local|remote)-id (?P<pol>\S+) (?P<kind>keyid|address|fqdn|user-fqdn) (?P<v>\S+)$'
+    when: "kind != 'address' or (v ~ '/32') is cidr"
+    emit:
+      - table: x_ike_id
+        key: {policy: "{{ pol }}"}
+        set: {"{{ side }}_id": "{{ 'email' if kind == 'user-fqdn' else kind }}:{{ v }}"}
 
   # Seconds, then how many times.
   - id: ike.keepalive
@@ -89,31 +184,156 @@ rules:
         key: {policy: "{{ pol }}"}
         set: {interval: "{{ s }}", retry: "{{ n }}"}
 
-  # For every policy; the forms with options stay unknown.
+  # For every policy, or for one; with the seconds between the packets that
+  # keep the way through NAT open, and with "force".
   - id: ike.nat_traversal
-    match: '^ike nat-traversal$'
+    match: '^ike nat-traversal(?: policy (?P<pol>\S+))?(?: keepalive (?P<s>\d+))?(?: (?P<force>force))?$'
     emit:
-      - table: x_ike
-        key: {}
-        set: {nat_traversal: "true"}
+      - table: x_ike_nat
+        key: {policy: "{{ pol if pol else '*' }}"}
+        set: {on: "true", keepalive: "{{ s }}", force: "{{ 'true' if force else '' }}"}
 
-  # The forms with "ah-..." and with a lifetime in bytes stay unknown.
+  # ESP encryption, ESP hash and AH hash, then the lifetime: seconds, or
+  # seconds and kilobytes.
   - id: ipsec.proposal
-    match: '^ipsec autokey-proposal (?P<prop>\S+)(?: (?P<enc>esp-aes-256|esp-aes-192|esp-aes|esp-3des|esp-des|esp-null))?(?: (?P<hash>esp-sha2-256|esp-sha|esp-md5))?(?: lifetime time (?P<s>\d+))?$'
+    match: '^ipsec autokey-proposal (?P<prop>\S+)(?: (?P<enc>esp-aes-256|esp-aes-192|esp-aes|esp-3des|esp-des|esp-null))?(?: (?P<hash>esp-sha2-256|esp-sha2-384|esp-sha2-512|esp-sha|esp-md5))?(?: (?P<ah>ah-sha2-256|ah-sha2-384|ah-sha2-512|ah-sha|ah-md5))?(?: lifetime (?:time (?P<s>\d+)|both (?P<s2>\d+) (?P<kb>\d+)))?$'
     row: {table: x_ipsec_proposal, key: {name: "{{ prop }}"}}
     set:
       encryption: "{{ (enc | unlex('esp_encryption')) if enc else '' }}"
       hash: "{{ (hash | unlex('esp_hash')) if hash else '' }}"
-      lifetime: "{{ s }}"
+      ah: "{{ (ah | unlex('ah_hash')) if ah else '' }}"
+      lifetime: "{{ s or s2 }}"
+      lifetime_kb: "{{ kb }}"
 
+  # Up to eight proposals (CRM p.13-24): the second and the later ones
+  # become rows of ipsec_proposals.
   - id: ipsec.map
-    match: '^ipsec autokey-map (?P<map>\S+) (?P<acl>\S+) peer (?P<peer>\d+\.\d+\.\d+\.\d+)(?: pfs (?P<pfs>off|768-bit|1024-bit|1536-bit|2048-bit))?(?: (?P<prop>\S+))?$'
+    match: '^ipsec autokey-map (?P<map>\S+) (?P<acl>\S+) (?:peer (?P<peer>\d+\.\d+\.\d+\.\d+)|peer-fqdn-ipv4 (?P<host>[A-Za-z][\w.\-]*))(?: pfs (?P<pfs>off|768-bit|1024-bit|1536-bit|2048-bit))?(?: (?P<prop>[^\s,]+)(?:,(?P<more>[^\s,]+(?:,[^\s,]+){0,6}))?)?$'
     row: {table: x_ipsec_map, key: {name: "{{ map }}"}}
     set:
       acl: "{{ acl }}"
-      peer: "{{ peer }}"
+      peer: "{{ peer or host }}"
       pfs: "{{ 'none' if pfs == 'off' else ((pfs | unlex('dh_group')) if pfs else '') }}"
       proposal: "{{ prop }}"
+      more: "{{ more }}"
+
+  # The map for a peer whose address is not known. "ike <policy>" names the
+  # IKE policy, and "ike-binding <policy>" names it and lets no peer of
+  # another policy in. The command reference writes the policy before the
+  # proposals, the examples of the vendor after them: both are read.
+  - id: ipsec.dynamic_map
+    match: '^ipsec dynamic-map (?P<map>\S+) (?P<acl>\S+)(?: pfs (?P<pfs>off|768-bit|1024-bit|1536-bit|2048-bit))?(?: (?P<how1>ike|ike-binding) (?P<ike1>\S+))?(?: (?P<prop>[^\s,]+)(?:,(?P<more>[^\s,]+(?:,[^\s,]+){0,6}))?)?(?: (?P<how2>ike|ike-binding) (?P<ike2>\S+))?$'
+    when: "prop not in ['ike', 'ike-binding', 'pfs', 'esp-level', 'ah-level'] and not (ike1 and ike2)"
+    row: {table: x_ipsec_map, key: {name: "{{ map }}"}}
+    set:
+      acl: "{{ acl }}"
+      peer: any
+      ike: "{{ ike1 or ike2 }}"
+      bind: "{{ 'true' if (how1 == 'ike-binding' or how2 == 'ike-binding') else '' }}"
+      pfs: "{{ 'none' if pfs == 'off' else ((pfs | unlex('dh_group')) if pfs else '') }}"
+      proposal: "{{ prop }}"
+      more: "{{ more }}"
+
+  # The identities of the second phase: what the map tells the peer that it
+  # protects, in place of the source and the destination of its access
+  # list (CRM p.13-29, p.13-33). An address (the identity of one host) or a
+  # network; IPv6 stays unknown, and so does a host written as a network
+  # ("/32": another kind of identity on the wire, which the row cannot tell
+  # from the host).
+  - id: ipsec.id
+    match: '^ipsec (?P<side>local|remote)-id (?P<map>\S+) (?P<v>\d+\.\d+\.\d+\.\d+(?:/\d+)?)$'
+    when: "not v is endingwith('/32')"
+    emit:
+      - table: x_ipsec_id
+        key: {map: "{{ map }}"}
+        set: {"{{ 'lid' if side == 'local' else 'rid' }}": "{{ v if '/' in v else v ~ '/32' }}"}
+
+  # ---- IPsec: IKE version 2 ----
+  # The keys, by the identity of who uses them: the device itself and each
+  # peer. A key that the device has encrypted ("key secret <value>") is kept
+  # as "secret <value>" (appendix A 3.26).
+  - id: ikev2.authentication
+    match: '^ikev2 authentication psk id (?P<kind>fqdn|keyid|ipv4|rfc822-addr) (?P<v>\S+) key (?P<form>char|hex|secret) (?P<psk>\S+)$'
+    emit:
+      - table: x_ikev2_auth
+        key: {id: "{{ kind | replace('ipv4', 'address') | replace('rfc822-addr', 'email') }}:{{ v }}"}
+        set: {psk: "{{ ('secret ' ~ psk) if form == 'secret' else psk }}", form: "{{ 'hex' if form == 'hex' else 'char' }}"}
+
+  # A profile holds what a tunnel does not say itself; the default profile
+  # holds what neither says. A line of a proposal has one value or several
+  # (CRM p.13-56: "複数アルゴリズムを指定可能"): the first one goes to the row
+  # of IPsec, the others to its "(more)" columns.
+  - id: ikev2.profile
+    match: '^ikev2 profile (?P<prof>\S+)$'
+    row: {table: x_ikev2_profile, key: {name: "{{ prof }}"}}
+    children:
+      - id: ikev2.p.self
+        match: '^local-authentication psk(?: id (?P<kind>fqdn|keyid|ipv4|rfc822-addr) (?P<v>\S+))?$'
+        set: {local_auth: psk, local_id: "{{ ((kind | replace('ipv4', 'address') | replace('rfc822-addr', 'email')) ~ ':' ~ v) if kind else '' }}"}
+      - id: ikev2.p.sa.enc
+        match: '^sa-proposal enc (?P<enc>3des-cbc|aes-cbc-128|aes-cbc-192|aes-cbc-256|aes-gcm-128-16|aes-gcm-256-16)(?P<more>(?: (?:3des-cbc|aes-cbc-128|aes-cbc-192|aes-cbc-256|aes-gcm-128-16|aes-gcm-256-16))*)$'
+        set: {ike_enc: "{{ enc | unlex('ikev2_encryption') }}", ike_enc_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_encryption') | join(' ')) if (more | trim) else '' }}"}
+      - id: ikev2.p.sa.integrity
+        match: '^sa-proposal integrity (?P<hash>md5|sha1|sha2-256|sha2-384|sha2-512)(?P<more>(?: (?:md5|sha1|sha2-256|sha2-384|sha2-512))*)$'
+        set: {ike_hash: "{{ hash | unlex('ikev2_hash') }}", ike_hash_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_hash') | join(' ')) if (more | trim) else '' }}"}
+      - id: ikev2.p.sa.prf
+        match: '^sa-proposal prf (?P<hash>md5|sha1|sha2-256|sha2-384|sha2-512)(?P<more>(?: (?:md5|sha1|sha2-256|sha2-384|sha2-512))*)$'
+        set: {ike_prf: "{{ hash | unlex('ikev2_hash') }}", ike_prf_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_hash') | join(' ')) if (more | trim) else '' }}"}
+      - id: ikev2.p.sa.dh
+        match: '^sa-proposal dh (?P<g>768-bit|1024-bit|1536-bit|2048-bit|3072-bit)(?P<more>(?: (?:768-bit|1024-bit|1536-bit|2048-bit|3072-bit))*)$'
+        set: {ike_dh: "{{ g | unlex('ikev2_dh') }}", ike_dh_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_dh') | join(' ')) if (more | trim) else '' }}"}
+      - id: ikev2.p.sa.lifetime
+        match: '^sa-lifetime (?P<s>\d+)$'
+        set: {ike_lifetime: "{{ s }}"}
+      - id: ikev2.p.child.enc
+        match: '^child-proposal enc (?P<enc>3des-cbc|aes-cbc-128|aes-cbc-192|aes-cbc-256|aes-gcm-128-16|aes-gcm-256-16|null)(?P<more>(?: (?:3des-cbc|aes-cbc-128|aes-cbc-192|aes-cbc-256|aes-gcm-128-16|aes-gcm-256-16|null))*)$'
+        set: {esp_enc: "{{ enc | unlex('ikev2_encryption') }}", esp_enc_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_encryption') | join(' ')) if (more | trim) else '' }}"}
+      - id: ikev2.p.child.integrity
+        match: '^child-proposal integrity (?P<hash>md5|sha1|sha2-256|sha2-384|sha2-512)(?P<more>(?: (?:md5|sha1|sha2-256|sha2-384|sha2-512))*)$'
+        set: {esp_hash: "{{ hash | unlex('ikev2_hash') }}", esp_hash_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_hash') | join(' ')) if (more | trim) else '' }}"}
+      # No ESP authentication at all (CRM p.13-56).
+      - id: ikev2.p.child.integrity.off
+        match: '^child-proposal integrity off$'
+        set: {esp_hash: none}
+      - id: ikev2.p.child.pfs
+        match: '^child-pfs (?P<g>off|768-bit|1024-bit|1536-bit|2048-bit|3072-bit)(?P<more>(?: (?:768-bit|1024-bit|1536-bit|2048-bit|3072-bit))*)$'
+        when: "g != 'off' or not (more | trim)"
+        set: {pfs: "{{ 'none' if g == 'off' else (g | unlex('ikev2_dh')) }}", pfs_more: "{{ (more | trim | split(' ') | map('unlex', 'ikev2_dh') | join(' ')) if (more | trim) else '' }}"}
+      - id: ikev2.p.child.lifetime
+        match: '^child-lifetime (?P<s>\d+)$'
+        set: {esp_lifetime: "{{ s }}"}
+      # Without the seconds the device asks every 10 seconds.
+      - id: ikev2.p.dpd
+        match: '^dpd(?: interval (?P<s>\d+)| (?P<off>off))?$'
+        set: {dpd: "{{ 'off' if off else (s if s else '10') }}"}
+      # How often and how long apart a message is sent again. "backoff"
+      # (longer each time) is what the device does by itself.
+      - id: ikev2.p.retransmit
+        match: '^retransmit count (?P<n>\d+) interval (?:(?P<s>\d+)|backoff)$'
+        set: {retry: "{{ n }}", retry_interval: "{{ s }}"}
+      - id: ikev2.p.nat
+        match: '^nat-traversal(?: (?P<f1>force))?(?: keepalive (?P<s>\d+))?(?: (?P<f2>force))?(?: (?P<off>off))?$'
+        when: "not (f1 and f2) and not (off and (f1 or f2 or s))"
+        set: {nat: "{{ 'off' if off else 'on' }}", nat_keepalive: "{{ s }}", nat_force: "{{ 'true' if (f1 or f2) else '' }}"}
+      - id: ikev2.p.mode
+        match: '^ipsec-mode (?P<mode>tunnel|transport)$'
+        set: {mode: "{{ mode }}"}
+      # The traffic the device proposes for the tunnel (CRM p.13-58, p.13-66):
+      # IPv4, with a network, TCP or UDP, and one port (the same number
+      # twice). A range of addresses or of ports, another protocol and IPv6
+      # stay unknown.
+      - id: ikev2.p.local_ts
+        match: '^local-ts ipv4(?: protocol (?P<proto>tcp|udp|6|17))?(?: address (?P<net>\d+\.\d+\.\d+\.\d+/\d+))?(?: port (?P<p1>\d+) (?P<p2>\d+))?$'
+        when: "(proto or net) and (not p1 or (p1 == p2 and proto))"
+        set: {lts: "{{ net if net else '0.0.0.0/0' }}", lts_proto: "{{ proto | replace('17', 'udp') | replace('6', 'tcp') }}", lts_port: "{{ p1 }}"}
+      - id: ikev2.p.remote_ts
+        match: '^remote-ts ipv4(?: protocol (?P<proto>tcp|udp|6|17))?(?: address (?P<net>\d+\.\d+\.\d+\.\d+/\d+))?(?: port (?P<p1>\d+) (?P<p2>\d+))?$'
+        when: "(proto or net) and (not p1 or (p1 == p2 and proto))"
+        set: {rts: "{{ net if net else '0.0.0.0/0' }}", rts_proto: "{{ proto | replace('17', 'udp') | replace('6', 'tcp') }}", rts_port: "{{ p1 }}"}
+  - id: ikev2.default_profile
+    match: '^ikev2 default-profile$'
+    row: {table: x_ikev2_profile, key: {name: "(default)"}}
+    children_from: ikev2.profile
 
   # ---- DHCP server ----
   - id: dhcp.enable
@@ -142,12 +362,15 @@ rules:
       - id: dhcp.profile.domain
         match: '^domain-name (?P<dom>\S+)$'
         set: {domain: "{{ dom }}"}
-      # Seconds. The dataset keeps days or hours: another length, and
-      # "infinite", stay unknown.
+      # Seconds (CRM 8-47): the dataset keeps the largest unit that has no
+      # remainder ("2d", "12h", "90m", "100s").
       - id: dhcp.profile.lease
         match: '^lease-time (?P<sec>\d+)$'
-        when: "sec | int > 0 and sec | int % 3600 == 0"
-        set: {lease: "{{ (sec | int // 86400) ~ 'd' if sec | int % 86400 == 0 else (sec | int // 3600) ~ 'h' }}"}
+        when: "sec | int > 0"
+        set: {lease: "{{ ((sec | int // 86400) ~ 'd') if sec | int % 86400 == 0 else (((sec | int // 3600) ~ 'h') if sec | int % 3600 == 0 else (((sec | int // 60) ~ 'm') if sec | int % 60 == 0 else (sec ~ 's'))) }}"}
+      - id: dhcp.profile.lease.infinite
+        match: '^lease-time infinite$'
+        set: {lease: infinite}
 
   - id: dhcp.excluded
     match: '^ip dhcp excluded-address (?P<start>\d+\.\d+\.\d+\.\d+) (?P<end>\d+\.\d+\.\d+\.\d+)$'
@@ -159,20 +382,92 @@ rules:
 derive:
   # ---- line monitoring ----
   # A watch group works only when "network-monitor <name> enable" is there.
+  # A group with one event is one row.
   - id: track.group
     for: x_wg
     as: w
     let:
       m: "lookup('x_monitor', name=w.name)"
-    when: "m.enabled and w.type"
+      evs: "rows('x_wg_event', wg=w.name)"
+      e: "evs | first"
+    when: "m.enabled and evs | length == 1 and e.n and not e.sub"
     row: {table: tracks, key: {id: "{{ w.name }}"}}
     set:
-      type: "{{ w.type }}"
-      target: "{{ w.target }}"
-      source_if: "{{ w.source_if }}"
+      type: "{{ e.type }}"
+      target: "{{ e.target }}"
+      vrf: "{{ e.vrf }}"
+      source_if: "{{ e.source_if }}"
+      source_ip: "{{ e.source_ip }}"
+      via_if: "{{ e.via_if }}"
+      via_next_hop: "{{ e.via_next_hop }}"
       interval: "{{ w.interval }}"
+      restore_interval: "{{ w.restore_interval }}"
       fail_count: "{{ w.fail_count }}"
       restore_count: "{{ w.restore_count }}"
+
+  # Several events (FD 2.28.3, "the events"): events with different numbers act when
+  # one of them happens (the group is well while all are well: all_up);
+  # events with one number and different "sub" numbers act when all of them
+  # happen (any_up). A mix of both stays unknown. Each event is a row
+  # "<group>-<n>" (n counts the events in the order of their numbers), and
+  # the row of the group holds them.
+  - id: track.group.member
+    for: x_wg
+    as: w
+    let:
+      m: "lookup('x_monitor', name=w.name)"
+      evs: "rows('x_wg_event', wg=w.name) | natural(attribute='ord')"
+      nums: "evs | map(attribute='n') | unique | list | length"
+      subs: "evs | selectattr('sub') | list | length"
+    each: {e: "evs"}
+    when: "m.enabled and evs | length > 1 and e.n and (e.sub or subs == 0) and ((nums == evs | length and subs == 0) or (nums == 1 and subs == evs | length))"
+    row: {table: tracks, key: {id: "{{ w.name }}-{{ e_n }}"}}
+    set:
+      type: "{{ e.type }}"
+      target: "{{ e.target }}"
+      vrf: "{{ e.vrf }}"
+      source_if: "{{ e.source_if }}"
+      source_ip: "{{ e.source_ip }}"
+      via_if: "{{ e.via_if }}"
+      via_next_hop: "{{ e.via_next_hop }}"
+      interval: "{{ w.interval }}"
+      restore_interval: "{{ w.restore_interval }}"
+      fail_count: "{{ w.fail_count }}"
+      restore_count: "{{ w.restore_count }}"
+  - id: track.group.list
+    for: x_wg
+    as: w
+    let:
+      m: "lookup('x_monitor', name=w.name)"
+      evs: "rows('x_wg_event', wg=w.name) | natural(attribute='ord')"
+      nums: "evs | map(attribute='n') | unique | list | length"
+      subs: "evs | selectattr('sub') | list | length"
+    each: {e: "evs"}
+    when: "m.enabled and evs | length > 1 and e.n and (e.sub or subs == 0) and ((nums == evs | length and subs == 0) or (nums == 1 and subs == evs | length))"
+    row: {table: tracks, key: {id: "{{ w.name }}"}}
+    set: {type: list, list_rule: "{{ 'all_up' if subs == 0 else 'any_up' }}"}
+    append: {members: "{{ w.name }}-{{ e_n }}"}
+
+  # What is done while the event lasts: an interface is shut, the priority
+  # of a virtual router goes down.
+  - id: track.shutdown
+    for: x_wg_shut
+    as: a
+    let:
+      w: "lookup('tracks', id=a.wg)"
+    when: "w.type and a.on"
+    row: {table: tracks, key: {id: "{{ a.wg }}"}}
+    append: {shutdown_ifs: "{{ a.if_name }}"}
+  - id: track.vrrp
+    for: x_wg_vrrp
+    as: a
+    let:
+      w: "lookup('tracks', id=a.wg)"
+      vrs: "rows('fhrp', group=a.vrid) | selectattr('protocol', 'equalto', 'vrrp') | list"
+    each: {f: "vrs"}
+    when: "w.type"
+    row: {table: fhrp, key: {if_name: "{{ f.if_name }}", group: "{{ f.group }}"}}
+    set: {track: "{{ a.wg }}", track_decrement: "{{ a.dec }}"}
 
   # "shutdown-route" names a static route: that route points to the watch.
   - id: track.route.next_hop
@@ -208,22 +503,32 @@ derive:
     as: b
     let:
       p: "lookup('x_ppp_profile', name=b.profile)"
-    when: "p.username and p.password_of == p.username and '.' in b.if_name and not b.if_name is endingwith('.0')"
+      u: "lookup('x_ppp_user', profile=b.profile, name=p.username)"
+      # "authentication request": this side asks the peer too. It has to
+      # name the method "authentication accept" names (the dataset has one).
+      # "auto-connect" and "encapsulation pppoe" say what the interface does
+      # anyway; "no auto-connect" is a line on demand.
+      known: "b.auto ~ b.encap"
+    when: "p.username and u.password and '.' in b.if_name and not b.if_name is endingwith('.0') and not b.server and (not p.request or not p.auth or p.request == p.auth) and not (b.auto and b.on_demand)"
     row: {table: pppoe, key: {name: "{{ b.profile }}"}}
     set:
       physical_if: "{{ (b.if_name | split('.'))[0] }}.0"
       logical_if: "{{ b.if_name }}"
       username: "{{ p.username }}"
-      password: "{{ p.password }}"
-      auth: "{{ p.auth }}"
+      password: "{{ u.password }}"
+      auth: "{{ p.auth if p.auth else p.request }}"
+      auth_both: "{{ 'true' if p.request else '' }}"
       service_name: "{{ b.service_name }}"
       keepalive: "{{ p.keepalive }}"
+      on_demand: "{{ b.on_demand }}"
+      idle_timeout: "{{ b.idle }}"
 
   # ---- IPsec ----
-  # The tunnel interface names a map; the map names its proposal and the
-  # address of the peer; the IKE policy is found by the same address. The
-  # list of the map must let everything through, as a tunnel interface of the
-  # dataset has no selector.
+  # IKE version 1. The tunnel interface names a map; the map names its
+  # proposal and the peer; the IKE policy is found by the same peer (a
+  # dynamic map names its policy, or takes the one for the peer "any"). The
+  # list of the map must let everything through, as a tunnel interface of
+  # the dataset has no selector.
   - id: ipsec.tunnel_if
     for: x_tunnel_policy
     as: t
@@ -231,12 +536,15 @@ derive:
       tun: "lookup('tunnels', if_name=t.if_name)"
       map: "lookup('x_ipsec_map', name=t.map)"
       sel: "first('acl_entries', acl=map.acl, sort='seq')"
-      ike: "lookup('x_ike_policy', peer=map.peer)"
+      anyn: "rows('x_ike_policy', peer='any') | length"
+      ike: "lookup('x_ike_policy', name=map.ike) if map.ike else (lookup('x_ike_policy', peer=map.peer) if (map.peer != 'any' or anyn == 1) else none)"
       ip: "lookup('x_ike_proposal', name=ike.proposal)"
       sp: "lookup('x_ipsec_proposal', name=map.proposal)"
       ka: "lookup('x_ike_keepalive', policy=ike.name)"
-      g: "lookup('x_ike')"
-    when: "tun.type == 'ipsec' and ike.psk and sel.action == 'permit' and sel.protocol == 'ip' and sel.src == 'any' and sel.dst == 'any'"
+      idr: "lookup('x_ike_id', policy=ike.name)"
+      nt: "lookup('x_ike_nat', policy=ike.name) or lookup('x_ike_nat', policy='*')"
+      em: "lookup('x_etherip_mode', if_name=t.if_name)"
+    when: "((tun.type == 'ipsec' and not t.transport) or (em.sec == 'v1' and t.transport and not tun.type)) and ike.psk and ike.peer == map.peer and sel.action == 'permit' and sel.protocol == 'ip' and sel.src == 'any' and sel.dst == 'any'"
     row: {table: ipsec_tunnels, key: {name: "{{ t.if_name }}"}}
     set:
       style: tunnel_if
@@ -244,51 +552,287 @@ derive:
       peer_address: "{{ map.peer }}"
       ike_version: 1
       ike_mode: "{{ ike.mode }}"
+      local_id: "{{ idr.local_id }}"
+      remote_id: "{{ idr.remote_id }}"
       psk: "{{ ike.psk }}"
+      psk_form: "{{ ike.form }}"
       ike_encryption: "{{ ip.encryption }}"
       ike_hash: "{{ ip.hash }}"
       ike_dh: "{{ ip.dh }}"
       ike_lifetime: "{{ ip.lifetime }}"
       esp_encryption: "{{ sp.encryption }}"
       esp_hash: "{{ sp.hash }}"
+      ah_hash: "{{ sp.ah }}"
+      ipsec_mode: "{{ 'transport' if em.sec else '' }}"
       pfs: "{{ map.pfs }}"
       ipsec_lifetime: "{{ sp.lifetime }}"
+      ipsec_lifetime_kb: "{{ sp.lifetime_kb }}"
       dpd_interval: "{{ ka.interval }}"
       dpd_retry: "{{ ka.retry }}"
-      nat_traversal: "{{ g.nat_traversal }}"
+      nat_traversal: "{{ nt.on }}"
+      nat_keepalive: "{{ nt.keepalive }}"
+      nat_force: "{{ nt.force }}"
+      ike_bind: "{{ map.bind }}"
 
-  # The line that lets everything into the tunnel leaves the access lists,
-  # and so does the list once it is empty: the template makes the list. A
-  # list that a filter, NAT or SNMP names as well stays whole.
-  - id: ipsec.acl_entry.taken
+  # IKE version 1, without a tunnel interface (the style "policy"): the map
+  # is put on an interface with "ipsec policy tunnel" or "ipsec policy
+  # transport", and its access list chooses the traffic (FD 2.35.2 (b),
+  # 2.35.6). The row takes the name of the map. Three shapes are read: the
+  # map in tunnel mode on one interface that is no tunnel, the same in
+  # transport mode, and a map in transport mode on the tunnel interfaces of
+  # an LNS (FD 2.36.4: the row has no interface of its own then, and the
+  # row of L2TP names it). Every line of the list must have a form in the
+  # selectors, and the list must belong to this map alone.
+  - id: ipsec.policy
+    for: x_ipsec_map
+    as: map
+    let:
+      tps: "rows('x_tunnel_policy', map=map.name)"
+      tp: "tps[0] if (tps | length) == 1 else none"
+      tun: "lookup('tunnels', if_name=tp.if_name)"
+      trs: "rows('x_l2tp_if', ipsec=map.name)"
+      tr: "trs[0] if (trs | length) == 1 else none"
+      lns: "rows('x_l2tp_if', ipsec=map.name, mode='lns')"
+      shape: "('tunnel' if ((tps | length) == 1 and (trs | length) == 0 and not tun.type and not (tp.if_name is startingwith('Tunnel'))) else '') ~ ('transport' if ((trs | length) == 1 and (tps | length) == 0 and not tr.mode and not (tr.if_name is startingwith('Tunnel'))) else '') ~ ('lns' if ((lns | length) > 0 and (lns | length) == (trs | length) and (tps | length) == 0) else '')"
+      ents: "rows('acl_entries', acl=map.acl)"
+      good: "ents | selectattr('action', 'eq', 'permit') | selectattr('protocol', 'in', ['ip', 'udp', 'tcp']) | rejectattr('dscp') | rejectattr('precedence') | list"
+      badp: "(ents | selectattr('src_port') | rejectattr('src_port', 'digits') | list | length) + (ents | selectattr('dst_port') | rejectattr('dst_port', 'digits') | list | length)"
+      anyn: "rows('x_ike_policy', peer='any') | length"
+      ike: "lookup('x_ike_policy', name=map.ike) if map.ike else (lookup('x_ike_policy', peer=map.peer) if (map.peer != 'any' or anyn == 1) else none)"
+      ip: "lookup('x_ike_proposal', name=ike.proposal)"
+      sp: "lookup('x_ipsec_proposal', name=map.proposal)"
+      ka: "lookup('x_ike_keepalive', policy=ike.name)"
+      idr: "lookup('x_ike_id', policy=ike.name)"
+      nt: "lookup('x_ike_nat', policy=ike.name) or lookup('x_ike_nat', policy='*')"
+    when: "shape in ['tunnel', 'transport', 'lns'] and ike.psk and ike.peer == map.peer and (ents | length) > 0 and (ents | length) == (good | length) and badp == 0 and (rows('x_ipsec_map', acl=map.acl) | length) == 1"
+    row: {table: ipsec_tunnels, key: {name: "{{ map.name }}"}}
+    set:
+      style: policy
+      local_if: "{{ tp.if_name if shape == 'tunnel' else (tr.if_name if shape == 'transport' else '') }}"
+      peer_address: "{{ map.peer }}"
+      ike_version: 1
+      ike_mode: "{{ ike.mode }}"
+      local_id: "{{ idr.local_id }}"
+      remote_id: "{{ idr.remote_id }}"
+      psk: "{{ ike.psk }}"
+      psk_form: "{{ ike.form }}"
+      ike_encryption: "{{ ip.encryption }}"
+      ike_hash: "{{ ip.hash }}"
+      ike_dh: "{{ ip.dh }}"
+      ike_lifetime: "{{ ip.lifetime }}"
+      esp_encryption: "{{ sp.encryption }}"
+      esp_hash: "{{ sp.hash }}"
+      ah_hash: "{{ sp.ah }}"
+      ipsec_mode: "{{ 'tunnel' if shape == 'tunnel' else 'transport' }}"
+      pfs: "{{ map.pfs }}"
+      ipsec_lifetime: "{{ sp.lifetime }}"
+      ipsec_lifetime_kb: "{{ sp.lifetime_kb }}"
+      dpd_interval: "{{ ka.interval }}"
+      dpd_retry: "{{ ka.retry }}"
+      nat_traversal: "{{ nt.on }}"
+      nat_keepalive: "{{ nt.keepalive }}"
+      nat_force: "{{ nt.force }}"
+      ike_bind: "{{ map.bind }}"
+
+  # The traffic of such a row: each line of its list. A list of one line
+  # that lets everything through makes no selector (a row without a
+  # selector is written with that line).
+  - id: ipsec.selector
     for: acl_entries
+    only_if: "rows('x_ipsec_map')"
     as: e
     let:
-      map: "lookup('x_ipsec_map', acl=e.acl)"
+      map: "first('x_ipsec_map', acl=e.acl)"
+      t: "lookup('ipsec_tunnels', name=map.name, style='policy')"
+    when: "t.name and not (e.protocol == 'ip' and e.src == 'any' and e.dst == 'any' and (rows('acl_entries', acl=e.acl) | length) == 1)"
+    row: {table: ipsec_selectors, key: {tunnel: "{{ t.name }}", seq: "{{ e.seq }}"}}
+    set:
+      local_net: "{{ '0.0.0.0/0' if e.src == 'any' else (e.src if '/' in e.src else e.src ~ '/32') }}"
+      remote_net: "{{ '0.0.0.0/0' if e.dst == 'any' else (e.dst if '/' in e.dst else e.dst ~ '/32') }}"
+      protocol: "{{ e.protocol }}"
+      local_port: "{{ e.src_port }}"
+      remote_port: "{{ e.dst_port }}"
+
+  # More candidates than one (ipsec_proposals, appendix A 3.20): the second
+  # and the later proposals that an IKE policy (four at most) or a map
+  # (eight at most) names, in their order (20, 30 and so on). The first one
+  # is on the row of ipsec_tunnels itself.
+  - id: ipsec.more.ike
+    for: x_ipsec_map
+    as: map
+    let:
+      tp: "first('x_tunnel_policy', map=map.name)"
+      own: "lookup('ipsec_tunnels', name=map.name, style='policy') or lookup('ipsec_tunnels', name=tp.if_name, style='tunnel_if')"
+      anyn: "rows('x_ike_policy', peer='any') | length"
+      ike: "lookup('x_ike_policy', name=map.ike) if map.ike else (lookup('x_ike_policy', peer=map.peer) if (map.peer != 'any' or anyn == 1) else none)"
+    each: {name: "ike.more | split(',')"}
+    when: "own.name and (own.ike_version | string) == '1' and name and lookup('x_ike_proposal', name=name).name"
+    row: {table: ipsec_proposals, key: {tunnel: "{{ own.name }}", phase: ike, seq: "{{ (name_n + 1) * 10 }}"}}
+    set:
+      encryption: "{{ lookup('x_ike_proposal', name=name).encryption }}"
+      hash: "{{ lookup('x_ike_proposal', name=name).hash }}"
+      dh: "{{ lookup('x_ike_proposal', name=name).dh }}"
+      lifetime: "{{ lookup('x_ike_proposal', name=name).lifetime }}"
+  - id: ipsec.more.ipsec
+    for: x_ipsec_map
+    as: map
+    let:
+      tp: "first('x_tunnel_policy', map=map.name)"
+      own: "lookup('ipsec_tunnels', name=map.name, style='policy') or lookup('ipsec_tunnels', name=tp.if_name, style='tunnel_if')"
+    each: {name: "map.more | split(',')"}
+    when: "own.name and (own.ike_version | string) == '1' and name and lookup('x_ipsec_proposal', name=name).name"
+    row: {table: ipsec_proposals, key: {tunnel: "{{ own.name }}", phase: ipsec, seq: "{{ (name_n + 1) * 10 }}"}}
+    set:
+      encryption: "{{ lookup('x_ipsec_proposal', name=name).encryption }}"
+      hash: "{{ lookup('x_ipsec_proposal', name=name).hash }}"
+      ah_hash: "{{ lookup('x_ipsec_proposal', name=name).ah }}"
+      lifetime: "{{ lookup('x_ipsec_proposal', name=name).lifetime }}"
+      lifetime_kb: "{{ lookup('x_ipsec_proposal', name=name).lifetime_kb }}"
+
+  # IKE version 2. The tunnel interface names its peer. What it does not say
+  # itself comes from the profile it is bound to, and then from the default
+  # profile. The keys are found by the identities: the own one (without one,
+  # the address the tunnel sends from) and that of the peer (without one,
+  # its address or its name).
+  - id: ipsec.tunnel_if.v2
+    for: x_ikev2_peer
+    as: t
+    let:
+      tun: "lookup('tunnels', if_name=t.if_name)"
+      i: "lookup('x_ikev2_if', if_name=t.if_name)"
+      p: "lookup('x_ikev2_profile', name=i.binding)"
+      d: "lookup('x_ikev2_profile', name='(default)')"
+      la: "i if i.local_auth else (p if p.local_auth else (d if d.local_auth else none))"
+      sif: "lookup('interfaces', name=tun.source)"
+      own: "tun.source if ((tun.source ~ '/32') is cidr) else ((sif.ipv4 | ip) if (sif.ipv4 is cidr) else '')"
+      lid: "la.local_id if la.local_id else (('address:' ~ own) if own else '')"
+      rid: "t.remote_id if t.remote_id else (('address:' ~ t.peer) if ((t.peer ~ '/32') is cidr) else (('fqdn:' ~ t.peer) if t.peer != 'any' else ''))"
+      lk: "lookup('x_ikev2_auth', id=lid)"
+      rk: "lookup('x_ikev2_auth', id=rid)"
+      dpd: "i.dpd or p.dpd or d.dpd"
+      nat: "i.nat or p.nat or d.nat"
+      em: "lookup('x_etherip_mode', if_name=t.if_name)"
+    when: "(tun.type == 'ipsec' or (em.sec == 'v2' and not tun.type)) and lk.psk and rk.psk and lk.form == rk.form and (not i.binding or p.name)"
+    row: {table: ipsec_tunnels, key: {name: "{{ t.if_name }}"}}
+    set:
+      style: tunnel_if
+      tunnel_if: "{{ t.if_name }}"
+      peer_address: "{{ t.peer }}"
+      ike_version: 2
+      local_id: "{{ la.local_id }}"
+      remote_id: "{{ t.remote_id }}"
+      psk: "{{ lk.psk }}"
+      psk_remote: "{{ rk.psk if rk.psk != lk.psk else '' }}"
+      psk_form: "{{ 'hex' if lk.form == 'hex' else '' }}"
+      ike_encryption: "{{ i.ike_enc or p.ike_enc or d.ike_enc }}"
+      ike_hash: "{{ i.ike_hash or p.ike_hash or d.ike_hash }}"
+      ike_dh: "{{ i.ike_dh or p.ike_dh or d.ike_dh }}"
+      ike_prf: "{{ i.ike_prf or p.ike_prf or d.ike_prf }}"
+      ike_lifetime: "{{ i.ike_lifetime or p.ike_lifetime or d.ike_lifetime }}"
+      esp_encryption: "{{ i.esp_enc or p.esp_enc or d.esp_enc }}"
+      esp_hash: "{{ i.esp_hash or p.esp_hash or d.esp_hash }}"
+      ipsec_mode: "{{ i.mode or p.mode or d.mode }}"
+      pfs: "{{ i.pfs or p.pfs or d.pfs }}"
+      ipsec_lifetime: "{{ i.esp_lifetime or p.esp_lifetime or d.esp_lifetime }}"
+      always_on: "{{ i.always_on }}"
+      dpd_interval: "{{ '' if dpd == 'off' else dpd }}"
+      dpd_retry: "{{ (i.retry or p.retry or d.retry) if (dpd and dpd != 'off') else '' }}"
+      dpd_retry_interval: "{{ (i.retry_interval if i.retry else (p.retry_interval if p.retry else d.retry_interval)) if (dpd and dpd != 'off') else '' }}"
+      nat_traversal: "{{ 'true' if nat == 'on' else ('false' if nat == 'off' else '') }}"
+      nat_keepalive: "{{ i.nat_keepalive if i.nat else (p.nat_keepalive if p.nat else d.nat_keepalive) }}"
+      nat_force: "{{ i.nat_force if i.nat else (p.nat_force if p.nat else d.nat_force) }}"
+    append:
+      ike_encryption_more: "{{ i.ike_enc_more if i.ike_enc else (p.ike_enc_more if p.ike_enc else d.ike_enc_more) }}"
+      ike_hash_more: "{{ i.ike_hash_more if i.ike_hash else (p.ike_hash_more if p.ike_hash else d.ike_hash_more) }}"
+      ike_dh_more: "{{ i.ike_dh_more if i.ike_dh else (p.ike_dh_more if p.ike_dh else d.ike_dh_more) }}"
+      ike_prf_more: "{{ i.ike_prf_more if i.ike_prf else (p.ike_prf_more if p.ike_prf else d.ike_prf_more) }}"
+      esp_encryption_more: "{{ i.esp_enc_more if i.esp_enc else (p.esp_enc_more if p.esp_enc else d.esp_enc_more) }}"
+      esp_hash_more: "{{ i.esp_hash_more if i.esp_hash else (p.esp_hash_more if p.esp_hash else d.esp_hash_more) }}"
+      pfs_more: "{{ i.pfs_more if i.pfs else (p.pfs_more if p.pfs else d.pfs_more) }}"
+
+  # An EtherIP tunnel that IPsec protects: the row of the tunnel, once the
+  # row of IPsec is there.
+  - id: ipsec.etherip
+    for: x_etherip_mode
+    as: em
+    let:
+      own: "lookup('ipsec_tunnels', name=em.if_name, style='tunnel_if')"
+    when: "own.name and ((em.sec == 'v1') == ((own.ike_version | string) == '1'))"
+    row: {table: tunnels, key: {if_name: "{{ em.if_name }}"}}
+    set: {type: etherip}
+
+  # A tunnel interface whose map tells the peer what it protects ("ipsec
+  # local-id", "ipsec remote-id"), or whose IKEv2 settings propose the
+  # traffic ("local-ts", "remote-ts"): one selector of the row. A side that
+  # is not written is everything.
+  - id: ipsec.tunnel_if.id
+    for: x_ipsec_id
+    as: sid
+    let:
+      tp: "lookup('x_tunnel_policy', map=sid.map)"
+      t: "lookup('ipsec_tunnels', name=tp.if_name, style='tunnel_if')"
+    when: "t.name and (t.ike_version | string) == '1'"
+    row: {table: ipsec_selectors, key: {tunnel: "{{ t.name }}", seq: "10"}}
+    set:
+      local_net: "{{ sid.lid if sid.lid else '0.0.0.0/0' }}"
+      remote_net: "{{ sid.rid if sid.rid else '0.0.0.0/0' }}"
+      protocol: ip
+  - id: ipsec.tunnel_if.ts
+    for: x_ikev2_peer
+    as: t
+    let:
+      i: "lookup('x_ikev2_if', if_name=t.if_name)"
+      p: "lookup('x_ikev2_profile', name=i.binding)"
+      d: "lookup('x_ikev2_profile', name='(default)')"
+      l: "i if i.lts else (p if p.lts else (d if d.lts else none))"
+      r: "i if i.rts else (p if p.rts else (d if d.rts else none))"
+      own: "lookup('ipsec_tunnels', name=t.if_name, style='tunnel_if')"
+    when: "own.name and (own.ike_version | string) == '2' and (l.lts or r.rts) and (not (l.lts and r.rts) or l.lts_proto == r.rts_proto)"
+    row: {table: ipsec_selectors, key: {tunnel: "{{ t.if_name }}", seq: "10"}}
+    set:
+      local_net: "{{ l.lts if l.lts else '0.0.0.0/0' }}"
+      remote_net: "{{ r.rts if r.rts else '0.0.0.0/0' }}"
+      protocol: "{{ (l.lts_proto or r.rts_proto) if (l.lts_proto or r.rts_proto) else 'ip' }}"
+      local_port: "{{ l.lts_port }}"
+      remote_port: "{{ r.rts_port }}"
+
+  # The line that lets everything into the tunnel leaves the access lists,
+  # and so does every line of the list of a row of the style "policy" (it
+  # became a selector, or is the line that lets everything through), and the
+  # list once it is empty: the template makes the list. A list that a
+  # filter, NAT or SNMP names as well stays whole.
+  - id: ipsec.acl_entry.taken
+    for: acl_entries
+    only_if: "rows('x_ipsec_map')"
+    as: e
+    let:
+      map: "first('x_ipsec_map', acl=e.acl)"
       tp: "lookup('x_tunnel_policy', map=map.name)"
-      t: "lookup('ipsec_tunnels', name=tp.if_name)"
+      t: "lookup('ipsec_tunnels', name=tp.if_name, style='tunnel_if')"
+      pol: "lookup('ipsec_tunnels', name=map.name, style='policy')"
       top: "first('acl_entries', acl=e.acl, sort='seq')"
       u1: "first('interfaces', acl_in=e.acl)"
       u2: "first('interfaces', acl_out=e.acl)"
       u3: "first('nat_rules', match_acl=e.acl)"
       u4: "first('remote_access', acl=e.acl)"
       u5: "first('snmp_communities', acl=e.acl)"
-    when: "t.style == 'tunnel_if' and top.seq == e.seq and not (u1.name or u2.name or u3.name or u4.acl or u5.acl)"
+    when: "((t.name and top.seq == e.seq) or pol.name) and not (u1.name or u2.name or u3.name or u4.acl or u5.acl)"
     remove: true
   - id: ipsec.acl.taken
     for: acls
     as: a
     let:
-      map: "lookup('x_ipsec_map', acl=a.name)"
+      map: "first('x_ipsec_map', acl=a.name)"
       tp: "lookup('x_tunnel_policy', map=map.name)"
-      t: "lookup('ipsec_tunnels', name=tp.if_name)"
+      t: "lookup('ipsec_tunnels', name=tp.if_name, style='tunnel_if')"
+      pol: "lookup('ipsec_tunnels', name=map.name, style='policy')"
       rest: "first('acl_entries', acl=a.name)"
       u1: "first('interfaces', acl_in=a.name)"
       u2: "first('interfaces', acl_out=a.name)"
       u3: "first('nat_rules', match_acl=a.name)"
       u4: "first('remote_access', acl=a.name)"
       u5: "first('snmp_communities', acl=a.name)"
-    when: "t.style == 'tunnel_if' and not rest.seq and not (u1.name or u2.name or u3.name or u4.acl or u5.acl)"
+    when: "(t.name or pol.name) and not rest.seq and not (u1.name or u2.name or u3.name or u4.acl or u5.acl)"
     remove: true
 
   # ---- DHCP server ----

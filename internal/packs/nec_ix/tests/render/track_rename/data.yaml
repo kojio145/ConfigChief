@@ -1,0 +1,22 @@
+# The members of a list of watches have names of their own (as another
+# vendor numbers them): the pack writes them as the events of the group of
+# the list, under the names the import gives them (G-614). A member that a
+# route names keeps its own group too. Made-up values.
+tables:
+  devices:
+    - hostname: ix-n05
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.45/30}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 192.0.2.129/25}
+  tracks:
+    - {id: "1", type: icmp, target: 198.51.100.1, source_if: GigaEthernet0.0, interval: 10, fail_count: 3, restore_count: 2}
+    - {id: "2", type: icmp, target: 198.51.100.2, interval: 10, fail_count: 3, restore_count: 2}
+    - {id: "3", type: interface, target: GigaEthernet1.0, interval: 10, fail_count: 3, restore_count: 2}
+    - {id: "10", type: list, list_rule: all_up, members: ["1", "2"]}
+    - {id: "20", type: list, list_rule: any_up, members: ["2", "3"]}
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: 203.0.113.46, track: "10"}
+    - {prefix: 198.51.100.64/26, next_hop: 203.0.113.46, track: "1"}
+    - {prefix: 198.51.100.128/26, next_hop: 203.0.113.46, track: "20"}
+findings: [G-614]

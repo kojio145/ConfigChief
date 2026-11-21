@@ -1,0 +1,8 @@
+# The next hop of an IPv6 route as a condition (made-up values).
+tables:
+  devices:
+    - {hostname: rt-v06, vendor: cisco_ios}
+  ipv6_prefix_lists:
+    - {name: PL6-SAMPLE-NH, seq: 5, action: permit, prefix: "2001:db8:0:1::/64", le: 128}
+  route_policies:
+    - {name: RM6-SAMPLE-NH, seq: 10, action: permit, match_ipv6_next_hop_prefix_list: PL6-SAMPLE-NH}

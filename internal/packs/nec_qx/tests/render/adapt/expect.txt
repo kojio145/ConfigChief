@@ -1,0 +1,100 @@
+#
+ sysname sw-q03
+#
+local-user admin class manage
+ password simple Example-Secret-1
+ service-type terminal ssh telnet
+ authorization-attribute user-role network-admin
+#
+local-user monitor class manage
+ password simple Example-Secret-2
+ service-type terminal ssh telnet
+ authorization-attribute user-role level-1
+#
+ stp global enable
+ stp mode pvst
+ stp bpdu-protection
+#
+vlan 10
+ name sample-office
+#
+vlan 20
+ name sample-voice
+#
+acl advanced name sample-in
+ rule 20 permit ip source 192.0.2.0 0.0.0.127
+ rule 20 comment sample office in
+ rule 25 deny ip
+#
+acl basic 2010
+ rule 10 permit source 192.0.2.0 0.0.0.127
+#
+acl advanced 3010
+ description sample out
+ rule 10 permit tcp destination 192.0.2.0 0.0.0.127 destination-port eq 443 established
+ rule 15 deny ip
+#
+ ip community-list basic CL-sample-policy-10 permit 64496:100 no-export
+#
+route-policy sample-policy permit node 10
+ if-match community name CL-sample-policy-10
+ apply local-preference 200
+#
+nqa entry track 1
+ type icmp-echo
+  destination ip 192.0.2.2
+  frequency 5000
+  reaction 1 checked-element probe-fail threshold-type consecutive 1 action-type trigger-only
+#
+ nqa schedule track 1 start-time now lifetime forever
+ track 1 nqa entry track 1 reaction 1
+#
+interface Bridge-Aggregation1
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20
+ link-aggregation mode dynamic
+#
+interface GigabitEthernet1/0/1
+ port link-type access
+ port access vlan 10
+ stp edged-port
+ broadcast-suppression 5
+#
+interface GigabitEthernet1/0/2
+ port link-type access
+ port access vlan 20
+#
+interface GigabitEthernet1/0/3
+ port link-type trunk
+ port trunk permit vlan all
+ stp edged-port
+#
+interface GigabitEthernet1/0/23
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20
+ port link-aggregation group 1
+#
+interface GigabitEthernet1/0/24
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20
+ port link-aggregation group 1
+#
+interface Vlan-interface10
+ ip address 192.0.2.1 255.255.255.128
+ packet-filter name sample-in inbound
+ packet-filter 3010 outbound
+#
+ ip route-static 198.51.100.0 24 192.0.2.2 track 1
+ ip route-static 0.0.0.0 0 192.0.2.126
+#
+ ssh server enable
+ ssh server acl 2010
+#
+line vty 0 63
+ authentication-mode scheme
+ protocol inbound ssh
+#
+return

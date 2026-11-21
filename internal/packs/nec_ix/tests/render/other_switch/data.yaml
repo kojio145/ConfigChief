@@ -1,0 +1,10 @@
+# What a switch of another vendor keeps and this device has no line for
+# (made-up values): left out, and told (G-614).
+tables:
+  devices:
+    - {hostname: ix-a05, vendor: nec_ix}
+  users:
+    - {name: admin, privilege: admin, secret: Example-Secret-1, secret_form: plain, services: [ssh, terminal]}
+  l2_settings:
+    - {stp_enabled: true, stp_priority: 4096}
+findings: [G-614]

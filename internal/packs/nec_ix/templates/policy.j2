@@ -1,12 +1,14 @@
-{# Access lists and prefix lists. Syntax: cmdref 4.9 (CRM p.24-3, p.23-14).
+{# Access lists and prefix lists. Syntax: CRM 24-3 to 24-8 and 23-14.
    A list has no line of its own: every entry is one line with "src" and
    "dest", and the entries count in the order they are written. The device
-   has one kind of list, no remark, and numbers the entries only in its
-   "sequence-mode", which is not written here: the entries have to be
-   numbered 10, 20, 30 ... (README). Written is what the import reads back:
-   ip, tcp, udp and icmp, one port with eq / lt / gt / neq. A list without
-   an entry writes no line (its entries may stand in an extra
-   configuration). #}
+   has one kind of list and no remark. It numbers the entries only in its
+   "sequence mode": a list with a step (acls.seq_step) is written with that
+   line and with the numbers; a list without one has to be numbered 10, 20,
+   30 ... (adapt.yaml gives a list with other numbers the step 10). Written
+   is what the import reads back. The device has no "log" and no time range
+   in a list. A list without an entry writes no line (its entries may stand
+   in an extra configuration). #}
+{% set icmp_names = ['administratively-prohibited', 'dod-host-prohibited', 'dod-net-prohibited', 'echo-reply', 'echo', 'general-parameter-problem', 'host-isolated', 'host-precedence-unreachable', 'host-redirect', 'host-tos-redirect', 'host-tos-unreachable', 'host-unknown', 'host-unreachable', 'information-reply', 'information-request', 'mask-reply', 'mask-request', 'net-redirect', 'net-tos-redirect', 'net-tos-unreachable', 'net-unreachable', 'network-unknown', 'option-missing', 'packet-too-big', 'parameter-problem', 'port-unreachable', 'precedence-unreachable', 'protocol-unreachable', 'reassembly-timeout', 'redirect', 'router-advertisement', 'router-solicitation', 'source-quench', 'source-route-failed', 'time-exceeded', 'timestamp-reply', 'timestamp-request', 'ttl-exceeded', 'unreachable'] %}
 {% set wrote = namespace(v=false) %}
 {% for a in t.acls %}
 {% if a.name | length > 15 %}
@@ -15,26 +17,65 @@
 {% if a.type and a.type != 'extended' %}
 {{ fail('ACL ' ~ a.name ~ ' の種類「' ~ a.type ~ '」は書けません（NEC IX の ACL は 1 種類です。種類を extended にし、各行にプロトコル ip と宛先 any を書いてください）') }}
 {% endif %}
-{% set n = namespace(i=0) %}
+{% set n = namespace(i=0, mode=false) %}
 {% for x in t.acl_entries %}
 {% if x.acl == a.name %}
 {% set n.i = n.i + 1 %}
 {% set what = 'ACL ' ~ a.name ~ ' の ' ~ x.seq ~ ' 番' %}
-{% if x.seq != n.i * 10 %}
-{{ fail(what ~ ': 順番が 10 刻みではありません（NEC IX では番号を書かず、上から順に書きます。順番を 10、20、30… に振り直してください。評価の順は変わりません）') }}
+{% if a.seq_step != '' and not n.mode %}
+{% set n.mode = true %}
+ip access-list {{ a.name }} sequence-mode {{ a.seq_step }}
+{% endif %}
+{% if a.seq_step == '' and x.seq != n.i * 10 %}
+{{ fail(what ~ ': 順番が 10 刻みではありません（NEC IX は、「行の番号の刻み」が空のリストには番号を書かず、上から順に書きます。順番を 10、20、30… に振り直すか、シート「ACL」の「行の番号の刻み」に 10 を書いてください）') }}
 {% endif %}
 {% if x.action == 'remark' %}
-{{ fail(what ~ ': 注記（remark）の行は書けません（NEC IX の ACL に注記の行があるかを確かめていません。行を消してください）') }}
+{{ fail(what ~ ': 注記（remark）の行は書けません（NEC IX の ACL に注記の行はありません。行を消してください）') }}
 {% else %}
 {% set proto = x.protocol | required(what ~ 'のプロトコル') %}
-{% if proto not in ['ip', 'tcp', 'udp', 'icmp'] %}
-{{ fail(what ~ 'のプロトコル「' ~ proto ~ '」は書けません（ip tcp udp icmp のどれかで書きます。ほかは追加コンフィグに書いてください）') }}
+{% if proto == 'gre' %}
+{% set proto = '47' %}
+{% elif proto == 'esp' %}
+{% set proto = '50' %}
 {% endif %}
-{% if x.flags %}
-{{ fail(what ~ 'の付加条件（' ~ (x.flags | join(' ')) ~ '）は書けません（追加コンフィグに書いてください）') }}
+{% if not (proto in ['ip', 'tcp', 'udp', 'icmp'] or proto is digits) %}
+{{ fail(what ~ 'のプロトコル「' ~ proto ~ '」は書けません（ip tcp udp icmp esp gre か、プロトコルの番号で書きます）') }}
 {% endif %}
-{% if x.icmp_type %}
-{{ fail(what ~ 'の ICMP の種類は書けません（追加コンフィグに書いてください）') }}
+{# The TCP flag stands before "src": one of them, or "established". #}
+{% set fl = namespace(tcp='', n=0, frag='') %}
+{% for f in x.flags %}
+{% if f in ['established', 'ack', 'fin', 'psh', 'rst', 'syn', 'urg'] %}
+{% if proto != 'tcp' %}
+{{ fail(what ~ 'の ' ~ f ~ ' は、プロトコルが tcp の行にだけ書けます') }}
+{% endif %}
+{% set fl.tcp = ' ' ~ f %}
+{% set fl.n = fl.n + 1 %}
+{% elif f == 'fragments' %}
+{% set fl.frag = ' fragments' %}
+{% else %}
+{{ fail(what ~ 'の付加条件「' ~ f ~ '」は書けません（NEC IX の ACL に、行ごとの記録（log）はありません。付加条件から外してください）') }}
+{% endif %}
+{% endfor %}
+{% if fl.n > 1 %}
+{{ fail(what ~ ': TCP のフラグ（established ack fin psh rst syn urg）は、NEC IX では 1 行に 1 つだけ書けます（行を分けてください）') }}
+{% endif %}
+{% if x.time_range %}
+{{ fail(what ~ 'の「効かせる時間帯」は書けません（NEC IX の ACL に時間帯はありません。列を空にしてください）') }}
+{% endif %}
+{# The ICMP type: a number (with its code), or the name of a message. #}
+{% set ic = '' %}
+{% if x.icmp_type or x.icmp_code != '' %}
+{% if proto != 'icmp' %}
+{{ fail(what ~ 'の ICMP の種類・コードは、プロトコルが icmp の行にだけ書けます') }}
+{% elif x.icmp_type is digits %}
+{% set ic = ' type ' ~ x.icmp_type ~ (' code ' ~ x.icmp_code if x.icmp_code != '' else '') %}
+{% elif x.icmp_code != '' %}
+{{ fail(what ~ 'の ICMP のコードは、ICMP の種類を番号で書いた行にだけ書けます') }}
+{% elif x.icmp_type in icmp_names %}
+{% set ic = ' ' ~ x.icmp_type %}
+{% else %}
+{{ fail(what ~ 'の ICMP の種類「' ~ x.icmp_type ~ '」は、NEC IX にない語です（番号で書いてください）') }}
+{% endif %}
 {% endif %}
 {# An address: any, or an address with its length (a host has /32). #}
 {% set ad = namespace(s='', d='') %}
@@ -54,7 +95,7 @@
 {% set ad.d = w %}
 {% endif %}
 {% endfor %}
-{# A port: 80, >1023, <1024, !80. A range is not read back by the import. #}
+{# A port: 80, 1000-2000, >1023, <1024, !80. #}
 {% set pt = namespace(s='', d='') %}
 {% if proto in ['tcp', 'udp'] %}
 {% for side in ['s', 'd'] %}
@@ -62,18 +103,22 @@
 {% set w = '' %}
 {% if p %}
 {% set op = 'eq' %}
-{% if '>' in p %}
+{% if '-' in p %}
+{% set op = 'range' %}
+{% elif '>' in p %}
 {% set op = 'gt' %}
 {% elif '<' in p %}
 {% set op = 'lt' %}
 {% elif '!' in p %}
 {% set op = 'neq' %}
 {% endif %}
-{% set num = p | replace('>', '') | replace('<', '') | replace('!', '') %}
-{% if not (num is digits) %}
-{{ fail(what ~ 'のポート「' ~ p ~ '」は書けません（80、>1023、<1024、!80 の形で、番号で書きます。範囲は追加コンフィグに書いてください）') }}
+{% set nums = p | replace('>', '') | replace('<', '') | replace('!', '') | split('-') %}
+{% for one in nums %}
+{% if not (one is digits) %}
+{{ fail(what ~ 'のポート「' ~ p ~ '」は書けません（80、1000-2000、>1023、<1024、!80 の形で、番号で書きます）') }}
 {% endif %}
-{% set w = (' sport ' if side == 's' else ' dport ') ~ op ~ ' ' ~ num %}
+{% endfor %}
+{% set w = (' sport ' if side == 's' else ' dport ') ~ op ~ ' ' ~ (nums | join(' ')) %}
 {% endif %}
 {% if side == 's' %}
 {% set pt.s = w %}
@@ -81,9 +126,11 @@
 {% set pt.d = w %}
 {% endif %}
 {% endfor %}
+{% elif x.src_port or x.dst_port %}
+{{ fail(what ~ 'のポートは、プロトコルが tcp・udp の行にだけ書けます') }}
 {% endif %}
 {% set wrote.v = true %}
-ip access-list {{ a.name }} {{ x.action }} {{ proto }} src {{ ad.s | required(what ~ 'の送信元') }}{{ pt.s }} dest {{ ad.d | required(what ~ 'の宛先') }}{{ pt.d }}{{ ' precedence ' ~ x.precedence if x.precedence != '' else '' }}{{ ' dscp ' ~ x.dscp if x.dscp != '' else '' }}
+ip access-list {{ a.name }}{{ ' ' ~ x.seq if a.seq_step != '' else '' }} {{ x.action }} {{ proto }}{{ fl.tcp }}{{ ic }} src {{ ad.s | required(what ~ 'の送信元') }}{{ pt.s }} dest {{ ad.d | required(what ~ 'の宛先') }}{{ pt.d }}{{ ' tos ' ~ x.tos if x.tos != '' else '' }}{{ ' precedence ' ~ x.precedence if x.precedence != '' else '' }}{{ ' dscp ' ~ x.dscp if x.dscp != '' else '' }}{{ fl.frag }}
 {% endif %}
 {% endif %}
 {% endfor %}

@@ -10,3 +10,9 @@ columns:
   - {name: keepalive, title: {ja: Keepalive（秒）, en: Keepalive (s)}, type: int}
   - {name: holdtime, title: {ja: Hold（秒）, en: Hold time (s)}, type: int}
   - {name: log_neighbor_changes, title: {ja: ネイバーの変化を記録, en: Log neighbor changes}, type: bool}
+  - {name: ipv6_networks, title: {ja: IPv6 の広告経路, en: IPv6 networks}, type: "list<net6>"}
+  - {name: ipv6_redistribute, title: {ja: IPv6 の再配布, en: IPv6 redistribute}, type: "list<enum>", values: [connected, static, ospf]}
+  - {name: distance_ebgp, title: {ja: 優先度（eBGP の経路）, en: Distance (eBGP)}, type: int, min: 1, max: 255, note: {ja: "空 = 機器の既定（20）。Cisco は 3 つを組で書く", en: "Empty = the default of the device (20). Cisco takes the three together"}}
+  - {name: distance_ibgp, title: {ja: 優先度（iBGP の経路）, en: Distance (iBGP)}, type: int, min: 1, max: 255, note: {ja: "空 = 機器の既定（200）", en: "Empty = the default of the device (200)"}}
+  - {name: distance_local, title: {ja: 優先度（自分で作った経路）, en: Distance (local)}, type: int, min: 1, max: 255, note: {ja: "空 = 機器の既定（200）。Cisco だけ", en: "Empty = the default of the device (200). Cisco only"}}
+  - {name: default_local_preference, title: {ja: ローカルプリファレンスの既定値, en: Default local preference}, type: int, min: 0, note: {ja: "空 = 機器の既定（100）", en: "Empty = the default of the device (100)"}}

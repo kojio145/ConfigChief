@@ -20,7 +20,7 @@ import (
 
 // Pack is one vendor pack, read and checked. M0 form: the parts that the
 // import needs (pack.yaml, ignore.yaml, import/*.yaml, lexicon.yaml,
-// defaults.yaml), the templates and errors.yaml. models.yaml joins later.
+// defaults.yaml), the templates, errors.yaml and models.yaml (models.go).
 type Pack struct {
 	ID       string
 	Title    map[string]string
@@ -54,6 +54,9 @@ type Pack struct {
 	// Words are the runs of letters of the files of the pack and of
 	// words.txt, in lower case (words.go).
 	Words map[string]bool
+
+	// Models is models.yaml (appendix B 6); empty: the pack knows no model.
+	Models []*Model
 
 	Warnings []string // what the checks of appendix B 8 found but allow
 }
@@ -122,10 +125,28 @@ type Derive struct {
 	// Remove takes the row of For out of the design data where When holds:
 	// what it said stands in another table by then. Row is nil.
 	Remove bool
+	// Each runs the step once for every item of a list: the name of the item
+	// and the expression that gives the list (appendix B 3.6). The place of
+	// the item in the list, from 1, is under the name with "_n" behind it.
+	EachAs, Each string
 	// Clear and Note are for the steps of adapt.yaml (appendix B 5.7): the
 	// columns of the row of For to empty, and what to tell the user.
 	Clear []string
 	Note  string
+	// Replace is for the steps of adapt.yaml too: the list columns of the
+	// row of Row whose items are put anew (what the column held is dropped
+	// first; an empty value leaves the column empty).
+	Replace []model.KV
+	// OnlyIf is asked once for a device, before the step goes over the rows
+	// of For: where it does not hold, the step is left out for the device
+	// (appendix B 3.6). It saves the work of a step that many rows would go
+	// through for nothing; it never changes what the step does where it
+	// runs. "" = the step always runs.
+	OnlyIf string
+	// Drop is for the steps of adapt.yaml too: a row that leaves the design
+	// data at the end of the step (nothing happens if it is not there). The
+	// step has no Row of its own; with Each it runs once for every item.
+	Drop *RowSpec
 }
 
 // Word is one entry of the lexicon: the neutral word and the vendor's.
@@ -201,9 +222,13 @@ type deriveY struct {
 	Set    kvs    `yaml:"set"`
 	Append kvs    `yaml:"append"`
 	Remove bool   `yaml:"remove"`
+	Each   kvs    `yaml:"each"`
+	OnlyIf string `yaml:"only_if"`
 	// Only in adapt.yaml.
-	Clear []string `yaml:"clear"`
-	Note  string   `yaml:"note"`
+	Clear   []string `yaml:"clear"`
+	Note    string   `yaml:"note"`
+	Replace kvs      `yaml:"replace"`
+	Drop    *rowY    `yaml:"drop"`
 }
 
 type adaptY struct {
@@ -222,6 +247,7 @@ type packY struct {
 	Schema          int               `yaml:"schema"`
 	Syntax          string            `yaml:"syntax"`
 	CommentPrefixes []string          `yaml:"comment_prefixes"`
+	CommentCloses   bool              `yaml:"comment_closes"`
 	Output          struct {
 		Encoding string `yaml:"encoding"`
 		Newline  string `yaml:"newline"`
@@ -319,6 +345,7 @@ func Load(fsys fs.FS) (*Pack, error) {
 		l.errf("pack.yaml: syntax「%s」には対応していません", p.Syntax)
 	}
 	p.Options.CommentPrefixes = py.CommentPrefixes
+	p.Options.CommentCloses = py.CommentCloses
 	if py.EndMarker != "" {
 		p.EndMark = l.re("pack.yaml end_marker", py.EndMarker)
 	}
@@ -458,6 +485,7 @@ func Load(fsys fs.FS) (*Pack, error) {
 	l.lexicon()
 	l.defaults()
 	l.messages()
+	l.models()
 	p.Output = Output{py.Output.Encoding, py.Output.Newline, py.Output.Indent}
 	switch p.Output.Newline {
 	case "", "lf", "crlf":
@@ -598,12 +626,23 @@ func (l *loader) table(name string) {
 // adapt reads one step of adapt.yaml: a derive over design data that also
 // tells what it changed.
 func (l *loader) adapt(file string, y *deriveY) {
+	if y.OnlyIf != "" {
+		n := len(l.p.Adapts)
+		defer func() {
+			for _, d := range l.p.Adapts[n:] {
+				d.OnlyIf = y.OnlyIf
+			}
+		}()
+	}
 	where := file + " " + y.ID
 	if y.Note == "" {
 		l.errf("%s: note がありません（置き換えたことを必ず知らせます）", where)
 	}
 	if strings.HasPrefix(y.For, "x_") || (y.Row != nil && strings.HasPrefix(y.Row.Table, "x_")) {
 		l.errf("%s: adapt は設計データの表だけを扱います", where)
+	}
+	if len(y.Replace) > 0 && (y.Row == nil || y.Remove) {
+		l.errf("%s: replace は row のある手順にだけ書けます", where)
 	}
 	n := len(l.p.Derives)
 	if y.Row == nil && !y.Remove {
@@ -616,19 +655,44 @@ func (l *loader) adapt(file string, y *deriveY) {
 			l.errf("%s: id「%s」が %s と重なっています", file, y.ID, prev)
 		}
 		l.ids[y.ID] = file
-		l.p.Adapts = append(l.p.Adapts, &Derive{ID: y.ID, File: file, For: y.For, As: y.As, Let: toKV(y.Let), When: y.When, Clear: y.Clear, Note: y.Note})
+		d := &Derive{ID: y.ID, File: file, For: y.For, As: y.As, Let: toKV(y.Let), When: y.When, Clear: y.Clear, Note: y.Note}
+		if y.Drop != nil {
+			if y.Drop.Table == "" || strings.HasPrefix(y.Drop.Table, "x_") {
+				l.errf("%s: drop には設計データの表を書きます", where)
+			}
+			d.Drop = &RowSpec{y.Drop.Table, toKV(y.Drop.Key)}
+		}
+		switch len(y.Each) {
+		case 0:
+		case 1:
+			d.EachAs, d.Each = y.Each[0].Name, y.Each[0].Value
+		default:
+			l.errf("%s: each に書けるのは「名前: 式」1 つです", where)
+		}
+		l.p.Adapts = append(l.p.Adapts, d)
 		return
+	}
+	if y.Drop != nil {
+		l.errf("%s: drop は、row も remove も無い手順にだけ書けます", where)
 	}
 	l.derive(file, y)
 	if len(l.p.Derives) > n {
 		d := l.p.Derives[len(l.p.Derives)-1]
 		l.p.Derives = l.p.Derives[:n]
-		d.Clear, d.Note = y.Clear, y.Note
+		d.Clear, d.Note, d.Replace = y.Clear, y.Note, toKV(y.Replace)
 		l.p.Adapts = append(l.p.Adapts, d)
 	}
 }
 
 func (l *loader) derive(file string, y *deriveY) {
+	if y.OnlyIf != "" {
+		n := len(l.p.Derives)
+		defer func() {
+			for _, d := range l.p.Derives[n:] {
+				d.OnlyIf = y.OnlyIf
+			}
+		}()
+	}
 	where := file + " " + y.ID
 	if y.ID == "" {
 		l.errf("%s: id のない derive があります", file)
@@ -664,8 +728,16 @@ func (l *loader) derive(file string, y *deriveY) {
 	if strings.HasPrefix(y.Row.Table, "x_") {
 		l.errf("%s: derive で作業用の表に行を作ることはできません", where)
 	}
-	l.p.Derives = append(l.p.Derives, &Derive{ID: y.ID, File: file, For: y.For, As: y.As, Let: toKV(y.Let), When: y.When,
-		Row: &RowSpec{y.Row.Table, toKV(y.Row.Key)}, Set: toKV(y.Set), Append: toKV(y.Append)})
+	d := &Derive{ID: y.ID, File: file, For: y.For, As: y.As, Let: toKV(y.Let), When: y.When,
+		Row: &RowSpec{y.Row.Table, toKV(y.Row.Key)}, Set: toKV(y.Set), Append: toKV(y.Append)}
+	switch len(y.Each) {
+	case 0:
+	case 1:
+		d.EachAs, d.Each = y.Each[0].Name, y.Each[0].Value
+	default:
+		l.errf("%s: each に書けるのは「名前: 式」1 つです", where)
+	}
+	l.p.Derives = append(l.p.Derives, d)
 }
 
 func (l *loader) lexicon() {

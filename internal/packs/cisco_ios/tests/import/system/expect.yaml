@@ -1,0 +1,36 @@
+# The device as a whole, appendix A 3.26 (made-up values): the time stamps,
+# the encryption of the passwords, the log the device keeps, the name servers
+# of a VRF, the three banners, the console, a timeout with seconds, and the
+# secrets in the encrypted form of the device ("7 <value>").
+tables:
+  devices:
+    - hostname: rt-d01
+      log_timestamp: datetime
+      log_timestamp_options: [msec, localtime, show_timezone, year]
+      debug_timestamp: uptime
+      password_encryption: true
+      log_buffer: true
+      log_buffer_size: 65536
+      log_severity: informational
+      name_servers: [192.0.2.53, 192.0.2.54]
+      name_servers_vrf: VRF-SAMPLE-M
+      banner: sample login banner
+      banner_motd: sample motd banner
+      banner_exec: sample exec banner
+      console_timeout: 5
+      console_timeout_sec: 30
+  users:
+    - {name: admin, privilege: admin, secret_form: hashed, reversible: ""}
+    - {name: example-user, secret: dummy7sample0A1B2C3D, secret_form: encrypted, reversible: true}
+    - {name: sample-user, secret: dummy-chap-password, secret_form: plain, reversible: true}
+  remote_access:
+    - {protocols: [telnet], idle_timeout: 9, idle_timeout_sec: 30, auth: password, line_password: "7 dummy7sample6E7F"}
+  ospf_interfaces:
+    - {process_id: 1, if_name: GigabitEthernet0/0, auth_type: md5, auth_key_id: 1, auth_key: "7 dummy7sample0E1F2A3B"}
+    - {process_id: 1, if_name: GigabitEthernet0/1, auth_type: simple, auth_key: "7 dummy7sample4C5D"}
+# A server outside the VRF of the others, and a line of the console that has
+# no column.
+unknown:
+  - "ip name-server 192.0.2.55"
+  - "logging synchronous"
+ignored_min: 2

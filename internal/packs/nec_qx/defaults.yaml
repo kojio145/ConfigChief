@@ -1,0 +1,17 @@
+# What the device does when the line is absent. Only values that were read in
+# the command manuals (the command is named on each line).
+defaults:
+  - {table: interfaces, column: enabled, value: true}           # shutdown: "Ethernet interfaces are in up state"
+  - {table: switchports, column: mode, value: access}           # port link-type: "Each port is an access port"
+  - {table: l2_settings, column: stp_enabled, value: false}     # stp global enable: "globally disabled"
+  - {table: syslog_servers, column: facility, value: local7}    # info-center loghost
+  - {table: fhrp, column: version, value: 3, when: "row.protocol == 'vrrp'"}          # vrrp version: "VRRPv3 is used"
+  - {table: fhrp, column: priority, value: 100, when: "row.protocol == 'vrrp'"}       # vrrp vrid priority
+  - {table: fhrp, column: preempt, value: true, when: "row.protocol == 'vrrp'"}       # vrrp vrid preempt-mode
+  - {table: fhrp, column: advert_interval, value: 1, when: "row.protocol == 'vrrp'"}  # vrrp vrid timer advertise: 100 centiseconds
+  - {table: dhcp_pools, column: lease, value: 1d}               # expired: "one day"
+  - {table: ospf_ranges, column: advertise, value: true}        # abr-summary: advertised unless "not-advertise"
+  # Not a default of the device: a password written without its form is
+  # written out as a plain one (templates/system.j2).
+  - {table: users, column: secret_form, value: plain, when: "row.secret"}
+  - {table: devices, column: secret_form, value: plain, when: "row.enable_secret"}

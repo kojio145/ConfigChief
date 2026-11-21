@@ -6,7 +6,10 @@
 {% if not r.next_hop and not r.out_if %}
 {{ fail('経路 ' ~ r.prefix ~ ' に、次ホップも出力 IF もありません') }}
 {% endif %}
-ip route{{ ' vrf ' ~ r.vrf if r.vrf else '' }} {{ 'default' if r.prefix == '0.0.0.0/0' else r.prefix }}{{ ' ' ~ r.next_hop if r.next_hop else '' }}{{ ' ' ~ r.out_if if r.out_if else '' }}{{ ' distance ' ~ r.distance if r.distance else '' }}
+{% if r.next_hop == 'dhcp' and not r.out_if %}
+{{ fail('経路 ' ~ r.prefix ~ ': ネクストホップが dhcp の経路には、出力 IF が要ります（NEC IX は ip route … <IF> dhcp と書きます。DHCP でアドレスをもらう IF を書いてください）') }}
+{% endif %}
+ip route{{ ' vrf ' ~ r.vrf if r.vrf else '' }} {{ 'default' if r.prefix == '0.0.0.0/0' else r.prefix }}{{ ' ' ~ r.next_hop if r.next_hop and r.next_hop != 'dhcp' else '' }}{{ ' ' ~ r.out_if if r.out_if else '' }}{{ ' dhcp' if r.next_hop == 'dhcp' else '' }}{{ ' connected' if r.connected_only == true else '' }}{{ ' metric ' ~ r.metric if r.metric != '' else '' }}{{ ' distance ' ~ r.distance if r.distance else '' }}{{ ' tag ' ~ r.tag if r.tag != '' else '' }}
 {% endfor %}
 {% if t.static_routes %}
 !

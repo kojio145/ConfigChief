@@ -47,13 +47,20 @@ type Column struct {
 	// AutoName marks a key the import makes up ("nat1", "nat2"): no line of a
 	// configuration holds it, and rows are matched by what else they hold.
 	AutoName bool
-	Min, Max *int
-	Ref      string // "table.column"
-	Note     Text
-	Secret   bool
+	// OrderOnly marks a key that is a number which only orders the rows
+	// (the further proposals of IPsec): no line of a configuration holds
+	// the number itself, and rows are compared by their place.
+	OrderOnly bool
+	Min, Max  *int
+	Ref       string // "table.column"
+	Note      Text
+	Secret    bool
 	// Generate is false for a column kept for people and for the tool: no
 	// line is written from it (spec 9.6).
 	Generate bool
+	// Compare is false for a column only a person fills in and no
+	// configuration can tell: two sources are not compared in it (spec 12.3).
+	Compare bool
 }
 
 // Check is a check of one table, written as an expression.
@@ -137,6 +144,10 @@ func (s *Set) Table(name string) *Table {
 var types = map[string]bool{
 	"string": true, "int": true, "bool": true, "enum": true,
 	"ip4": true, "ip6": true, "cidr4": true, "cidr6": true, "net4": true, "net6": true,
+	// An address or a network of either family (2026-11-21): the columns
+	// both vendors can write with IPv6 too. An IPv4 value is written exactly
+	// as an ip4 / net4 column writes it, so a key compares as before.
+	"ip": true, "net": true,
 	"ifname": true, "ref": true, "secret": true, "text": true,
 }
 
@@ -149,22 +160,24 @@ var (
 )
 
 type columnY struct {
-	Name     string    `yaml:"name"`
-	Title    Text      `yaml:"title"`
-	Type     string    `yaml:"type"`
-	Required bool      `yaml:"required"`
-	Default  string    `yaml:"default"`
-	Explicit bool      `yaml:"explicit"`
-	Values   []*string `yaml:"values"` // a pointer: a bare null must not vanish
-	Also     []*string `yaml:"also"`
-	OrIfname bool      `yaml:"or_ifname"`
-	AutoName bool      `yaml:"auto_name"`
-	Min      *int      `yaml:"min"`
-	Max      *int      `yaml:"max"`
-	Ref      string    `yaml:"ref"`
-	Note     Text      `yaml:"note"`
-	Secret   bool      `yaml:"secret"`
-	Generate *bool     `yaml:"generate"`
+	Name      string    `yaml:"name"`
+	Title     Text      `yaml:"title"`
+	Type      string    `yaml:"type"`
+	Required  bool      `yaml:"required"`
+	Default   string    `yaml:"default"`
+	Explicit  bool      `yaml:"explicit"`
+	Values    []*string `yaml:"values"` // a pointer: a bare null must not vanish
+	Also      []*string `yaml:"also"`
+	OrIfname  bool      `yaml:"or_ifname"`
+	AutoName  bool      `yaml:"auto_name"`
+	OrderOnly bool      `yaml:"order_only"`
+	Min       *int      `yaml:"min"`
+	Max       *int      `yaml:"max"`
+	Ref       string    `yaml:"ref"`
+	Note      Text      `yaml:"note"`
+	Secret    bool      `yaml:"secret"`
+	Generate  *bool     `yaml:"generate"`
+	Compare   *bool     `yaml:"compare"`
 }
 
 type tableY struct {
@@ -310,8 +323,9 @@ func Load(fsys fs.FS) (*Set, error) {
 
 func column(y *columnY) (*Column, error) {
 	c := &Column{Name: y.Name, Title: y.Title, Type: y.Type, Required: y.Required, Default: y.Default, Explicit: y.Explicit,
-		Min: y.Min, Max: y.Max, Ref: y.Ref, Note: y.Note, Secret: y.Secret, OrIfname: y.OrIfname, AutoName: y.AutoName}
+		Min: y.Min, Max: y.Max, Ref: y.Ref, Note: y.Note, Secret: y.Secret, OrIfname: y.OrIfname, AutoName: y.AutoName, OrderOnly: y.OrderOnly}
 	c.Generate = y.Generate == nil || *y.Generate
+	c.Compare = y.Compare == nil || *y.Compare
 	for _, v := range y.Values {
 		if v == nil || *v == "" {
 			return nil, errors.New("values に空の語があります（null・yes などの語は引用符で囲みます）")
@@ -353,6 +367,9 @@ func column(y *columnY) (*Column, error) {
 	}
 	if c.AutoName && (c.Type != "string" || c.List) {
 		return nil, errors.New("auto_name は string の列だけに書けます")
+	}
+	if c.OrderOnly && (c.Type != "int" || c.List) {
+		return nil, errors.New("order_only は int の列だけに書けます")
 	}
 	if !c.Generate && c.Explicit {
 		return nil, errors.New("generate: false の列に explicit は書けません")
@@ -429,6 +446,21 @@ func (c *Column) Normalize(val string) (string, error) {
 			return "", fmt.Errorf("「%s」は %s アドレスではありません", val, family(c.Type))
 		}
 		return a.String(), nil
+	case "ip":
+		a, err := netip.ParseAddr(val)
+		if err != nil || a.Zone() != "" {
+			return "", fmt.Errorf("「%s」は IPv4 アドレスでも IPv6 アドレスでもありません", val)
+		}
+		return a.String(), nil
+	case "net":
+		p, err := netip.ParsePrefix(val)
+		if err != nil {
+			return "", fmt.Errorf("「%s」は「アドレス/長さ」の形ではありません", val)
+		}
+		if p != p.Masked() {
+			return "", fmt.Errorf("「%s」はネットワークのアドレスではありません（%s と書きます）", val, p.Masked())
+		}
+		return p.String(), nil
 	case "cidr4", "cidr6", "net4", "net6":
 		p, err := netip.ParsePrefix(val)
 		if err != nil || p.Addr().Is4() != strings.HasSuffix(c.Type, "4") {

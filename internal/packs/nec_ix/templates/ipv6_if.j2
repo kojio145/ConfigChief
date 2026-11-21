@@ -1,0 +1,150 @@
+{# IPv6 on one interface (appendix A 3.23): read into interfaces.j2, inside
+   the block of the interface "i". Syntax: CRM chapters 9 and 10 (README). A
+   fixed address is written by interfaces.j2 itself. #}
+{% for v in t.ipv6_interfaces %}
+{% if v.if_name == i.name %}
+{% set what = i.name ~ ' の IPv6' %}
+{% if v.link_local %}
+{{ fail(what ~ ': リンクローカルアドレスを手で決める書き方を、NEC IX では確かめていません（セルを空にすると、機器が自動で作ります。相手の機器がこのアドレスを指しているなら、相手の側も直してください）') }}
+{% endif %}
+{% for a in v.eui64 %}
+  ipv6 address {{ a }} eui-64
+{% endfor %}
+{% for a in v.anycast %}
+  ipv6 address {{ a }} anycast
+{% endfor %}
+{% if v.autoconfig == true %}
+{% if v.nd_proxy %}
+{{ fail(what ~ ': 「自動設定（RA を受ける）」と「ND プロキシの LAN 側 IF」は、同じ IF に書けません（NEC IX ではどちらか片方です）') }}
+{% endif %}
+  ipv6 address autoconfig{{ ' receive-default' if v.autoconfig_default == true else '' }}
+{% elif v.autoconfig_default == true %}
+{{ fail(what ~ ': 「RA の送り元をデフォルト経路にする」は、「自動設定（RA を受ける）」を有効にした行にだけ書けます') }}
+{% endif %}
+{% if v.dhcp_address == true %}
+{{ fail(what ~ ': 「DHCPv6 でアドレスをもらう」は NEC IX では書けません（NEC IX の DHCPv6 クライアントがもらうのは、プレフィックスと DNS などの情報です。「自動設定（RA を受ける）」か「プレフィックスをもらう（DHCPv6-PD）」に直してください）') }}
+{% endif %}
+{% if v.enabled == true %}
+  ipv6 enable
+{% endif %}
+{% if v.mtu != '' %}
+  ipv6 mtu {{ v.mtu }}
+{% endif %}
+{# The line takes a sequence number, which the dataset does not have: 1. #}
+{% if v.tcp_mss != '' %}
+  ipv6 tcp adjust-mss {{ v.tcp_mss }}
+{% endif %}
+{% if v.policy_route %}
+  ipv6 policy route-map {{ v.policy_route }}
+{% endif %}
+{% if v.acl_in %}
+  ipv6 filter {{ v.acl_in }} 1 in
+{% elif v.acl_in_more %}
+{{ fail(v.if_name ~ ': 「入力 IPv6 フィルタ（2 つ目以降）」があるのに、「入力 IPv6 フィルタ」が空です') }}
+{% endif %}
+{% for a in v.acl_in_more %}
+  ipv6 filter {{ a }} {{ loop.index + 1 }} in
+{% endfor %}
+{% if v.acl_out %}
+  ipv6 filter {{ v.acl_out }} 1 out
+{% elif v.acl_out_more %}
+{{ fail(v.if_name ~ ': 「出力 IPv6 フィルタ（2 つ目以降）」があるのに、「出力 IPv6 フィルタ」が空です') }}
+{% endif %}
+{% for a in v.acl_out_more %}
+  ipv6 filter {{ a }} {{ loop.index + 1 }} out
+{% endfor %}
+{# Router advertisements: not sent unless the line switches them on. #}
+{% if v.ra == 'send' %}
+  ipv6 nd ra enable
+{% elif v.ra == 'off' %}
+  no ipv6 nd ra enable
+{% elif v.ra == 'reply_only' %}
+{{ fail(what ~ ': 「RA を送る」の reply_only（問い合わせにだけ答える）は NEC IX にありません（send か off に直してください）') }}
+{% endif %}
+{% if v.ra_interval != '' %}
+  ipv6 nd ra max-interval {{ v.ra_interval }}
+{% endif %}
+{% if v.ra_interval_min != '' %}
+  ipv6 nd ra min-interval {{ v.ra_interval_min }}
+{% endif %}
+{% if v.ra_lifetime != '' %}
+  ipv6 nd ra lifetime {{ v.ra_lifetime }}
+{% endif %}
+{% if v.ra_managed == true %}
+  ipv6 nd ra managed-config-flag
+{% endif %}
+{% if v.ra_other == true %}
+  ipv6 nd ra other-config-flag
+{% endif %}
+{% if v.ra_dns %}
+{% if v.ra_dns | length > 2 %}
+{{ fail(what ~ ': 「RA で配る DNS サーバ」は 2 つまでです（NEC IX）') }}
+{% endif %}
+  ipv6 nd ra dns-server {{ v.ra_dns | join(' ') }}{{ ' ' ~ v.ra_dns_lifetime if v.ra_dns_lifetime != '' else '' }}
+{% elif v.ra_dns_lifetime != '' %}
+{{ fail(what ~ ': 「RA で配る DNS の生存時間」は、「RA で配る DNS サーバ」を書いたときだけ書けます') }}
+{% endif %}
+{% if v.nd_proxy %}
+  ipv6 nd proxy {{ v.nd_proxy }}{{ ' ' ~ v.nd_proxy_acl if v.nd_proxy_acl else '' }}
+{% elif v.nd_proxy_acl %}
+{{ fail(what ~ ': 「ND プロキシの対象外リスト」は、「ND プロキシの LAN 側 IF」を書いた行にだけ書けます') }}
+{% endif %}
+{# The DHCPv6 client: the profile of ipv6.j2. A profile that delegates a
+   prefix has the name of the prefix; another one gets a name from the pack. #}
+{% if v.pd_request or v.dhcp_request or v.dhcp_info_only == true %}
+  ipv6 dhcp client {{ v.pd_request if v.pd_request else 'dhcpv6-' ~ loop.index }}
+{% elif v.rapid_commit == true %}
+{{ fail(what ~ ': 「DHCPv6 の Rapid Commit」は、DHCPv6 でプレフィックスか情報をもらう行にだけ書けます') }}
+{% endif %}
+{% if v.pd_from %}
+{% set n = namespace(seen=false) %}
+{% for w in t.ipv6_interfaces %}
+{% if w.pd_request == v.pd_from %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail(what ~ ': 「もらったプレフィックスから付ける」の名前 ' ~ v.pd_from ~ ' を、「プレフィックスをもらう（DHCPv6-PD）」に書いた IF がありません（WAN 側の IF の行に、同じ名前を書いてください）') }}
+{% endif %}
+{% elif v.pd_suffix or v.pd_eui64 == true %}
+{{ fail(what ~ ': 「付けるアドレスの下の部分」「下 64 ビットを EUI-64 で作る」は、「もらったプレフィックスから付ける」にプレフィックスの名前を書いた行にだけ書けます') }}
+{% endif %}
+{% if v.dhcp_server %}
+{% if v.dhcp_domain %}
+{{ fail(what ~ ': 「DHCPv6 で配るドメイン名」は NEC IX では書けません（DHCPv6 サーバにドメイン名を配る行がありません。セルを空にしてください）') }}
+{% endif %}
+  ipv6 dhcp server {{ v.dhcp_server }}
+{% elif v.dhcp_dns or v.dhcp_domain %}
+{{ fail(what ~ ': 「DHCPv6 で配る DNS サーバ」「DHCPv6 で配るドメイン名」は、「DHCPv6 サーバ（名前）」を書いた行にだけ書けます') }}
+{% elif v.dhcp_ntp or v.dhcp_pd_pool or v.dhcp_pd_length or v.dhcp_pd_from or v.dhcp_address_prefix %}
+{{ fail(what ~ ': DHCPv6 で配るもの（NTP サーバ・下流へ配るプレフィックス・端末へ配るアドレス）は、「DHCPv6 サーバ（名前）」を書いた行にだけ書けます') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# The prefixes of the router advertisements: by the names ipv6.j2 gives. #}
+{% for p in t.ipv6_ra_prefixes %}
+{% if p.if_name == i.name %}
+  ipv6 nd ra prefix-advertisement ra{{ loop.index }}
+{% endif %}
+{% endfor %}
+{# OSPFv3: the area stands under the process (ipv6.j2). #}
+{% for o in t.ospfv3_interfaces %}
+{% if o.if_name == i.name %}
+{% if o.network_type %}
+{{ fail(i.name ~ ' の OSPFv3 の「網の種類」は NEC IX では書けません（OSPFv3 には網の種類を決める行がありません。セルを空にしてください）') }}
+{% endif %}
+{% if o.cost != '' %}
+  ipv6 ospf cost {{ o.cost }}
+{% endif %}
+{% if o.priority != '' %}
+  ipv6 ospf priority {{ o.priority }}
+{% endif %}
+{% if o.hello != '' %}
+  ipv6 ospf hello-interval {{ o.hello }}
+{% endif %}
+{% if o.dead != '' %}
+  ipv6 ospf dead-interval {{ o.dead }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% include 'rip_if.j2' %}

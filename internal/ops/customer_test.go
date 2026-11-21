@@ -116,7 +116,7 @@ func TestCustomer(t *testing.T) {
 		t.Errorf("count = %+v, findings %d", c, o.Findings())
 	}
 	h := read(t, e, o.Report.HTML)
-	for _, want := range []string{"お客様の一覧とパラメータブックの比較", "rt-a09", "192.0.2.129/25", "sites_v1.csv の「CSV」E3", "S-503", "memo.txt は、どの列対応ファイルにも当たらない"} {
+	for _, want := range []string{"外部一覧とパラメータブックの比較", "rt-a09", "192.0.2.129/25", "sites_v1.csv の「CSV」E3", "S-503", "memo.txt は、どの列対応ファイルにも当たらない"} {
 		if !strings.Contains(h, want) {
 			t.Errorf("the report lacks %q", want)
 		}

@@ -7,3 +7,4 @@ columns:
   - {name: name, title: {ja: 名前, en: Name}, type: string, required: true, note: {ja: "番号の ACL は番号を名前として書く", en: "A numbered list has its number as the name"}}
   - {name: type, title: {ja: 種類, en: Type}, type: enum, values: [standard, extended]}
   - {name: description, title: {ja: 説明, en: Description}, type: string}
+  - {name: seq_step, title: {ja: 行の番号の刻み, en: Sequence step}, type: int, min: 1, max: 1000, note: {ja: "NEC IX の sequence-mode。値があれば、行に番号を付けて持つ。空なら、番号は 10、20、30 … で書く", en: "The sequence mode of NEC IX: with a value the entries keep their numbers. Empty = the entries are numbered 10, 20, 30 ..."}}

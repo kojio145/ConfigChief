@@ -2,6 +2,8 @@ package compare
 
 import (
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/kojio145/configchief/internal/model"
 	"github.com/kojio145/configchief/internal/schema"
@@ -56,22 +58,87 @@ func (r *Result) Equal() bool {
 // not compared.
 func Datasets(sc *schema.Set, a, b *model.Dataset) *Result {
 	res := &Result{}
-	for _, name := range tableNames(sc, a, b) {
+	names := tableNames(sc, a, b)
+	// The made-up names that differ between the two sides, by the column
+	// they stand in ("table.column") and by device: a row of another table
+	// that points at such a name (a ref column) points at the same row on
+	// both sides, and is compared as that.
+	renamed := map[string]map[string]string{}
+	for _, name := range names {
+		t := sc.Table(name)
+		if t == nil || t.AutoName() == "" {
+			continue
+		}
+		auto, devCol := t.AutoName(), t.DeviceColumn()
+		pair, _ := twins(t, rows(table(a, name)), rows(table(b, name)))
+		for ra, rb := range pair {
+			if ra.Get(auto) == rb.Get(auto) {
+				continue
+			}
+			k := name + "." + auto
+			if renamed[k] == nil {
+				renamed[k] = map[string]string{}
+			}
+			renamed[k][ra.Get(devCol)+"\x00"+ra.Get(auto)] = rb.Get(auto)
+		}
+	}
+	for _, name := range names {
 		t := sc.Table(name)
 		devCol := ""
 		if t != nil {
 			devCol = t.DeviceColumn()
 		}
 		ta, tb := table(a, name), table(b, name)
-		pair, taken := twins(t, rows(ta), rows(tb))
-		for _, ra := range rows(ta) {
-			rb := pair[ra]
-			if rb == nil {
-				if rb = tb.Find(ra.Key); taken[rb] {
-					rb = nil
+		as, bs := rows(ta), rows(tb)
+		// seen is a row as it is compared: a row of side A as side B names
+		// what it points at, and on both sides a number that only orders
+		// the rows (schema: order_only) as the place it gives the row.
+		seen := map[*model.Row]*model.Row{}
+		if t != nil && len(renamed) > 0 {
+			for _, ra := range as {
+				if v := pointed(t, ra, devCol, renamed); v != nil {
+					seen[ra] = v
 				}
-				taken[rb] = true
 			}
+		}
+		view := func(r *model.Row) *model.Row {
+			if v := seen[r]; v != nil {
+				return v
+			}
+			return r
+		}
+		vas := make([]*model.Row, len(as))
+		for i, ra := range as {
+			vas[i] = view(ra)
+		}
+		vbs := bs
+		byKey := func(key []model.KV) *model.Row { return tb.Find(key) }
+		if col := orderOnly(t); col != "" {
+			for i, v := range placed(t, vas, col) {
+				seen[as[i]], vas[i] = v, v
+			}
+			vbs = placed(t, bs, col)
+			index := map[string]*model.Row{}
+			for _, v := range vbs {
+				index[v.KeyText()] = v
+			}
+			byKey = func(key []model.KV) *model.Row { return index[(&model.Row{Key: key}).KeyText()] }
+		}
+		orig := map[*model.Row]*model.Row{}
+		for i, v := range vbs {
+			orig[v] = bs[i]
+		}
+		vpair, taken := twins(t, vas, vbs)
+		for _, ra := range as {
+			va := view(ra)
+			vb := vpair[va]
+			if vb == nil {
+				if vb = byKey(va.Key); taken[vb] {
+					vb = nil
+				}
+				taken[vb] = true
+			}
+			rb := orig[vb]
 			if rb == nil {
 				res.OnlyA = append(res.OnlyA, RowDiff{name, ra.Get(devCol), ra})
 				continue
@@ -83,7 +150,7 @@ func Datasets(sc *schema.Set, a, b *model.Dataset) *Result {
 					continue
 				}
 				ca, cb := filled(ra.Cells[col]), filled(rb.Cells[col])
-				if equal(ca, cb) {
+				if equal(filled(va.Cells[col]), cb) {
 					continue
 				}
 				same = false
@@ -97,13 +164,115 @@ func Datasets(sc *schema.Set, a, b *model.Dataset) *Result {
 				res.Same++
 			}
 		}
-		for _, rb := range rows(tb) {
-			if !taken[rb] {
+		for i, rb := range bs {
+			if !taken[vbs[i]] {
 				res.OnlyB = append(res.OnlyB, RowDiff{name, rb.Get(devCol), rb})
 			}
 		}
 	}
 	return res
+}
+
+// orderOnly gives the key column of a table whose number only orders the
+// rows ("" = none).
+func orderOnly(t *schema.Table) string {
+	if t == nil {
+		return ""
+	}
+	for _, k := range t.Key {
+		if c := t.Column(k); c != nil && c.OrderOnly {
+			return k
+		}
+	}
+	return ""
+}
+
+// placed gives copies of the rows in which the column that only orders them
+// holds the place of the row among the rows with the same other key columns
+// (1, 2, 3 and so on, by the number): 15 and 25 on one side are 20 and 30 on
+// the other.
+func placed(t *schema.Table, rs []*model.Row, col string) []*model.Row {
+	group := func(r *model.Row) string {
+		var sb strings.Builder
+		for _, k := range r.Key {
+			if k.Name != col {
+				sb.WriteString(k.Value)
+				sb.WriteByte(0)
+			}
+		}
+		return sb.String()
+	}
+	byGroup := map[string][]*model.Row{}
+	for _, r := range rs {
+		g := group(r)
+		byGroup[g] = append(byGroup[g], r)
+	}
+	place := map[*model.Row]int{}
+	for _, g := range byGroup {
+		sort.SliceStable(g, func(i, j int) bool {
+			x, e1 := strconv.Atoi(g[i].Get(col))
+			y, e2 := strconv.Atoi(g[j].Get(col))
+			if e1 == nil && e2 == nil {
+				return x < y
+			}
+			return g[i].Get(col) < g[j].Get(col)
+		})
+		for i, r := range g {
+			place[r] = i + 1
+		}
+	}
+	out := make([]*model.Row, len(rs))
+	for i, r := range rs {
+		n := &model.Row{Table: r.Table, Origins: r.Origins, Extra: r.Extra, Cells: map[string]*model.Cell{}}
+		for name, c := range r.Cells {
+			n.Cells[name] = c
+		}
+		n.Cells[col] = &model.Cell{Values: []string{strconv.Itoa(place[r])}}
+		for _, k := range r.Key {
+			n.Key = append(n.Key, model.KV{Name: k.Name, Value: n.Get(k.Name)})
+		}
+		out[i] = n
+	}
+	return out
+}
+
+// pointed gives a copy of a row of side A in which the made-up names it
+// points at (ref columns) are those of side B, or nil if it points at none
+// that differs.
+func pointed(t *schema.Table, r *model.Row, devCol string, renamed map[string]map[string]string) *model.Row {
+	var out *model.Row
+	for _, c := range t.Columns {
+		m := renamed[c.Ref]
+		cell := r.Cells[c.Name]
+		if c.Ref == "" || m == nil || cell == nil {
+			continue
+		}
+		for i, v := range cell.Values {
+			to, ok := m[r.Get(devCol)+"\x00"+v]
+			if !ok {
+				continue
+			}
+			if out == nil {
+				out = &model.Row{Table: r.Table, Origins: r.Origins, Cells: map[string]*model.Cell{}}
+				for name, c := range r.Cells {
+					out.Cells[name] = c
+				}
+			}
+			if out.Cells[c.Name] == cell {
+				n := *cell
+				n.Values = append([]string{}, cell.Values...)
+				out.Cells[c.Name] = &n
+			}
+			out.Cells[c.Name].Values[i] = to
+		}
+	}
+	if out == nil {
+		return nil
+	}
+	for _, k := range r.Key {
+		out.Key = append(out.Key, model.KV{Name: k.Name, Value: out.Get(k.Name)})
+	}
+	return out
 }
 
 // twins pairs the rows of a table with a made-up name that hold the same
@@ -177,14 +346,16 @@ func rows(t *model.Table) []*model.Row {
 }
 
 // columns gives the columns to look at: those of the definition in their
-// order, then the other filled columns of the two rows by name.
+// order (but those it keeps out of a comparison: compare: false), then the other filled columns of the two rows by name.
 func columns(t *schema.Table, ra, rb *model.Row) []string {
 	var out []string
 	seen := map[string]bool{}
 	if t != nil {
 		for _, c := range t.Columns {
-			out = append(out, c.Name)
 			seen[c.Name] = true
+			if c.Compare {
+				out = append(out, c.Name)
+			}
 		}
 	}
 	var rest []string

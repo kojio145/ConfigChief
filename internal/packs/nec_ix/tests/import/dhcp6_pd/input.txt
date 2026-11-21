@@ -1,0 +1,71 @@
+! NEC Portable Internetwork Core Operating System Software
+! IX Series (made-up sample)
+!
+hostname ix-w01
+!
+ipv6 dhcp enable
+!
+ipv6 dhcp client-profile pd-sample
+  option-request dns-servers
+  ia-pd redistribute pool pd-sample-lan2 ::/60 nla-length 4
+  ia-pd redistribute pool pd-sample-static ::/62
+  ia-pd redistribute pool pd-sample-lan4 ::/64
+!
+ipv6 dhcp server-profile pd-sample-lan1
+  dns-server 2001:db8::53
+  ntp-server 2001:db8::123
+  ia-option ia-pd 300 600
+  ia-pd prefix 2001:db8:1000::/56 nla-length 16 life-time 1200 600
+!
+ipv6 dhcp server-profile pd-sample-lan2
+  ia-pd redistribute-prefix pool pd-sample-lan2
+  ia-pd redistribute-static fe80::1 pool pd-sample-static
+!
+ipv6 dhcp server-profile pd-sample-lan3
+  ia-pd prefix 2001:db8:2001::/48 nla-length 8
+  ia-pd static fe80::2 2001:db8:3000::/48
+!
+ipv6 dhcp server-profile pd-sample-lan4
+  ia-pd redistribute-prefix pool pd-sample-lan4
+!
+ipv6 dhcp server-profile pd-sample-lan5
+  ia-pd prefix 2001:db8:4000::/48 nla-length 0 life-time infinity infinity
+!
+interface GigaEthernet0.0
+  no ip address
+  ipv6 enable
+  ipv6 dhcp client pd-sample
+  no shutdown
+!
+interface GigaEthernet1.0
+  no ip address
+  ipv6 enable
+  ipv6 dhcp server pd-sample-lan1
+  no shutdown
+!
+interface GigaEthernet2.0
+  no ip address
+  ipv6 enable
+  ipv6 dhcp server pd-sample-lan2
+  no shutdown
+!
+interface GigaEthernet2.1
+  encapsulation dot1q 10 tpid 8100
+  no ip address
+  ipv6 enable
+  ipv6 dhcp server pd-sample-lan3
+  no shutdown
+!
+interface GigaEthernet2.2
+  encapsulation dot1q 20 tpid 8100
+  no ip address
+  ipv6 enable
+  ipv6 dhcp server pd-sample-lan4
+  no shutdown
+!
+interface GigaEthernet2.3
+  encapsulation dot1q 30 tpid 8100
+  no ip address
+  ipv6 enable
+  ipv6 dhcp server pd-sample-lan5
+  no shutdown

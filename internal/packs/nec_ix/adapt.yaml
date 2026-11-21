@@ -40,3 +40,979 @@ adapt:
     when: "p.class in ['default', 'local'] and not more"
     remove: true
     note: "{{ '' }}"
+
+  # ---- L2TP (appendix A 3.21) ----
+  # One tunnel interface is one caller at a time (FD 2.36). Nothing is
+  # changed.
+  - id: l2tp.lns.one
+    for: l2tp_groups
+    as: g
+    when: "g.role == 'lns' and g.logical_ifs | length == 1"
+    note: "L2TP {{ g.name }}: 「受け口の IF」が 1 つなので、同時につなげるのは 1 台です（NEC IX は、同時につなぐ数だけトンネル IF が要ります）。足りなければ、インタフェースの表にトンネル IF の行を足し、「受け口の IF」に並べてください。1 台でよければ、承認します"
+  # ---- route policies (appendix A 3.19) ----
+  # A standard list of one "permit" line says "the route carries all of
+  # these": the same as the values written in the entry itself. The device has
+  # no community list, so the entry takes the values.
+  - id: rp.community.inline
+    for: route_policies
+    as: p
+    let:
+      all: "rows('community_lists', name=p.match_community_list)"
+      one: "first('community_lists', name=p.match_community_list)"
+    when: "p.match_community_list and not p.match_community and all | length == 1 and one.action == 'permit' and one.type == 'standard' and one.communities"
+    row: {table: route_policies, key: {name: "{{ p.name }}", seq: "{{ p.seq }}"}}
+    append: {match_community: "{{ one.communities | join(' ') }}"}
+    note: "方針 {{ p.name }} の {{ p.seq }} 番: NEC IX にコミュニティのリストは無いので、リスト {{ p.match_community_list }} の中身（{{ one.communities | join(' ') }}）を、条件にじかに書きます（意味は同じです）"
+  - id: rp.community.list.taken
+    for: community_lists
+    as: c
+    let:
+      n: "rows('community_lists', name=c.name) | length"
+      users: "rows('route_policies', match_community_list=c.name)"
+      open: "users | rejectattr('match_community') | list | length"
+    when: "n == 1 and c.action == 'permit' and c.type == 'standard' and users | length > 0 and open == 0"
+    remove: true
+    note: "{{ '' }}"
+  - id: rp.community.list.clear
+    for: route_policies
+    as: p
+    let:
+      list: "first('community_lists', name=p.match_community_list)"
+    when: "p.match_community_list and p.match_community and not list.name"
+    clear: [match_community_list]
+    note: "{{ '' }}"
+  # The device has no AS path list. A list that no entry looks at changes
+  # nothing: it is left out and told. (A list that is looked at stops the
+  # generation in the template: the entry cannot be written.)
+  - id: rp.as_path.unused
+    for: as_path_lists
+    as: a
+    when: "rows('route_policies', match_as_path=a.name) | length == 0 and rows('bgp_neighbors', as_path_filter_in=a.name) | length == 0 and rows('bgp_neighbors', as_path_filter_out=a.name) | length == 0"
+    remove: true
+    note: "{{ 'AS パスのリスト ' ~ a.name ~ ' は、どの方針の条件にも使われていないので書きません（NEC IX に、AS パスのリストはありません）' if rows('as_path_lists', name=a.name) | length == 1 else '' }}"
+  # One distance for every OSPF route is written kind by kind ("distance
+  # external … inter-area … intra-area …", CRM 10-28): the same thing.
+  - id: ospf.distance.kinds
+    for: ospf_processes
+    as: o
+    when: "o.distance != '' and o.distance_intra == '' and o.distance_inter == '' and o.distance_external == ''"
+    row: {table: ospf_processes, key: {process_id: "{{ o.process_id }}"}}
+    set: {distance_intra: "{{ o.distance }}", distance_inter: "{{ o.distance }}", distance_external: "{{ o.distance }}"}
+    clear: [distance]
+    note: "{{ '' }}"
+  # Whether the changes of the neighbors are logged is no setting of BGP
+  # here (CRM chapter 10 has no such line): it changes no route.
+  - id: bgp.log_neighbor_changes
+    for: bgp_processes
+    as: b
+    when: "b.log_neighbor_changes in [true, false, 'true', 'false']"
+    clear: [log_neighbor_changes]
+    note: "BGP: 「ネイバーの変化を記録」に当たる行は NEC IX にありません（書きません。経路には影響しません）"
+  # The local routes of BGP have no distance of their own on this device
+  # ("distance [ebgp …] [ibgp …]", CRM 10-56): the default of the other
+  # vendor (200) says nothing; another value is told.
+  - id: bgp.distance.own
+    for: bgp_processes
+    as: b
+    when: "b.distance_local != ''"
+    clear: [distance_local]
+    note: "{{ '' if (b.distance_local | string) == '200' else 'BGP: 「優先度（自分で作った経路）」（' ~ b.distance_local ~ '）は NEC IX に無いので、書きません（eBGP と iBGP の優先度だけを書きます）' }}"
+  # The device has no line for "send the communities" (CRM chapter 10).
+  - id: bgp.send_community
+    for: bgp_neighbors
+    as: n
+    when: "n.send_community in [true, false, 'true', 'false']"
+    clear: [send_community]
+    note: "BGP ネイバー {{ n.neighbor }}: 「コミュニティを送る」に当たる行は NEC IX にありません（書きません）。コミュニティが相手に届くかどうかは、機器で確かめてください"
+  # ---- VLANs and switch ports as another vendor has them (README, "VLAN と
+  # スイッチ"; the answers: hearing.md, 2026-11-20). The other vendor names a
+  # VLAN by its number on every port and has an interface for the VLAN; this
+  # device puts ports into VLAN groups, and joins what must be one VLAN over
+  # several groups with a bridge group. A row of a port has the name
+  # "<device>:port<number>". The steps do nothing to rows that are already as
+  # this device has them (the interface of a group carries no other number
+  # than that of the group).
+  - id: sw.port.description
+    for: interfaces
+    as: i
+    when: "':port' in i.name and i.description"
+    clear: [description]
+    note: "{{ i.name }}: NEC IX の内蔵スイッチのポートには説明を書けないので、説明「{{ i.description }}」は書きません"
+  # A port of the other vendor with no line of its own is an access port of
+  # VLAN 1.
+  - id: sw.port.default
+    for: interfaces
+    as: i
+    let:
+      sp: "lookup('switchports', if_name=i.name)"
+      v1: "first('interfaces', vlan_id=1)"
+    when: "':port' in i.name and not sp.if_name and v1.name"
+    row: {table: switchports, key: {if_name: "{{ i.name }}"}}
+    set: {mode: access, access_vlan: "1"}
+    note: "{{ i.name }}: スイッチポートの行が無いので、VLAN 1 のアクセスポートとして書きます（元の機器の既定）"
+  - id: sw.port.access
+    for: switchports
+    as: p
+    when: "':port' in p.if_name and p.mode in ['', 'access'] and (not p.mode or not p.access_vlan)"
+    row: {table: switchports, key: {if_name: "{{ p.if_name }}"}}
+    set: {mode: access, access_vlan: "{{ p.access_vlan if p.access_vlan else 1 }}"}
+    note: "{{ '' if p.access_vlan else p.if_name ~ ': アクセス VLAN が空なので、VLAN 1 のアクセスポートとして書きます（元の機器の既定）' }}"
+  # The interface of a VLAN that is to be a BVI: the bridge group has the
+  # number of the VLAN.
+  - id: sw.bvi
+    for: interfaces
+    as: i
+    when: "i.name is startingwith('BVI') and i.vlan_id and not i.bridge_group"
+    row: {table: interfaces, key: {name: "{{ i.name }}"}}
+    set: {bridge_group: "{{ i.vlan_id }}"}
+    note: "VLAN {{ i.vlan_id }} の IF {{ i.name }} を、ブリッジグループ {{ i.vlan_id }} の BVI として書きます（NEC IX では、複数の VLAN グループやタグ付きのサブ IF にまたがる VLAN を、ブリッジグループでつなぎます）"
+  - id: sw.irb
+    for: interfaces
+    as: i
+    let:
+      g: "lookup('l2_settings')"
+    when: "i.name is startingwith('BVI') and i.vlan_id and i.bridge_group and g.bridge_irb != 'true'"
+    row: {table: l2_settings, key: {}}
+    set: {bridge_irb: true}
+    note: "ブリッジグループを BVI で L3 につなぐので、bridge irb enable を書きます"
+  # A trunk port: a VLAN group of its own (the number of the port), a tagged
+  # subinterface for every VLAN it carries, each in the bridge group of its
+  # VLAN. The VLANs it can carry are those that this device has ports or a
+  # BVI for; a VLAN whose interface is a port VLAN ("<device>:<group>.0")
+  # cannot go over a trunk, and the port is left as it is (the template
+  # tells).
+  - id: sw.trunk.sub
+    for: switchports
+    as: p
+    let:
+      at: "p.if_name | split(':port')"
+      native: "p.native_vlan | int if p.native_vlan else 1"
+      amap: "rows('interfaces') | selectattr('vlan_id') | selectattr('name', 'startingwith', at[0] ~ ':') | map(attribute='vlan_id') | map('int') | list"
+      bv: "rows('interfaces') | selectattr('vlan_id') | selectattr('name', 'startingwith', 'BVI') | map(attribute='vlan_id') | map('int') | list"
+      av: "rows('switchports', mode='access') | selectattr('if_name', 'startingwith', at[0] ~ ':port') | selectattr('access_vlan') | map(attribute='access_vlan') | map('int') | reject('in', amap) | list"
+      all: "not p.allowed_vlans or 'all' in p.allowed_vlans"
+      allow: "p.allowed_vlans | ranges"
+      blocked: "amap if all else (amap | select('in', allow) | list)"
+      defined: "rows('vlans') | map(attribute='vlan_id') | map('int') | list"
+      olist: "rows('switchports', mode='trunk') | rejectattr('if_name', 'eq', p.if_name) | selectattr('if_name', 'startingwith', at[0] ~ ':port') | map(attribute='allowed_vlans') | map('join', ',') | list"
+      other: "((olist | ranges) + (defined + [1] if '' in olist or 'all' in olist else [])) | unique | list"
+      through: "((defined + [1]) if all else allow) | select('in', other) | reject('in', amap) | list"
+      known: "(bv + av + through) | unique | sort"
+      carried: "(known if all else (known | select('in', allow) | list)) | reject('eq', native) | list"
+      taken: "lookup('interfaces', name=at[0] ~ ':' ~ at[1] ~ '.0') if at | length == 2 else ''"
+    each: {v: "carried if p.mode == 'trunk' and ':port' in p.if_name and not blocked else []"}
+    row: {table: interfaces, key: {name: "{{ at[0] }}:{{ at[1] }}.{{ v_n }}"}}
+    set:
+      encap_vlan: "{{ v if not (taken and taken.name) else fail('トランクのポート ' ~ p.if_name ~ ' を VLAN グループ ' ~ at[1] ~ ' にして書きますが、IF ' ~ taken.name ~ ' が、すでにインタフェースの表にあります（IF 対応で、その IF を別のグループの番号にしてください）') }}"
+      bridge_group: "{{ v }}"
+      enabled: true
+    note: "トランクのポート {{ p.if_name }} の VLAN {{ v }} を、タグ付きのサブ IF {{ at[0] }}:{{ at[1] }}.{{ v_n }}（ブリッジグループ {{ v }}）として書きます"
+  - id: sw.trunk.base
+    for: switchports
+    as: p
+    let:
+      at: "p.if_name | split(':port')"
+      native: "p.native_vlan | int if p.native_vlan else 1"
+      amap: "rows('interfaces') | selectattr('vlan_id') | selectattr('name', 'startingwith', at[0] ~ ':') | map(attribute='vlan_id') | map('int') | list"
+      bv: "rows('interfaces') | selectattr('vlan_id') | selectattr('name', 'startingwith', 'BVI') | map(attribute='vlan_id') | map('int') | list"
+      av: "rows('switchports', mode='access') | selectattr('if_name', 'startingwith', at[0] ~ ':port') | selectattr('access_vlan') | map(attribute='access_vlan') | map('int') | reject('in', amap) | list"
+      all: "not p.allowed_vlans or 'all' in p.allowed_vlans"
+      allow: "p.allowed_vlans | ranges"
+      blocked: "amap if all else (amap | select('in', allow) | list)"
+      defined: "rows('vlans') | map(attribute='vlan_id') | map('int') | list"
+      olist: "rows('switchports', mode='trunk') | rejectattr('if_name', 'eq', p.if_name) | selectattr('if_name', 'startingwith', at[0] ~ ':port') | map(attribute='allowed_vlans') | map('join', ',') | list"
+      other: "((olist | ranges) + (defined + [1] if '' in olist or 'all' in olist else [])) | unique | list"
+      through: "((defined + [1]) if all else allow) | select('in', other) | reject('in', amap) | list"
+      known: "(bv + av + through) | unique | sort"
+      untagged: "native in known and (all or native in allow)"
+      lost: "[] if all else (allow | reject('in', known) | list)"
+    when: "p.mode == 'trunk' and ':port' in p.if_name and not blocked"
+    row: {table: interfaces, key: {name: "{{ at[0] }}:{{ at[1] }}.0"}}
+    set:
+      enabled: true
+      bridge_group: "{{ native if untagged else '' }}"
+    note: "トランクのポート {{ p.if_name }} を、ポート 1 つの VLAN グループ {{ at[1] }}（IF {{ at[0] }}:{{ at[1] }}.0）として書きます。タグなしの通信（ネイティブ VLAN {{ native }}）は{{ 'ブリッジグループ ' ~ native ~ ' に入れます' if untagged else '、どのブリッジグループにも入れません（この機器に VLAN ' ~ native ~ ' のポートも BVI も無いため）' }}{{ '。許可 VLAN のうち ' ~ (lost | join(',')) ~ ' は、この機器にポートも BVI も無く、ほかのトランクも通さないので書きません' if lost else '' }}"
+  # The access ports of a VLAN whose interface is not a port VLAN: one VLAN
+  # group (its number is the lowest of the ports), in the bridge group of
+  # the VLAN.
+  - id: sw.access.group
+    for: switchports
+    as: p
+    let:
+      at: "p.if_name | split(':port')"
+      amap: "rows('interfaces') | selectattr('vlan_id') | selectattr('name', 'startingwith', at[0] ~ ':') | map(attribute='vlan_id') | map('int') | list"
+      own: "lookup('interfaces', name=at[0] ~ ':' ~ p.access_vlan ~ '.0')"
+      same: "rows('switchports', mode='access', access_vlan=p.access_vlan) | selectattr('if_name', 'startingwith', at[0] ~ ':port') | map(attribute='if_name') | map('replace', at[0] ~ ':port', '') | map('int') | sort"
+      taken: "lookup('interfaces', name=at[0] ~ ':' ~ (same | first) ~ '.0') if same else ''"
+    when: "same and p.mode == 'access' and ':port' in p.if_name and p.access_vlan and p.access_vlan | int not in amap and not (own.name and not own.vlan_id) and at[1] | int == same | first"
+    row: {table: interfaces, key: {name: "{{ at[0] }}:{{ at[1] }}.0"}}
+    set:
+      vlan_id: "{{ p.access_vlan if not taken.name else fail('VLAN ' ~ p.access_vlan ~ ' のアクセスポートを VLAN グループ ' ~ at[1] ~ ' にまとめて書きますが、IF ' ~ taken.name ~ ' が、すでにインタフェースの表にあります（IF 対応で、その IF を別のグループの番号にしてください）') }}"
+      bridge_group: "{{ p.access_vlan }}"
+      enabled: true
+    note: "VLAN {{ p.access_vlan }} のアクセスポート（ポート {{ same | join('・') }}）を、VLAN グループ {{ at[1] }}（IF {{ at[0] }}:{{ at[1] }}.0）にまとめ、ブリッジグループ {{ p.access_vlan }} に入れて書きます"
+  # The number of the VLAN becomes the number of the group whose interface
+  # is that of the VLAN.
+  - id: sw.access.number
+    for: switchports
+    as: p
+    let:
+      at: "p.if_name | split(':port')"
+      i: "rows('interfaces', vlan_id=p.access_vlan) | selectattr('name', 'startingwith', at[0] ~ ':') | first"
+      g: "i.name | replace(at[0] ~ ':', '') | replace('.0', '') if i else ''"
+    when: "p.mode == 'access' and ':port' in p.if_name and p.access_vlan and g and g != p.access_vlan"
+    row: {table: switchports, key: {if_name: "{{ p.if_name }}"}}
+    set: {access_vlan: "{{ g }}"}
+    note: "{{ '' if i.bridge_group else p.if_name ~ ': アクセス VLAN ' ~ p.access_vlan ~ ' を、VLAN グループ ' ~ g ~ '（IF ' ~ i.name ~ '）のポートとして書きます' }}"
+  - id: sw.trunk.port
+    for: switchports
+    as: p
+    let:
+      at: "p.if_name | split(':port')"
+      base: "lookup('interfaces', name=at[0] ~ ':' ~ at[1] ~ '.0') if ':port' in p.if_name else ''"
+    when: "p.mode == 'trunk' and base and base.name and not base.vlan_id"
+    row: {table: switchports, key: {if_name: "{{ p.if_name }}"}}
+    set: {mode: access, access_vlan: "{{ at[1] }}"}
+    clear: [native_vlan, allowed_vlans, trunk_encapsulation, nonegotiate]
+    note: "{{ '' }}"
+  # Bridging works only with the switch of the whole device (CRM p.6-6), with
+  # or without a BVI: where the steps above made a bridge group (a group of
+  # access ports that still has the number of its VLAN, a tagged
+  # subinterface of a trunk), the switch is turned on.
+  - id: sw.irb.l2
+    for: interfaces
+    as: i
+    let:
+      g: "lookup('l2_settings')"
+    when: "i.bridge_group and ':' in i.name and (i.vlan_id == i.bridge_group or i.encap_vlan == i.bridge_group) and g.bridge_irb != 'true'"
+    row: {table: l2_settings, key: {}}
+    set: {bridge_irb: true}
+    note: "ブリッジグループを使うので、bridge irb enable を書きます"
+  # The device has no spanning tree and no line that names a VLAN.
+  - id: sw.stp.port
+    for: switchports
+    as: p
+    when: "p.stp_edge or p.stp_bpdu_guard"
+    clear: [stp_edge, stp_bpdu_guard]
+    note: "{{ p.if_name }}: NEC IX にスパニングツリーは無いので、「すぐ転送にする」「BPDU ガード」は書きません（ループへの備えが要るなら、その VLAN グループの IF の「ループ検出」を有効にしてください）"
+  - id: sw.stp.global
+    for: l2_settings
+    as: g
+    when: "g.stp_mode or g.stp_edge_default or g.stp_bpdu_guard_default or g.stp_extend_system_id"
+    clear: [stp_mode, stp_edge_default, stp_bpdu_guard_default, stp_extend_system_id]
+    note: "NEC IX にスパニングツリーは無いので、スパニングツリーの全体設定は書きません"
+  - id: sw.stp.vlans
+    for: stp_vlans
+    as: s
+    when: "s.vlans"
+    remove: true
+    note: "NEC IX にスパニングツリーは無いので、VLAN {{ s.vlans }} のスパニングツリーの設定は書きません"
+  - id: sw.vlans
+    for: vlans
+    as: v
+    when: "v.vlan_id"
+    remove: true
+    note: "NEC IX には VLAN を定義する行が無いので、VLAN {{ v.vlan_id }}{{ '（' ~ v.name ~ '）' if v.name else '' }} の定義は書きません（VLAN は、ポートとサブ IF の設定で決まります）"
+  # What a switch of another vendor keeps about spanning tree (appendix A
+  # 3.22, the columns of 2026-11-21): the device has no spanning tree.
+  - id: sw.stp.qx
+    for: l2_settings
+    as: g
+    when: "g.stp_enabled | string != '' or g.stp_priority | string != ''"
+    clear: [stp_enabled, stp_priority]
+    note: "NEC IX にスパニングツリーは無いので、「スパニングツリーを使う」「優先度（機器全体）」は書きません"
+  # The rest of what a switch of another vendor says (appendix A 3.22,
+  # 2026-11-21). The device has no spanning tree, no CDP, LLDP or UDLD, no
+  # recovery of stopped ports and one way of bundling ports.
+  - id: sw.more.stp.port
+    for: switchports
+    as: p
+    when: "p.stp_guard or p.stp_bpdu_filter or p.stp_cost or p.stp_port_priority or p.stp_link_type"
+    clear: [stp_guard, stp_bpdu_filter, stp_cost, stp_port_priority, stp_link_type]
+    note: "{{ p.if_name }}: NEC IX にスパニングツリーは無いので、スパニングツリーのガード・BPDU フィルタ・コスト・ポート優先度・リンクの種類は書きません"
+  - id: sw.more.stp.port.off
+    for: switchports
+    as: p
+    when: "p.stp_enabled | string != ''"
+    clear: [stp_enabled]
+    note: "{{ '' if p.stp_enabled | string == 'false' else p.if_name ~ ': NEC IX にスパニングツリーは無いので、「スパニングツリー（ポート）」は書きません' }}"
+  - id: sw.more.udld.port
+    for: switchports
+    as: p
+    when: "p.udld"
+    clear: [udld]
+    note: "{{ '' if p.udld == 'disable' else p.if_name ~ ': 片方向リンクの検出（UDLD）は NEC IX に無いので書きません' }}"
+  - id: sw.more.stp.global
+    for: l2_settings
+    as: g
+    when: "g.stp_loopguard_default or g.stp_bpdu_filter_default or g.stp_pathcost_method or g.stp_backbonefast or g.stp_uplinkfast or g.mst_name or g.mst_revision or g.stp_root or g.stp_hello or g.stp_forward or g.stp_max_age"
+    clear: [stp_loopguard_default, stp_bpdu_filter_default, stp_pathcost_method, stp_backbonefast, stp_uplinkfast, mst_name, mst_revision, stp_root, stp_hello, stp_forward, stp_max_age]
+    note: "NEC IX にスパニングツリーは無いので、ループガード・BPDU フィルタの既定・コストの桁・BackboneFast・UplinkFast・MST のリージョン・ルートブリッジの指定・タイマーは書きません"
+  - id: sw.more.stp.instances
+    for: stp_instances
+    as: s
+    when: "s.instance"
+    remove: true
+    note: "NEC IX にスパニングツリーは無いので、MST インスタンス {{ s.instance }} の設定は書きません"
+  - id: sw.more.discovery
+    for: l2_settings
+    as: g
+    when: "g.cdp or g.cdp_timer or g.cdp_holdtime or g.lldp or g.lldp_timer or g.lldp_holdtime or g.lldp_reinit"
+    clear: [cdp, cdp_timer, cdp_holdtime, lldp, lldp_timer, lldp_holdtime, lldp_reinit]
+    note: "{{ 'CDP・LLDP は NEC IX に無いので書きません（隣の機器からは、この機器が見えなくなります）' if g.cdp == 'true' or g.lldp == 'true' else '' }}"
+  - id: sw.more.discovery.if
+    for: interfaces
+    as: i
+    when: "i.cdp or i.lldp_transmit or i.lldp_receive"
+    clear: [cdp, lldp_transmit, lldp_receive]
+    note: "{{ i.name ~ ': CDP・LLDP は NEC IX に無いので書きません' if i.cdp == 'true' or i.lldp_transmit == 'true' or i.lldp_receive == 'true' else '' }}"
+  - id: sw.more.watch
+    for: l2_settings
+    as: g
+    when: "g.udld or g.udld_message_time or g.errdisable_recovery_causes or g.errdisable_recovery_interval"
+    clear: [udld, udld_message_time, errdisable_recovery_causes, errdisable_recovery_interval]
+    note: "片方向リンクの検出（UDLD）と、止まったポートを自動で戻す設定（errdisable recovery）は NEC IX に無いので書きません（ループ検出で止めたポートを戻す時間は、IF の「ループ検出からの復帰」に書けます）"
+  - id: sw.more.lag
+    for: l2_settings
+    as: g
+    when: "g.lag_load_balance or g.lacp_system_priority"
+    clear: [lag_load_balance, lacp_system_priority]
+    note: "LAG の振り分け方・LACP のシステム優先度は NEC IX に無いので書きません（NEC IX の LAG は固定で、振り分け方は選べません）"
+  # The VLANs a device uses inside for its routed ports are nothing a person
+  # sees: the device has no such VLANs.
+  - id: sw.more.allocation
+    for: l2_settings
+    as: g
+    when: "g.vlan_internal_allocation"
+    clear: [vlan_internal_allocation]
+    note: "{{ '' }}"
+  # The device has no mirror sessions. Its import numbers a mirror by the
+  # port that takes the copy; a row of another vendor gets that number.
+  - id: sw.more.mirror.number
+    for: mirror_sessions
+    as: m
+    let:
+      to: "m.destination_if | split(':port')"
+    when: "to | length == 2 and to[1] is digits and m.session != to[1]"
+    row: {table: mirror_sessions, key: {session: "{{ to[1] }}"}}
+    set: {destination_if: "{{ m.destination_if }}"}
+    append: {sources_both: "{{ m.sources_both | join(' ') }}", sources_rx: "{{ m.sources_rx | join(' ') }}", sources_tx: "{{ m.sources_tx | join(' ') }}"}
+    note: "{{ '' }}"
+  - id: sw.more.mirror.old
+    for: mirror_sessions
+    as: m
+    let:
+      to: "m.destination_if | split(':port')"
+      now: "lookup('mirror_sessions', session=to[1]) if to | length == 2 and to[1] is digits else ''"
+    when: "now and now.destination_if == m.destination_if and m.session != to[1]"
+    remove: true
+    note: "{{ '' }}"
+  - id: sw.more.bridge.stp
+    for: bridge_groups
+    as: b
+    when: "b.protocol or b.priority"
+    clear: [protocol, priority]
+    note: "ブリッジグループ {{ b.group }}: NEC IX のブリッジにスパニングツリーは無いので、スパニングツリーの種類・優先度は書きません（ループする構成では使えません）"
+  - id: sw.more.bridge.empty
+    for: bridge_groups
+    as: b
+    when: "not (b.aging_time or b.table_size or b.bridge_ip or b.bridge_ipv6 or b.bridge_only_pppoe or b.protocol or b.priority)"
+    remove: true
+    note: "{{ '' }}"
+  - id: sw.l2.empty
+    for: l2_settings
+    as: g
+    when: "not (g.stp_mode or g.stp_edge_default or g.stp_bpdu_guard_default or g.stp_extend_system_id or g.ip_routing or g.default_gateway or g.vtp_mode or g.vtp_domain or g.bridge_irb or g.vtp_version or g.vtp_password or g.vtp_pruning or g.dhcp_snooping or g.dhcp_snooping_vlans or g.dhcp_snooping_option82 or g.arp_inspection_vlans or g.mac_aging_time or g.system_mtu or g.loop_detect_interval or g.loop_detect_threshold or g.loop_detect_window or g.bvi_count)"
+    remove: true
+    note: "{{ '' }}"
+  # A subinterface that carried the native VLAN, now on the base interface
+  # of the port: the base interface takes what has no tag.
+  - id: subif.native
+    for: interfaces
+    as: i
+    when: "i.encap_native == 'true' and i.name is endingwith('.0')"
+    clear: [encap_vlan, encap_native]
+    note: "{{ i.name }}: タグなしの VLAN（ネイティブ VLAN {{ i.encap_vlan }}）のサブ IF を、基本 IF として書きます（NEC IX では、タグなしの通信は基本 IF が受けます）"
+  # The number of the VLAN did its work above. What is left is what the
+  # import of this device gives: the number of the group on the interface of
+  # a group that has ports, and nothing elsewhere (so that the book and a
+  # configuration read from the device compare equal).
+  - id: sw.vlan_id.group
+    for: interfaces
+    as: i
+    let:
+      at: "i.name | split(':')"
+      g: "at[1] | replace('.0', '') if at | length == 2 and i.name is endingwith('.0') else ''"
+      ports: "rows('switchports', mode='access', access_vlan=g) | selectattr('if_name', 'startingwith', at[0] ~ ':port') | list if g else []"
+    when: "i.vlan_id and g and ports and i.vlan_id != g"
+    row: {table: interfaces, key: {name: "{{ i.name }}"}}
+    set: {vlan_id: "{{ g }}"}
+    note: "{{ '' }}"
+  - id: sw.vlan_id.other
+    for: interfaces
+    as: i
+    let:
+      at: "i.name | split(':')"
+      g: "at[1] | replace('.0', '') if at | length == 2 and i.name is endingwith('.0') else ''"
+      ports: "rows('switchports', mode='access', access_vlan=g) | selectattr('if_name', 'startingwith', at[0] ~ ':port') | list if g else []"
+    when: "i.vlan_id and not (g and ports)"
+    clear: [vlan_id]
+    note: "{{ '' }}"
+  # IPv6 (appendix A 3.23). The device forwards IPv6 wherever an interface
+  # has it switched on: the switch of the whole device has no line here.
+  - id: ipv6.adapt.routing
+    for: devices
+    as: d
+    when: "d.ipv6_routing == 'true'"
+    clear: [ipv6_routing]
+    note: "「IPv6 の転送」を有効にする行は NEC IX にありません（IPv6 を使う IF があれば転送します）。行を書かずに進めます"
+  # ---- IPsec (appendix A 3.20) ----
+  # How the peer is watched is not chosen on this device: IKE version 1 asks
+  # only while nothing comes from the peer, version 2 at every interval (the
+  # description of the functions, chapter 2.38).
+  - id: ipsec.dpd_mode
+    for: ipsec_tunnels
+    as: r
+    let:
+      want: "'periodic' if (r.ike_version | string) == '2' else 'on_demand'"
+    when: "r.dpd_interval and r.dpd_mode and r.dpd_mode != want"
+    row: {table: ipsec_tunnels, key: {name: "{{ r.name }}"}}
+    set: {dpd_mode: "{{ want }}"}
+    note: "IPsec {{ r.name }}: 相手監視の送り方「{{ r.dpd_mode }}」は NEC IX では選べないので、「{{ want }}」として書きます（NEC IX の IKE 版 1 は通信が無いときだけ、版 2 はいつも間隔ごとに聞きます）"
+  # IKE version 2 writes how often and how long apart a message is sent again
+  # as a pair ("retransmit count … interval …", CRM p.13-62: 3 times unless
+  # written).
+  - id: ipsec.retry
+    for: ipsec_tunnels
+    as: r
+    when: "(r.ike_version | string) == '2' and r.dpd_interval and r.dpd_retry_interval and not r.dpd_retry"
+    row: {table: ipsec_tunnels, key: {name: "{{ r.name }}"}}
+    set: {dpd_retry: 3}
+    note: "IPsec {{ r.name }}: 相手監視の再送回数が空なので、NEC IX の既定の 3 回として書きます（NEC IX の IKE 版 2 は、再送を回数と間隔の組で書きます）"
+  # The device does not say per user what a user may log in by (appendix A
+  # 3.4, the column of 2026-11-21).
+  - id: user.services
+    for: users
+    as: u
+    when: "u.services"
+    clear: [services]
+    note: "ユーザ {{ u.name }}: 「使える接続方式」（{{ u.services | join('・') }}）は書きません（NEC IX には、ユーザごとに方式を決める行がありません）"
+  # ---- access lists and tracking (appendix A 3.25) ----
+  # A list keeps the numbers of its entries only in the sequence mode (CRM
+  # 24-8). A list whose entries are not numbered 10, 20, 30 ... is written
+  # in that mode, so that the numbers stay.
+  - id: acl.seq.mode
+    for: acls
+    as: a
+    let:
+      es: "rows('acl_entries', acl=a.name)"
+      plain: "(es | map(attribute='seq') | map('int') | list) == (range(10, (es | length) * 10 + 1, 10) | list)"
+    when: "a.seq_step == '' and es | length > 0 and not plain"
+    row: {table: acls, key: {name: "{{ a.name }}"}}
+    set: {seq_step: 10}
+    note: "ACL {{ a.name }}: 行の番号が 10、20、30 … ではないので、番号を持つ書き方（sequence-mode 10）で書きます（番号はそのまま残ります）"
+  # The probe takes its source as an interface: the one with that address.
+  - id: track.source_ip
+    for: tracks
+    as: k
+    each: {i: "rows('interfaces')"}
+    when: "k.source_ip and ':' not in k.source_ip and not k.source_if and i.ipv4 is cidr and (i.ipv4 | ip) == k.source_ip"
+    row: {table: tracks, key: {id: "{{ k.id }}"}}
+    set: {source_if: "{{ i.name }}"}
+    clear: [source_ip]
+    note: "回線監視 {{ k.id }}: 送信元アドレス {{ k.source_ip }} を、そのアドレスを持つ IF {{ i.name }} にして書きます（NEC IX は、送信元を IF 名で書きます）"
+
+  # An IPv6 probe takes its source as an address (CRM p.17-18): the first
+  # fixed IPv6 address of the source interface (appendix A 3.23, 2026-11-21).
+  - id: track.source_if6
+    for: tracks
+    as: k
+    let:
+      i: "lookup('interfaces', name=k.source_if)"
+    when: "k.type == 'icmp' and ':' in k.target and k.source_if and not k.source_ip and i.ipv6"
+    row: {table: tracks, key: {id: "{{ k.id }}"}}
+    set: {source_ip: "{{ i.ipv6[0] | ip }}"}
+    clear: [source_if]
+    note: "回線監視 {{ k.id }}: 送信元 IF {{ k.source_if }} を、その IF の IPv6 アドレス {{ i.ipv6[0] | ip }} にして書きます（NEC IX の IPv6 の監視は、送信元をアドレスで書きます）"
+  # The IPv6 probe needs its output interface (CRM p.17-18): the one of the
+  # IPv6 static route that covers the target.
+  - id: track.via_if6
+    for: tracks
+    as: k
+    let:
+      r: "covering('ipv6_routes', 'prefix', k.target)"
+    when: "k.type == 'icmp' and ':' in k.target and not k.via_if and r.out_if and not r.vrf"
+    row: {table: tracks, key: {id: "{{ k.id }}"}}
+    set: {via_if: "{{ r.out_if }}"}
+    note: "回線監視 {{ k.id }}: 「監視の出口の IF」が空なので、監視先を含む IPv6 の経路 {{ r.prefix }} の出力 IF {{ r.out_if }} にして書きます（NEC IX の IPv6 の監視には出力 IF が要ります）"
+
+  # ---- NAT (appendix A 3.25) ----
+  # This device marks no interface inside or outside: every rule of NAT
+  # stands under its interface outside. The mark says nothing more.
+  - id: nat.outside_if
+    for: nat_rules
+    as: n
+    let:
+      outs: "rows('interfaces', nat_role='outside')"
+    each: {o: "outs"}
+    when: "not n.outside_if and outs | length == 1"
+    row: {table: nat_rules, key: {name: "{{ n.name }}"}}
+    set: {outside_if: "{{ o.name }}"}
+    note: "NAT {{ n.name }}: 「外側 IF」が空なので、「NAT の向き」が outside の IF {{ o.name }} にして書きます（NEC IX は、NAT の行を外側 IF の下に書きます）"
+  - id: nat.role
+    for: interfaces
+    as: i
+    let:
+      out: "rows('nat_rules', outside_if=i.name) | length"
+      all: "rows('nat_rules') | length"
+      placed: "rows('nat_rules') | selectattr('outside_if') | list | length"
+    when: "i.nat_role and all > 0 and all == placed and ((i.nat_role == 'outside') == (out > 0))"
+    clear: [nat_role]
+    note: "{{ i.name ~ ': 「NAT の向き」は書きません（NEC IX は、NAT の行を外側 IF の下に書きます。内側の IF は選べず、外側 IF を通る通信に当たります）' if i.nat_role == 'outside' else '' }}"
+
+  # ---- the members of a list of watches (appendix A 3.25) ----
+  # A list is one watch group, and its members are the events of the group:
+  # read back, they are named "<list>-1", "<list>-2" … A member of another
+  # name is written as a copy of that name, and the list names the copies.
+  # The member itself leaves the data when nothing else names it (it would
+  # be a watch group that does nothing). The last two steps go on only where
+  # the row of the new name is the copy (the same kind and target).
+  - id: track.list.member.clash
+    for: tracks
+    as: k
+    each: {m: "k.members"}
+    when: "k.type == 'list' and m != k.id ~ '-' ~ m_n and rows('tracks', id=k.id ~ '-' ~ m_n) | length > 0"
+    note: "{{ fail('回線監視 ' ~ k.id ~ ' がまとめる ' ~ m ~ ' を、NEC IX の event の名前 ' ~ k.id ~ '-' ~ m_n ~ ' に付け替えられません（その名前の行が、もうあります。' ~ k.id ~ '-' ~ m_n ~ ' の行の名前を変えるか、「まとめる監視」の順番を名前の順に合わせてください）') }}"
+  - id: track.list.member.copy
+    for: tracks
+    as: k
+    each: {m: "k.members"}
+    when: "k.type == 'list' and m != k.id ~ '-' ~ m_n and rows('tracks', id=m) | length == 1 and rows('tracks', id=m, type='list') | length == 0 and rows('tracks', id=k.id ~ '-' ~ m_n) | length == 0"
+    row: {table: tracks, key: {id: "{{ k.id }}-{{ m_n }}"}}
+    set:
+      type: "{{ lookup('tracks', id=m).type }}"
+      target: "{{ lookup('tracks', id=m).target }}"
+      source_if: "{{ lookup('tracks', id=m).source_if }}"
+      vrf: "{{ lookup('tracks', id=m).vrf }}"
+      interval: "{{ lookup('tracks', id=m).interval }}"
+      timeout: "{{ lookup('tracks', id=m).timeout }}"
+      fail_count: "{{ lookup('tracks', id=m).fail_count }}"
+      restore_count: "{{ lookup('tracks', id=m).restore_count }}"
+      down_delay: "{{ lookup('tracks', id=m).down_delay }}"
+      up_delay: "{{ lookup('tracks', id=m).up_delay }}"
+      source_ip: "{{ lookup('tracks', id=m).source_ip }}"
+      via_if: "{{ lookup('tracks', id=m).via_if }}"
+      via_next_hop: "{{ lookup('tracks', id=m).via_next_hop }}"
+      threshold: "{{ lookup('tracks', id=m).threshold }}"
+      up_when: "{{ lookup('tracks', id=m).up_when }}"
+      restore_interval: "{{ lookup('tracks', id=m).restore_interval }}"
+    note: "回線監視 {{ k.id }}: まとめる監視 {{ m }} を、{{ k.id }}-{{ m_n }} という名前の event にして書きます（NEC IX は、1 つの監視グループに event を並べます。取り込み直すと、その名前になります）"
+  - id: track.list.member.drop
+    for: tracks
+    as: k
+    each: {m: "k.members"}
+    when: "k.type == 'list' and m != k.id ~ '-' ~ m_n and rows('tracks', id=k.id ~ '-' ~ m_n) | length == 1 and rows('tracks', id=m) | length == 1 and rows('tracks', id=m, type='list') | length == 0 and lookup('tracks', id=k.id ~ '-' ~ m_n).target == lookup('tracks', id=m).target and lookup('tracks', id=k.id ~ '-' ~ m_n).type == lookup('tracks', id=m).type and rows('static_routes', track=m) | length == 0 and rows('fhrp', track=m) | length == 0 and not lookup('tracks', id=m).shutdown_ifs and rows('tracks', type='list', id=((m | split('-'))[:-1] | join('-')), members=m) | length == 0"
+    drop: {table: tracks, key: {id: "{{ m }}"}}
+    note: "{{ '' }}"
+  - id: track.list.member.names
+    for: tracks
+    as: k
+    each: {m: "k.members"}
+    when: "k.type == 'list' and m != k.id ~ '-' ~ m_n and rows('tracks', id=k.id ~ '-' ~ m_n) | length == 1 and (rows('tracks', id=m) | length == 0 or lookup('tracks', id=k.id ~ '-' ~ m_n).target == lookup('tracks', id=m).target)"
+    row: {table: tracks, key: {id: "{{ k.id }}"}}
+    replace:
+      members: "{% for x in k.members %}{{ (k.id ~ '-' ~ m_n) if loop.index == m_n else x }} {% endfor %}"
+    note: "{{ '' }}"
+
+  # ---- the device as a whole (appendix A 3.26) ----
+  # What only another vendor writes is taken away, or written the way of
+  # this device, and told.
+  - id: sys.adapt.timestamp.options
+    for: devices
+    as: d
+    when: "d.log_timestamp_options"
+    clear: [log_timestamp_options]
+    note: "「ログの時刻に足すもの」（{{ d.log_timestamp_options | join('・') }}）は NEC IX にありません。時刻の付け方だけを書きます"
+  - id: sys.adapt.timestamp.debug
+    for: devices
+    as: d
+    when: "d.debug_timestamp or d.debug_timestamp_options"
+    clear: [debug_timestamp, debug_timestamp_options]
+    note: "「デバッグの時刻の付け方」は書きません（NEC IX は、ログとデバッグの時刻を分けません。logging timestamp の 1 つです）"
+  # The level of a syslog destination is not of this device: what is logged
+  # at all has one level.
+  - id: sys.adapt.log_severity
+    for: syslog_servers
+    as: s
+    let:
+      d: "first('devices')"
+      all: "rows('syslog_servers') | map(attribute='severity') | unique | list"
+    when: "s.severity and not d.log_severity and all | length == 1 and s.severity in ['errors', 'warnings', 'notifications', 'informational', 'debugging']"
+    row: {table: devices, key: {}}
+    set: {log_severity: "{{ s.severity }}"}
+    note: "{% if s.server == (rows('syslog_servers') | first).server %}ログ転送先の「重要度」{{ s.severity }} を、機器の「ログに残す重要度」として書きます（NEC IX は、転送先ごとに重要度を決められません。logging subsystem all で、機器内のログも同じ重要度になります）{% endif %}"
+  - id: sys.adapt.log_severity.clear
+    for: syslog_servers
+    as: s
+    let:
+      d: "first('devices')"
+    when: "s.severity and d.log_severity == s.severity"
+    clear: [severity]
+    note: "{{ '' }}"
+  # One timeout for every terminal: the console and the remote logins.
+  - id: sys.adapt.idle.seconds
+    for: remote_access
+    as: r
+    when: "r.idle_timeout_sec != '' and r.idle_timeout_sec | int > 0"
+    row: {table: remote_access, key: {}}
+    set: {idle_timeout: "{{ (r.idle_timeout | int if r.idle_timeout != '' else 0) + 1 }}"}
+    clear: [idle_timeout_sec]
+    note: "無操作切断の秒の端数（{{ r.idle_timeout_sec }} 秒）は NEC IX に書けないので、{{ (r.idle_timeout | int if r.idle_timeout != '' else 0) + 1 }} 分に切り上げて書きます"
+  - id: sys.adapt.idle.seconds.zero
+    for: remote_access
+    as: r
+    when: "r.idle_timeout_sec != '' and r.idle_timeout_sec | int == 0"
+    clear: [idle_timeout_sec]
+    note: "{{ '' }}"
+  - id: sys.adapt.console.to_remote
+    for: devices
+    as: d
+    let:
+      r: "first('remote_access')"
+      min: "(d.console_timeout | int if d.console_timeout != '' else 0) + (1 if d.console_timeout_sec != '' and d.console_timeout_sec | int > 0 else 0)"
+    when: "d.console_timeout != '' and r.device and r.idle_timeout == ''"
+    row: {table: remote_access, key: {}}
+    set: {idle_timeout: "{{ min }}"}
+    note: "コンソールの無操作切断（{{ min }} 分）を、機器に 1 つの terminal timeout として書きます（NEC IX は、コンソールと遠隔ログインの無操作切断を分けません）"
+  - id: sys.adapt.console.clear
+    for: devices
+    as: d
+    let:
+      r: "first('remote_access')"
+      min: "(d.console_timeout | int if d.console_timeout != '' else 0) + (1 if d.console_timeout_sec != '' and d.console_timeout_sec | int > 0 else 0)"
+    when: "d.console_timeout != '' or d.console_timeout_sec != ''"
+    clear: [console_timeout, console_timeout_sec]
+    note: "{% if not r.device %}コンソールの無操作切断（{{ min }} 分）は書けません（NEC IX の terminal timeout は、遠隔ログインの表の「無操作切断」に書きます。その表に行を作ってください）{% elif r.idle_timeout == '' or r.idle_timeout | int != min %}コンソールの無操作切断（{{ min }} 分）は書きません（NEC IX は、コンソールと遠隔ログインの無操作切断を分けません。遠隔ログインの {{ r.idle_timeout }} 分を terminal timeout として書きます）{% endif %}"
+  # The users of the device are login users, always hashed.
+  - id: sys.adapt.user.reversible
+    for: users
+    as: u
+    when: "u.reversible | string | lower == 'true'"
+    clear: [reversible]
+    note: "ユーザ {{ u.name }}: 「元に戻せる形で持つ」は NEC IX のユーザにありません（ログインのユーザは、いつもハッシュで保存します）。ログインのユーザとして書きます。PPP の相手の認証に使うユーザなら、この行を消して、PPP の設定（L2TP の接続ユーザなど）に書いてください"
+
+  # ---- secrets in the encrypted form of a device (appendix A 3.26) ----
+  # The keys of IPsec: "secret <value>" is the form of this device.
+  - id: secret.form.ipsec
+    for: ipsec_tunnels
+    as: x
+    when: "(' ' in x.psk and not x.psk is startingwith('secret ')) or (' ' in x.psk_remote and not x.psk_remote is startingwith('secret '))"
+    note: "{{ fail('IPsec ' ~ x.name ~ ' の鍵は、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+  # A secret with a space is "<kind> <value>" as a device saved it. This
+  # device writes back its own form where the import reads it ("secret
+  # <value>" of an L2TP tunnel); any other cannot be carried over.
+  - id: secret.form.ospf
+    for: ospf_interfaces
+    as: x
+    when: "' ' in x.auth_key"
+    note: "{{ fail('' ~ x.if_name ~ ' の OSPF の鍵は、機器が暗号化した形です（NEC IX へは引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.bgp
+    for: bgp_neighbors
+    as: x
+    when: "' ' in x.password"
+    note: "{{ fail('BGP ネイバー ' ~ x.neighbor ~ ' のパスワードは、機器が暗号化した形です（NEC IX へは引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.pppoe
+    for: pppoe
+    as: x
+    when: "' ' in x.password"
+    note: "{{ fail('PPPoE ' ~ x.name ~ ' の接続パスワードは、機器が暗号化した形です（NEC IX へは引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.l2tp_user
+    for: l2tp_users
+    as: x
+    when: "' ' in x.password"
+    note: "{{ fail('L2TP 接続ユーザ ' ~ x.name ~ ' の接続パスワードは、機器が暗号化した形です（NEC IX へは引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.fhrp
+    for: fhrp
+    as: x
+    when: "' ' in x.auth_key"
+    note: "{{ fail('冗長化 ' ~ x.if_name ~ ' の認証の鍵は、機器が暗号化した形です（NEC IX へは引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.l2tp
+    for: l2tp_groups
+    as: x
+    when: "' ' in x.password and not x.password is startingwith('secret ')"
+    note: "{{ fail('L2TP ' ~ x.name ~ ' のトンネルのパスワードは、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.user
+    for: users
+    as: x
+    when: "x.secret_form == 'encrypted'"
+    note: "{{ fail('ユーザ ' ~ x.name ~ ' のパスワードは、別メーカーの機器が暗号化した形（encrypted）です（引き継げません。平文を入れ直してください）') }}"
+
+  # ---- PPPoE (appendix A 3.26) ----
+  # The device calls by itself ("auto-connect"), or on any packet ("no
+  # auto-connect"): it has no list of the packets that start a call.
+  - id: pppoe.adapt.trigger
+    for: pppoe
+    as: p
+    when: "p.dial_trigger"
+    clear: [dial_trigger]
+    note: "PPPoE {{ p.name }}: 「つなぐきっかけの通信」（{{ p.dial_trigger }}）は NEC IX にありません（{{ '通信があるときだけつなぐ IF は、どの通信でもつなぎます' if p.on_demand | string | lower == 'true' else 'いつもつないでいます（auto-connect）' }}）。行を書かずに進めます"
+
+  # ---- EtherIP (appendix A 3.26) ----
+  # The tunnel is a member of a bridge group: bridging has to be on (FD
+  # 2.10.1, "bridge irb enable").
+  - id: etherip.adapt.irb
+    for: tunnels
+    as: u
+    let:
+      l2: "first('l2_settings')"
+      head: "rows('tunnels', type='etherip') | first"
+    when: "u.type == 'etherip' and not (l2.bridge_irb | string | lower == 'true') and head.if_name == u.if_name"
+    row: {table: l2_settings, key: {}}
+    set: {bridge_irb: true}
+    note: "EtherIP のトンネル（{{ u.if_name }}）があるので、「ブリッジと L3 の併用」を有効にして書きます（bridge irb enable。NEC IX の EtherIP は、ブリッジの機能の上で動きます）"
+  # ---- IPsec that protects the callers of an LNS (appendix A 3.21) ----
+  # The map of such a row is put on the tunnel interfaces of the LNS, and
+  # its list lets everything through (FD 2.36.4: "the same as the example
+  # unless there is a reason"). The interface another vendor puts the map
+  # on, and the selector that picks L2TP there (UDP 1701), say what this
+  # device does by itself: nothing is told. Another selector is told.
+  - id: ipsec.lns.local_if
+    for: ipsec_tunnels
+    as: r
+    let:
+      g: "first('l2tp_groups', ipsec_policy=r.name, role='lns')"
+    when: "g.name and r.style == 'policy' and r.local_if"
+    clear: [local_if]
+    note: "{{ '' }}"
+  - id: ipsec.lns.selector
+    for: ipsec_selectors
+    as: s
+    let:
+      g: "first('l2tp_groups', ipsec_policy=s.tunnel, role='lns')"
+      r: "lookup('ipsec_tunnels', name=s.tunnel)"
+      l2tp: "s.protocol == 'udp' and ((s.local_port | string) == '1701' or (s.remote_port | string) == '1701')"
+    when: "g.name and r.style == 'policy'"
+    remove: true
+    note: "{{ '' if l2tp else ('IPsec ' ~ s.tunnel ~ ' の対象通信 ' ~ s.seq ~ ' 番: L2TP ' ~ g.name ~ ' の受け口を守る行なので、書きません（NEC IX では、L2TP だけが通る受け口のトンネル IF に当てるので、対象は「すべて」で書きます）') }}"
+  # A row whose only selector is "everything" says what a map without a
+  # selector says: the list of the map lets everything through.
+  - id: ipsec.selector.all
+    for: ipsec_selectors
+    as: s
+    let:
+      r: "lookup('ipsec_tunnels', name=s.tunnel)"
+    when: "r.style == 'policy' and s.local_net == '0.0.0.0/0' and s.remote_net == '0.0.0.0/0' and (not s.protocol or s.protocol == 'ip') and (rows('ipsec_selectors', tunnel=s.tunnel) | length) == 1"
+    remove: true
+    note: "{{ '' }}"
+  # ---- candidates of IKE version 2 (appendix A 3.20) ----
+  # This device writes the candidates of version 2 as lists of values on the
+  # lines of one proposal, and agrees to any combination of them. A row of
+  # "IPsec more proposals" (how another vendor writes a further candidate)
+  # is written by adding its values to those lists, which is told: more
+  # combinations are let in than the rows say. A row with a lifetime or an
+  # AH hash is left as it is (the template tells that it cannot be written).
+  - id: ipsec.v2.proposal
+    for: ipsec_proposals
+    as: x
+    let:
+      r: "lookup('ipsec_tunnels', name=x.tunnel)"
+      ike: "x.phase == 'ike'"
+    when: "(r.ike_version | string) == '2' and r.style == 'tunnel_if' and not (x.ah_hash or x.lifetime or x.lifetime_kb)"
+    row: {table: ipsec_tunnels, key: {name: "{{ x.tunnel }}"}}
+    append:
+      ike_encryption_more: "{{ x.encryption if (ike and x.encryption and x.encryption != r.ike_encryption and x.encryption not in (r.ike_encryption_more or [])) else '' }}"
+      ike_hash_more: "{{ x.hash if (ike and x.hash and x.hash != r.ike_hash and x.hash not in (r.ike_hash_more or [])) else '' }}"
+      ike_dh_more: "{{ x.dh if (ike and x.dh and x.dh != r.ike_dh and x.dh not in (r.ike_dh_more or [])) else '' }}"
+      ike_prf_more: "{{ x.prf if (ike and x.prf and r.ike_prf and x.prf != r.ike_prf and x.prf not in (r.ike_prf_more or [])) else '' }}"
+      esp_encryption_more: "{{ x.encryption if (not ike and x.encryption and x.encryption != r.esp_encryption and x.encryption not in (r.esp_encryption_more or [])) else '' }}"
+      esp_hash_more: "{{ x.hash if (not ike and x.hash and x.hash != r.esp_hash and x.hash not in (r.esp_hash_more or [])) else '' }}"
+    note: "IPsec {{ x.tunnel }} の追加の提案 {{ x.seq }} 番（段 {{ x.phase }}）: NEC IX の IKEv2 は、候補を値の並びで書きます。この行の値を「（追加）」の並びに足して書きます（並べた値のどの組み合わせでも折り合うので、行に書いた組み合わせより広くなります）"
+  - id: ipsec.v2.proposal.done
+    for: ipsec_proposals
+    as: x
+    let:
+      r: "lookup('ipsec_tunnels', name=x.tunnel)"
+    when: "(r.ike_version | string) == '2' and r.style == 'tunnel_if' and not (x.ah_hash or x.lifetime or x.lifetime_kb)"
+    remove: true
+    note: "{{ '' }}"
+  # The one selector of a tunnel interface (what the map tells the peer
+  # that it protects) has no number on this device; the import calls it 10.
+  - id: ipsec.tunnel_if.selector
+    for: ipsec_selectors
+    as: s
+    let:
+      r: "lookup('ipsec_tunnels', name=s.tunnel)"
+    when: "r.style == 'tunnel_if' and (s.seq | string) != '10' and (rows('ipsec_selectors', tunnel=s.tunnel) | length) == 1"
+    row: {table: ipsec_selectors, key: {tunnel: "{{ s.tunnel }}", seq: "10"}}
+    set:
+      local_net: "{{ s.local_net }}"
+      remote_net: "{{ s.remote_net }}"
+      protocol: "{{ s.protocol }}"
+      local_port: "{{ s.local_port }}"
+      remote_port: "{{ s.remote_port }}"
+    note: "{{ '' }}"
+  - id: ipsec.tunnel_if.selector.done
+    for: ipsec_selectors
+    as: s
+    let:
+      r: "lookup('ipsec_tunnels', name=s.tunnel)"
+      ten: "lookup('ipsec_selectors', tunnel=s.tunnel, seq='10')"
+    when: "r.style == 'tunnel_if' and (s.seq | string) != '10' and (rows('ipsec_selectors', tunnel=s.tunnel) | length) == 2 and ten.local_net == s.local_net and ten.remote_net == s.remote_net and ten.protocol == s.protocol and ten.local_port == s.local_port and ten.remote_port == s.remote_port"
+    remove: true
+    note: "{{ '' }}"
+  # A tunnel of IPsec with IKE version 1 has neither a source nor a
+  # destination line on this device: the map holds the address of the peer,
+  # and the routes choose the interface the packets leave by. A destination
+  # that is the peer of the IPsec row says nothing more (not told); a
+  # source is told, as the device cannot be held to it.
+  - id: tunnel.ipsec.destination
+    for: tunnels
+    as: u
+    let:
+      r: "first('ipsec_tunnels', tunnel_if=u.if_name, style='tunnel_if')"
+    when: "u.type == 'ipsec' and (r.ike_version | string) == '1' and u.destination and u.destination == r.peer_address"
+    clear: [destination]
+    note: "{{ '' }}"
+  # A peer by its name: the row of IPsec says the name ("peer-fqdn-ipv4").
+  - id: tunnel.ipsec.destination.name
+    for: tunnels
+    as: u
+    let:
+      r: "first('ipsec_tunnels', tunnel_if=u.if_name, style='tunnel_if')"
+    when: "u.type == 'ipsec' and u.destination_fqdn and u.destination_fqdn == r.peer_address"
+    clear: [destination_fqdn]
+    note: "{{ '' }}"
+  - id: tunnel.ipsec.source
+    for: tunnels
+    as: u
+    let:
+      r: "first('ipsec_tunnels', tunnel_if=u.if_name, style='tunnel_if')"
+    when: "u.type == 'ipsec' and (r.ike_version | string) == '1' and u.source"
+    clear: [source]
+    note: "トンネル {{ u.if_name }}: 「送信元」（{{ u.source }}）は書きません（NEC IX の IKE 版 1 の IPsec は、経路で決まる出口のインタフェースから送ります）"
+
+  # ---- what a dataset read from NEC QX may hold (appendix A 3.24) ----
+  - id: qx.secret.device
+    for: devices
+    as: d
+    when: "d.secret_form == 'encrypted'"
+    note: "{{ fail('特権パスワードは、別メーカーの機器が暗号化して保存した形（encrypted）です（引き継げません。平文を入れ直してください）') }}"
+  - id: qx.secret.snmp
+    for: snmp_communities
+    as: x
+    when: "' ' in x.community"
+    note: "{{ fail('SNMP コミュニティに、別メーカーの機器が暗号化した形の値があります（引き継げません。平文を入れ直してください）') }}"
+  - id: qx.secret.line
+    for: remote_access
+    as: x
+    when: "x.line_password is startingwith('cipher ') or x.line_password is startingwith('hash ')"
+    note: "{{ fail('遠隔ログインの回線パスワードは、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+  - id: qx.ospf.hmac
+    for: ospf_interfaces
+    as: x
+    when: "x.auth_type == 'hmac_md5'"
+    note: "{{ fail(x.if_name ~ ' の OSPF の認証 hmac_md5 は、NEC QX の語です（このメーカーの認証 md5 と同じ動きかを、公開資料で確かめられていません。両端の機器で確かめたうえで、md5 に書き直してください）') }}"
+  - id: qx.sw.hybrid
+    for: switchports
+    as: p
+    when: "p.mode == 'hybrid'"
+    note: "{{ fail(p.if_name ~ ': モード hybrid は、このメーカーでは書けません（access か trunk に決めてください）') }}"
+  # ---- RIP and RIPng (appendix A 3.27) ----
+  # The version of RIP stands on the interfaces here: the version of the
+  # process is written on every interface that names none (the same
+  # meaning: not told).
+  - id: rip.version.send
+    for: rip_interfaces
+    as: r
+    let:
+      p: "lookup('rip_processes', family='ipv4')"
+    when: "r.family == 'ipv4' and p.version and not r.send_version"
+    row: {table: rip_interfaces, key: {family: ipv4, if_name: "{{ r.if_name }}"}}
+    append: {send_version: "{{ p.version }}"}
+    note: "{{ '' }}"
+  - id: rip.version.receive
+    for: rip_interfaces
+    as: r
+    let:
+      p: "lookup('rip_processes', family='ipv4')"
+    when: "r.family == 'ipv4' and p.version and not r.receive_version"
+    row: {table: rip_interfaces, key: {family: ipv4, if_name: "{{ r.if_name }}"}}
+    append: {receive_version: "{{ p.version }}"}
+    note: "{{ '' }}"
+  - id: rip.version.clear
+    for: rip_processes
+    as: p
+    when: "p.family == 'ipv4' and p.version"
+    clear: [version]
+    note: "{{ '' }}"
+  # "Passive by default" (Cisco) is written on the interfaces: the ones
+  # that do not say "sends" stop sending.
+  - id: rip.passive.each
+    for: rip_interfaces
+    as: r
+    let:
+      p: "lookup('rip_processes', family=r.family)"
+    when: "(p.passive_default | string | lower) == 'true' and r.send == ''"
+    row: {table: rip_interfaces, key: {family: "{{ r.family }}", if_name: "{{ r.if_name }}"}}
+    set: {send: false}
+    note: "{{ r.if_name }} の RIP: 「既定を「送らない」にする」は NEC IX に無いので、この IF の「送る」を無効にして書きます（no {{ 'ipv6' if r.family == 'ipv6' else 'ip' }} rip send）"
+  - id: rip.passive.clear
+    for: rip_processes
+    as: p
+    when: "(p.passive_default | string | lower) == 'true'"
+    clear: [passive_default]
+    note: "{{ '' }}"
+  # An interface that says "sends" where sending is the default.
+  - id: rip.send.clear
+    for: rip_interfaces
+    as: r
+    when: "(r.send | string | lower) == 'true'"
+    clear: [send]
+    note: "{{ '' }}"
+  - id: rip.receive.clear
+    for: rip_interfaces
+    as: r
+    when: "(r.receive | string | lower) == 'true'"
+    clear: [receive]
+    note: "{{ '' }}"
+  # The hold-down timer is not of this device.
+  - id: rip.holddown
+    for: rip_processes
+    as: p
+    when: "p.timer_holddown != ''"
+    clear: [timer_holddown]
+    note: "{{ '' if ((p.timer_holddown | string) == '180' and p.family == 'ipv4') or ((p.timer_holddown | string) == '0' and p.family == 'ipv6') else ('RIP（' ~ p.family ~ '）: 「より良い経路を受け付けない時間」（' ~ p.timer_holddown ~ ' 秒）は NEC IX に無いので、外して書きます') }}"
+  # The line names the OSPF process: the one process of the device.
+  - id: rip.redistribute.ospf
+    for: rip_redistribute
+    as: d
+    let:
+      procs: "rows('ospf_processes') if d.family == 'ipv4' else rows('ospfv3_processes')"
+    when: "d.source == 'ospf' and d.process_id == '' and procs | length == 1"
+    row: {table: rip_redistribute, key: {family: "{{ d.family }}", source: ospf}}
+    set: {process_id: "{{ (procs | first).process_id }}"}
+    note: "{{ '' }}"
+  # VRRP version 3 (appendix A 3.23, "IPv6 の VRRP"): the IPv4 VRRP of this
+  # device is version 2 only (FD 2.27.1, "IPv4 と IPv6 の動作差分"); IPv6 VRRP is version 3 by itself.
+  # A device on version 3 (as Cisco has it) is written on version 2: that is
+  # told when it has IPv4 groups (a peer on version 3 only does not meet them;
+  # X-405), and not told when it has none (nothing changes). "vrrpv2" is how
+  # this device always works.
+  - id: vrrp3.adapt.v2
+    for: devices
+    as: d
+    when: "d.vrrp_version == '3' and rows('fhrp', protocol='vrrp')"
+    clear: [vrrp_version]
+    note: "NEC IX の IPv4 の VRRP は版 2 だけなので、機器の「VRRP の版（IPv4）」3 を外し、IPv4 のグループを版 2 で書きます（IPv6 の VRRP は版 3 のままです）。同じグループの相手が版 3 だけで動く機器なら、相手の行の「版 2 の相手とも話す」を有効にしてください"
+  - id: vrrp3.adapt.v3only
+    for: devices
+    as: d
+    when: "d.vrrp_version == '3' and not rows('fhrp', protocol='vrrp')"
+    clear: [vrrp_version]
+    note: "{{ '' }}"
+  - id: vrrp3.adapt.vrrpv2
+    for: fhrp
+    as: f
+    when: "f.vrrpv2 in [true, 'true']"
+    clear: [vrrpv2]
+    note: "{{ '' }}"

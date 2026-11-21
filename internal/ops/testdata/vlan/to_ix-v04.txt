@@ -1,0 +1,20 @@
+hostname ix-v04
+!
+device GigaEthernet2
+  vlan-group 1 port 1 2
+  vlan-group 3 port 3 4
+  port 1 mirror-port 4 both
+  port 2 mirror-port 4 out
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.14/30
+  no shutdown
+!
+interface GigaEthernet2:1.0
+  ip address 192.0.2.1/25
+  no shutdown
+!
+interface GigaEthernet2:3.0
+  ip address 192.0.2.129/25
+  no shutdown
+!

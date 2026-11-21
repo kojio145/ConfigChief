@@ -1,0 +1,75 @@
+# NEC QX series (layer-2 and layer-3 switches; the software that calls itself
+# "Version 7"). The syntax follows the vendor's public command manuals;
+# README.md names the books and what is not confirmed yet.
+id: nec_qx
+title: {ja: "NEC QX シリーズ（スイッチ）", en: "NEC QX series (switches)"}
+version: 0.2.0
+schema: 1
+syntax: indent
+# Every part of the configuration ends with a line "#". The single lines of
+# the device as a whole are indented by one space (" sysname sw-a01"): the
+# mark closes what stands before it, so such a line is no child of the
+# interface above (appendix B 2.2).
+comment_prefixes: ["#"]
+comment_closes: true
+output:
+  encoding: utf-8
+  newline: lf
+  indent: " "
+end_marker: '^return$'
+
+# A switch of the other bundled vendor scores up to 6 here with its
+# "version", "interface GigabitEthernet" and "line vty" lines: the lines
+# only this device has weigh more.
+detect:
+  - {match: '^sysname \S+$', score: 5}
+  - {match: '^version \d+\.\d+\.\d+(, Release \S+)?$', score: 3}
+  - {match: '^interface (Vlan-interface|Bridge-Aggregation|Ten-GigabitEthernet|M-GigabitEthernet)\d', score: 3}
+  - {match: '^port link-(mode|type) (bridge|route|access|trunk|hybrid)$', score: 3}
+  - {match: '^(undo )?stp (global enable|mode \S+|bpdu-protection|edged-port)$', score: 2}
+  - {match: '^ip route-static \d+\.\d+\.\d+\.\d+ ', score: 2}
+  - {match: '^local-user \S+( class (manage|network))?$', score: 2}
+  - {match: '^(snmp-agent|info-center|ntp-service) ', score: 1}
+  - {match: '^return$', score: 1}
+
+blocks:
+  # A banner: the text stands between two marks, the first character after
+  # the keyword and the same character again (Operation Manual, "バナー入力
+  # モード"). The form that starts on the next line and ends with "%" has
+  # no mark on its first line and is not read (README).
+  - id: header
+    start: '^header (?P<kind>incoming|legal|login|motd|shell) (?P<delim>.)'
+    end_by: delim
+
+hostname: '^sysname (?P<name>\S+)$'
+
+# Terminal logs. The prompt is the device name in angle brackets (user view),
+# or in square brackets with the view behind a hyphen
+# ("[sw-a01-Vlan-interface10]"): a command typed there changes the
+# configuration. A device name may hold hyphens itself, so the name cannot be
+# cut from the view: the name is only taken from the user-view form, and
+# "mode" is all that stands in the square brackets. Keywords may be shortened
+# (Operation Manual, the chapter on the command line); "---- More ----" is
+# the pager mark of the manuals' examples.
+session:
+  prompt: '^(?:<(?P<host>[\w.\-]+)>|\[(?P<mode>[\w.\-/:]+)\])'
+  show_config:
+    - '^dis\w*\s+cu\S*$'
+    - '^dis\w*\s+sa\S*$'
+  pager: ['^\s*---- More ----']
+
+# The saved text has the full names. The short names are what the display
+# commands of the manuals show (GE1/0/1, XGE1/0/25, BAGG1).
+interfaces:
+  types:
+    - {name: GigabitEthernet, short: [GE], kind: physical}
+    - {name: Ethernet, short: [], kind: physical}             # 100 Mbps ports (the generation before Version 7)
+    - {name: Ten-GigabitEthernet, short: [XGE], kind: physical}
+    - {name: FortyGigE, short: [], kind: physical}
+    - {name: M-GigabitEthernet, short: [], kind: physical}
+    - {name: Bridge-Aggregation, short: [BAGG], kind: lag}
+    - {name: Vlan-interface, short: [], kind: vlan}
+    - {name: LoopBack, short: [], kind: loopback}
+    - {name: Tunnel, short: [], kind: tunnel}
+    - {name: "NULL", short: [], kind: other}
+  subif: '^(?P<parent>.+)\.(?P<n>\d+)$'

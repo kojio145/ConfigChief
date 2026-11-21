@@ -1,12 +1,15 @@
 {# Remote access. Syntax: cmdref 4.4. Each server is switched on by its own
-   line, both take the same access list, and the timeout is one value for
+   line, each takes an access list (the one of the row, or its own), and the timeout is one value for
    every terminal of the device. The SSH version, the way of logging in and a
    line password have no confirmed line: those cells are not read. #}
 {% for ra in t.remote_access %}
 {% for p in ra.protocols %}
 {{ p }}-server ip enable
-{% if ra.acl %}
-{{ p }}-server ip access-list {{ ra.acl }}
+{% set own = ra.acl_ssh if p == 'ssh' else ra.acl_telnet %}
+{% if ra.acl and own %}
+{{ fail('遠隔ログイン: 「接続元の制限」と「接続元の制限（' ~ p ~ ' だけ）」の両方があります（どちらか片方に書きます）') }}
+{% elif ra.acl or own %}
+{{ p }}-server ip access-list {{ ra.acl if ra.acl else own }}
 {% endif %}
 {% endfor %}
 {% if ra.idle_timeout != '' %}

@@ -1,0 +1,17 @@
+table: ipv6_routes
+title: {ja: IPv6 スタティック経路, en: IPv6 static routes}
+since: M7
+key: [device, vrf, prefix, next_hop, out_if]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name, note: {ja: "空 = VRF なし（全体の経路表）", en: "Empty = no VRF (the global table)"}}
+  - {name: prefix, title: {ja: 宛先, en: Prefix}, type: net6, required: true, note: {ja: "例 2001:db8:10::/48。デフォルト経路は ::/0", en: "e.g. 2001:db8:10::/48. The default route is ::/0"}}
+  - {name: next_hop, title: {ja: ネクストホップ, en: Next hop}, type: ip6, note: {ja: "リンクローカル（fe80::…）のときは出力 IF も書く", en: "With a link-local address (fe80::…) the out interface is needed too"}}
+  - {name: out_if, title: {ja: 出力 IF, en: Out interface}, type: ifname, also: ["Null*"], note: {ja: "捨てる経路の Null0 などは、インタフェースの表に行がなくてもよい", en: "Null0 and the like (a route that discards) need no row in the interfaces table"}}
+  - {name: gateway_from, title: {ja: ネクストホップの決め方, en: Gateway from}, type: enum, values: [ra, dhcp], note: {ja: "出力 IF だけを書いた経路で、RA の送り元（ra）か DHCPv6 サーバ（dhcp）をネクストホップにする", en: "For a route with an out interface only: the sender of the RA, or the DHCPv6 server, is the next hop"}}
+  - {name: distance, title: {ja: 優先度（distance）, en: Distance}, type: int, min: 1, max: 255}
+  - {name: description, title: {ja: 説明, en: Description}, type: string}
+checks:
+  - id: V-101
+    when: "not row.next_hop and not row.out_if"
+    message: {ja: ネクストホップか出力 IF のどちらかが必要です, en: A next hop or an out interface is needed}

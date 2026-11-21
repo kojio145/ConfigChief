@@ -1,0 +1,28 @@
+# The shapes of the series (appendix B 6). The IDs name the ports, not a
+# product: "ix-2ge-8sw" has 2 routed Gigabit Ethernet ports and a built-in
+# switch of 8 ports. The names of the ports: README, "機種の定義".
+models:
+  - id: ix-1ge-4sw
+    title: {ja: "L3 の GE×1 ＋ 内蔵スイッチ 4 ポート", en: "1 routed GE port and a built-in switch of 4 ports"}
+    ports:
+      - {name: GigaEthernet0.0, role: wan, sub: GigaEthernet0}
+      - {range: "GigaEthernet1:port[1-4]", role: switch, vlan_if: "GigaEthernet1:{p}.0"}
+    logical: {loopback: "Loopback{n}.0", tunnel: "Tunnel{n}.0", subif: "{parent}.{i}", pppoe: "{parent}.{i}", vlan: "BVI{j}"}
+    limits: {switch_ports: 4}
+  - id: ix-2ge-8sw
+    title: {ja: "L3 の GE×2 ＋ 内蔵スイッチ 8 ポート", en: "2 routed GE ports and a built-in switch of 8 ports"}
+    ports:
+      - {name: GigaEthernet0.0, role: wan, sub: GigaEthernet0}
+      - {name: GigaEthernet1.0, role: wan, sub: GigaEthernet1}
+      - {range: "GigaEthernet2:port[1-8]", role: switch, vlan_if: "GigaEthernet2:{p}.0"}
+    logical: {loopback: "Loopback{n}.0", tunnel: "Tunnel{n}.0", subif: "{parent}.{i}", pppoe: "{parent}.{i}", vlan: "BVI{j}"}
+    limits: {switch_ports: 8}
+  - id: ix-4ge
+    title: {ja: "L3 の GE×4（内蔵スイッチなし）", en: "4 routed GE ports, no built-in switch"}
+    ports:
+      - {name: GigaEthernet0.0, role: wan, sub: GigaEthernet0}
+      - {name: GigaEthernet1.0, role: wan, sub: GigaEthernet1}
+      - {name: GigaEthernet2.0, role: lan, sub: GigaEthernet2}
+      - {name: GigaEthernet3.0, role: lan, sub: GigaEthernet3}
+    logical: {loopback: "Loopback{n}.0", tunnel: "Tunnel{n}.0", subif: "{parent}.{i}", pppoe: "{parent}.{i}", vlan: "BVI{j}"}
+    limits: {switch_ports: 0}

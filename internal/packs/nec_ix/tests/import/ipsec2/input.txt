@@ -1,0 +1,96 @@
+hostname ix-c01
+!
+ip route 192.0.2.0/26 Tunnel0.0
+ip access-list sec-sample permit ip src any dest any
+!
+ike proposal ike-prop-sample encryption aes-256 hash sha2-256 group 2048-bit
+!
+ike policy ike-sample-a peer-fqdn-ipv4 ix-c02.example.com key 64756d6d792d6b65792d61 key-type hex mode aggressive ike-prop-sample
+ike local-id ike-sample-a fqdn ix-c01.example.com
+ike remote-id ike-sample-a user-fqdn netops@example.com
+ike keepalive ike-sample-a 30 5
+ike nat-traversal policy ike-sample-a keepalive 30 force
+!
+ike policy ike-sample-b peer any key dummy-psk-v1-b mode aggressive ike-prop-sample
+ike remote-id ike-sample-b keyid sample-site-b
+!
+ipsec autokey-proposal ipsec-prop-sample-a esp-aes-256 esp-sha2-512 ah-sha2-256 lifetime both 3600 100000
+ipsec autokey-proposal ipsec-prop-sample-b esp-aes esp-sha lifetime time 7200
+!
+ipsec autokey-map ipsec-sample-a sec-sample peer-fqdn-ipv4 ix-c02.example.com pfs 2048-bit ipsec-prop-sample-a
+ipsec dynamic-map ipsec-sample-b sec-sample ike ike-sample-b ipsec-prop-sample-b
+!
+ikev2 authentication psk id keyid sample-site-a key char dummy-psk-v2-a
+ikev2 authentication psk id keyid sample-site-c key char dummy-psk-v2-c
+ikev2 authentication psk id ipv4 203.0.113.9 key char dummy-psk-v2-d
+ikev2 authentication psk id ipv4 203.0.113.40 key char dummy-psk-v2-d
+ikev2 authentication psk id fqdn ix-c05.example.com key hex 64756d6d792d6b65792d62
+ikev2 authentication psk id rfc822-addr netops@example.com key hex 64756d6d792d6b65792d61
+!
+ikev2 default-profile
+  child-pfs 2048-bit
+  child-proposal enc aes-cbc-256
+  child-proposal integrity sha2-256
+  dpd interval 20
+  local-authentication psk id keyid sample-site-a
+  sa-proposal dh 2048-bit
+  sa-proposal enc aes-cbc-256
+  sa-proposal integrity sha2-256
+  sa-proposal prf sha2-384
+!
+ikev2 profile ikev2-sample-d
+  child-lifetime 7200
+  child-pfs off
+  dpd off
+  ipsec-mode transport
+  local-authentication psk
+  nat-traversal force keepalive 30
+  sa-lifetime 43200
+  sa-proposal enc aes-gcm-256-16
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.9/29
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.1/24
+  no shutdown
+!
+interface Tunnel0.0
+  tunnel mode ipsec
+  ip unnumbered GigaEthernet1.0
+  ipsec policy tunnel ipsec-sample-a out
+  no shutdown
+!
+interface Tunnel1.0
+  tunnel mode ipsec
+  ip unnumbered GigaEthernet1.0
+  ipsec policy tunnel ipsec-sample-b out
+  no shutdown
+!
+interface Tunnel2.0
+  tunnel mode ipsec-ikev2
+  ip unnumbered GigaEthernet1.0
+  ikev2 connect-type auto
+  ikev2 peer 203.0.113.30 authentication psk id keyid sample-site-c
+  ikev2 retransmit count 5 interval 10
+  no shutdown
+!
+interface Tunnel3.0
+  tunnel mode ipsec-ikev2
+  ip unnumbered GigaEthernet1.0
+  ikev2 binding ikev2-sample-d
+  ikev2 peer 203.0.113.40 authentication psk
+  ikev2 source-address GigaEthernet0.0
+  no shutdown
+!
+interface Tunnel4.0
+  tunnel mode ipsec-ikev2
+  ip unnumbered GigaEthernet1.0
+  ikev2 connect-type trigger
+  ikev2 dpd interval 60
+  ikev2 local-authentication psk id rfc822-addr netops@example.com
+  ikev2 nat-traversal off
+  ikev2 peer-fqdn-ipv4 ix-c05.example.com
+  no shutdown
+!

@@ -1,0 +1,19 @@
+table: ipv6_acl_entries
+title: {ja: IPv6 フィルタ, en: IPv6 access lists}
+since: M7
+key: [device, acl, seq]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: acl, title: {ja: リスト名, en: List}, type: string, required: true, note: {ja: "IPv4 の ACL とは別の名前の世界（同じ名前でもよい）", en: "A name space of its own, apart from the IPv4 lists"}}
+  - {name: seq, title: {ja: 順番, en: Sequence}, type: int, required: true, note: {ja: "番号を持たない書き方では 10 刻みで振る", en: "Numbered by tens where the text has no number"}}
+  - {name: action, title: {ja: 動作, en: Action}, type: enum, values: [permit, deny, remark], required: true}
+  - {name: protocol, title: {ja: プロトコル, en: Protocol}, type: string, note: {ja: "ip（すべて）、tcp、udp、icmp か番号", en: "ip (everything), tcp, udp, icmp or a number"}}
+  - {name: src, title: {ja: 送信元, en: Source}, type: string, note: {ja: "any、2001:db8::1（ホスト）、2001:db8:1::/64（ネットワーク）", en: "any, 2001:db8::1 (a host) or 2001:db8:1::/64 (a network)"}}
+  - {name: src_port, title: {ja: 送信元ポート, en: Source port}, type: string, note: {ja: "80、1000-2000、>1023、<1024、!80", en: "80, 1000-2000, >1023, <1024 or !80"}}
+  - {name: dst, title: {ja: 宛先, en: Destination}, type: string, note: {ja: "送信元と同じ書き方", en: "Written like the source"}}
+  - {name: dst_port, title: {ja: 宛先ポート, en: Destination port}, type: string, note: {ja: "送信元ポートと同じ書き方", en: "Written like the source port"}}
+  - {name: flags, title: {ja: 付加条件, en: Flags}, type: "list<enum>", values: [established, log, fragments, log_input, ack, fin, psh, rst, syn, urg]}
+  - {name: icmp_type, title: {ja: ICMPv6 の種類, en: ICMPv6 type}, type: string, note: {ja: "番号か、メーカーの語（echo-request など）", en: "A number, or the word of the vendor (echo-request and so on)"}}
+  - {name: remark, title: {ja: 注記, en: Remark}, type: string}
+  - {name: dscp, title: {ja: DSCP, en: DSCP}, type: int, min: 0, max: 63}
+  - {name: icmp_code, title: {ja: ICMPv6 のコード, en: ICMPv6 code}, type: int, min: 0, max: 255, note: {ja: "ICMPv6 の種類を番号で書いた行だけ", en: "Only with an ICMPv6 type written as a number"}}

@@ -1,0 +1,18 @@
+hostname rt-q24
+!
+class-map match-any cm-u-a
+ match cos 3
+!
+policy-map pm-u-out
+ class cm-u-a
+  set cos 3
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.25 255.255.255.252
+ service-policy output pm-u-out
+ no shutdown
+!
+interface Tunnel0
+ no shutdown
+!
+end

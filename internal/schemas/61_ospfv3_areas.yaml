@@ -1,0 +1,15 @@
+table: ospfv3_areas
+title: {ja: OSPFv3 エリア, en: OSPFv3 areas}
+since: M7
+key: [device, process_id, area]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: process_id, title: {ja: プロセス番号, en: Process ID}, type: int, required: true}
+  - {name: area, title: {ja: エリア, en: Area}, type: string, required: true}
+  - {name: type, title: {ja: 種類, en: Type}, type: enum, values: [normal, stub, totally_stub, nssa, totally_nssa]}
+  - {name: default_cost, title: {ja: 既定経路のコスト, en: Default cost}, type: int}
+  - {name: ranges, title: {ja: 集約して広告する範囲, en: Ranges (advertised)}, type: "list<net6>"}
+  - {name: ranges_hidden, title: {ja: 集約して広告しない範囲, en: Ranges (not advertised)}, type: "list<net6>"}
+  - {name: auth_hash, title: {ja: 認証のアルゴリズム, en: Authentication algorithm}, type: enum, values: [md5, sha1], note: {ja: "エリアの全部の IF の隣接を IPsec の AH で認証する（Cisco の area … authentication）", en: "Authenticate the neighbors on every interface of the area with IPsec AH (Cisco area … authentication)"}}
+  - {name: auth_spi, title: {ja: 認証の SPI, en: Authentication SPI}, type: int, min: 256, max: 4294967295}
+  - {name: auth_key, title: {ja: 認証の鍵, en: Authentication key}, type: secret, note: {ja: "16 進の数字（md5 は 32 字、sha1 は 40 字）", en: "Hexadecimal digits (32 for md5, 40 for sha1)"}}

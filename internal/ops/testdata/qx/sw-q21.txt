@@ -1,0 +1,38 @@
+#
+ version 7.1.070, Release 1201
+#
+ sysname sw-q21
+#
+ stp global enable
+#
+vlan 10
+ name sample-office
+#
+vlan 20
+ name sample-voice
+#
+interface Bridge-Aggregation1
+ port link-type trunk
+ port trunk permit vlan 1 10 20
+#
+interface GigabitEthernet1/0/1
+ port access vlan 40
+#
+interface GigabitEthernet1/0/21
+ port link-type trunk
+ port trunk permit vlan 1 10 20
+ port link-aggregation group 1
+#
+interface GigabitEthernet1/0/22
+ port link-type trunk
+ port trunk permit vlan 1 10
+ port link-aggregation group 1
+#
+interface GigabitEthernet1/0/24
+ port link-type trunk
+ undo port trunk permit vlan 1
+ port trunk permit vlan 10 20
+ port trunk pvid vlan 99
+ speed 1000
+#
+return

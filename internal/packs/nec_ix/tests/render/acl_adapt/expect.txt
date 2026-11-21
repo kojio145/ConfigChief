@@ -1,0 +1,36 @@
+hostname ix-f03
+!
+ip access-list acl-f-num sequence-mode 10
+ip access-list acl-f-num 5 permit tcp src any dest any dport eq 80
+ip access-list acl-f-num 15 deny ip src any dest any
+!
+ip route default 203.0.113.2
+ip route 192.0.2.64/26 203.0.113.2
+!
+ip router ospf 1
+  router-id 192.0.2.1
+!
+watch-group 1 10
+  event 10 ip unreach-host 203.0.113.2 source GigaEthernet1.0
+  probe-counter variance 3
+  probe-timer variance 10
+  action 10 ip shutdown-route 0.0.0.0/0 203.0.113.2
+!
+network-monitor 1 enable
+!
+ip dhcp enable
+!
+ip dhcp profile dhcp-f-a
+  default-gateway 198.51.100.1
+  lease-time 86400
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.1/30
+  ip filter acl-f-num 1 in
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.1/24
+  ip dhcp binding dhcp-f-a
+  no shutdown
+!

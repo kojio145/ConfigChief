@@ -1,0 +1,194 @@
+{# Route policies: route maps (appendix A 3.19). Syntax: CRM chapter 23
+   (pp. 23-3 to 23-10) and 8-11, read on 2026-11-20; the layout is that of
+   the examples of FD 2.22. The device has no AS path list and no community
+   list; an entry takes one name (one value) where other devices take
+   several. The lines the device cannot write stop with what to do. #}
+{% for a in t.as_path_lists %}
+{% if loop.first %}
+{{ fail('AS パスのリスト ' ~ a.name ~ ' は書けません（NEC IX に、AS パスで経路を見分ける設定はありません。プレフィックスリストやコミュニティで見分ける形に書き直してください）') }}
+{% endif %}
+{% endfor %}
+{% for p in t.route_policies %}
+{% set what = '方針 ' ~ p.name ~ ' の ' ~ p.seq ~ ' 番' %}
+{% if p.name | length > 31 %}
+{{ fail('方針 ' ~ p.name ~ ': NEC IX のルートマップの名前は 31 字までです') }}
+{% endif %}
+route-map {{ p.name }} {{ p.action }} {{ p.seq }}
+{% if p.match_prefix_list | length > 0 and p.match_acl | length > 0 %}
+{{ fail(what ~ ': プレフィックスリストの条件と ACL の条件は、1 行にどちらか 1 つだけ書けます（NEC IX。行を分けてください）') }}
+{% endif %}
+{% if p.match_prefix_list | length > 1 %}
+{{ fail(what ~ ': プレフィックスリストの条件は 1 つだけ書けます（NEC IX。リストを 1 つにまとめるか、行を分けてください）') }}
+{% endif %}
+{% for x in p.match_prefix_list %}
+  match ip address prefix-list {{ x }}
+{% endfor %}
+{% if p.match_acl | length > 1 %}
+{{ fail(what ~ ': ACL の条件は 1 つだけ書けます（NEC IX。リストを 1 つにまとめるか、行を分けてください）') }}
+{% endif %}
+{% for x in p.match_acl %}
+  match ip address access-list {{ x }}
+{% endfor %}
+{% if p.match_ipv6_prefix_list | length > 0 and p.match_ipv6_acl | length > 0 %}
+{{ fail(what ~ ': IPv6 のプレフィックスリストの条件と IPv6 フィルタの条件は、1 行にどちらか 1 つだけ書けます（NEC IX。行を分けてください）') }}
+{% endif %}
+{% if p.match_ipv6_prefix_list | length > 1 or p.match_ipv6_acl | length > 1 %}
+{{ fail(what ~ ': IPv6 の条件のリストは 1 つだけ書けます（NEC IX。リストを 1 つにまとめるか、行を分けてください）') }}
+{% endif %}
+{% for x in p.match_ipv6_prefix_list %}
+  match ipv6 address prefix-list {{ x }}
+{% endfor %}
+{% for x in p.match_ipv6_acl %}
+  match ipv6 address access-list {{ x }}
+{% endfor %}
+{% if p.match_ipv6_next_hop_prefix_list %}
+  match ipv6 next-hop prefix-list {{ p.match_ipv6_next_hop_prefix_list }}
+{% endif %}
+{% if p.match_next_hop_acl | length > 0 %}
+{{ fail(what ~ ': 「条件: ネクストホップ（ACL）」は書けません（NEC IX は、ネクストホップをプレフィックスリストで見ます。同じアドレスを通すプレフィックスリストを作り、「条件: ネクストホップ（プレフィックスリスト）」に書いてください）') }}
+{% endif %}
+{% if p.match_route_type | length > 0 %}
+{{ fail(what ~ ': 「条件: 経路の種類」は書けません（NEC IX のルートマップに、経路の種類で見分ける条件はありません）') }}
+{% endif %}
+{% if p.continue_to %}
+{{ fail(what ~ ': 「合った後に続けて見る順番」は書けません（NEC IX のルートマップは、最初に合った行で終わります。続きの行が付ける値を、この行にまとめて書いてください）') }}
+{% endif %}
+{% if p.match_next_hop_prefix_list %}
+  match ip next-hop prefix-list {{ p.match_next_hop_prefix_list }}
+{% endif %}
+{% if p.match_as_path %}
+{{ fail(what ~ ': 「条件: AS パス」は書けません（NEC IX に、AS パスで経路を見分ける設定はありません）') }}
+{% endif %}
+{% if p.match_community_list %}
+{{ fail(what ~ ': コミュニティのリスト「' ~ p.match_community_list ~ '」は書けません（NEC IX にリストはありません。permit の 1 行だけの標準のリストなら、パックがじかの値に置き換えます。それ以外は、「条件: コミュニティ」にじかに書く形へ、行を分けて書き直してください）') }}
+{% endif %}
+{% if p.match_community | length > 32 %}
+{{ fail(what ~ ': 条件のコミュニティは 32 個までです') }}
+{% endif %}
+{% if p.match_community | length > 0 %}
+{% set c = namespace(v='') %}
+{% for x in p.match_community %}
+{% set c.v = c.v ~ ' ' ~ (x if (':' in x or x is digits) else (x | lex('community'))) %}
+{% endfor %}
+  match community{{ c.v }}{{ ' exact-match' if p.match_community_exact == true else '' }}
+{% elif p.match_community_exact == true %}
+{{ fail(what ~ ': 「条件: コミュニティが完全に同じ」は、コミュニティの条件がある行にだけ書けます') }}
+{% endif %}
+{% if p.match_interface | length > 1 %}
+{{ fail(what ~ ': 出力 IF の条件は 1 つだけ書けます（NEC IX。行を分けてください）') }}
+{% endif %}
+{% for x in p.match_interface %}
+  match interface {{ x }}
+{% endfor %}
+{% if p.match_metric != '' %}
+  match metric {{ p.match_metric }}
+{% endif %}
+{% if p.match_tag | length > 1 %}
+{{ fail(what ~ ': タグの条件は 1 つだけ書けます（NEC IX。行を分けてください）') }}
+{% endif %}
+{% for x in p.match_tag %}
+  match tag {{ x }}
+{% endfor %}
+{% if p.set_as_path_prepend | length > 0 %}
+{% for x in p.set_as_path_prepend %}
+{% if x | int > 65535 %}
+{{ fail(what ~ ': AS パスに足す AS ' ~ x ~ ' は書けません（NEC IX の AS 番号は 1〜65535 です）') }}
+{% endif %}
+{% endfor %}
+  set as-path prepend {{ p.set_as_path_prepend | join(' ') }}
+{% endif %}
+{% if p.set_community | length > 0 %}
+{% if 'none' in p.set_community %}
+{% if p.set_community | length > 1 or p.set_community_additive == true %}
+{{ fail(what ~ ': コミュニティの none（すべて外す）は、ほかの値や「コミュニティを足す」と一緒には書けません') }}
+{% endif %}
+  set community none
+{% else %}
+{% if p.set_community | length > 32 %}
+{{ fail(what ~ ': 付けるコミュニティは 32 個までです') }}
+{% endif %}
+{% set c = namespace(v='', d='') %}
+{% for x in p.set_community %}
+{% set c.v = c.v ~ ' ' ~ (x if (':' in x or x is digits) else (x | lex('community'))) %}
+{% endfor %}
+{% for x in p.set_community_delete %}
+{% set c.d = c.d ~ ' ' ~ (x if (':' in x or x is digits) else (x | lex('community'))) %}
+{% endfor %}
+{% if c.d and p.set_community_additive != true %}
+{{ fail(what ~ ': 「外すコミュニティ」は、コミュニティを置き換える行には書けません（NEC IX は、足す行か、外すだけの行に書きます。「コミュニティを足す」を有効にするか、行を分けてください）') }}
+{% endif %}
+  set community{{ c.v }}{{ ' additive' if p.set_community_additive == true else '' }}{{ ' delete' ~ c.d if c.d else '' }}
+{% endif %}
+{% elif p.set_community_additive == true %}
+{{ fail(what ~ ': 「コミュニティを足す」は、付けるコミュニティがある行にだけ書けます') }}
+{% elif p.set_community_delete | length > 0 %}
+{% set c = namespace(d='') %}
+{% for x in p.set_community_delete %}
+{% set c.d = c.d ~ ' ' ~ (x if (':' in x or x is digits) else (x | lex('community'))) %}
+{% endfor %}
+  set community delete{{ c.d }}
+{% endif %}
+{% if 'none' in p.set_community and p.set_community_delete | length > 0 %}
+{{ fail(what ~ ': コミュニティの none（すべて外す）と「外すコミュニティ」は、一緒には書けません') }}
+{% endif %}
+{% if p.set_default_interface | length > 1 %}
+{{ fail(what ~ ': 経路が無いときの出力 IF は 1 つだけ書けます（NEC IX）') }}
+{% endif %}
+{% for x in p.set_default_interface %}
+  set default interface {{ x }}
+{% endfor %}
+{% if p.set_ipv6_default_next_hop | length > 1 or p.set_ipv6_next_hop | length > 1 %}
+{{ fail(what ~ ': IPv6 のネクストホップは 1 つだけ書けます（NEC IX）') }}
+{% endif %}
+{% for x in p.set_ipv6_default_next_hop %}
+  set ipv6 default next-hop {{ x }}
+{% endfor %}
+{% for x in p.set_ipv6_next_hop %}
+  set ipv6 next-hop {{ x }}
+{% endfor %}
+{% if p.set_interface | length > 1 %}
+{{ fail(what ~ ': 出力 IF は 1 つだけ書けます（NEC IX）') }}
+{% endif %}
+{% for x in p.set_interface %}
+  set interface {{ x }}
+{% endfor %}
+{% if p.set_default_next_hop | length > 1 %}
+{{ fail(what ~ ': 経路が無いときのネクストホップは 1 つだけ書けます（NEC IX）') }}
+{% endif %}
+{% for x in p.set_default_next_hop %}
+  set ip default next-hop {{ x }}
+{% endfor %}
+{% if p.set_next_hop | length > 1 %}
+{{ fail(what ~ ': ネクストホップは 1 つだけ書けます（NEC IX）') }}
+{% endif %}
+{% for x in p.set_next_hop %}
+  set ip next-hop {{ x }}
+{% endfor %}
+{% if p.set_local_preference != '' %}
+  set local-preference {{ p.set_local_preference }}
+{% endif %}
+{% if p.set_metric != '' %}
+{% if (p.set_metric | replace('+', '', 1) | replace('-', '', 1)) is not digits or not (p.set_metric[0] in '+-0123456789') %}
+{{ fail(what ~ ': メトリック「' ~ p.set_metric ~ '」は書けません（数か、+10・-10 の形で書きます）') }}
+{% endif %}
+  set metric {{ p.set_metric }}
+{% endif %}
+{% if p.set_metric_type %}
+  set metric-type {{ 'internal' if p.set_metric_type == 'internal' else 'type-' ~ p.set_metric_type }}
+{% endif %}
+{% if p.set_origin %}
+  set origin {{ p.set_origin }}
+{% endif %}
+{% if p.set_tag != '' %}
+  set tag {{ p.set_tag }}
+{% endif %}
+!
+{% endfor %}
+{% if device.local_policy_route %}
+ip local policy route-map {{ device.local_policy_route }}
+!
+{% endif %}
+{% if device.local_policy_route_v6 %}
+ipv6 local policy route-map {{ device.local_policy_route_v6 }}
+!
+{% endif %}

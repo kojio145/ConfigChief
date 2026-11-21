@@ -1,0 +1,28 @@
+# A small router with built-in switch ports (made-up values): access and
+# trunk ports, the interfaces of the VLANs, a subinterface on the native
+# VLAN, a LAG member without a mode, and a bridge group with its BVI.
+tables:
+  devices:
+    - hostname: rt-s02
+      vendor: cisco_ios
+  l2_settings:
+    - {bridge_irb: true}
+  vlans:
+    - {vlan_id: 10, name: sample-office}
+  interfaces:
+    - {name: FastEthernet0, enabled: true}
+    - {name: FastEthernet1, enabled: true}
+    - {name: FastEthernet7, enabled: true}
+    - {name: GigabitEthernet8, enabled: true, ipv4: 203.0.113.2/30}
+    - {name: GigabitEthernet9, enabled: true}
+    - {name: GigabitEthernet9.10, enabled: true, encap_vlan: 10, encap_native: true, ipv4: 198.51.100.129/25}
+    - {name: GigabitEthernet9.20, enabled: true, encap_vlan: 20, bridge_group: 1}
+    - {name: Port-channel1, enabled: true, bridge_group: 1}
+    - {name: Vlan10, enabled: true, ipv4: 192.0.2.1/25}
+    - {name: BVI1, enabled: true, ipv4: 198.51.100.1/25, bridge_group: 1}
+  switchports:
+    - {if_name: FastEthernet0, mode: access, access_vlan: 10}
+    - {if_name: FastEthernet1, access_vlan: 10}
+    - {if_name: FastEthernet7, mode: trunk, allowed_vlans: [all]}
+  lags:
+    - {if_name: GigabitEthernet9, group: 1}

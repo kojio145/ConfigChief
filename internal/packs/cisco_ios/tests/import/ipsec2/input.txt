@@ -1,0 +1,137 @@
+!
+version 17.9
+!
+hostname rt-c01
+!
+ip domain name example.com
+!
+crypto ikev2 proposal PROP-SAMPLE
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+ prf sha384
+!
+crypto ikev2 policy POL-SAMPLE
+ proposal PROP-SAMPLE
+!
+crypto ikev2 keyring KR-SAMPLE
+ peer rt-c02
+  address 203.0.113.20
+  pre-shared-key dummy-psk-v2-a
+ !
+ peer rt-c03
+  address 203.0.113.30 255.255.255.255
+  pre-shared-key local dummy-psk-v2-b
+  pre-shared-key remote dummy-psk-v2-c
+ !
+ peer others
+  address 0.0.0.0 0.0.0.0
+  pre-shared-key hex 64756d6d792d6b65792d61
+ !
+!
+crypto ikev2 profile V2-SAMPLE-A
+ match identity remote address 203.0.113.20 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local KR-SAMPLE
+ lifetime 43200
+ dpd 30 5 periodic
+!
+crypto ikev2 profile V2-SAMPLE-B
+ match identity remote fqdn rt-c03.example.com
+ identity local fqdn rt-c01.example.com
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local KR-SAMPLE
+ nat keepalive 20
+!
+crypto ikev2 profile V2-SAMPLE-C
+ match identity remote any
+ identity local key-id sample-site-c
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local KR-SAMPLE
+!
+crypto ikev2 dpd 60 10 on-demand
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp key dummy-psk-v1-a address 0.0.0.0 0.0.0.0
+crypto isakmp key dummy-psk-v1-b hostname rt-c06.example.com
+crypto isakmp keepalive 20 3 periodic
+crypto isakmp nat keepalive 25
+!
+crypto keyring KR-SAMPLE-V1
+  pre-shared-key address 203.0.113.70 key dummy-psk-v1-c
+crypto isakmp profile ISA-SAMPLE
+   keyring KR-SAMPLE-V1
+   self-identity fqdn
+   match identity host rt-c07.example.com
+   keepalive 15 retry 4
+!
+crypto ipsec transform-set TS-SAMPLE-A esp-aes 256 esp-sha-hmac
+ mode tunnel
+crypto ipsec transform-set TS-SAMPLE-B ah-sha-hmac esp-aes esp-sha-hmac
+ mode transport
+crypto ipsec transform-set TS-SAMPLE-C esp-3des esp-sha-hmac
+!
+crypto ipsec profile PROF-SAMPLE-A
+ set transform-set TS-SAMPLE-A
+ set pfs group14
+ set security-association lifetime kilobytes 4608000
+ set ikev2-profile V2-SAMPLE-A
+!
+crypto dynamic-map DYN-SAMPLE-V2 10
+ set transform-set TS-SAMPLE-A
+ set ikev2-profile V2-SAMPLE-C
+!
+crypto dynamic-map DYN-SAMPLE-V1 10
+ set transform-set TS-SAMPLE-C
+ set pfs group5
+ match address ACL-SAMPLE-DYN
+!
+crypto map CMAP-SAMPLE 10 ipsec-isakmp
+ set peer 203.0.113.30
+ set transform-set TS-SAMPLE-B
+ set security-association lifetime seconds 7200
+ set ikev2-profile V2-SAMPLE-B
+ match address ACL-SAMPLE-B
+crypto map CMAP-SAMPLE 20 ipsec-isakmp
+ set peer rt-c06.example.com dynamic
+ set transform-set TS-SAMPLE-C
+ match address ACL-SAMPLE-F
+crypto map CMAP-SAMPLE 30 ipsec-isakmp
+ set peer 203.0.113.70
+ set transform-set TS-SAMPLE-A
+ set isakmp-profile ISA-SAMPLE
+ match address ACL-SAMPLE-G
+crypto map CMAP-SAMPLE 80 ipsec-isakmp dynamic DYN-SAMPLE-V2
+crypto map CMAP-SAMPLE 90 ipsec-isakmp dynamic DYN-SAMPLE-V1
+!
+interface Tunnel1
+ ip address 192.0.2.209 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel mode ipsec ipv4
+ tunnel destination 203.0.113.20
+ tunnel protection ipsec profile PROF-SAMPLE-A
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.9 255.255.255.248
+ crypto map CMAP-SAMPLE
+!
+interface GigabitEthernet0/1
+ ip address 198.51.100.1 255.255.255.0
+!
+ip access-list extended ACL-SAMPLE-B
+ 10 permit ip 198.51.100.0 0.0.0.255 192.0.2.0 0.0.0.127
+ip access-list extended ACL-SAMPLE-DYN
+ 10 permit ip 198.51.100.0 0.0.0.255 192.0.2.128 0.0.0.63
+ip access-list extended ACL-SAMPLE-F
+ 10 permit ip 198.51.100.0 0.0.0.255 host 192.0.2.200
+ip access-list extended ACL-SAMPLE-G
+ 10 permit ip 198.51.100.0 0.0.0.255 192.0.2.192 0.0.0.7
+!
+end

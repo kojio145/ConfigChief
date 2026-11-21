@@ -1,0 +1,20 @@
+# QoS of another vendor that has no line on this device and nothing near it
+# (made-up values; appendix A 3.26): marking IPv6 apart from IPv4, the policy
+# a device has for NGN. The values are told as not used (G-602); a person
+# decides.
+tables:
+  devices:
+    - hostname: rt-q24
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.25/30}
+    - {name: Tunnel0, enabled: true}
+  qos_classes:
+    - {name: cm-u-a, match: any}
+  qos_class_matches:
+    - {class: cm-u-a, seq: 10, cos: [3]}
+  qos_policies:
+    - {policy: pm-u-out, class: cm-u-a, seq: 10, set_cos: 3, set_ipv6_dscp: 46, set_ipv6_precedence: 5}
+  qos_bindings:
+    - {if_name: GigabitEthernet0/0, direction: output, policy: pm-u-out, ngn_default: true}
+findings: [G-602]

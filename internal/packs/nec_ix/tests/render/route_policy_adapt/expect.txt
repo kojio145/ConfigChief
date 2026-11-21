@@ -1,0 +1,20 @@
+hostname ix-r07
+!
+route-map rm-r-in permit 10
+  match community 64497:100 no-export-subconfed exact-match
+  set local-preference 200
+!
+route-map rm-r-in permit 20
+  match community 64497:100 no-export-subconfed
+  set local-preference 150
+!
+router bgp 64496
+  router-id 192.0.2.1
+  neighbor 203.0.113.2 remote-as 64497
+  address-family ipv4 unicast
+    neighbor 203.0.113.2 route-map rm-r-in in
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.1/30
+  no shutdown
+!

@@ -1,0 +1,34 @@
+hostname ix-w03
+!
+ipv6 dhcp enable
+!
+ipv6 dhcp client-profile pd-sample
+  ia-pd redistribute pool lan4 ::/60 nla-length 4
+!
+interface GigaEthernet0.0
+  ipv6 enable
+  ipv6 dhcp client pd-sample
+  no shutdown
+!
+interface GigaEthernet1.0
+  ipv6 enable
+  ipv6 dhcp server lan1
+  no shutdown
+!
+interface GigaEthernet2.0
+  ipv6 enable
+  ipv6 dhcp server lan2
+  no shutdown
+!
+interface GigaEthernet2.1
+  encapsulation dot1q 10
+  ipv6 enable
+  ipv6 dhcp server lan3
+  no shutdown
+!
+interface GigaEthernet2.2
+  encapsulation dot1q 20
+  ipv6 enable
+  ipv6 dhcp server lan4
+  no shutdown
+!

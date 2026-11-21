@@ -8,18 +8,30 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 )
 
 // Sources is state/sources.yaml: the vendor pack a person chose for a file
 // whose vendor the tool could not tell (spec 8.1 step 3).
+//
+// It also keeps which file a person chose for a host name that two or more
+// files of a folder have (spec 8.1 step 4).
 type Sources struct {
 	byFile map[string]string
+	use    map[string]string // folder + " " + host name -> file
 }
 
 type sourcesY struct {
 	Sources []sourceY `yaml:"sources"`
+	Use     []useY    `yaml:"use,omitempty"`
+}
+
+type useY struct {
+	Source string `yaml:"source"` // "old" | "new"
+	Device string `yaml:"device"`
+	File   string `yaml:"file"`
 }
 
 type sourceY struct {
@@ -31,7 +43,7 @@ const sourcesFile = "state/sources.yaml"
 
 // Sources reads state/sources.yaml (empty if the file is not there).
 func (p *Project) Sources() (*Sources, error) {
-	s := &Sources{byFile: map[string]string{}}
+	s := &Sources{byFile: map[string]string{}, use: map[string]string{}}
 	var y sourcesY
 	if err := p.readState(sourcesFile, &y); err != nil {
 		return nil, err
@@ -42,11 +54,24 @@ func (p *Project) Sources() (*Sources, error) {
 		}
 		s.byFile[e.File] = e.Pack
 	}
+	for _, u := range y.Use {
+		if u.Source == "" || u.Device == "" || u.File == "" {
+			return nil, fmt.Errorf("%s: use には source・device・file が要ります", sourcesFile)
+		}
+		s.use[u.Source+" "+u.Device] = u.File
+	}
 	return s, nil
 }
 
 // Pack gives the pack chosen for a file ("" if none).
 func (s *Sources) Pack(file string) string { return s.byFile[file] }
+
+// Use gives the file chosen for a host name that several files of the
+// folder have ("" if none was chosen).
+func (s *Sources) Use(source, device string) string { return s.use[source+" "+device] }
+
+// SetUse records the file chosen for a host name of a folder.
+func (s *Sources) SetUse(source, device, file string) { s.use[source+" "+device] = file }
 
 // Choose records the pack chosen for a file.
 func (s *Sources) Choose(file, pack string) { s.byFile[file] = pack }
@@ -58,6 +83,16 @@ func (p *Project) SaveSources(s *Sources) error {
 		y.Sources = append(y.Sources, sourceY{File: f, Pack: id})
 	}
 	sort.Slice(y.Sources, func(i, j int) bool { return y.Sources[i].File < y.Sources[j].File })
+	for k, f := range s.use {
+		source, device, _ := strings.Cut(k, " ")
+		y.Use = append(y.Use, useY{Source: source, Device: device, File: f})
+	}
+	sort.Slice(y.Use, func(i, j int) bool {
+		if y.Use[i].Source != y.Use[j].Source {
+			return y.Use[i].Source < y.Use[j].Source
+		}
+		return y.Use[i].Device < y.Use[j].Device
+	})
 	return p.writeState(sourcesFile, &y)
 }
 
@@ -252,4 +287,37 @@ func (p *Project) SaveListFiles(list []ListFile) error {
 	y := listsY{Files: append([]ListFile{}, list...)}
 	sort.Slice(y.Files, func(i, j int) bool { return y.Files[i].File < y.Files[j].File })
 	return p.writeState(listsFile, &y)
+}
+
+// draftFile holds what a person changed in the tables of the screen and did
+// not save into the parameter book yet (spec 14.6).
+const draftFile = "state/draft.yaml"
+
+// ReadDraft reads the draft into a value; a draft that is not there leaves
+// it as it is.
+func (p *Project) ReadDraft(into any) error { return p.readState(draftFile, into) }
+
+// WriteDraft writes the draft.
+func (p *Project) WriteDraft(from any) error { return p.writeState(draftFile, from) }
+
+// RemoveDraft takes the draft away; none is no error.
+func (p *Project) RemoveDraft() error {
+	if err := os.Remove(p.Path(draftFile)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("%s を消せません: %v", draftFile, err)
+	}
+	return nil
+}
+
+// BookWritable tells, before anything is written, whether the parameter book
+// can be replaced: a book that Excel holds open cannot (spec 4.2).
+func (p *Project) BookWritable() error {
+	f, err := os.OpenFile(p.BookPath(), os.O_RDWR, 0)
+	if err == nil {
+		f.Close()
+		return nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return fmt.Errorf("%s に書けません。Excel を閉じてください", p.Config.Book)
 }

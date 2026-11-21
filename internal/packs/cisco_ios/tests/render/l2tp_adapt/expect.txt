@@ -1,0 +1,39 @@
+hostname rt-c03
+!
+pseudowire-class l2tpv3-101
+ encapsulation l2tpv3
+ protocol l2tpv3
+ ip local interface Loopback0
+!
+vpdn enable
+!
+vpdn-group lac-sample
+ request-dialin
+  protocol l2tp
+  domain example.com
+ initiate-to ip 198.51.100.1
+ l2tp tunnel password dummy-l2tp-secret-c
+!
+vpdn-group lns-sample
+ accept-dialin
+  protocol l2tp
+  virtual-template 1
+ no l2tp tunnel authentication
+!
+ip local pool l2tp-lns-sample 192.0.2.131 192.0.2.190
+!
+interface GigabitEthernet0/1
+ xconnect 203.0.113.2 101 pw-class l2tpv3-101
+ no shutdown
+!
+interface Loopback0
+ ip address 203.0.113.1 255.255.255.255
+ no shutdown
+!
+interface Virtual-Template1
+ ip unnumbered Loopback0
+ peer default ip address pool l2tp-lns-sample
+ ppp authentication chap
+ no shutdown
+!
+end

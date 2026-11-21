@@ -7,4 +7,6 @@ columns:
   - {name: name, title: {ja: ユーザ名, en: User name}, type: string, required: true}
   - {name: privilege, title: {ja: 権限, en: Privilege}, type: string, note: {ja: "admin、operator か、メーカーの値（数値など）", en: "admin, operator, or the value of the vendor (a number …)"}}
   - {name: secret, title: {ja: パスワード, en: Password}, type: secret, required: true}
-  - {name: secret_form, title: {ja: パスワードの形, en: Secret form}, type: enum, values: [plain, hashed], note: {ja: "取り込んだ値がハッシュのとき hashed", en: "hashed when the imported value is a hash"}}
+  - {name: secret_form, title: {ja: パスワードの形, en: Secret form}, type: enum, values: [plain, hashed, encrypted], note: {ja: "取り込んだ値がハッシュのとき hashed。機器が戻せる形で暗号化した値は encrypted", en: "hashed when the imported value is a hash"}}
+  - {name: services, title: {ja: 使える接続方式, en: Services}, type: "list<enum>", values: [terminal, ssh, telnet, ftp], note: {ja: "ユーザごとに使える方式を決める機器だけ。terminal = コンソール。空 = 機器の既定", en: "Only where the device says per user what the user may log in by. terminal = the console. Empty = the default of the device"}}
+  - {name: reversible, title: {ja: 元に戻せる形で持つ, en: Reversible}, type: bool, note: {ja: "機器がパスワードそのものを使う認証（PPP の CHAP の相手）のユーザは有効にする", en: "On for a user whose password the device itself has to know (the peer of PPP CHAP)"}}

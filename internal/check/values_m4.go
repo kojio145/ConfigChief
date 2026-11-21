@@ -129,6 +129,8 @@ var weak = []struct {
 	{"esp_encryption", []string{"des"}},
 	{"esp_hash", []string{"md5"}},
 	{"pfs", []string{"dh1", "dh2", "dh5"}},
+	{"ike_prf", []string{"md5"}},
+	{"ah_hash", []string{"md5"}},
 }
 
 // ipsec looks at the rows of IPsec: what the style of a row needs is there
@@ -153,8 +155,8 @@ func (x *values) ipsec() {
 			if tun == nil {
 				x.add("V-215", t, r, "tunnel_if", fmt.Sprintf("IPsec %s のトンネル IF %s が、トンネルの表にありません", name, tif),
 					model.KV{Name: "トンネル IF", Value: tif})
-			} else if kind := tun.Get("type"); kind != "" && kind != "ipsec" {
-				x.add("V-215", t, r, "tunnel_if", fmt.Sprintf("IPsec %s のトンネル IF %s は、トンネルの表で種類が %s です（ipsec ではありません）", name, tif, kind),
+			} else if kind := tun.Get("type"); kind != "" && kind != "ipsec" && kind != "etherip" {
+				x.add("V-215", t, r, "tunnel_if", fmt.Sprintf("IPsec %s のトンネル IF %s は、トンネルの表で種類が %s です（ipsec でも、IPsec で守る etherip でもありません）", name, tif, kind),
 					model.KV{Name: "トンネル IF", Value: tif}, model.KV{Name: "種類", Value: kind})
 			}
 		case "policy":
@@ -167,7 +169,9 @@ func (x *values) ipsec() {
 					}
 				}
 			}
-			if !found {
+			// A row for peers whose address is not known may take what the
+			// peer proposes: it needs no selector.
+			if !found && r.Get("peer_address") != "any" {
 				x.add("V-215", t, r, "style", fmt.Sprintf("IPsec %s は方式が policy ですが、対象通信の行がありません", name))
 			}
 		}

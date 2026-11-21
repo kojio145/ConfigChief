@@ -1,0 +1,50 @@
+hostname ix-q22
+!
+ip access-list al-m-voice permit udp src any dest any dport eq 5060
+!
+class-map match-any cm-m-ctl
+  match local-generate-packet high
+  match qos-group 10 medium
+  match input-interface GigaEthernet1.0 sub-b
+  match ipv6 access-list al-m-v6 low
+class-map match-any cm-m-ngn
+  match ngn Tunnel0.0 qos-group 20
+class-map match-any cm-m-voice
+  match ip access-list al-m-voice cos 5 high
+  match rtp port 16384 16383
+  match cos 5 sub-a
+!
+policy-map pm-m-in
+  class cm-m-voice
+    set ipv6 dscp 46
+    set cos 5
+    set qos-group 10
+  class cm-m-ctl
+    set ipv6 precedence 6
+  class class-local
+  class class-default
+policy-map pm-m-out
+  class cm-m-voice
+    priority
+    queue-limit 10 20 30 40 50 60 70 80
+  class cm-m-ctl
+    bandwidth percent 20
+  class class-dynamic
+  class class-local
+  class class-default
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.29/30
+  service-policy enable
+  service-policy output pm-m-out
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.1/24
+  service-policy input pm-m-in
+  no shutdown
+!
+interface Tunnel0.0
+  service-policy output default-policy-map-ngn
+  no shutdown
+!

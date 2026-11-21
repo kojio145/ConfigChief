@@ -10,6 +10,7 @@ crypto isakmp key dummy-psk-site-w address 203.0.113.20
 crypto isakmp keepalive 30
 !
 crypto ipsec transform-set TS-Tunnel1 esp-aes 256 esp-sha-hmac
+ mode tunnel
 !
 crypto ipsec profile PROF-Tunnel1
  set transform-set TS-Tunnel1
@@ -45,6 +46,7 @@ interface GigabitEthernet0/1
 interface Tunnel1
  description sample vpn
  ip unnumbered GigabitEthernet0/1
+ ip nat inside
  ip tcp adjust-mss 1300
  tunnel source Dialer1
  tunnel destination 203.0.113.20

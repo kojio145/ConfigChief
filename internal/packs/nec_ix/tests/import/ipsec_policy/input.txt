@@ -1,0 +1,62 @@
+hostname ix-h01
+!
+ip route default 203.0.113.1
+!
+ip access-list sec-sample-ra permit ip src any dest any
+ip access-list sec-sample-b permit ip src 192.0.2.0/25 dest 198.51.100.0/25
+ip access-list sec-sample-b permit ip src 192.0.2.0/25 dest 198.51.100.128/25
+ip access-list sec-sample-c permit udp src 203.0.113.9/32 sport eq 1701 dest 203.0.113.30/32 dport eq 1701
+!
+ike nat-traversal
+!
+ike proposal ike-prop-sample-a encryption aes-256 hash sha2-256 group 2048-bit
+ike proposal ike-prop-sample-b encryption aes hash sha group 1024-bit
+ike policy ike-sample-ra peer any key dummy-psk-sample-ra ike-prop-sample-a,ike-prop-sample-b
+ike policy ike-sample-b peer 203.0.113.20 key dummy-psk-sample-b ike-prop-sample-a
+ike policy ike-sample-c peer 203.0.113.30 key dummy-psk-sample-c ike-prop-sample-a
+ike keepalive ike-sample-b 30 3
+!
+ipsec autokey-proposal ipsec-prop-sample-a esp-aes-256 esp-sha
+ipsec autokey-proposal ipsec-prop-sample-b esp-aes esp-sha
+ipsec dynamic-map ipsec-sample-ra sec-sample-ra ipsec-prop-sample-a,ipsec-prop-sample-b
+ipsec autokey-map ipsec-sample-b sec-sample-b peer 203.0.113.20 pfs 2048-bit ipsec-prop-sample-a
+ipsec autokey-map ipsec-sample-c sec-sample-c peer 203.0.113.30 ipsec-prop-sample-a
+!
+ppp profile lns-sample
+  authentication request chap
+  authentication password example-user dummy-l2tp-user-secret-1
+  lcp pfc
+  lcp acfc
+  ipcp ip-compression
+  ipcp provide-ip-address range 192.0.2.131 192.0.2.190
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.2/29
+  ipsec policy tunnel ipsec-sample-b out
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 192.0.2.1/25
+  no shutdown
+!
+interface GigaEthernet2.0
+  ip address 203.0.113.9/29
+  ipsec policy transport ipsec-sample-c
+  no shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.129/25
+!
+interface Tunnel0.0
+  ppp binding lns-sample
+  tunnel mode l2tp-lns ipsec
+  ip unnumbered Loopback0.0
+  ipsec policy transport ipsec-sample-ra
+  no shutdown
+!
+interface Tunnel1.0
+  ppp binding lns-sample
+  tunnel mode l2tp-lns ipsec
+  ip unnumbered Loopback0.0
+  ipsec policy transport ipsec-sample-ra
+  no shutdown

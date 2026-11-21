@@ -1,0 +1,80 @@
+{# The banner and remote login (README, "コンフィグの書き出し"). The
+   banner stands between two marks: one character that is not in its text. #}
+{% for kind in ['motd', 'login', 'shell'] %}
+{% set text = device.banner_motd if kind == 'motd' else (device.banner if kind == 'login' else device.banner_exec) %}
+{% if text %}
+{% set mark = namespace(c='') %}
+{% for c in ['%', '@', '~', '|', '^'] %}
+{% if not mark.c and c not in text %}
+{% set mark.c = c %}
+{% endif %}
+{% endfor %}
+{% if not mark.c %}
+{{ fail('バナーの区切りに使える文字がありません（% @ ~ | ^ のどれかを文面から外してください）') }}
+{% endif %}
+{% if '\n' in text %}
+ header {{ kind }} {{ mark.c }}
+{{ text }}{{ mark.c }}
+{% else %}
+ header {{ kind }} {{ mark.c }}{{ text }}{{ mark.c }}
+{% endif %}
+#
+{% endif %}
+{% endfor %}
+{% if device.console_timeout != '' or device.console_timeout_sec != '' %}
+line aux 0
+ idle-timeout {{ device.console_timeout if device.console_timeout != '' else 0 }}{{ ' ' ~ device.console_timeout_sec if device.console_timeout_sec != '' else '' }}
+#
+{% endif %}
+{% for ra in t.remote_access %}
+{% if ra.ssh_version == '1' %}
+{{ fail('SSH の版 1 は、このパックでは書けません（QX の SSH サーバは SSH2 です）') }}
+{% endif %}
+{% set acl_t = ra.acl_telnet if ra.acl_telnet else ra.acl %}
+{% set acl_s = ra.acl_ssh if ra.acl_ssh else ra.acl %}
+{% if ra.acl and (ra.acl_ssh or ra.acl_telnet) %}
+{{ fail('遠隔ログインの「接続元の制限」と、方式ごとの制限（SSH だけ・Telnet だけ）は、同時には書けません') }}
+{% endif %}
+{% if (acl_t and acl_t is not digits) or (acl_s and acl_s is not digits) %}
+{{ fail('遠隔ログインの「接続元の制限」は、QX では ACL の番号で書きます（2000〜3999）') }}
+{% endif %}
+{% if 'telnet' in ra.protocols %}
+ telnet server enable
+{% if acl_t %}
+ telnet server acl {{ acl_t }}
+{% endif %}
+{% elif ra.acl_telnet %}
+{{ fail('「Telnet だけの接続元の制限」がありますが、「許可する方式」に telnet がありません') }}
+{% endif %}
+{% if 'ssh' in ra.protocols %}
+ ssh server enable
+{% if acl_s %}
+ ssh server acl {{ acl_s }}
+{% endif %}
+{% elif ra.acl_ssh %}
+{{ fail('「SSH だけの接続元の制限」がありますが、「許可する方式」に ssh がありません') }}
+{% endif %}
+#
+line vty 0 63
+{% if ra.auth == 'local' %}
+ authentication-mode scheme
+{% elif ra.auth == 'password' %}
+{% if not ra.line_password %}
+{{ fail('認証が password のときは、ログインのパスワードが要ります') }}
+{% endif %}
+ authentication-mode password
+{% elif ra.auth == 'aaa' %}
+{{ fail('認証 aaa は、このパックでは書けません（追加コンフィグに書いてください）') }}
+{% endif %}
+{% if ra.line_password %}
+{# A value with a space is what a device saved: "hash <value>" (appendix A 3.26). #}
+ set authentication password {{ ra.line_password if ra.line_password is startingwith('hash ') else 'simple ' ~ ra.line_password }}
+{% endif %}
+{% if ra.protocols | length == 1 %}
+ protocol inbound {{ ra.protocols[0] }}
+{% endif %}
+{% if ra.idle_timeout != '' or ra.idle_timeout_sec != '' %}
+ idle-timeout {{ ra.idle_timeout if ra.idle_timeout != '' else 0 }}{{ ' ' ~ ra.idle_timeout_sec if ra.idle_timeout_sec != '' else '' }}
+{% endif %}
+#
+{% endfor %}

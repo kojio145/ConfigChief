@@ -1,0 +1,37 @@
+hostname ix-l01
+!
+ip route default 203.0.113.10
+!
+ip access-list sec-p1 permit ip src any dest any
+ike proposal ike-prop-p1 encryption aes-256 hash sha2-256 group 2048-bit lifetime 86400
+ike policy ike-p1 peer any key dummy-psk-sample-ra ike-prop-p1
+ipsec autokey-proposal ipsec-prop-p1 esp-aes-256 esp-sha lifetime time 3600
+ipsec dynamic-map CMAP-SAMPLE-10 sec-p1 pfs off ipsec-prop-p1
+!
+ike nat-traversal
+!
+ppp profile RA-SAMPLE
+  authentication request chap
+  authentication password example-user dummy-l2tp-user-secret-1
+  authentication password sample-user dummy-l2tp-user-secret-2
+  lcp pfc
+  lcp acfc
+  ipcp ip-compression
+  ipcp provide-ip-address range 192.0.2.131 192.0.2.190
+  ipcp provide-remote-dns 192.0.2.53 192.0.2.54
+!
+interface GigaEthernet0.0
+  description sample-wan
+  ip address 203.0.113.9/30
+  no shutdown
+!
+interface Loopback0.0
+  ip address 192.0.2.129/25
+!
+interface Tunnel0.0
+  ip unnumbered Loopback0.0
+  ppp binding RA-SAMPLE
+  tunnel mode l2tp-lns ipsec
+  ipsec policy transport CMAP-SAMPLE-10
+  no shutdown
+!

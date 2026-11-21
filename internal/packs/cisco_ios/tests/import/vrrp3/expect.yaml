@@ -1,0 +1,15 @@
+# VRRP version 3 (appendix A 3.23, "IPv6 の VRRP"; made-up values): the
+# switch of the whole device, an IPv4 group that talks to version 2 too, an
+# IPv6 group. An interval that is not whole seconds (IPv4) and the
+# description stay unknown.
+tables:
+  devices:
+    - {hostname: rt-w01, vrrp_version: "3"}
+  fhrp:
+    - {if_name: GigabitEthernet0/1, group: 1, protocol: vrrp, virtual_ip: 192.0.2.1, priority: 110, preempt: true, preempt_delay: 30, advert_interval: 2, track: 1, track_decrement: 20, vrrpv2: true}
+    - {if_name: GigabitEthernet0/2, group: 3, protocol: vrrp, virtual_ip: 198.51.100.1, priority: 100, preempt: false, advert_interval: 1, vrrpv2: ""}
+  ipv6_fhrp:
+    - {if_name: GigabitEthernet0/1, group: 2, link_local: "fe80::1", addresses: ["2001:db8:0:1::1"], priority: 120, preempt: true, advert_interval: 500, track: ""}
+unknown:
+  - "  timers advertise 1500"
+  - "  description sample-group"

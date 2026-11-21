@@ -1,14 +1,15 @@
 {# Ports and interfaces. Syntax: cmdref 4.2 and 4.10. The "device" blocks
    stand before the "interface" blocks (cmdref 3.3). The device has no "mtu"
-   line and no NAT direction, and the unit of "bandwidth" is not known: those
-   cells are not read. #}
-{% set ifs = t.interfaces %}
+   line and no NAT direction: those cells are not read. "bandwidth" is in
+   kbps, as the dataset has it. #}
+{# In the order of the names: adapt.yaml may have added rows at the end. #}
+{% set ifs = t.interfaces | natural(attribute='name') %}
 {# NAT stands under the interface outside (cmdref 4.10). What cannot be
    written is told here once, before the blocks. #}
 {% for n in t.nat_rules %}
 {% set what = 'NAT ' ~ n.name %}
 {% set oif = n.outside_if | required(what ~ ' の外側 IF（NEC IX は、外側のインタフェースの下に NAT を書きます）') %}
-{% set seen = namespace(v=false, pat=0) %}
+{% set seen = namespace(v=false, pat=0, napt=0) %}
 {% for i in ifs %}
 {% if i.name == oif %}
 {% set seen.v = true %}
@@ -21,29 +22,56 @@
 {% if m.outside_if == oif and m.type == 'pat_interface' %}
 {% set seen.pat = seen.pat + 1 %}
 {% endif %}
+{% if m.outside_if == oif and m.type in ['pat_interface', 'pat_pool'] %}
+{% set seen.napt = seen.napt + 1 %}
+{% endif %}
 {% endfor %}
+{% if n.extendable == true %}
+{{ fail(what ~ ' の「複数の外側アドレスに対応させる」は書けません（NEC IX に当たる語がありません。列を空にしてください）') }}
+{% endif %}
 {% if n.type == 'pat_interface' %}
 {% if seen.pat > 1 %}
 {{ fail(what ~ ': 外側 IF ' ~ oif ~ ' に、種類が pat_interface の行が 2 つ以上あります（NEC IX では 1 つのインタフェースに 1 つです）') }}
 {% endif %}
+{% elif n.type == 'pat_pool' %}
+{% if n.pool_start != n.pool_end %}
+{{ fail(what ~ ': 変換後アドレスの先頭と末尾が違います（NEC IX のポート変換（NAPT）は、1 つのアドレスへまとめます。先頭と末尾を同じアドレスにするか、種類を dynamic_pool にしてください）') }}
+{% endif %}
+{% elif n.type == 'dynamic_pool' %}
+{% if ' ' in n.name or n.name | length > 31 %}
+{{ fail(what ~ ' の名前は、空白なしの 31 字までにします（NEC IX では、名前をプールの名前に使います）') }}
+{% endif %}
 {% elif n.type == 'static_port' %}
-{% if seen.pat == 0 %}
-{{ fail(what ~ ' のポート転送は、同じ外側 IF に種類が pat_interface の行が要ります（NEC IX では ip napt enable の上で動きます）') }}
+{% if seen.napt == 0 %}
+{{ fail(what ~ ' のポート転送は、同じ外側 IF に種類が pat_interface か pat_pool の行が要ります（NEC IX では ip napt enable の上で動きます）') }}
 {% endif %}
 {% if n.global_ip and n.global_ip != 'interface' %}
 {{ fail(what ~ ' の外側アドレスは「interface」（外側 IF のアドレス）だけ書けます') }}
 {% endif %}
-{% if n.local_port != n.global_port %}
-{{ fail(what ~ ' は内側ポートと外側ポートが違います（ポートを変える転送の書き方を確かめていません。追加コンフィグに書いてください）') }}
+{% if n.local_port != n.global_port and (' ' in n.name or n.name | length > 31 or n.name in ['any', 'dns', 'ftp', 'http', 'https', 'ping', 'snmp', 'ssh', 'telnet']) %}
+{{ fail(what ~ ' の名前は、空白なしの 31 字までで、any dns ftp http https ping snmp ssh telnet 以外にします（NEC IX では、ポートを変える転送のサービス名に使います）') }}
 {% endif %}
-{% elif n.type == 'static' %}
+{% elif n.type in ['static', 'static_network'] %}
 {% if n.global_ip == 'interface' %}
 {{ fail(what ~ ' の外側アドレス「interface」は、種類が static_port の行にだけ書けます') }}
 {% endif %}
 {% else %}
-{{ fail(what ~ ' の種類「' ~ n.type ~ '」は、このパックでは書けません（アドレスの範囲の定義の書き方を確かめていません。追加コンフィグに書いてください）') }}
+{{ fail(what ~ ' の種類「' ~ n.type ~ '」は、このパックでは書けません') }}
 {% endif %}
 {% endfor %}
+{# The pools of the dynamic translations stand outside the interfaces and
+   take the name of their rule (CRM 8-30). The device has no length for a
+   pool: that cell is not read. #}
+{% set pools = namespace(n=0) %}
+{% for n in t.nat_rules %}
+{% if n.type == 'dynamic_pool' %}
+{% set pools.n = pools.n + 1 %}
+ip nat pool {{ n.name }} {{ n.pool_start | required('NAT ' ~ n.name ~ ' の変換後アドレスの先頭') }} {{ n.pool_end | required('NAT ' ~ n.name ~ ' の変換後アドレスの末尾') }}
+{% endif %}
+{% endfor %}
+{% if pools.n %}
+!
+{% endif %}
 {# A VRF has no block of its own: the interface that names it makes it
    (cmdref 4.5). #}
 {% for v in t.vrfs %}
@@ -73,7 +101,34 @@
 {{ fail(f.if_name ~ ' の冗長化のグループ ' ~ f.group ~ ' の方式「' ~ f.protocol ~ '」は書けません（NEC IX の冗長化は VRRP です。方式を vrrp に書き直してください）') }}
 {% endif %}
 {% endfor %}
-{% if t.fhrp %}
+{# IPv6 VRRP (version 3; appendix A 3.23, "IPv6 の VRRP"). A number is used
+   once on the device, IPv4 and IPv6 together (FD 2.27.1). The IPv4 VRRP of
+   this device is version 2 only (FD 2.27.1, "IPv4 と IPv6 の動作差分"). #}
+{% for f in t.ipv6_fhrp %}
+{% set n = namespace(seen=false, same=0) %}
+{% for i in ifs %}
+{% if i.name == f.if_name %}
+{% set n.seen = true %}
+{% endif %}
+{% endfor %}
+{% if not n.seen %}
+{{ fail('IPv6 の冗長化の IF ' ~ f.if_name ~ ' が、インタフェースの表にありません') }}
+{% endif %}
+{% for g in t.fhrp %}
+{% if g.group == f.group %}
+{% set n.same = n.same + 1 %}
+{% endif %}
+{% endfor %}
+{% for g in t.ipv6_fhrp %}
+{% if g.group == f.group and g.if_name != f.if_name %}
+{% set n.same = n.same + 1 %}
+{% endif %}
+{% endfor %}
+{% if n.same > 0 %}
+{{ fail(f.if_name ~ ' の IPv6 の冗長化のグループ ' ~ f.group ~ ': 同じ番号のグループが、この機器のほかの行（IPv4 か、ほかの IF）にあります（NEC IX は、IPv4 と IPv6 を含めて、機器の中で同じ番号を使えません。どちらかの番号を変えてください。相手の機器の番号も合わせます）') }}
+{% endif %}
+{% endfor %}
+{% if t.fhrp or t.ipv6_fhrp %}
 vrrp enable
 !
 {% endif %}
@@ -99,25 +154,303 @@ vrrp enable
 ip dhcp-relay enable
 !
 {% endif %}
-{# Speed and duplex belong to the port, and are written on the row of its
-   base interface ("<port>.0"). #}
+{# The numbers of interfaces, loop detection and the settings of bridge
+   groups (appendix A 3.22, 2026-11-21). #}
+{% set l2 = namespace(any=false) %}
+{% for g in t.l2_settings %}
+{% if g.bvi_count != '' %}
+{% set l2.any = true %}
+system interfaces bvi {{ g.bvi_count }}
+{% endif %}
+{% endfor %}
 {% for i in ifs %}
-{% if i.speed or i.duplex %}
+{% if i.max_subinterfaces != '' %}
+{% set port = i.name | split('.') %}
+{% if port | length != 2 or port[1] != '0' or ':' in i.name %}
+{{ fail(i.name ~ ' に「サブ IF の数の上限」は書けません（物理ポートの設定です。「ポート名.0」の行に書いてください）') }}
+{% endif %}
+{% set l2.any = true %}
+system subinterfaces {{ port[0] }} {{ i.max_subinterfaces }}
+{% endif %}
+{% endfor %}
+{% for g in t.l2_settings %}
+{% if g.loop_detect_interval != '' %}
+{% set l2.any = true %}
+loop-detection interval-time {{ g.loop_detect_interval }}
+{% endif %}
+{% if g.loop_detect_threshold != '' %}
+{% set l2.any = true %}
+loop-detection threshold {{ g.loop_detect_threshold }}
+{% endif %}
+{% if g.loop_detect_window != '' %}
+{% set l2.any = true %}
+loop-detection window-size {{ g.loop_detect_window }}
+{% endif %}
+{% endfor %}
+{% for b in t.bridge_groups %}
+{% if b.aging_time != '' %}
+{% set l2.any = true %}
+bridge {{ b.group }} aging-time {{ b.aging_time }}
+{% endif %}
+{% if b.table_size != '' %}
+{% set l2.any = true %}
+bridge {{ b.group }} table-size {{ b.table_size }}
+{% endif %}
+{% if b.bridge_ip == true %}
+{% set l2.any = true %}
+bridge {{ b.group }} bridge ip
+{% elif b.bridge_ip == false %}
+{% set l2.any = true %}
+no bridge {{ b.group }} bridge ip
+{% endif %}
+{% if b.bridge_ipv6 == true %}
+{% set l2.any = true %}
+bridge {{ b.group }} bridge ipv6
+{% elif b.bridge_ipv6 == false %}
+{% set l2.any = true %}
+no bridge {{ b.group }} bridge ipv6
+{% endif %}
+{% if b.bridge_only_pppoe == true %}
+{% set l2.any = true %}
+bridge {{ b.group }} bridge-only pppoe
+{% elif b.bridge_only_pppoe == false %}
+{{ fail('ブリッジグループ ' ~ b.group ~ ' の「PPPoE だけをブリッジする」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% endfor %}
+{% if l2.any %}
+!
+{% endif %}
+{# Bridging meets layer 3 at a BVI only with the switch of the whole device
+   (CRM p.6-6). #}
+{% set irb = namespace(on=false) %}
+{% for g in t.l2_settings %}
+{% if g.bridge_irb == true %}
+{% set irb.on = true %}
+bridge irb enable
+!
+{% elif g.bridge_irb == false %}
+{{ fail('「ブリッジと L3 の併用」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% endfor %}
+{% for i in ifs %}
+{% if i.kind == 'bvi' and i.bridge_group != '' and not irb.on %}
+{{ fail(i.name ~ ' をブリッジグループの L3 の口にするには、「L2 の全体設定」の「ブリッジと L3 の併用」を有効にします') }}
+{% endif %}
+{% endfor %}
+{# A VLAN group has 8 subinterfaces at most (FD p.1-7, the FAQ on VLANs):
+   a trunk of another vendor that carries more VLANs cannot be written. #}
+{% for i in ifs %}
+{% if ':' in i.name and ':port' not in i.name and i.name is endingwith('.0') %}
+{% set stem = i.name | replace('.0', '.') %}
+{% set subs = namespace(n=0) %}
+{% for j in ifs %}
+{% if j.name is startingwith(stem) and j.name != i.name %}
+{% set subs.n = subs.n + 1 %}
+{% endif %}
+{% endfor %}
+{% if subs.n > 8 %}
+{{ fail(i.name ~ ' の VLAN グループに、サブ IF が ' ~ subs.n ~ ' 個あります（NEC IX では、VLAN グループ 1 つに 8 個までです。トランクに通す VLAN を 8 個までに減らしてください。ネイティブ VLAN は数えません）') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# With the model known (models.yaml): the ports the built-in switch has,
+   and the numbers a VLAN group can take (1 to the number of ports; CRM
+   p.3-14). #}
+{% if model.ports %}
+{% for i in ifs %}
+{% if ':port' in i.name and i.name not in model.ports %}
+{{ fail(i.name ~ ': 機種 ' ~ model.id ~ ' に、このポートはありません（IF 対応の新 IF 名を、この機種のポートに直してください）') }}
+{% endif %}
+{% endfor %}
+{% for s in t.switchports %}
+{% if ':port' in s.if_name and s.mode == 'access' and s.access_vlan != '' and s.access_vlan | int > model.limits.switch_ports %}
+{{ fail(s.if_name ~ ' の VLAN グループ ' ~ s.access_vlan ~ ' は書けません（機種 ' ~ model.id ~ ' の VLAN グループの番号は 1〜' ~ model.limits.switch_ports ~ ' です）') }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{# The built-in switch (README, "VLAN とスイッチ"). A port is not an
+   interface of the device: its row has the name "<device>:port<number>",
+   and its settings stand in the "device" block. What cannot be written is
+   told here once, before the blocks. #}
+{% for s in t.switchports %}
+{% set what = s.if_name ~ ' のスイッチポート' %}
+{% set at = s.if_name | split(':port') %}
+{% if at | length != 2 or not at[1] is digits %}
+{{ fail(what ~ ': NEC IX のスイッチポートは、内蔵スイッチのポートだけです。IF 名を「<デバイス名>:port<番号>」の形（例 GigaEthernet2:port1）にしてください（IF 対応で決めます）') }}
+{% elif s.mode == 'trunk' %}
+{{ fail(what ~ ': トランクのポートは、このままでは書けません。VLAN の IF の新 IF 名を BVI（例 BVI0）にすると、パックがタグ付きのサブ IF とブリッジに置き換えて書きます（ポート VLAN の IF「<デバイス名>:<グループ>.0」にした VLAN は、トランクに通せません）') }}
+{% elif s.mode not in ['access', 'routed'] %}
+{{ fail(what ~ ': モード「' ~ s.mode ~ '」は書けません（NEC IX の内蔵スイッチのポートは、access（VLAN グループに入れる）か routed（グループに入れない）です）') }}
+{% elif s.mode == 'access' %}
+{% set g = s.access_vlan | required(what ~ ' のアクセス VLAN（NEC IX では VLAN グループの番号）') %}
+{% set seen = namespace(v=false) %}
+{% for i in ifs %}
+{% if i.name == at[0] ~ ':' ~ g ~ '.0' %}
+{% set seen.v = true %}
+{% endif %}
+{% endfor %}
+{% if g != '' and not seen.v %}
+{{ fail(what ~ ': アクセス VLAN ' ~ g ~ ' に当たる VLAN グループの IF「' ~ at[0] ~ ':' ~ g ~ '.0」が、インタフェースの表にありません（NEC IX では、アクセス VLAN の番号が VLAN グループの番号です。1 からポートの数までの番号にして、その IF の行を足してください）') }}
+{% endif %}
+{% elif s.access_vlan != '' %}
+{{ fail(what ~ ': モードが routed のポートに、アクセス VLAN は書けません') }}
+{% endif %}
+{% endfor %}
+{% for l in t.lags %}
+{% set at = l.if_name | split(':port') %}
+{% if at | length != 2 or not at[1] is digits %}
+{{ fail('LAG のメンバー ' ~ l.if_name ~ ' は書けません（NEC IX の LAG は、内蔵スイッチのポートだけです。IF 名を「<デバイス名>:port<番号>」の形にしてください）') }}
+{% elif l.mode not in ['', 'on'] %}
+{{ fail('LAG のメンバー ' ~ l.if_name ~ ' の束ね方「' ~ l.mode ~ '」は書けません（NEC IX の LAG は固定（on）だけで、LACP には対応していません。対向の機器と合わせて on に直してください）') }}
+{% endif %}
+{% endfor %}
+{# Speed and duplex belong to the port, and are written on the row of its
+   base interface ("<port>.0"), or on the row of a port of the switch. #}
+{% for i in ifs %}
+{% if (i.speed or i.duplex) and ':port' not in i.name %}
 {% set port = i.name | split('.') %}
 {% if i.kind != 'physical' or port | length != 2 or port[1] != '0' or ':' in i.name %}
 {{ fail(i.name ~ ' に速度・二重は書けません（NEC IX では物理ポートの設定です。「ポート名.0」の行に書いてください）') }}
 {% endif %}
-device {{ port[0] }}
-{% if i.speed %}
-  speed {{ i.speed }}
 {% endif %}
-{% if i.duplex %}
-  duplex {{ i.duplex }}
+{% endfor %}
+{% for m in t.mirror_sessions %}
+{% for x in m.sources_both + m.sources_tx %}
+{% if ':port' not in x %}
+{{ fail('ポートミラー ' ~ m.session ~ ': 写す元の IF「' ~ x ~ '」は書けません（NEC IX のミラーは、内蔵スイッチのポートだけです。IF 名を「<デバイス名>:port<番号>」の形にしてください）') }}
 {% endif %}
+{% endfor %}
+{% for x in m.sources_rx %}
+{{ fail('ポートミラー ' ~ m.session ~ '（' ~ x ~ '）: 受信だけを写す行は書けません（NEC IX は、両方向か送信だけです）') }}
+{% endfor %}
+{% endfor %}
+{# One block for a device: its own speed, the VLAN groups, then the ports. #}
+{% for i in ifs %}
+{% set d = (i.name | split(':'))[0] | split('.') | first %}
+{% set dev = namespace(first='', any=false) %}
+{% for j in ifs %}
+{% if dev.first == '' and ((j.name | split(':'))[0] | split('.') | first) == d %}
+{% set dev.first = j.name %}
+{% endif %}
+{% endfor %}
+{% if dev.first == i.name and i.kind in ['physical', 'subif'] %}
+{% for j in ifs %}
+{% if (j.name == d ~ '.0' and (j.speed or j.duplex or j.port_description or j.mdi or j.switch_qos_scheduler or j.switch_router_priority != '')) or (j.name is startingwith(d ~ ':port') and (j.speed or j.duplex or j.enabled == false or j.mdi or j.qos_default_priority != '')) %}
+{% set dev.any = true %}
+{% endif %}
+{% endfor %}
+{% for s in t.switchports %}
+{% if s.if_name is startingwith(d ~ ':port') and s.mode == 'access' %}
+{% set dev.any = true %}
+{% endif %}
+{% endfor %}
+{% for l in t.lags %}
+{% if l.if_name is startingwith(d ~ ':port') %}
+{% set dev.any = true %}
+{% endif %}
+{% endfor %}
+{% for m in t.mirror_sessions %}
+{% for x in m.sources_both + m.sources_tx %}
+{% if x is startingwith(d ~ ':port') %}
+{% set dev.any = true %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% if dev.any %}
+device {{ d }}
+{% for j in ifs %}
+{% if j.name == d ~ '.0' %}
+{% if j.port_description %}
+{% if j.port_description | length > 79 %}
+{{ fail(j.name ~ ' の「ポートの説明」は 79 字までです') }}
+{% endif %}
+  description {{ j.port_description }}
+{% endif %}
+{% if j.speed %}
+  speed {{ j.speed }}
+{% endif %}
+{% if j.duplex %}
+  duplex {{ j.duplex }}
+{% endif %}
+{% if j.mdi %}
+  mdi-mdix {{ j.mdi }}
+{% endif %}
+{% if j.switch_qos_scheduler %}
+  qos scheduler {{ j.switch_qos_scheduler }}
+{% endif %}
+{% if j.switch_router_priority != '' %}
+  router-port qos default-priority {{ j.switch_router_priority }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% set vg = namespace(nums=[]) %}
+{% for s in t.switchports %}
+{% if s.if_name is startingwith(d ~ ':port') and s.mode == 'access' and s.access_vlan != '' and s.access_vlan | int not in vg.nums %}
+{% set vg.nums = vg.nums + [s.access_vlan | int] %}
+{% endif %}
+{% endfor %}
+{% for n in vg.nums | sort %}
+{% set ports = namespace(nums=[]) %}
+{% for s in t.switchports %}
+{% if s.if_name is startingwith(d ~ ':port') and s.mode == 'access' and s.access_vlan != '' and s.access_vlan | int == n %}
+{% set ports.nums = ports.nums + [s.if_name | replace(d ~ ':port', '') | int] %}
+{% endif %}
+{% endfor %}
+  vlan-group {{ n }} port {{ ports.nums | sort | join(' ') }}
+{% endfor %}
+{% set pn = namespace(nums=[]) %}
+{% for j in ifs %}
+{% if j.name is startingwith(d ~ ':port') %}
+{% set pn.nums = pn.nums + [j.name | replace(d ~ ':port', '') | int] %}
+{% endif %}
+{% endfor %}
+{% for n in pn.nums | sort %}
+{% for j in ifs %}
+{% if j.name == d ~ ':port' ~ n %}
+{% if j.speed in ['2500', '5000', '10000'] %}
+{{ fail(j.name ~ ' の速度 ' ~ j.speed ~ ' は書けません（内蔵スイッチのポートは 10・100・1000・auto です）') }}
+{% elif j.speed %}
+  port {{ n }} speed {{ j.speed }}
+{% endif %}
+{% if j.duplex %}
+  port {{ n }} duplex {{ j.duplex }}
+{% endif %}
+{% if j.mdi %}
+  port {{ n }} mdi-mdix {{ j.mdi }}
+{% endif %}
+{% if j.qos_default_priority != '' %}
+  port {{ n }} qos default-priority {{ j.qos_default_priority }}
+{% endif %}
+{# The device has no sessions: the number stands for the port that takes the
+   copy (adapt.yaml), and is read here only so that it is not told as left
+   out. #}
+{% for m in t.mirror_sessions %}
+{% if m.session != '' and (j.name in m.sources_both or j.name in m.sources_tx) %}
+{% set to = m.destination_if | split(':port') %}
+{% if to | length != 2 or to[0] != d %}
+{{ fail('ポートミラー ' ~ m.session ~ '（' ~ j.name ~ '）: 写す先の IF「' ~ m.destination_if ~ '」は書けません（NEC IX のミラーは、同じ内蔵スイッチのポートどうしです。IF 名を「' ~ d ~ ':port<番号>」の形にしてください）') }}
+{% else %}
+  port {{ n }} mirror-port {{ to[1] }} {{ 'both' if j.name in m.sources_both else 'out' }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if j.enabled == false %}
+  port {{ n }} shutdown
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for l in t.lags %}
+{% if l.if_name == d ~ ':port' ~ n %}
+  port {{ n }} link-aggregation {{ l.group }}
+{% endif %}
+{% endfor %}
+{% endfor %}
 !
+{% endif %}
 {% endif %}
 {% endfor %}
 {% for i in ifs %}
+{% if ':port' not in i.name %}
 interface {{ i.name }}
 {% if i.description %}
   description {{ i.description }}
@@ -126,7 +459,15 @@ interface {{ i.name }}
 {% if i.kind != 'subif' %}
 {{ fail(i.name ~ ' に VLAN のタグは書けません（サブインタフェース「ポート名.1」以降に書きます）') }}
 {% endif %}
-  encapsulation dot1q {{ i.encap_vlan }}
+{% if i.encap_native == true %}
+{{ fail(i.name ~ ' の「タグなしの VLAN」は書けません（NEC IX では、タグなしの通信は基本 IF「ポート名.0」が受けます。IF 対応で、このサブ IF の新 IF 名を「ポート名.0」にしてください）') }}
+{% endif %}
+{% if i.encap_tpid and not (i.encap_tpid | length in [3, 4]) %}
+{{ fail(i.name ~ ' のタグの種別（TPID）「' ~ i.encap_tpid ~ '」は書けません（16 進数で 5dd〜ffff です）') }}
+{% endif %}
+  encapsulation dot1q {{ i.encap_vlan }}{{ ' tpid ' ~ i.encap_tpid if i.encap_tpid else '' }}
+{% elif i.encap_tpid or i.encap_native != '' %}
+{{ fail(i.name ~ ' の「タグの種別」「タグなしの VLAN」は、「VLAN 番号（サブ IF）」を書いたときだけ書けます') }}
 {% endif %}
 {# The VRF is entered before the address (CRM p.8-17). #}
 {% if i.vrf %}
@@ -149,13 +490,26 @@ interface {{ i.name }}
 {% for a in i.ipv6 %}
   ipv6 address {{ a }}
 {% endfor %}
-{# The line takes a sequence number, which the dataset does not have: 1. #}
+{% include 'ipv6_if.j2' %}
+{# The line takes a sequence number, which the dataset does not have: the
+   lists are numbered 1, 2, 3 ... in their order (CRM 13-3: the smaller
+   number is looked at first). #}
 {% if i.acl_in %}
   ip filter {{ i.acl_in }} 1 in
+{% elif i.acl_in_more %}
+{{ fail(i.name ~ ': 「入力 ACL（2 つ目以降）」があるのに、「入力 ACL」が空です') }}
 {% endif %}
+{% for a in i.acl_in_more %}
+  ip filter {{ a }} {{ loop.index + 1 }} in
+{% endfor %}
 {% if i.acl_out %}
   ip filter {{ i.acl_out }} 1 out
+{% elif i.acl_out_more %}
+{{ fail(i.name ~ ': 「出力 ACL（2 つ目以降）」があるのに、「出力 ACL」が空です') }}
 {% endif %}
+{% for a in i.acl_out_more %}
+  ip filter {{ a }} {{ loop.index + 1 }} out
+{% endfor %}
 {% for a in i.dhcp_relay %}
   ip dhcp-relay server {{ a }}
 {% endfor %}
@@ -163,6 +517,12 @@ interface {{ i.name }}
   ip proxy-arp
 {% elif i.proxy_arp == false %}
 {{ fail(i.name ~ ' の代理 ARP「無効」は書けません（NEC IX の既定と、止める行の出方を確かめていません。セルを空にしてください）') }}
+{% endif %}
+{% if i.policy_route %}
+  ip policy route-map {{ i.policy_route }}
+{% endif %}
+{% if i.bandwidth != '' %}
+  bandwidth {{ i.bandwidth }}
 {% endif %}
 {% if i.ip_mtu %}
   ip mtu {{ i.ip_mtu }}
@@ -229,25 +589,153 @@ interface {{ i.name }}
 {% endif %}
 {% endif %}
 {% endfor %}
+{# IPv6 VRRP (CRM p.16-4, p.16-5): the link-local address first; the
+   interval in seconds when it is whole seconds, or else in centiseconds (up
+   to 30 seconds with version 3). #}
+{% for f in t.ipv6_fhrp %}
+{% if f.if_name == i.name %}
+{% set what = i.name ~ ' の IPv6 の冗長化のグループ ' ~ f.group %}
+{% set g = 'vrrp ' ~ f.group %}
+{% if f.link_local != '' and not (f.link_local | in_net('fe80::/10')) %}
+{{ fail(what ~ ' の仮想リンクローカルアドレス ' ~ f.link_local ~ ' が、fe80::/10 にありません') }}
+{% endif %}
+  {{ g }} ipv6 {{ f.link_local | required(what ~ ' の仮想リンクローカルアドレス') }}
+{% for a in f.addresses %}
+  {{ g }} ipv6 {{ a }}
+{% endfor %}
+{% if f.priority != '' %}
+  {{ g }} priority {{ f.priority }}
+{% endif %}
+{% if f.preempt == true %}
+  {{ g }} preempt
+{% elif f.preempt == false %}
+  no {{ g }} preempt
+{% endif %}
+{% if f.advert_interval != '' %}
+{% set ms = f.advert_interval | int %}
+{% if ms > 30000 %}
+{{ fail(what ~ ' の広告間隔 ' ~ ms ~ ' ミリ秒は書けません（NEC IX の版 3 は 30 秒までです）') }}
+{% elif ms % 1000 == 0 %}
+  {{ g }} timers advertisement {{ ms // 1000 }}
+{% elif ms % 10 == 0 %}
+  {{ g }} timers advertisement csec {{ ms // 10 }}
+{% else %}
+{{ fail(what ~ ' の広告間隔 ' ~ ms ~ ' ミリ秒は書けません（NEC IX は 10 ミリ秒（1 センチ秒）刻みです）') }}
+{% endif %}
+{% endif %}
+{% if f.track %}
+{{ fail(what ~ ' の回線監視は書けません（NEC IX のネットワークモニタの action ip decrement-vrrp-priority が IPv6 のグループに効くかを、公開資料で確かめられていません。追加コンフィグに書いてください）') }}
+{% endif %}
+{% endif %}
+{% endfor %}
 {# A tunnel: the mode first. #}
 {% for u in t.tunnels %}
 {% if u.if_name == i.name %}
 {% set what = i.name ~ ' のトンネル' %}
+{# MAP-E and the tunnels the carrier provisions get their address, and
+   where they lead, from the carrier (appendix A 3.23; CRM p.12-5, p.8-9). #}
+{% if u.type == 'map_e' %}
+{% if u.provider_host and u.provider != 'ocn_fixed' %}
+{{ fail(what ~ ': 「MAP-E のホスト名」は、「MAP-E の事業者」が ocn_fixed のときだけ書けます') }}
+{% endif %}
+  tunnel mode map-e{{ ' ' ~ (u.provider | replace('_', '-')) if u.provider else '' }}{{ ' hostname ' ~ u.provider_host if u.provider_host else '' }}
+  ip address map-e
+{% elif u.type in ['auto_ds_lite', 'auto_ipip'] %}
+  tunnel mode v6pv {{ 'ds-lite' if u.type == 'auto_ds_lite' else 'ipip' }}
+  ip address v6pv lan {{ u.lan_if | required(what ~ ' の LAN 側 IF（自動設定）') }}
+{% else %}
+{% if u.provider or u.provider_host or u.lan_if %}
+{{ fail(what ~ ': 「MAP-E の事業者」「MAP-E のホスト名」は種類が map_e のとき、「LAN 側 IF（自動設定）」は種類が auto_ds_lite・auto_ipip のときだけ書けます') }}
+{% endif %}
+{% if u.type == 'etherip' and i.bridge_group == '' %}
+{{ fail(what ~ ': 種類が etherip のトンネル IF には、ブリッジグループが要ります（延伸する IF と同じ番号を、インタフェースの表の「ブリッジグループ」に書いてください）') }}
+{% endif %}
+{# EtherIP that a row of IPsec protects has its mode written with the lines
+   of IPsec, below; over IPv6 the mode says so. #}
+{% set esec = namespace(seen=false) %}
+{% for r in t.ipsec_tunnels %}
+{% if u.type == 'etherip' and r.style == 'tunnel_if' and r.tunnel_if == i.name %}
+{% set esec.seen = true %}
+{% endif %}
+{% endfor %}
+{% if u.type == 'etherip' and esec.seen %}
+{% elif u.type == 'etherip' and u.destination_v6 %}
+  tunnel mode ether-ip ipv6
+{% elif u.type != 'ipsec' %}
   tunnel mode {{ u.type | lex('tunnel_mode') }}
-{# IPsec: the map of ipsec.j2 holds the address of the other side, and the
-   tunnel has neither a source nor a destination line. #}
-{% if u.type == 'ipsec' %}
+{% endif %}
+{% endif %}
+{# IPsec with IKE version 1: the map of ipsec.j2 holds the address of the
+   other side, and the tunnel has neither a source nor a destination line.
+   With IKE version 2 the tunnel has a mode of its own and names the profile
+   of ipsec.j2, the peer (which is the destination of the tunnel) and the
+   address or the interface it sends from (the source of the tunnel). #}
+{% set eip = namespace(on=false) %}
+{% for r in t.ipsec_tunnels %}
+{% if u.type == 'etherip' and r.style == 'tunnel_if' and r.tunnel_if == i.name %}
+{% set eip.on = true %}
+{% endif %}
+{% endfor %}
+{% if u.type == 'ipsec' or eip.on %}
 {% set sec = namespace(seen=false) %}
 {% for r in t.ipsec_tunnels %}
-{% if r.style == 'tunnel_if' and r.tunnel_if == i.name %}
+{% if r.style == 'tunnel_if' and r.tunnel_if == i.name and not sec.seen %}
 {% set sec.seen = true %}
-  ipsec policy tunnel ipsec-{{ i.name | replace('Tunnel', '') | replace('.0', '') }} out
+{% set num = i.name | replace('Tunnel', '') | replace('.0', '') %}
+{% if (r.ike_version | string) == '2' %}
+  tunnel mode {{ 'ether-ip ' if eip.on else '' }}ipsec-ikev2
+  ikev2 binding ikev2-{{ num }}
+{% if r.always_on == true %}
+  ikev2 connect-type auto
+{% elif r.always_on == false %}
+  ikev2 connect-type trigger
+{% endif %}
+{% if u.destination and u.destination != r.peer_address %}
+{{ fail(what ~ ' の宛先が、IPsec ' ~ r.name ~ ' の相手アドレスと違います（NEC IX の IKEv2 では、IPsec の相手がトンネルの宛先です。そろえるか、宛先を空にしてください）') }}
+{% endif %}
+{% set rid = '' %}
+{% if r.remote_id %}
+{% set rid = ' id ' ~ (r.remote_id | split(':') | first | replace('address', 'ipv4') | replace('email', 'rfc822-addr')) ~ ' ' ~ ((r.remote_id | split(':'))[1:] | join(':')) %}
+{% endif %}
+{% if (r.peer_address ~ '/32') is cidr or r.peer_address == 'any' %}
+  ikev2 peer {{ r.peer_address }} authentication psk{{ rid }}
+{% else %}
+  ikev2 peer-fqdn-ipv4 {{ r.peer_address }} authentication psk{{ rid }}
+{% endif %}
+{% if u.source %}
+  ikev2 source-address {{ u.source }}
+{% endif %}
+{% elif eip.on %}
+  tunnel mode ether-ip ipsec
+  ipsec policy transport ipsec-{{ num }} with-id-payload
+{% else %}
+  tunnel mode ipsec
+  ipsec policy tunnel ipsec-{{ num }} out
+{% endif %}
 {% endif %}
 {% endfor %}
 {% if not sec.seen %}
+  tunnel mode ipsec
 {{ fail(what ~ ' は種類が ipsec ですが、IPsec の表に、このトンネル IF の行がありません') }}
 {% endif %}
+{% elif u.type in ['map_e', 'auto_ds_lite', 'auto_ipip'] %}
+{% if u.destination or u.destination_v6 or u.destination_fqdn %}
+{{ fail(what ~ ': 種類が ' ~ u.type ~ ' のトンネルに宛先は書けません（宛先は回線の事業者からもらいます。セルを空にしてください）') }}
+{% endif %}
+{% elif u.type == 'ipv4_over_ipv6' %}
+  tunnel source {{ u.source | required(what ~ ' の送信元') }}
+{% if u.destination_v6 %}
+  tunnel destination {{ u.destination_v6 }}
 {% else %}
+  tunnel destination fqdn {{ u.destination_fqdn | required(what ~ ' の宛先（IPv6）か宛先（名前）') }}
+{% endif %}
+{% elif u.type == 'etherip' and u.destination_v6 and not u.destination and not u.destination_fqdn %}
+  tunnel source {{ u.source | required(what ~ ' の送信元') }}
+  tunnel destination {{ u.destination_v6 }}
+{% else %}
+{% if u.destination_v6 or u.destination_fqdn %}
+{{ fail(what ~ ': 「宛先（IPv6）」「宛先（名前）」は、種類が ipv4_over_ipv6 のときと、種類が etherip で IPv6 の網を通るとき（宛先（IPv6）だけ）に書けます') }}
+{% endif %}
   tunnel source {{ u.source | required(what ~ ' の送信元') }}
   tunnel destination {{ u.destination | required(what ~ ' の宛先') }}
 {% endif %}
@@ -262,10 +750,76 @@ interface {{ i.name }}
 {% endif %}
 {% endif %}
 {% endfor %}
+{# IPsec without a tunnel interface (the style "policy"; the map is in
+   ipsec.j2 and has the name of the row): on the interface the traffic
+   leaves by, in tunnel mode or in transport mode (FD 2.35.2 (b), 2.35.6). #}
+{% for r in t.ipsec_tunnels %}
+{% if r.style == 'policy' and r.local_if == i.name %}
+{% if r.ipsec_mode == 'transport' %}
+  ipsec policy transport {{ r.name | replace('/', '-') }}
+{% else %}
+  ipsec policy tunnel {{ r.name | replace('/', '-') }} out
+{% endif %}
+{% endif %}
+{% endfor %}
+{# L2TP (appendix A 3.21; the profile and the list are in l2tp.j2). The
+   tunnel of an LNS is bound to the PPP profile and to IPsec in transport
+   mode; the tunnel of a LAC names the LNS; a PPPoE interface of a LAC names
+   the tunnel and the list of the domains. #}
+{% for g in t.l2tp_groups %}
+{% set what = 'L2TP ' ~ g.name %}
+{% if i.name in g.logical_ifs %}
+{% if not (i.name is startingwith('Tunnel')) %}
+{{ fail(what ~ ' の受け口の IF「' ~ i.name ~ '」は書けません（NEC IX では、L2TP の受け口はトンネル IF です。Tunnel0.0 のような名前にしてください）') }}
+{% endif %}
+{% if g.role == 'lns' %}
+  ppp binding {{ g.name }}
+  tunnel mode l2tp-lns ipsec
+  ipsec policy transport {{ g.ipsec_policy | required(what ~ ' の IPsec の設定名（NEC IX の LNS は、IPsec と組でしか動きません。IPsec の表に、相手アドレスが any・IPsec のモードが transport・方式が policy の行を作り、その名前を書いてください）') | replace('/', '-') }}
+{% else %}
+{% set peer = g.peer_address | required(what ~ ' の相手アドレス') %}
+  tunnel mode l2tp-lac ip
+{% if peer | split('.') | length == 4 and peer | split('.') | select('digits') | list | length == 4 %}
+  tunnel destination {{ peer }}
+{% else %}
+  tunnel destination fqdn {{ peer }}
+{% endif %}
+{% endif %}
+{% if g.password %}
+  l2tp password {{ '' if g.password is startingwith('secret ') else 'plain ' }}{{ g.password }}
+{% endif %}
+{% if g.idle_timeout != '' %}
+  l2tp session idle-time {{ g.idle_timeout }}
+{% endif %}
+{% endif %}
+{% if g.role == 'lac' and i.name in g.access_ifs %}
+{# With what the callers are asked for, the interface is written as the
+   PPPoE server the examples of the vendor show (FD 2.37.3). #}
+{% if g.auth %}
+  encapsulation pppoe
+  auto-connect
+{% endif %}
+  pppoe l2tp interface {{ g.logical_ifs | first }} url-list {{ g.name }}
+{% if g.auth %}
+  pppoe server
+  ppp binding {{ g.name }}-pppoe
+{% endif %}
+{% endif %}
+{% endfor %}
 {# PPPoE: the profile (pppoe.j2) is bound by its name. On a sub-interface
    PPPoE and "auto-connect" are what the device does by itself. #}
 {% for p in t.pppoe %}
 {% if p.logical_if == i.name %}
+{# On demand: the line is called when a packet asks for it, and cut after
+   the idle time (CRM 3-3, 3-4). #}
+{% if p.on_demand == true %}
+  no auto-connect
+{% if p.idle_timeout != '' %}
+  idle-time {{ p.idle_timeout }}
+{% endif %}
+{% elif p.idle_timeout != '' %}
+{{ fail('PPPoE ' ~ p.name ~ ': 「無通信で切る時間」は、「通信があるときだけつなぐ」が有効のときだけ書けます（NEC IX は、いつもつなぐ IF を無通信で切りません）') }}
+{% endif %}
   ppp binding {{ p.name }}
 {% if p.service_name %}
   pppoe service-name {{ p.service_name }}
@@ -278,25 +832,51 @@ interface {{ i.name }}
   ip dhcp binding {{ p.name }}
 {% endif %}
 {% endfor %}
-{# The switch first, then the lines that work on it. #}
-{% set nat = namespace(on=false) %}
-{% for kind in ['pat_interface', 'static_port', 'static'] %}
+{# The switch first, then the lines that work on it. Without a row of
+   the type pat_interface, the first pool of one address is the address of
+   the translation ("ip napt address"); every other one is a list with its
+   own address ("outside"). #}
+{% set nat = namespace(on=false, napt=false) %}
+{% for kind in ['pat_interface', 'pat_pool', 'static_port', 'dynamic_pool', 'static', 'static_network'] %}
 {% for n in t.nat_rules %}
 {% if n.outside_if == i.name and n.type == kind %}
 {% set what = 'NAT ' ~ n.name %}
 {% if kind == 'pat_interface' %}
+{% set nat.napt = true %}
   ip napt enable
 {% if n.match_acl %}
   ip napt inside list {{ n.match_acl }}
 {% endif %}
+{% elif kind == 'pat_pool' %}
+{% if not nat.napt %}
+{% set nat.napt = true %}
+  ip napt enable
+  ip napt address {{ n.pool_start | required(what ~ ' の変換後アドレスの先頭') }}
+{% if n.match_acl %}
+  ip napt inside list {{ n.match_acl }}
+{% endif %}
+{% else %}
+  ip napt inside list {{ n.match_acl | required(what ~ ' の対象の通信（2 つ目以降のポート変換には、ACL の名前が要ります）') }} outside {{ n.pool_start | required(what ~ ' の変換後アドレスの先頭') }}
+{% endif %}
 {% elif kind == 'static_port' %}
+{% if n.local_port == n.global_port %}
   ip napt static {{ n.local_ip | required(what ~ ' の内側アドレス') }} {{ n.protocol | required(what ~ ' のプロトコル') }} {{ n.local_port | required(what ~ ' の内側ポート') }}
+{% else %}
+  ip napt service {{ n.name }} {{ n.local_ip | required(what ~ ' の内側アドレス') }} {{ n.local_port | required(what ~ ' の内側ポート') }} {{ n.protocol | required(what ~ ' のプロトコル') }} {{ n.global_port | required(what ~ ' の外側ポート') }}
+{% endif %}
 {% else %}
 {% if not nat.on %}
   ip nat enable
 {% set nat.on = true %}
 {% endif %}
+{% if kind == 'dynamic_pool' %}
+  ip nat dynamic list {{ n.match_acl | required(what ~ ' の対象の通信（NEC IX では ACL の名前が要ります）') }} pool {{ n.name }}
+{% elif kind == 'static' %}
   ip nat static {{ n.local_ip | required(what ~ ' の内側アドレス') }} {{ n.global_ip | required(what ~ ' の外側アドレス') }}
+{% else %}
+{% set len = n.pool_prefix | required(what ~ ' の範囲のプレフィックス長') %}
+  ip nat static network {{ n.local_ip | required(what ~ ' の内側アドレス') }}/{{ len }} {{ n.global_ip | required(what ~ ' の外側アドレス') }}/{{ len }}
+{% endif %}
 {% endif %}
 {% endif %}
 {% endfor %}
@@ -323,7 +903,12 @@ interface {{ i.name }}
 {% if q.on %}
   service-policy enable
 {% endif %}
+{% if b.ngn_default == true %}
 {% if b.policy %}
+{{ fail(what ~ ': 「NGN 用の既定のポリシー」とポリシー名は一緒に書けません（どちらかにしてください）') }}
+{% endif %}
+  service-policy output default-policy-map-ngn
+{% elif b.policy %}
   service-policy output {{ b.policy }}
 {% endif %}
 {% if b.shape_bps != '' %}
@@ -333,10 +918,13 @@ interface {{ i.name }}
   traffic-shape rate {{ b.shape_bps }}{{ ' ' ~ b.shape_bc if b.shape_bc != '' else '' }}{{ ' ' ~ b.shape_be if b.shape_be != '' else '' }}
 {% elif b.shape_bc != '' or b.shape_be != '' %}
 {{ fail(what ~ ': IF 全体のバーストは、「IF 全体を絞る速さ」を書いたときだけ書けます') }}
-{% elif not b.policy %}
+{% elif not b.policy and b.ngn_default != true %}
 {{ fail(what ~ ': ポリシー名も「IF 全体を絞る速さ」もありません（どちらかを書くか、行を消してください）') }}
 {% endif %}
 {% else %}
+{% if b.ngn_default == true %}
+{{ fail(what ~ ': 「NGN 用の既定のポリシー」は出力（output）の行にだけ書けます') }}
+{% endif %}
 {% if b.shape_bps != '' or b.shape_bc != '' or b.shape_be != '' %}
 {{ fail(what ~ ': 「IF 全体を絞る速さ」は出力（output）の行にだけ書けます') }}
 {% endif %}
@@ -344,9 +932,39 @@ interface {{ i.name }}
 {% endif %}
 {% endif %}
 {% endfor %}
+{# A bridge group: on Ethernet, tunnel and BVI interfaces (CRM p.6-5). The
+   BVI names the group it is the layer-3 interface of. #}
+{% if i.bridge_group != '' %}
+{% if i.kind not in ['physical', 'subif', 'tunnel', 'bvi'] %}
+{{ fail(i.name ~ ' にブリッジグループは書けません（書けるのは GigaEthernet・Tunnel・BVI です）') }}
+{% endif %}
+  bridge-group {{ i.bridge_group }}
+{% endif %}
+{% if i.bridge_protected == true %}
+  bridge-group {{ i.bridge_group | required(i.name ~ ' のブリッジグループ（保護ポートは、ブリッジグループの中の設定です）') }} port-protected
+{% elif i.bridge_protected == false %}
+{{ fail(i.name ~ ' の「ブリッジの保護ポート」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if i.bridge_table_size != '' %}
+  bridge-group {{ i.bridge_group | required(i.name ~ ' のブリッジグループ（覚える MAC の数は、ブリッジグループの中の設定です）') }} port-table-size {{ i.bridge_table_size }}
+{% endif %}
+{% if i.dot1q_min_frame != '' %}
+  dot1q min-frame-size {{ i.dot1q_min_frame }}
+{% endif %}
+{% if i.loop_detect == true %}
+  loop-detection enable
+{% elif i.loop_detect == false %}
+{{ fail(i.name ~ ' の「ループ検出」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if i.loop_detect_action %}
+  loop-detection action {{ i.loop_detect_action }}{{ ' restore-time ' ~ i.loop_detect_restore if i.loop_detect_restore != '' else '' }}
+{% elif i.loop_detect_restore != '' %}
+{{ fail(i.name ~ ': 「ループ検出からの復帰」は、「ループを見つけたときの動作」と一緒に書きます') }}
+{% endif %}
 {# "shutdown" / "no shutdown" stand on Ethernet and tunnel interfaces, and on
-   neither Loopback nor Null (cmdref, note 1). #}
-{% if i.kind in ['physical', 'subif', 'tunnel'] %}
+   neither Loopback nor Null (cmdref, note 1). The examples of a BVI have
+   "no shutdown" too (FD p.2-82). #}
+{% if i.kind in ['physical', 'subif', 'tunnel', 'bvi'] %}
 {% if i.enabled == false %}
   shutdown
 {% else %}
@@ -357,7 +975,8 @@ interface {{ i.name }}
 {{ fail(i.name ~ ' は無効にできません（Loopback と Null に shutdown を書けるか確かめていません）') }}
 {% endif %}
 {% else %}
-{{ fail(i.name ~ ' の有効・無効の書き方を確かめていません（書けるのは GigaEthernet・Tunnel・Loopback・Null です）') }}
+{{ fail(i.name ~ ' の有効・無効の書き方を確かめていません（書けるのは GigaEthernet・Tunnel・BVI・Loopback・Null です）') }}
 {% endif %}
 !
+{% endif %}
 {% endfor %}

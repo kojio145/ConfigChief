@@ -1,0 +1,29 @@
+# Rows of the third round of IPsec the pack cannot write (made-up values):
+# each tells why.
+tables:
+  devices:
+    - hostname: rt-v03
+      vendor: cisco_ios
+  vrfs:
+    - {name: wan-a}
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.9/29}
+    - {name: Tunnel1, enabled: true, ipv4: 198.51.100.1/30}
+    - {name: Tunnel2, enabled: true, ipv4: 198.51.100.5/30}
+    - {name: Virtual-Template1, enabled: true, ipv4: "unnumbered:GigabitEthernet0/0"}
+  tunnels:
+    - {if_name: Tunnel1, type: ipsec, source: GigabitEthernet0/0}
+    - {if_name: Tunnel2, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.30}
+    - {if_name: Virtual-Template1, type: ipsec}
+  ipsec_tunnels:
+    # A peer "any" on a tunnel interface that is no virtual template.
+    - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: any, ike_version: 1, psk: dummy-psk-sample-a, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha256, pfs: none, ipsec_lifetime: 3600}
+    # IKE version 2 with an outer VRF and no proposal of IKE; "retry the first peer first" on a tunnel interface.
+    - {name: Tunnel2, style: tunnel_if, tunnel_if: Tunnel2, peer_address: 203.0.113.30, ike_version: 2, psk: dummy-psk-sample-b, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha256, pfs: none, ipsec_lifetime: 3600, outer_vrf: wan-a, peer_default: true}
+    # A virtual template with a peer that is known.
+    - {name: Virtual-Template1, style: tunnel_if, tunnel_if: Virtual-Template1, peer_address: 203.0.113.40, ike_version: 1, psk: dummy-psk-sample-c, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha256, pfs: none, ipsec_lifetime: 3600}
+    # An outer VRF that is not the VRF of the interface; a key in the saved form of another vendor.
+    - {name: CMAP-SAMPLE/10, style: policy, local_if: GigabitEthernet0/0, peer_address: 203.0.113.50, ike_version: 1, psk: "secret DUMMYENCSAMPLEAAAA", ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha256, pfs: none, ipsec_lifetime: 3600, outer_vrf: wan-a}
+  ipsec_selectors:
+    - {tunnel: CMAP-SAMPLE/10, seq: 10, local_net: 192.0.2.0/25, remote_net: 198.51.100.128/25, protocol: ip}
+findings: [G-601, G-606]

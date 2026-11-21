@@ -1,0 +1,84 @@
+hostname rt-h01
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+ lifetime 86400
+crypto isakmp key dummy-psk-sample-c address 203.0.113.38
+crypto isakmp key dummy-psk-sample-ra address 0.0.0.0 0.0.0.0
+crypto isakmp key dummy-psk-sample-c address 203.0.113.37
+crypto isakmp key dummy-psk-sample-c hostname sample-peer.example.com
+!
+crypto ipsec transform-set TS-CMAP-SAMPLE-10 esp-aes 256 esp-sha-hmac
+ mode transport
+!
+crypto ipsec transform-set TS-CMAP-SAMPLE-20 esp-aes 256 esp-sha-hmac
+!
+crypto ipsec transform-set TS-CMAP-GigabitEthernet0-0-10 esp-aes 256 esp-sha-hmac
+ mode transport
+!
+ip access-list extended ACL-CMAP-SAMPLE-10
+ 10 permit udp host 203.0.113.33 eq 1701 host 203.0.113.38 eq 1701
+ 20 permit tcp host 203.0.113.33 host 203.0.113.38 eq 179
+!
+crypto map CMAP-SAMPLE 10 ipsec-isakmp
+ set peer 203.0.113.38
+ set peer 203.0.113.37
+ set peer sample-peer.example.com dynamic
+ set transform-set TS-CMAP-SAMPLE-10
+ set security-association lifetime seconds 3600
+ match address ACL-CMAP-SAMPLE-10
+!
+ip access-list extended ACL-CMAP-SAMPLE-20
+ 10 permit ip 192.0.2.0 0.0.0.127 any
+!
+crypto dynamic-map DYN-CMAP-SAMPLE-20 10
+ set transform-set TS-CMAP-SAMPLE-20
+ set security-association lifetime seconds 3600
+ match address ACL-CMAP-SAMPLE-20
+!
+crypto map CMAP-SAMPLE 20 ipsec-isakmp dynamic DYN-CMAP-SAMPLE-20
+!
+crypto dynamic-map DYN-CMAP-GigabitEthernet0-0-10 10
+ set transform-set TS-CMAP-GigabitEthernet0-0-10
+ set security-association lifetime seconds 3600
+!
+crypto map CMAP-GigabitEthernet0-0 10 ipsec-isakmp dynamic DYN-CMAP-GigabitEthernet0-0-10
+!
+vpdn enable
+!
+vpdn-group RA-SAMPLE
+ accept-dialin
+  protocol l2tp
+  virtual-template 1
+ no l2tp tunnel authentication
+!
+ip local pool l2tp-RA-SAMPLE 192.0.2.131 192.0.2.190
+!
+username example-user password 0 dummy-l2tp-user-secret-1
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.9 255.255.255.252
+ crypto map CMAP-GigabitEthernet0-0
+ no shutdown
+!
+interface GigabitEthernet0/1
+ ip address 203.0.113.33 255.255.255.248
+ crypto map CMAP-SAMPLE
+ no shutdown
+!
+interface Loopback0
+ ip address 192.0.2.129 255.255.255.128
+ no shutdown
+!
+interface Virtual-Template1
+ ip unnumbered Loopback0
+ peer default ip address pool l2tp-RA-SAMPLE
+ ppp authentication chap
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.10
+!
+end

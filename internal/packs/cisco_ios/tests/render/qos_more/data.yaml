@@ -1,0 +1,39 @@
+# The rest of QoS, appendix A 3.26 (made-up values): the conditions by the
+# input interface, CoS, the QoS group, a protocol, another class, and "not";
+# marking CoS and the QoS group; shaping to the peak and by percent; policing
+# by percent, with a peak rate and with an action above it; WRED; a queue
+# limit in bytes.
+tables:
+  devices:
+    - hostname: rt-q22
+      vendor: cisco_ios
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.25/30}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 198.51.100.1/24}
+  acls:
+    - {name: ACL-SAMPLE-Q, type: extended}
+  acl_entries:
+    - {acl: ACL-SAMPLE-Q, seq: 10, action: permit, protocol: udp, src: any, dst: any, dst_port: 5060}
+  qos_classes:
+    - {name: cm-m-voice, match: any}
+    - {name: cm-m-video, match: all}
+    - {name: cm-m-both, match: any}
+  qos_class_matches:
+    - {class: cm-m-voice, seq: 10, cos: [5]}
+    - {class: cm-m-voice, seq: 20, qos_group: 10}
+    - {class: cm-m-voice, seq: 30, protocol: rtp}
+    - {class: cm-m-video, seq: 10, input_if: GigabitEthernet0/1}
+    - {class: cm-m-video, seq: 20, cos: [0, 1], negate: true}
+    - {class: cm-m-both, seq: 10, class_ref: cm-m-voice}
+    - {class: cm-m-both, seq: 20, class_ref: cm-m-video}
+    - {class: cm-m-both, seq: 30, acl: ACL-SAMPLE-Q, negate: true}
+  qos_policies:
+    - {policy: pm-m-in, class: cm-m-voice, seq: 10, set_qos_group: 10, set_cos: 5}
+    - {policy: pm-m-in, class: default, seq: 20, police_percent: 20, police_exceed: set_dscp, police_exceed_value: 10, police_violate: drop}
+    - {policy: pm-m-out, class: cm-m-voice, seq: 10, priority: true, bandwidth_percent: 20}
+    - {policy: pm-m-out, class: cm-m-video, seq: 20, bandwidth_remaining: 40, shape_mode: peak, shape_bps: 4000000, random_detect: dscp}
+    - {policy: pm-m-out, class: cm-m-both, seq: 30, shape_mode: average, shape_percent: 30, queue_limit: [64000], queue_limit_unit: bytes}
+    - {policy: pm-m-out, class: default, seq: 40, police_bps: 2000000, police_bc: 8000, police_pir_bps: 4000000, police_be: 16000, police_exceed: transmit, police_violate: set_precedence, police_violate_value: 1, random_detect: "on"}
+  qos_bindings:
+    - {if_name: GigabitEthernet0/0, direction: output, policy: pm-m-out}
+    - {if_name: GigabitEthernet0/1, direction: input, policy: pm-m-in}

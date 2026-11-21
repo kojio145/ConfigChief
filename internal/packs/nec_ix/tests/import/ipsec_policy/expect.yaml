@@ -1,0 +1,25 @@
+# IPsec without a tunnel interface (made-up values; appendix A 3.13, 3.20 and
+# 3.21): the map that protects the callers of an LNS (L2TP over IPsec: a
+# peer "any", the transport mode, on the tunnel interfaces of the LNS), a map
+# in tunnel mode on a physical interface with two selectors, and a map in
+# transport mode with a protocol and ports. The lists the maps name leave
+# the access lists.
+tables:
+  ipsec_tunnels:
+    - {name: ipsec-sample-ra, style: policy, peer_address: any, ike_version: 1, psk: dummy-psk-sample-ra, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, ipsec_mode: transport, nat_traversal: true}
+    - {name: ipsec-sample-b, style: policy, local_if: GigaEthernet0.0, peer_address: 203.0.113.20, ike_version: 1, psk: dummy-psk-sample-b, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, ipsec_mode: tunnel, pfs: dh14, dpd_interval: 30, dpd_retry: 3, dpd_mode: on_demand, nat_traversal: true}
+    - {name: ipsec-sample-c, style: policy, local_if: GigaEthernet2.0, peer_address: 203.0.113.30, ike_version: 1, psk: dummy-psk-sample-c, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, ipsec_mode: transport, nat_traversal: true}
+  ipsec_selectors:
+    - {tunnel: ipsec-sample-b, seq: 10, local_net: 192.0.2.0/25, remote_net: 198.51.100.0/25, protocol: ip}
+    - {tunnel: ipsec-sample-b, seq: 20, local_net: 192.0.2.0/25, remote_net: 198.51.100.128/25, protocol: ip}
+    - {tunnel: ipsec-sample-c, seq: 10, local_net: 203.0.113.9/32, remote_net: 203.0.113.30/32, protocol: udp, local_port: 1701, remote_port: 1701}
+  ipsec_proposals:
+    - {tunnel: ipsec-sample-ra, phase: ike, seq: 20, encryption: aes128, hash: sha1, dh: dh2}
+    - {tunnel: ipsec-sample-ra, phase: ipsec, seq: 20, encryption: aes128, hash: sha1}
+  l2tp_groups:
+    - {name: lns-sample, role: lns, logical_ifs: [Tunnel0.0, Tunnel1.0], tunnel_auth: false, auth: chap, pool_start: 192.0.2.131, pool_end: 192.0.2.190, ipsec_policy: ipsec-sample-ra}
+  l2tp_users:
+    - {group: lns-sample, name: example-user, password: dummy-l2tp-user-secret-1}
+  acls: []
+  acl_entries: []
+unknown: []

@@ -1,0 +1,98 @@
+{# The device as a whole and its users (README, "コンフィグの書き出し").
+   The single lines of the device are indented by one space and every part
+   ends with "#", as the device saves them. #}
+#
+ sysname {{ device.hostname }}
+#
+{% if device.timezone %}
+{% set tz = device.timezone | split(' ') %}
+{% if tz | length != 2 %}
+{{ fail('タイムゾーンは「名前 +時」の形で書きます（例 JST +9）。QX では名前が要ります') }}
+{% endif %}
+{% if not (tz[1] is startingwith('+') or tz[1] is startingwith('-')) %}
+{{ fail('タイムゾーンの時差は + か - で始めます（例 JST +9）') }}
+{% endif %}
+ clock timezone {{ tz[0] }} {{ 'minus' if tz[1] is startingwith('-') else 'add' }} {{ tz[1] | replace('+', '') | replace('-', '') }}
+#
+{% endif %}
+{% if device.log_timestamp %}
+{% if device.log_timestamp == 'time' %}
+{{ fail('「ログの時刻の付け方」の time は、QX では書けません（datetime = info-center timestamp date か、uptime = boot にしてください）') }}
+{% endif %}
+ info-center timestamp {{ 'boot' if device.log_timestamp == 'uptime' else 'date' }}
+{% endif %}
+{% if device.log_buffer == true %}
+ info-center logbuffer
+{% elif device.log_buffer == false %}
+ undo info-center logbuffer
+{% endif %}
+{% if device.log_severity %}
+ info-center source default logbuffer level {{ device.log_severity | lex('severity') }}
+{% endif %}
+{% for x in t.log_subsystems %}
+ info-center source {{ x.subsystem }} logbuffer level {{ x.severity | required('ログの対象 ' ~ x.subsystem ~ ' の重要度') | lex('severity') }}
+{% endfor %}
+{% if device.log_timestamp or device.log_buffer != '' or device.log_severity or t.log_subsystems %}
+#
+{% endif %}
+{% if device.domain_name %}
+ dns domain {{ device.domain_name }}
+{% endif %}
+{% for a in device.name_servers %}
+ dns server {{ a }}{{ ' vpn-instance ' ~ device.name_servers_vrf if device.name_servers_vrf else '' }}
+{% endfor %}
+{% if device.domain_name or device.name_servers %}
+#
+{% endif %}
+{% if device.enable_secret %}
+{% if device.secret_form == 'encrypted' %}
+{{ fail('特権パスワードは、機器が暗号化して保存した形（encrypted）です。QX の Version 7 の書き方（super password … hash か simple）では書けません。平文を入れ直してください') }}
+{% elif device.secret_form == 'hashed' %}
+{% if not device.enable_secret is startingwith('$h$') %}
+{{ fail('特権パスワードのハッシュの種類が分かりません（QX のハッシュは $h$ で始まります。別メーカーのハッシュは引き継げません。平文で書き直してください）') }}
+{% endif %}
+ super password role network-admin hash {{ device.enable_secret }}
+{% else %}
+ super password role network-admin simple {{ device.enable_secret }}
+{% endif %}
+#
+{% endif %}
+{% for u in t.users %}
+local-user {{ u.name }} class manage
+{% if u.secret_form == 'encrypted' %}
+{{ fail('ユーザ ' ~ u.name ~ ' のパスワードは、機器が暗号化して保存した形（encrypted）です。QX の Version 7 の書き方（password hash か simple）では書けません。平文を入れ直してください') }}
+{% elif u.secret_form == 'hashed' %}
+{% if not u.secret is startingwith('$h$') %}
+{{ fail('ユーザ ' ~ u.name ~ ' のパスワードのハッシュの種類が分かりません（QX のハッシュは $h$ で始まります。別メーカーのハッシュは引き継げません。平文で書き直してください）') }}
+{% endif %}
+ password hash {{ u.secret }}
+{% else %}
+ password simple {{ u.secret | required('パスワード') }}
+{% endif %}
+{% set sv = namespace(login=[], ftp=false) %}
+{% for s in u.services %}
+{% if s == 'ftp' %}
+{% set sv.ftp = true %}
+{% else %}
+{% set sv.login = sv.login + [s] %}
+{% endif %}
+{% endfor %}
+{% if sv.ftp and u.services[0] == 'ftp' %}
+ service-type ftp
+{% endif %}
+{% if sv.login %}
+ service-type {{ sv.login | join(' ') }}
+{% endif %}
+{% if sv.ftp and u.services[0] != 'ftp' %}
+ service-type ftp
+{% endif %}
+{% if u.privilege in ['admin', 'operator'] %}
+ authorization-attribute user-role {{ u.privilege | lex('user_role') }}
+{% elif u.privilege %}
+{% if u.privilege is digits %}
+{{ fail('ユーザ ' ~ u.name ~ ' の権限「' ~ u.privilege ~ '」は書けません（admin・operator か、QX のロールの名前で書きます。例 level-1）') }}
+{% endif %}
+ authorization-attribute user-role {{ u.privilege }}
+{% endif %}
+#
+{% endfor %}

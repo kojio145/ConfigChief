@@ -1,0 +1,83 @@
+# RIP and RIPng (appendix A 3.27). The lines under an interface are in
+# 20_interfaces.yaml. Syntax: CRM chapter 10 ("RIP", "RIPng"; README,
+# "参照した資料").
+rules:
+  - id: rip
+    match: '^ip router rip$'
+    row: {table: rip_processes, key: {family: ipv4}}
+    children:
+      - id: rip.auto_summary
+        match: '^(?P<no>no )?auto-summary$'
+        set: {auto_summary: "{{ 'false' if no else 'true' }}"}
+      - id: rip.default_metric
+        match: '^default-metric (?P<n>\d+)$'
+        set: {default_metric: "{{ n }}"}
+      - id: rip.distance
+        match: '^distance (?P<n>\d+)$'
+        set: {distance: "{{ n }}"}
+      - id: rip.filter
+        match: '^distribute-list prefix (?P<pl>\S+) (?P<dir>in|out)$'
+        set: {"prefix_list_{{ dir }}": "{{ pl }}"}
+      - id: rip.default_originate
+        match: '^originate-default(?: (?P<metric>\d+))?$'
+        set: {default_originate: true, default_originate_metric: "{{ metric }}"}
+      # The last number counts from when a route became invalid: the
+      # dataset counts from the last update.
+      - id: rip.timers
+        match: '^timers (?P<u>\d+) (?P<e>\d+) (?P<g>\d+)$'
+        set: {timer_update: "{{ u }}", timer_invalid: "{{ e }}", timer_flush: "{{ (e | int) + (g | int) }}"}
+      # The AS number of BGP is not kept.
+      - id: rip.redistribute
+        match: '^redistribute (?P<src>connected|static|ospf|bgp)(?: (?P<n>\d+))?(?: metric (?P<metric>\d+))?(?: tag (?P<tag>\d+))?(?: route-map (?P<map>\S+))?$'
+        when: "not n or src in ['ospf', 'bgp']"
+        row: {table: rip_redistribute, key: {family: ipv4, source: "{{ src }}"}}
+        set: {process_id: "{{ n if src == 'ospf' else '' }}", metric: "{{ metric }}", tag: "{{ tag }}", filter: "{{ map }}"}
+
+  - id: ripng
+    match: '^ipv6 router rip$'
+    row: {table: rip_processes, key: {family: ipv6}}
+    children:
+      - id: ripng.distance
+        match: '^distance (?P<n>\d+)$'
+        set: {distance: "{{ n }}"}
+      - id: ripng.filter
+        match: '^distribute-list prefix (?P<pl>\S+) (?P<dir>in|out)$'
+        set: {"prefix_list_{{ dir }}": "{{ pl }}"}
+      - id: ripng.default_originate
+        match: '^originate-default(?: (?P<metric>\d+))?$'
+        set: {default_originate: true, default_originate_metric: "{{ metric }}"}
+      # The route map stands before the tag here (CRM 10-19).
+      - id: ripng.redistribute
+        match: '^redistribute (?P<src>connected|static|ospf)(?: (?P<n>\d+))?(?: metric (?P<metric>\d+))?(?: route-map (?P<map>\S+))?(?: tag (?P<tag>\d+))?$'
+        when: "not n or src == 'ospf'"
+        row: {table: rip_redistribute, key: {family: ipv6, source: "{{ src }}"}}
+        set: {process_id: "{{ n }}", metric: "{{ metric }}", tag: "{{ tag }}", filter: "{{ map }}"}
+
+derive:
+  # RIP runs on an interface that says "enable". A key is a text key.
+  - id: rip.interface
+    for: x_rip_if
+    as: x
+    when: "x.enabled"
+    row: {table: rip_interfaces, key: {family: "{{ x.family }}", if_name: "{{ x.if_name }}"}}
+    set:
+      send: "{{ '' if x.send == 'true' else x.send }}"
+      receive: "{{ '' if x.receive == 'true' else x.receive }}"
+      v2_broadcast: "{{ x.v2_broadcast }}"
+      auth_mode: "{{ 'text' if x.auth_key else '' }}"
+      auth_key: "{{ x.auth_key }}"
+      metric_offset: "{{ x.metric_offset }}"
+      split_horizon: "{{ x.split_horizon }}"
+      default_originate: "{{ x.default_originate }}"
+      default_originate_metric: "{{ x.default_originate_metric }}"
+      prefix_list_in: "{{ x.prefix_list_in }}"
+      prefix_list_out: "{{ x.prefix_list_out }}"
+    append: {send_version: "{{ x.send_version }}", receive_version: "{{ x.receive_version }}"}
+  - id: rip.interface.summary
+    for: x_rip_if_summary
+    as: s
+    let:
+      x: "lookup('x_rip_if', family=s.family, if_name=s.if_name)"
+    when: "x.enabled"
+    row: {table: rip_interfaces, key: {family: "{{ s.family }}", if_name: "{{ s.if_name }}"}}
+    append: {summary: "{{ s.prefix }}"}

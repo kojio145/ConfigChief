@@ -71,6 +71,7 @@ func kind(c *schema.Column) string {
 		"string": "文字", "text": "文章", "int": "数", "bool": "有効・無効", "enum": "選択", "secret": "秘密の値",
 		"ip4": "IPv4 アドレス", "ip6": "IPv6 アドレス", "cidr4": "IPv4 アドレス/長さ", "cidr6": "IPv6 アドレス/長さ",
 		"net4": "IPv4 ネットワーク", "net6": "IPv6 ネットワーク", "ifname": "IF 名", "ref": "参照",
+		"ip": "IPv4 か IPv6 のアドレス", "net": "IPv4 か IPv6 のネットワーク",
 	}
 	s := words[c.Type]
 	if s == "" {
@@ -139,11 +140,11 @@ func checks() string {
 	b.WriteString("# チェックの一覧\n\n")
 	b.WriteString("このページは、プログラムが使っている定義から作っています（`go run ./cmd/docgen`）。手で直さないでください。\n\n")
 	b.WriteString("- 重大度: E = エラー、W = 警告、I = 情報。「指定」= 案件のルールに書いた重大度\n")
-	b.WriteString("- 頭の字: V = 値、X = 対向（2 台の間）、G = 生成、M = 移行（旧との違い・対応）、S = お客様の一覧、L = 投入ログと反映確認\n\n")
-	b.WriteString("| ID | 重大度 | 内容 |\n|---|---|---|\n")
+	b.WriteString("- 頭の字: V = 値、X = 対向（2 台の間）、G = 生成、M = 移行（旧との違い・対応）、S = 外部一覧、L = 投入ログと反映確認\n\n")
+	b.WriteString("| ID | 重大度 | 内容 | 直し方 |\n|---|---|---|---|\n")
 	sev := map[string]string{check.Error: "E", check.Warning: "W", check.Info: "I", "": "指定"}
 	for _, r := range check.AllRules() {
-		fmt.Fprintf(&b, "| %s | %s | %s |\n", r.ID, sev[r.Severity], cell(r.Title))
+		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", r.ID, sev[r.Severity], cell(r.Title), cell(r.Fix))
 	}
 	return b.String()
 }

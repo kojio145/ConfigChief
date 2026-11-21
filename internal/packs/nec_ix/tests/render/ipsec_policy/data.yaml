@@ -1,0 +1,33 @@
+# IPsec without a tunnel interface (made-up values; appendix A 3.13, 3.20 and
+# 3.21). expect.txt is the configuration the tables must turn into: the map
+# that protects the callers of an LNS (the row of L2TP names it), a map in
+# tunnel mode on a physical interface, and one in transport mode with a
+# protocol and ports. The row with the name of another vendor's form
+# ("map/number") is written with "-" for "/".
+tables:
+  devices:
+    - hostname: ix-h01
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.2/29}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 192.0.2.1/25}
+    - {name: GigaEthernet2.0, enabled: true, ipv4: 203.0.113.9/29}
+    - {name: Loopback0.0, enabled: true, ipv4: 192.0.2.129/25}
+    - {name: Tunnel0.0, enabled: true, ipv4: "unnumbered:Loopback0.0"}
+    - {name: Tunnel1.0, enabled: true, ipv4: "unnumbered:Loopback0.0"}
+  ipsec_tunnels:
+    - {name: CMAP-SAMPLE/10, style: policy, peer_address: any, ike_version: 1, psk: dummy-psk-sample-ra, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, ipsec_mode: transport, nat_traversal: true}
+    - {name: ipsec-sample-b, style: policy, local_if: GigaEthernet0.0, peer_address: 203.0.113.20, ike_version: 1, psk: dummy-psk-sample-b, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, ipsec_mode: tunnel, pfs: dh14, dpd_interval: 30, dpd_retry: 3, dpd_mode: on_demand, nat_traversal: true}
+    - {name: ipsec-sample-c, style: policy, local_if: GigaEthernet2.0, peer_address: 203.0.113.30, ike_version: 1, psk: dummy-psk-sample-c, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, ipsec_mode: transport, nat_traversal: true}
+  ipsec_selectors:
+    - {tunnel: ipsec-sample-b, seq: 10, local_net: 192.0.2.0/25, remote_net: 198.51.100.0/25, protocol: ip}
+    - {tunnel: ipsec-sample-b, seq: 20, local_net: 192.0.2.0/25, remote_net: 198.51.100.128/25, protocol: ip}
+    - {tunnel: ipsec-sample-c, seq: 10, local_net: 203.0.113.9/32, remote_net: 203.0.113.30/32, protocol: udp, local_port: 1701, remote_port: 1701}
+  ipsec_proposals:
+    - {tunnel: CMAP-SAMPLE/10, phase: ike, seq: 20, encryption: aes128, hash: sha1, dh: dh2}
+    - {tunnel: CMAP-SAMPLE/10, phase: ipsec, seq: 20, encryption: aes128, hash: sha1}
+    - {tunnel: CMAP-SAMPLE/10, phase: ipsec, seq: 30, encryption: 3des, hash: sha1}
+  l2tp_groups:
+    - {name: lns-sample, role: lns, logical_ifs: [Tunnel0.0, Tunnel1.0], tunnel_auth: false, auth: chap, pool_start: 192.0.2.131, pool_end: 192.0.2.190, ipsec_policy: CMAP-SAMPLE/10}
+  l2tp_users:
+    - {group: lns-sample, name: example-user, password: dummy-l2tp-user-secret-1}

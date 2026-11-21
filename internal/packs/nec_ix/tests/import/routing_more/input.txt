@@ -1,0 +1,55 @@
+hostname ix-m01
+!
+ip prefix-list pl-m-ospf 5 permit 198.51.100.0/24 max 28
+ipv6 prefix-list pl6-m 5 permit 2001:db8:100::/48 max 64
+ipv6 access-list acl6-m-pbr permit ip src 2001:db8:0:10::/64 dest any
+!
+route-map rm-m-def permit 10
+!
+route-map rm-m-more permit 10
+  match ipv6 address prefix-list pl6-m
+  set community delete 64497:100 64497:200
+!
+route-map rm-m-more permit 20
+  set community 64496:60 additive delete 64497:300 no-export
+!
+route-map rm-m-pbr6 permit 10
+  match ipv6 address access-list acl6-m-pbr
+  set ipv6 default next-hop 2001:db8:0:1::9
+  set ipv6 next-hop 2001:db8:0:1::2
+!
+route-map rm-m-nh6 permit 10
+  match ipv6 next-hop prefix-list pl6-m
+!
+ipv6 local policy route-map rm-m-pbr6
+!
+ip router ospf 1
+  router-id 192.0.2.1
+  distance external 120 inter-area 105 intra-area 100
+  distribute-list prefix pl-m-ospf
+  area 1 virtual-link 192.0.2.9
+  area 2 virtual-link 192.0.2.10 dead-interval 20 hello-interval 5
+  area 3 virtual-link 192.0.2.11 authentication message-digest message-digest-key 1 dummy-sample-key
+  originate-default always metric 50 metric-type 1 route-map rm-m-def
+  network GigaEthernet1.0 area 0
+!
+ip router ospf 2
+  distribute-list route-map rm-m-def
+  distance external 130 nssa-external 140
+!
+ipv6 router ospf 5
+  router-id 192.0.2.1
+  redistribute connected
+  redistribute static metric 20 metric-type 1 tag 30 route-map rm-m-def
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.1/29
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.1/24
+  ipv6 address 2001:db8:0:10::1/64
+  ipv6 tcp adjust-mss auto
+  ipv6 policy route-map rm-m-pbr6
+  no shutdown
+!

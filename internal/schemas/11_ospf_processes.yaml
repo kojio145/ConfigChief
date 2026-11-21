@@ -11,3 +11,14 @@ columns:
   - {name: passive_default, title: {ja: 既定を受動にする, en: Passive by default}, type: bool}
   - {name: default_originate, title: {ja: デフォルト経路の広告, en: Default originate}, type: enum, values: [none, when_present, always]}
   - {name: default_metric, title: {ja: 広告のメトリック, en: Default metric}, type: int}
+  - {name: log_adjacency, title: {ja: 隣接の変化の記録, en: Log adjacency changes}, type: enum, values: [detail, "off"], note: {ja: "空 = 機器の既定。detail = 状態が変わるたびに記録、off = 記録しない（Cisco）", en: "Empty = the default of the device. detail = every change of state, off = none (Cisco)"}}
+  - {name: default_metric_type, title: {ja: 広告のメトリックの種類, en: Default metric type}, type: enum, values: ["1", "2"], note: {ja: "デフォルト経路の広告に付ける外部経路の種類。空 = 機器の既定（2）", en: "The external type of the default route. Empty = the default of the device (2)"}}
+  - {name: default_filter, title: {ja: デフォルト経路の広告の条件, en: Default originate filter}, type: string, note: {ja: "条件にする経路制御の方針の名前", en: "The route policy that decides when the default route is advertised"}}
+  - {name: max_metric, title: {ja: 通過させない（最大メトリックで広告）, en: Max metric}, type: bool, note: {ja: "有効 = 自分を通る経路を、ほかのルータに選ばせない（保守のとき）。Cisco だけ", en: "On = other routers do not pick paths through this one (for maintenance). Cisco only"}}
+  - {name: distance, title: {ja: 優先度（distance）, en: Distance}, type: int, min: 1, max: 255, note: {ja: "OSPF の経路ぜんぶの優先度。種類ごとの 3 列とどちらか", en: "The distance of every OSPF route. This, or the three columns by kind"}}
+  - {name: distance_intra, title: {ja: 優先度（エリア内の経路）, en: Distance (intra-area)}, type: int, min: 1, max: 255}
+  - {name: distance_inter, title: {ja: 優先度（エリア間の経路）, en: Distance (inter-area)}, type: int, min: 1, max: 255}
+  - {name: distance_external, title: {ja: 優先度（外部経路）, en: Distance (external)}, type: int, min: 1, max: 255}
+  - {name: filter_in_prefix_list, title: {ja: 経路表に入れる経路の絞り込み（プレフィックスリスト）, en: Distribute list in (prefix list)}, type: ref, ref: prefix_lists.name, note: {ja: "OSPF で学んだ経路のうち、経路表に入れるものを絞る", en: "Which of the routes learned by OSPF go into the routing table"}}
+  - {name: filter_in_acl, title: {ja: 経路表に入れる経路の絞り込み（ACL）, en: Distribute list in (ACL)}, type: ref, ref: acls.name, note: {ja: "Cisco だけ", en: "Cisco only"}}
+  - {name: filter_in_policy, title: {ja: 経路表に入れる経路の絞り込み（経路制御の方針）, en: Distribute list in (route policy)}, type: string}

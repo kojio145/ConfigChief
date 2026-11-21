@@ -1,0 +1,173 @@
+# RIP and RIPng (appendix A 3.27). The lines under an interface are in
+# 20_interfaces.yaml. Syntax: Cisco IOS IP Routing: RIP Command Reference,
+# IP Routing: Protocol-Independent Command Reference and IPv6 Command
+# Reference (README, "参照した資料").
+rules:
+  # A key chain: the key of the RIP authentication of an interface. The
+  # lifetimes of a key and the algorithm have no column.
+  - id: keychain
+    match: '^key chain (?P<chain>\S+)$'
+    children:
+      - id: keychain.key
+        match: '^key (?P<kid>\d+)$'
+        children:
+          - id: keychain.key.string
+            match: '^key-string (?P<key>\S+)$'
+            emit:
+              - table: x_keychain
+                key: {name: "{{ chain }}", id: "{{ kid }}"}
+                set: {key: "{{ key }}"}
+
+  - id: rip
+    match: '^router rip$'
+    row: {table: rip_processes, key: {family: ipv4}}
+    children:
+      - id: rip.version
+        match: '^version (?P<v>1|2)$'
+        set: {version: "{{ v }}"}
+      - id: rip.auto_summary
+        match: '^(?P<no>no )?auto-summary$'
+        set: {auto_summary: "{{ 'false' if no else 'true' }}"}
+      # The network of the class: every interface with an address in it
+      # runs RIP (the rows are made at the end).
+      - id: rip.network
+        match: '^network (?P<net>(?P<o>\d+)\.\d+\.\d+\.\d+)$'
+        when: "(o | int) >= 1 and (o | int) <= 223 and (o | int) != 127"
+        emit:
+          - table: x_rip_net
+            key: {cnet: "{{ (net ~ '/' ~ (8 if (o | int) < 128 else (16 if (o | int) < 192 else 24))) | network }}"}
+      - id: rip.passive.default
+        match: '^passive-interface default$'
+        set: {passive_default: true}
+      - id: rip.passive
+        match: '^(?P<no>no )?passive-interface (?P<ifn>[A-Za-z]\S*)$'
+        emit:
+          - table: x_rip_passive
+            key: {if_name: "{{ ifn | ifname }}"}
+            set: {send: "{{ 'true' if no else 'false' }}"}
+      # "on-passive" has no column.
+      - id: rip.default_originate
+        match: '^default-information originate(?: route-map (?P<map>\S+))?$'
+        set: {default_originate: true, default_originate_filter: "{{ map }}"}
+      - id: rip.default_metric
+        match: '^default-metric (?P<n>\d+)$'
+        set: {default_metric: "{{ n }}"}
+      # Only the form for every source of routes (the syntax line has the
+      # address and the wildcard as needed).
+      - id: rip.distance
+        match: '^distance (?P<n>\d+) 0\.0\.0\.0 255\.255\.255\.255$'
+        set: {distance: "{{ n }}"}
+      - id: rip.timers
+        match: '^timers basic (?P<u>\d+) (?P<i>\d+) (?P<h>\d+) (?P<f>\d+)$'
+        set: {timer_update: "{{ u }}", timer_invalid: "{{ i }}", timer_holddown: "{{ h }}", timer_flush: "{{ f }}"}
+      - id: rip.filter
+        match: '^distribute-list prefix (?P<pl>\S+) (?P<dir>in|out)$'
+        set: {"prefix_list_{{ dir }}": "{{ pl }}"}
+      - id: rip.filter.if
+        match: '^distribute-list prefix (?P<pl>\S+) (?P<dir>in|out) (?P<ifn>[A-Za-z]\S*)$'
+        emit:
+          - table: x_rip_if_filter
+            key: {if_name: "{{ ifn | ifname }}", dir: "{{ dir }}"}
+            set: {list: "{{ pl }}"}
+      # The AS number of BGP is not kept (the template takes it from the
+      # table of BGP).
+      - id: rip.redistribute
+        match: '^redistribute (?P<src>connected|static|ospf|bgp)(?: (?P<n>\d+))?(?: metric (?P<metric>\d+))?(?: route-map (?P<map>\S+))?$'
+        when: "(n != '') == (src in ['ospf', 'bgp'])"
+        row: {table: rip_redistribute, key: {family: ipv4, source: "{{ src }}"}}
+        set: {process_id: "{{ n if src == 'ospf' else '' }}", metric: "{{ metric }}", filter: "{{ map }}"}
+
+  # ---- RIPng: only the process the interfaces of the device name first ----
+  - id: ripng
+    match: '^ipv6 router rip (?P<rn>\S+)$'
+    when: "rows('x_ripng') | length == 0 or rows('x_ripng', name=rn) | length > 0"
+    row: {table: rip_processes, key: {family: ipv6}}
+    emit:
+      - table: x_ripng
+        key: {name: "{{ rn }}"}
+    children:
+      - id: ripng.distance
+        match: '^distance (?P<n>\d+)$'
+        set: {distance: "{{ n }}"}
+      # The last number counts from when a route became invalid: the
+      # dataset counts from the last update.
+      - id: ripng.timers
+        match: '^timers (?P<u>\d+) (?P<i>\d+) (?P<h>\d+) (?P<g>\d+)$'
+        set: {timer_update: "{{ u }}", timer_invalid: "{{ i }}", timer_holddown: "{{ h }}", timer_flush: "{{ (i | int) + (g | int) }}"}
+      - id: ripng.filter
+        match: '^distribute-list prefix-list (?P<pl>\S+) (?P<dir>in|out)$'
+        set: {"prefix_list_{{ dir }}": "{{ pl }}"}
+      - id: ripng.filter.if
+        match: '^distribute-list prefix-list (?P<pl>\S+) (?P<dir>in|out) (?P<ifn>[A-Za-z]\S*)$'
+        when: "rows('rip_interfaces', family='ipv6', if_name=(ifn | ifname)) | length > 0"
+        row: {table: rip_interfaces, key: {family: ipv6, if_name: "{{ ifn | ifname }}"}}
+        set: {"prefix_list_{{ dir }}": "{{ pl }}"}
+      # The whole process: put on every interface of it at the end.
+      - id: ripng.split
+        match: '^no split-horizon$'
+        emit:
+          - table: x_ripng_split
+            key: {}
+            set: {mode: none}
+      - id: ripng.poison
+        match: '^poison-reverse$'
+        emit:
+          - table: x_ripng_split
+            key: {}
+            set: {mode: poisoned_reverse}
+      - id: ripng.redistribute
+        match: '^redistribute (?P<src>connected|static|ospf|bgp)(?: (?P<n>\d+))?(?: metric (?P<metric>\d+))?(?: route-map (?P<map>\S+))?$'
+        when: "(n != '') == (src in ['ospf', 'bgp'])"
+        row: {table: rip_redistribute, key: {family: ipv6, source: "{{ src }}"}}
+        set: {process_id: "{{ n if src == 'ospf' else '' }}", metric: "{{ metric }}", filter: "{{ map }}"}
+
+derive:
+  # RIP runs on an interface whose address is in a network of the process.
+  - id: rip.interface
+    for: interfaces
+    as: i
+    let:
+      o: "(i.ipv4 | ip | split('.') | first | int) if i.ipv4 is cidr else 0"
+      rn: "lookup('x_rip_net', cnet=((((i.ipv4 | ip) ~ '/' ~ (8 if o < 128 else (16 if o < 192 else 24))) | network) if i.ipv4 is cidr else 'no net'))"
+      x: "lookup('x_rip_if', if_name=i.name)"
+      pv: "lookup('x_rip_passive', if_name=i.name)"
+      fi: "lookup('x_rip_if_filter', if_name=i.name, dir='in')"
+      fo: "lookup('x_rip_if_filter', if_name=i.name, dir='out')"
+      k: "lookup('x_keychain', name=(x.key_chain if x.key_chain else 'no chain'))"
+    when: "rn.cnet and (not x.key_chain or k.key)"
+    row: {table: rip_interfaces, key: {family: ipv4, if_name: "{{ i.name }}"}}
+    set:
+      send: "{{ pv.send }}"
+      v2_broadcast: "{{ x.v2_broadcast }}"
+      auth_mode: "{{ (x.auth_mode if x.auth_mode else 'text') if x.key_chain else x.auth_mode }}"
+      auth_key: "{{ k.key }}"
+      auth_key_id: "{{ '' if k.id == '1' else k.id }}"
+      split_horizon: "{{ x.split_horizon }}"
+      prefix_list_in: "{{ fi.list }}"
+      prefix_list_out: "{{ fo.list }}"
+    append: {send_version: "{{ x.send_version }}", receive_version: "{{ x.receive_version }}"}
+  - id: rip.interface.summary
+    for: x_rip_if_summary
+    as: s
+    when: "rows('rip_interfaces', family='ipv4', if_name=s.if_name) | length > 0"
+    row: {table: rip_interfaces, key: {family: ipv4, if_name: "{{ s.if_name }}"}}
+    append: {summary: "{{ s.prefix }}"}
+  # The network lines are spent once an interface is found in them.
+  - id: rip.network.used
+    for: x_rip_net
+    as: n
+    row: {table: rip_processes, key: {family: ipv4}}
+
+  # RIPng: the process the interfaces name. Its name is not kept.
+  - id: ripng.process
+    for: x_ripng
+    as: r
+    row: {table: rip_processes, key: {family: ipv6}}
+  - id: ripng.split.join
+    for: rip_interfaces
+    as: r
+    let:
+      s: "lookup('x_ripng_split')"
+    when: "r.family == 'ipv6' and s.mode"
+    row: {table: rip_interfaces, key: {family: ipv6, if_name: "{{ r.if_name }}"}}
+    set: {split_horizon: "{{ s.mode }}"}

@@ -1,0 +1,18 @@
+# Lists whose names are numbers that are no numbers of a list here (made-up
+# values): the pack writes them by a name ("ACL-<number>") and tells it. A
+# routing policy that names such a list is not rewritten: the pack stops and
+# says what to do.
+tables:
+  devices:
+    - {hostname: sw-a06, vendor: cisco_ios}
+  acls:
+    - {name: "3000", type: extended}
+    - {name: "2000", type: standard}
+    - {name: "2001", type: extended}
+  acl_entries:
+    - {acl: "3000", seq: 10, action: permit, protocol: ip, src: any, dst: any}
+    - {acl: "2000", seq: 10, action: permit, src: any}
+    - {acl: "2001", seq: 10, action: permit, protocol: ip, src: any, dst: any}
+  route_policies:
+    - {name: sample-policy, seq: 10, action: permit, match_acl: ["2000"]}
+findings: [G-601, G-614]

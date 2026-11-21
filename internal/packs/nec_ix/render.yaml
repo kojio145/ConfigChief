@@ -8,14 +8,18 @@ sections:
   - {id: system,     template: system.j2}
   - {id: policy,     template: policy.j2}
   - {id: qos,        template: qos.j2}          # after the access lists the classes name
+  - {id: route_policy, template: route_policy.j2}   # after the lists the route maps name, before the routing that names them
   - {id: routing,    template: routing.j2}
   - {id: ospf,       template: ospf.j2}
   - {id: bgp,        template: bgp.j2}
+  - {id: rip,        template: rip.j2}          # RIP and RIPng (appendix A 3.27)
+  - {id: ipv6,       template: ipv6.j2}         # IPv6: routes, lists, OSPFv3, RA prefixes and DHCPv6
   - {id: tracking,   template: tracking.j2}
   - {id: ipsec,      template: ipsec.j2}
   - {id: extra,      slot: extra}
   - {id: services,   template: services.j2}
   - {id: remote,     template: remote.j2}
   - {id: pppoe,      template: pppoe.j2}
+  - {id: l2tp,       template: l2tp.j2}         # the PPP profile of an LNS, the list of a LAC
   - {id: dhcp,       template: dhcp.j2}
   - {id: interfaces, template: interfaces.j2}

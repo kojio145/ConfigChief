@@ -1,0 +1,57 @@
+# Route policies (route maps), the options of the static routes, the tag of
+# a redistribution and the BGP of a VRF (appendix A 3.19). Made-up values.
+# expect.txt is the configuration the tables must turn into.
+tables:
+  devices:
+    - hostname: ix-r01
+      vendor: nec_ix
+      local_policy_route: rm-r-pbr
+  vrfs:
+    - {name: vrf-r}
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.1/30}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.1/24, policy_route: rm-r-pbr}
+    - {name: GigaEthernet2.0, enabled: true, ipv4: 192.0.2.129/25, vrf: vrf-r}
+    - {name: Tunnel0.0, enabled: true, ipv4: "unnumbered:GigaEthernet1.0"}
+  tunnels:
+    - {if_name: Tunnel0.0, type: gre, source: GigaEthernet0.0, destination: 203.0.113.6}
+  static_routes:
+    - {prefix: 0.0.0.0/0, next_hop: 203.0.113.2, tag: 200}
+    - {prefix: 192.0.2.64/26, next_hop: 198.51.100.254, metric: 5, distance: 20, tag: 100}
+    - {prefix: 192.0.2.32/27, out_if: Tunnel0.0, connected_only: true}
+    - {vrf: vrf-r, prefix: 192.0.2.192/26, next_hop: 192.0.2.130}
+  acls:
+    - {name: al-r-pbr, type: extended}
+  acl_entries:
+    - {acl: al-r-pbr, seq: 10, action: permit, protocol: ip, src: 198.51.100.0/25, dst: any}
+  prefix_lists:
+    - {name: pl-r-in, seq: 5, action: permit, prefix: 0.0.0.0/0, le: 24}
+    - {name: pl-r-out, seq: 5, action: permit, prefix: 198.51.100.0/24}
+    - {name: pl-r-nh, seq: 5, action: permit, prefix: 203.0.113.0/24, ge: 32}
+  ospf_processes:
+    - {process_id: 1, router_id: 192.0.2.1}
+  ospf_interfaces:
+    - {process_id: 1, if_name: GigaEthernet1.0, area: "0", hello: 10, dead: 40}
+  ospf_redistribute:
+    - {process_id: 1, source: static, metric: 20, metric_type: "1", tag: 100, filter: rm-r-static}
+  bgp_processes:
+    - {asn: 64496, router_id: 192.0.2.1}
+    - {vrf: vrf-r, asn: 64496}
+  bgp_neighbors:
+    - {neighbor: 203.0.113.2, remote_as: 64497, filter_in: rm-r-in, filter_out: rm-r-out}
+    - {vrf: vrf-r, neighbor: 192.0.2.130, remote_as: 64498, description: to sample vrf peer, next_hop_self: true}
+  bgp_networks:
+    - {prefix: 198.51.100.0/24}
+    - {vrf: vrf-r, prefix: 192.0.2.128/25}
+  bgp_redistribute:
+    - {source: ospf, process_id: 1, metric: 50}
+    - {source: connected, filter: rm-r-out}
+    - {vrf: vrf-r, source: static}
+  route_policies:
+    - {name: rm-r-in, seq: 10, action: permit, match_prefix_list: [pl-r-in], match_next_hop_prefix_list: pl-r-nh, match_community: ["64497:100", local-as], match_community_exact: true, set_local_preference: 200, set_community: ["64496:50", no-export], set_community_additive: true}
+    - {name: rm-r-in, seq: 20, action: deny, match_community: ["64497:900"]}
+    - {name: rm-r-out, seq: 10, action: permit, match_prefix_list: [pl-r-out], set_metric: "+10", set_as_path_prepend: [64496, 64496], set_origin: igp, set_next_hop: [self]}
+    - {name: rm-r-out, seq: 20, action: permit, set_community: [none], set_metric_type: internal}
+    - {name: rm-r-static, seq: 10, action: permit, match_tag: [100], match_interface: [GigaEthernet1.0], match_metric: 5, set_metric: 20, set_metric_type: "1", set_tag: 300}
+    - {name: rm-r-pbr, seq: 10, action: permit, match_acl: [al-r-pbr], set_next_hop: [203.0.113.2], set_default_next_hop: [198.51.100.254]}
+    - {name: rm-r-pbr, seq: 20, action: permit, set_interface: [Tunnel0.0], set_default_interface: [GigaEthernet0.0]}

@@ -1,0 +1,78 @@
+{# The rest of the lines of a switch port (appendix A 3.22, 2026-11-21;
+   README, "VLAN とスイッチ"). Included from interfaces.j2 with the row "s" of
+   the port and the text "what". #}
+{% if s.voice_vlan_mode %}
+{% if s.voice_vlan != '' %}
+{{ fail(what ~ ': 「音声 VLAN」と「音声 VLAN の伝え方」の両方は書けません（番号か、dot1p・none・untagged のどちらかです）') }}
+{% endif %}
+ switchport voice vlan {{ s.voice_vlan_mode }}
+{% endif %}
+{% if s.mode == 'pvlan_host' %}
+ switchport private-vlan host-association {{ s.pvlan_primary | required(what ~ ' のプライベート VLAN のプライマリ') }} {{ s.pvlan_secondaries | join(',') | required(what ~ ' のプライベート VLAN のセカンダリ') }}
+{% elif s.mode == 'pvlan_promiscuous' %}
+ switchport private-vlan mapping {{ s.pvlan_primary | required(what ~ ' のプライベート VLAN のプライマリ') }} {{ s.pvlan_secondaries | join(',') | required(what ~ ' のプライベート VLAN のセカンダリ') }}
+{% elif s.pvlan_primary != '' or s.pvlan_secondaries %}
+{{ fail(what ~ ': プライベート VLAN のプライマリ・セカンダリは、モードが pvlan_host か pvlan_promiscuous のときだけ書けます') }}
+{% endif %}
+{% for m in s.port_security_macs %}
+{% set at = m | split('/') %}
+ switchport port-security mac-address {{ at[0] }}{{ ' vlan ' ~ at[1] if at | length > 1 else '' }}
+{% endfor %}
+{% for m in s.port_security_sticky_macs %}
+{% set at = m | split('/') %}
+ switchport port-security mac-address sticky {{ at[0] }}{{ ' vlan ' ~ at[1] if at | length > 1 else '' }}
+{% endfor %}
+{% if s.port_security_aging_time != '' %}
+ switchport port-security aging time {{ s.port_security_aging_time }}
+{% endif %}
+{% if s.port_security_aging_type %}
+ switchport port-security aging type {{ s.port_security_aging_type }}
+{% endif %}
+{% if s.port_security_aging_static == true %}
+ switchport port-security aging static
+{% elif s.port_security_aging_static == false %}
+{{ fail(what ~ ' の「手で決めた MAC も忘れる」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if s.protected == true %}
+ switchport protected
+{% elif s.protected == false %}
+{{ fail(what ~ ' の「保護ポート」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if s.stp_guard %}
+ spanning-tree guard {{ s.stp_guard }}
+{% endif %}
+{% if s.stp_bpdu_filter == true %}
+ spanning-tree bpdufilter enable
+{% elif s.stp_bpdu_filter == false %}
+ spanning-tree bpdufilter disable
+{% endif %}
+{% if s.stp_cost != '' %}
+ spanning-tree cost {{ s.stp_cost }}
+{% endif %}
+{% if s.stp_port_priority != '' %}
+{% if s.stp_port_priority | int % 16 != 0 %}
+{{ fail(what ~ ' のスパニングツリーのポート優先度 ' ~ s.stp_port_priority ~ ' は書けません（0〜240 の 16 刻みです）') }}
+{% endif %}
+ spanning-tree port-priority {{ s.stp_port_priority }}
+{% endif %}
+{% if s.stp_link_type %}
+ spanning-tree link-type {{ s.stp_link_type | replace('_', '-') }}
+{% endif %}
+{% if s.udld == 'enable' %}
+ udld port
+{% elif s.udld %}
+ udld port {{ s.udld }}
+{% endif %}
+{% if s.dhcp_snooping_trust == true %}
+ ip dhcp snooping trust
+{% elif s.dhcp_snooping_trust == false %}
+{{ fail(what ~ ' の「DHCP スヌーピングの信頼ポート」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if s.dhcp_snooping_rate != '' %}
+ ip dhcp snooping limit rate {{ s.dhcp_snooping_rate }}
+{% endif %}
+{% if s.arp_inspection_trust == true %}
+ ip arp inspection trust
+{% elif s.arp_inspection_trust == false %}
+{{ fail(what ~ ' の「ARP 検査の信頼ポート」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}

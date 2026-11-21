@@ -1,0 +1,247 @@
+{# Route policies: AS path lists, community lists and route maps (appendix A
+   3.19). Syntax: the command references of the README (IP Routing:
+   Protocol-Independent; IP Routing: BGP), read on 2026-11-20.
+   The entries of a list have no number on the device: the import numbers
+   them by tens, so a list that is numbered otherwise cannot be read back. #}
+{% set cnt = namespace(name='', i=0) %}
+{% for a in t.as_path_lists %}
+{% set what = 'AS パスのリスト ' ~ a.name %}
+{% if a.name is not digits or a.name | int < 1 or a.name | int > 500 %}
+{{ fail(what ~ ': Cisco の AS パスのリストの名前は、1〜500 の番号です') }}
+{% endif %}
+{% if cnt.name != a.name %}
+{% set cnt.name = a.name %}
+{% set cnt.i = 0 %}
+{% endif %}
+{% set cnt.i = cnt.i + 1 %}
+{% if a.seq != cnt.i * 10 %}
+{{ fail(what ~ ' の順番 ' ~ a.seq ~ ' は書けません（機器は行に番号を持ちません。10、20、30… と振り直してください。見る順は変わりません）') }}
+{% endif %}
+ip as-path access-list {{ a.name }} {{ a.action }} {{ a.regex | required(what ~ ' の正規表現') }}
+{% endfor %}
+{% if t.as_path_lists %}
+!
+{% endif %}
+{% set cnt.name = '' %}
+{% for c in t.community_lists %}
+{% set what = 'コミュニティのリスト ' ~ c.name %}
+{% if cnt.name != c.name %}
+{% set cnt.name = c.name %}
+{% set cnt.i = 0 %}
+{% endif %}
+{% set cnt.i = cnt.i + 1 %}
+{% if c.seq != cnt.i * 10 %}
+{{ fail(what ~ ' の順番 ' ~ c.seq ~ ' は書けません（機器は行に番号を持ちません。10、20、30… と振り直してください。見る順は変わりません）') }}
+{% endif %}
+{% if c.type == 'standard' %}
+{% if c.regex %}
+{{ fail(what ~ ': 種類が standard の行に、正規表現は書けません（種類を expanded にします）') }}
+{% endif %}
+{% if c.communities | length == 0 %}
+{{ fail(what ~ ' の ' ~ c.seq ~ ' 番: コミュニティが空です') }}
+{% endif %}
+{% if c.communities | length > 16 %}
+{{ fail(what ~ ' の ' ~ c.seq ~ ' 番: 1 行に書けるコミュニティは 16 個までです') }}
+{% endif %}
+{% if c.name is digits %}
+{% if c.name | int < 1 or c.name | int > 99 %}
+{{ fail(what ~ ': 番号の名前は、standard なら 1〜99 です（100〜500 は expanded の番号です）') }}
+{% endif %}
+ip community-list {{ c.name }} {{ c.action }} {{ c.communities | join(' ') }}
+{% else %}
+ip community-list standard {{ c.name }} {{ c.action }} {{ c.communities | join(' ') }}
+{% endif %}
+{% else %}
+{% if c.communities | length > 0 %}
+{{ fail(what ~ ': 種類が expanded の行に、コミュニティの並びは書けません（正規表現で書くか、種類を standard にします）') }}
+{% endif %}
+{% set re = c.regex | required(what ~ ' の正規表現') %}
+{% if c.name is digits %}
+{% if c.name | int < 100 or c.name | int > 500 %}
+{{ fail(what ~ ': 番号の名前は、expanded なら 100〜500 です（1〜99 は standard の番号です）') }}
+{% endif %}
+ip community-list {{ c.name }} {{ c.action }} {{ re }}
+{% else %}
+ip community-list expanded {{ c.name }} {{ c.action }} {{ re }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# The communities an entry names itself: the device needs a list, so the
+   pack makes one (the import turns it back into the values). #}
+{% set made = namespace(v=false) %}
+{% for p in t.route_policies %}
+{% if p.match_community | length > 0 %}
+{% set cl = 'CL-' ~ p.name ~ '-' ~ p.seq %}
+{% for c in t.community_lists %}
+{% if c.name == cl %}
+{{ fail('コミュニティのリスト ' ~ cl ~ ' は、パックが方針 ' ~ p.name ~ ' の ' ~ p.seq ~ ' 番のために作る名前です。別の名前にしてください') }}
+{% endif %}
+{% endfor %}
+{% if p.match_community | length > 16 %}
+{{ fail('方針 ' ~ p.name ~ ' の ' ~ p.seq ~ ' 番: 条件のコミュニティは 16 個までです') }}
+{% endif %}
+{% set made.v = true %}
+ip community-list standard {{ cl }} permit {{ p.match_community | join(' ') }}
+{% endif %}
+{% endfor %}
+{# The communities an entry takes off: a standard list with one community
+   on every line (BGP Command Reference, "set comm-list delete"). #}
+{% for p in t.route_policies %}
+{% if p.set_community_delete | length > 0 %}
+{% set cl = 'CD-' ~ p.name ~ '-' ~ p.seq %}
+{% for c in t.community_lists %}
+{% if c.name == cl %}
+{{ fail('コミュニティのリスト ' ~ cl ~ ' は、パックが方針 ' ~ p.name ~ ' の ' ~ p.seq ~ ' 番のために作る名前です。別の名前にしてください') }}
+{% endif %}
+{% endfor %}
+{% set made.v = true %}
+{% for v in p.set_community_delete %}
+ip community-list standard {{ cl }} permit {{ v }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% if t.community_lists or made.v %}
+!
+{% endif %}
+{% for p in t.route_policies %}
+{% set what = '方針 ' ~ p.name ~ ' の ' ~ p.seq ~ ' 番' %}
+route-map {{ p.name }} {{ p.action }} {{ p.seq }}
+{% if p.match_prefix_list | length > 0 %}
+ match ip address prefix-list {{ p.match_prefix_list | join(' ') }}
+{% endif %}
+{% if p.match_acl | length > 0 %}
+ match ip address {{ p.match_acl | join(' ') }}
+{% endif %}
+{% if p.match_ipv6_prefix_list | length > 1 %}
+{{ fail(what ~ ': IPv6 のプレフィックスリストの条件は 1 つだけ書けます（Cisco。リストを 1 つにまとめるか、行を分けてください）') }}
+{% endif %}
+{% if p.match_ipv6_acl | length > 1 %}
+{{ fail(what ~ ': IPv6 フィルタの条件は 1 つだけ書けます（Cisco。リストを 1 つにまとめるか、行を分けてください）') }}
+{% endif %}
+{% for x in p.match_ipv6_prefix_list %}
+ match ipv6 address prefix-list {{ x }}
+{% endfor %}
+{% for x in p.match_ipv6_acl %}
+ match ipv6 address {{ x }}
+{% endfor %}
+{% if p.match_ipv6_next_hop_prefix_list %}
+ match ipv6 next-hop prefix-list {{ p.match_ipv6_next_hop_prefix_list }}
+{% endif %}
+{% if p.match_next_hop_acl | length > 0 %}
+ match ip next-hop {{ p.match_next_hop_acl | join(' ') }}
+{% endif %}
+{% for x in p.match_route_type %}
+ match route-type {{ x | replace('_type', ' type-') }}
+{% endfor %}
+{% if p.match_next_hop_prefix_list %}
+{{ fail(what ~ ': 「条件: ネクストホップ（プレフィックスリスト）」は書けません（Cisco のコマンドリファレンスにあるのは、ACL でネクストホップを見る形だけです。追加コンフィグに書いてください）') }}
+{% endif %}
+{% if p.match_as_path %}
+{% if p.match_as_path is not digits %}
+{{ fail(what ~ ': AS パスのリストの名前「' ~ p.match_as_path ~ '」は書けません（Cisco は 1〜500 の番号です）') }}
+{% endif %}
+ match as-path {{ p.match_as_path }}
+{% endif %}
+{% set exact = ' exact' if p.match_community_exact == true else '' %}
+{% if p.match_community | length > 0 and p.match_community_list %}
+{{ fail(what ~ ': 「条件: コミュニティ」と「条件: コミュニティのリスト」は、どちらか 1 つだけ書きます') }}
+{% elif p.match_community | length > 0 %}
+ match community CL-{{ p.name }}-{{ p.seq }}{{ exact }}
+{% elif p.match_community_list %}
+ match community {{ p.match_community_list }}{{ exact }}
+{% elif p.match_community_exact == true %}
+{{ fail(what ~ ': 「条件: コミュニティが完全に同じ」は、コミュニティの条件がある行にだけ書けます') }}
+{% endif %}
+{% if p.match_interface | length > 0 %}
+ match interface {{ p.match_interface | join(' ') }}
+{% endif %}
+{% if p.match_metric != '' %}
+ match metric {{ p.match_metric }}
+{% endif %}
+{% if p.match_tag | length > 0 %}
+ match tag {{ p.match_tag | join(' ') }}
+{% endif %}
+{% if p.set_local_preference != '' %}
+ set local-preference {{ p.set_local_preference }}
+{% endif %}
+{% if p.set_metric != '' %}
+{% if p.set_metric is not digits %}
+{{ fail(what ~ ': メトリック「' ~ p.set_metric ~ '」は書けません（今の値に足す・引く形の意味を、Cisco のコマンドリファレンスで確かめていません。数だけで書くか、追加コンフィグに書いてください）') }}
+{% endif %}
+ set metric {{ p.set_metric }}
+{% endif %}
+{% if p.set_metric_type %}
+ set metric-type {{ 'internal' if p.set_metric_type == 'internal' else 'type-' ~ p.set_metric_type }}
+{% endif %}
+{% if p.set_as_path_prepend | length > 0 %}
+ set as-path prepend {{ p.set_as_path_prepend | join(' ') }}
+{% endif %}
+{% if p.set_community | length > 0 %}
+{% if 'none' in p.set_community %}
+{% if p.set_community | length > 1 or p.set_community_additive == true %}
+{{ fail(what ~ ': コミュニティの none（すべて外す）は、ほかの値や「コミュニティを足す」と一緒には書けません') }}
+{% endif %}
+ set community none
+{% else %}
+ set community {{ p.set_community | join(' ') }}{{ ' additive' if p.set_community_additive == true else '' }}
+{% endif %}
+{% elif p.set_community_additive == true %}
+{{ fail(what ~ ': 「コミュニティを足す」は、付けるコミュニティがある行にだけ書けます') }}
+{% endif %}
+{% if p.set_community_delete | length > 0 %}
+ set comm-list CD-{{ p.name }}-{{ p.seq }} delete
+{% endif %}
+{% if p.set_extcommunity_rt | length > 0 %}
+ set extcommunity rt {{ p.set_extcommunity_rt | join(' ') }}{{ ' additive' if p.set_extcommunity_rt_additive == true else '' }}
+{% elif p.set_extcommunity_rt_additive == true %}
+{{ fail(what ~ ': 「ルートターゲットを足す」は、付けるルートターゲットがある行にだけ書けます') }}
+{% endif %}
+{% if p.set_extcommunity_soo %}
+ set extcommunity soo {{ p.set_extcommunity_soo }}
+{% endif %}
+{% if p.set_weight != '' %}
+ set weight {{ p.set_weight }}
+{% endif %}
+{% if p.set_origin %}
+ set origin {{ p.set_origin }}
+{% endif %}
+{% if p.set_tag != '' %}
+ set tag {{ p.set_tag }}
+{% endif %}
+{% if p.set_next_hop | length > 0 %}
+{% if 'self' in p.set_next_hop and p.set_next_hop | length > 1 %}
+{{ fail(what ~ ': ネクストホップの self は、アドレスと一緒には書けません') }}
+{% endif %}
+ set ip next-hop {{ p.set_next_hop | join(' ') }}
+{% endif %}
+{% if p.set_default_next_hop | length > 0 %}
+ set ip default next-hop {{ p.set_default_next_hop | join(' ') }}
+{% endif %}
+{% if p.set_ipv6_next_hop | length > 0 %}
+ set ipv6 next-hop {{ p.set_ipv6_next_hop | join(' ') }}
+{% endif %}
+{% if p.set_ipv6_default_next_hop | length > 0 %}
+ set ipv6 default next-hop {{ p.set_ipv6_default_next_hop | join(' ') }}
+{% endif %}
+{% if p.set_interface | length > 0 %}
+ set interface {{ p.set_interface | join(' ') }}
+{% endif %}
+{% if p.set_default_interface | length > 0 %}
+ set default interface {{ p.set_default_interface | join(' ') }}
+{% endif %}
+{% if p.continue_to %}
+{% if p.continue_to != 'next' and p.continue_to is not digits %}
+{{ fail(what ~ ': 「合った後に続けて見る順番」は、順番の数か next で書きます') }}
+{% endif %}
+ continue{{ ' ' ~ p.continue_to if p.continue_to != 'next' else '' }}
+{% endif %}
+!
+{% endfor %}
+{% if device.local_policy_route %}
+ip local policy route-map {{ device.local_policy_route }}
+!
+{% endif %}
+{% if device.local_policy_route_v6 %}
+ipv6 local policy route-map {{ device.local_policy_route_v6 }}
+!
+{% endif %}

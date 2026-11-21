@@ -1,0 +1,29 @@
+# L2TP rows the pack cannot write (made-up values; appendix A 3.21): each
+# tells why, and how it is put right.
+tables:
+  devices:
+    - hostname: ix-c05
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet1.0, enabled: true}
+    - {name: GigaEthernet2.0, enabled: true, ipv4: 198.51.100.129/25}
+    - {name: Loopback0.0, enabled: true, ipv4: 192.0.2.129/25}
+    - {name: Tunnel0.0, enabled: true, ipv4: "unnumbered:Loopback0.0"}
+    - {name: Tunnel1.0, enabled: true, ipv4: "unnumbered:Loopback0.0"}
+    - {name: Tunnel2.0, enabled: true}
+  l2tpv3:
+    # The device has no L2TPv3.
+    - {if_name: GigaEthernet1.0, peer_address: 203.0.113.2, vc_id: 101, profile: PW-SAMPLE-A, local_if: Loopback0.0, signaling: dynamic}
+  l2tp_groups:
+    # No name of the IPsec setting; a method the device does not have; the
+    # authentication of the tunnel without a password; what only another
+    # vendor writes.
+    - {name: lns-sample, role: lns, logical_ifs: [Tunnel0.0, Tunnel1.0], tunnel_auth: true, auth: mschap_v2, peer_name: rt-c09, local_name: ix-c05}
+    # No domain and no PPPoE interface; the tunnel is not on the sheet.
+    - {name: lac-sample, role: lac, logical_ifs: [Tunnel9.0], peer_address: 198.51.100.1, tunnel_auth: false}
+    # The interface is no tunnel; no interface for an LNS.
+    - {name: lac-sample-b, role: lac, logical_ifs: [GigaEthernet2.0], access_ifs: [GigaEthernet1.0], peer_address: 198.51.100.1, tunnel_auth: false, domains: [example.com]}
+    - {name: lns-sample-with-a-name-too-long-b, role: lns, tunnel_auth: false, auth: chap, ipsec_policy: ipsec-sample-ra}
+  l2tp_users:
+    - {group: lns-none, name: sample-user, password: dummy-l2tp-user-secret-2}
+findings: [G-601, G-603, G-606]

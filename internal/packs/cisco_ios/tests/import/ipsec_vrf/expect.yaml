@@ -1,0 +1,36 @@
+# IPsec, the third round (made-up values; appendix A 3.20): a virtual
+# template (the interface the device makes for each peer: a row with the
+# peer "any") with IKE version 1 and version 2, a tunnel whose peer is
+# written by its name, and the two VRFs: the outer one ("tunnel vrf", the
+# keyring, "match fvrf") and the inner one (the VRF of the tunnel
+# interface; "vrf" of the ISAKMP profile for a crypto map entry).
+# "tunnel vrf" on a tunnel without IPsec stays unknown.
+tables:
+  ipsec_tunnels:
+    - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: rt-v09.example.com, ike_version: 1, psk: dummy-psk-sample-name, outer_vrf: "", inner_vrf: ""}
+    - {name: Tunnel2, style: tunnel_if, tunnel_if: Tunnel2, peer_address: 203.0.113.50, ike_version: 1, psk: dummy-psk-sample-wan, remote_id: "", outer_vrf: wan-a, inner_vrf: ""}
+    - {name: Tunnel3, style: tunnel_if, tunnel_if: Tunnel3, peer_address: 203.0.113.70, ike_version: 2, psk: dummy-psk-sample-v2wan, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, outer_vrf: wan-a}
+    - {name: Virtual-Template1, style: tunnel_if, tunnel_if: Virtual-Template1, peer_address: any, ike_version: 1, psk: dummy-psk-sample-vt, local_id: "", remote_id: "", outer_vrf: ""}
+    - {name: Virtual-Template2, style: tunnel_if, tunnel_if: Virtual-Template2, peer_address: any, ike_version: 2, psk: dummy-psk-sample-v2any, local_id: "fqdn:rt-v01.example.com", remote_id: "fqdn:rt-v08.example.com", ike_encryption: aes256}
+    - {name: CMAP-SAMPLE/10, style: policy, local_if: GigabitEthernet0/1, peer_address: 203.0.113.60, ike_version: 1, psk: dummy-psk-sample-map, remote_id: "", outer_vrf: wan-a, inner_vrf: cust-b}
+  tunnels:
+    - {if_name: Tunnel1, type: ipsec, source: GigabitEthernet0/0, destination: "", destination_fqdn: rt-v09.example.com}
+    - {if_name: Tunnel2, type: ipsec, source: GigabitEthernet0/1, destination: 203.0.113.50}
+    - {if_name: Tunnel3, type: ipsec, source: GigabitEthernet0/1, destination: 203.0.113.70}
+    - {if_name: Tunnel4, source: GigabitEthernet0/0, destination: 203.0.113.80}
+    - {if_name: Virtual-Template1, type: ipsec, source: "", destination: ""}
+    - {if_name: Virtual-Template2, type: ipsec, source: GigabitEthernet0/0, destination: ""}
+  interfaces:
+    - {name: Loopback0, ipv4: 192.0.2.1/32}
+    - {name: GigabitEthernet0/0, ipv4: 203.0.113.9/29}
+    - {name: GigabitEthernet0/1, ipv4: 203.0.113.17/29, vrf: wan-a}
+    - {name: Tunnel1, ipv4: 198.51.100.1/30}
+    - {name: Tunnel2, ipv4: 198.51.100.5/30, vrf: cust-a}
+    - {name: Tunnel3, ipv4: 198.51.100.9/30, vrf: cust-a}
+    - {name: Tunnel4, ipv4: 198.51.100.13/30}
+    - {name: Virtual-Template1, ipv4: "unnumbered:Loopback0"}
+    - {name: Virtual-Template2, ipv4: "unnumbered:Loopback0"}
+  ipsec_selectors:
+    - {tunnel: CMAP-SAMPLE/10, seq: 10, local_net: 192.0.2.128/25, remote_net: 198.51.100.128/25, protocol: ip}
+unknown:
+  - " tunnel vrf wan-a"

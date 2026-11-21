@@ -126,3 +126,1176 @@ adapt:
     when: "p.class in ['default'] and not more"
     remove: true
     note: "{{ '' }}"
+
+  # ---- L2TP (appendix A 3.21) ----
+  # A pseudowire class needs a name.
+  - id: l2tpv3.profile
+    for: l2tpv3
+    as: x
+    when: "not x.profile"
+    row: {table: l2tpv3, key: {if_name: "{{ x.if_name }}"}}
+    set: {profile: "l2tpv3-{{ x.vc_id }}"}
+    note: "L2 延伸 {{ x.if_name }}: 「設定名」が空なので、pseudowire-class の名前を l2tpv3-{{ x.vc_id }} として書きます"
+  # The device does not point at IPsec from the VPDN group: the crypto map
+  # of the outside interface protects L2TP. The import takes the first
+  # entry for peers "any" in transport mode as the one that protects the
+  # callers of an LNS (import/70_l2tp.yaml), so the cell is brought to
+  # that: another name, or a name where no such row is, is told.
+  - id: l2tp.ipsec_policy.lac
+    for: l2tp_groups
+    as: g
+    when: "g.role != 'lns' and g.ipsec_policy"
+    clear: [ipsec_policy]
+    note: "L2TP {{ g.name }}: 「IPsec の設定名」（{{ g.ipsec_policy }}）は書きません（役割が lns の行だけが使う列です）"
+  - id: l2tp.ipsec_policy.none
+    for: l2tp_groups
+    as: g
+    let:
+      sec: "first('ipsec_tunnels', style='policy', peer_address='any', ipsec_mode='transport', sort='name')"
+    when: "g.role == 'lns' and g.ipsec_policy and not sec.name"
+    clear: [ipsec_policy]
+    note: "L2TP {{ g.name }}: 「IPsec の設定名」（{{ g.ipsec_policy }}）は書きません。Cisco は L2TP の設定から IPsec を指さず、外向きの IF のクリプトマップ（相手アドレスが any・IPsec のモードが transport・方式が policy の行）が L2TP を守ります。IPsec の表に、その行がありません"
+  - id: l2tp.ipsec_policy.set
+    for: l2tp_groups
+    as: g
+    let:
+      sec: "first('ipsec_tunnels', style='policy', peer_address='any', ipsec_mode='transport', sort='name')"
+    when: "g.role == 'lns' and sec.name and g.ipsec_policy != sec.name"
+    row: {table: l2tp_groups, key: {name: "{{ g.name }}"}}
+    set: {ipsec_policy: "{{ sec.name }}"}
+    note: "L2TP {{ g.name }}: 「IPsec の設定名」を {{ sec.name }} として扱います（Cisco は L2TP の設定から IPsec を指しません。相手アドレスが any・IPsec のモードが transport・方式が policy の行のうち、名前の順で最初の行が L2TP を守ります）"
+  # A LAC of this device has no interface for the tunnel.
+  - id: l2tp.lac.interface
+    for: l2tp_groups
+    as: g
+    when: "g.role == 'lac' and g.logical_ifs and not g.access_ifs"
+    clear: [logical_ifs]
+    note: "L2TP {{ g.name }}: LAC の「受け口の IF」（{{ g.logical_ifs | join('、') }}）は書きません（Cisco の LAC は、LNS へのトンネルに IF を使いません。インタフェースの表にその IF の行が残っていれば、消してください）"
+  # A LAC that takes PPPoE on its ports needs a Virtual-Template for the
+  # callers (appendix A 3.26). The tunnel interface of another vendor is not
+  # one: the pack makes "Virtual-Template<n>" and tells it.
+  - id: l2tp.lac.pppoe.many
+    for: l2tp_groups
+    as: g
+    let:
+      need: "rows('l2tp_groups', role='lac') | selectattr('access_ifs') | list"
+      mine: "g.logical_ifs | length == 1 and (g.logical_ifs | first) is startingwith('Virtual-Template')"
+    when: "g.role == 'lac' and g.access_ifs and not mine and need | length > 1"
+    note: "{{ fail('L2TP ' ~ g.name ~ ': PPPoE を受ける LAC が 2 つ以上あるときは、「受け口の IF」に Virtual-Template を 1 つずつ書いてください（Virtual-Template1 のような名前。インタフェースの表にもその行が要ります）') }}"
+  - id: l2tp.lac.pppoe.vt
+    for: l2tp_groups
+    as: g
+    let:
+      mine: "g.logical_ifs | length == 1 and (g.logical_ifs | first) is startingwith('Virtual-Template')"
+      n: "(rows('interfaces') | selectattr('name', 'startingwith', 'Virtual-Template') | list | length) + 1"
+      clash: "lookup('interfaces', name='Virtual-Template' ~ n)"
+    when: "g.role == 'lac' and g.access_ifs and not mine"
+    row: {table: interfaces, key: {name: "{{ ('Virtual-Template' ~ n) if not clash.name else fail('L2TP ' ~ g.name ~ ': PPPoE を受けるための Virtual-Template' ~ n ~ ' が、インタフェースの表にもうあります（「受け口の IF」に、使う Virtual-Template を書いてください）') }}"}}
+    set: {enabled: true}
+    note: "L2TP {{ g.name }}: PPPoE でつないできた相手を受ける IF として、Virtual-Template{{ n }} を作って書きます（Cisco は、PPPoE を Virtual-Template で受けます。{{ '「受け口の IF」の ' ~ (g.logical_ifs | join('、')) ~ ' は使いません' if g.logical_ifs else '「受け口の IF」が空でした' }}）"
+  - id: l2tp.lac.pppoe.vt.clear
+    for: l2tp_groups
+    as: g
+    let:
+      mine: "g.logical_ifs | length == 1 and (g.logical_ifs | first) is startingwith('Virtual-Template')"
+    when: "g.role == 'lac' and g.access_ifs and g.logical_ifs and not mine"
+    clear: [logical_ifs]
+    note: "{{ '' }}"
+  - id: l2tp.lac.pppoe.vt.name
+    for: l2tp_groups
+    as: g
+    let:
+      n: "rows('interfaces') | selectattr('name', 'startingwith', 'Virtual-Template') | list | length"
+    when: "g.role == 'lac' and g.access_ifs and not g.logical_ifs"
+    row: {table: l2tp_groups, key: {name: "{{ g.name }}"}}
+    append: {logical_ifs: "Virtual-Template{{ n }}"}
+    note: "{{ '' }}"
+  # ---- route policies (appendix A 3.19) ----
+  # A standard list of one "permit" line says "the route carries all of
+  # these": the same as the values written in the entry itself. The import
+  # reads such a list back as the values, so it is written that way.
+  - id: rp.community.inline
+    for: route_policies
+    as: p
+    let:
+      all: "rows('community_lists', name=p.match_community_list)"
+      one: "first('community_lists', name=p.match_community_list)"
+    when: "p.match_community_list and not p.match_community and all | length == 1 and one.action == 'permit' and one.type == 'standard' and one.communities"
+    row: {table: route_policies, key: {name: "{{ p.name }}", seq: "{{ p.seq }}"}}
+    append: {match_community: "{{ one.communities | join(' ') }}"}
+    note: "{{ '' }}"
+  - id: rp.community.list.taken
+    for: community_lists
+    as: c
+    let:
+      n: "rows('community_lists', name=c.name) | length"
+      users: "rows('route_policies', match_community_list=c.name)"
+      open: "users | rejectattr('match_community') | list | length"
+    when: "n == 1 and c.action == 'permit' and c.type == 'standard' and users | length > 0 and open == 0"
+    remove: true
+    note: "{{ '' }}"
+  - id: rp.community.list.clear
+    for: route_policies
+    as: p
+    let:
+      list: "first('community_lists', name=p.match_community_list)"
+    when: "p.match_community_list and p.match_community and not list.name"
+    clear: [match_community_list]
+    note: "{{ '' }}"
+  # "redistribute ospf" names its process: without a number in the row, the
+  # one process of the same VRF (the import reads the number back).
+  - id: bgp.redistribute.ospf
+    for: bgp_redistribute
+    as: r
+    let:
+      procs: "rows('ospf_processes') | selectattr('vrf', 'equalto', r.vrf) | list"
+    when: "r.source == 'ospf' and not r.process_id and procs | length == 1"
+    row: {table: bgp_redistribute, key: {vrf: "{{ r.vrf }}", source: ospf}}
+    set: {process_id: "{{ (procs | first).process_id }}"}
+    note: "{{ '' }}"
+  # A policy that sets communities does nothing for the neighbor unless the
+  # communities are sent to it: by default no communities attribute is sent
+  # (BGP Command Reference, "neighbor send-community"). Nothing is changed.
+  - id: bgp.send_community.missing
+    for: bgp_neighbors
+    as: n
+    let:
+      sets: "rows('route_policies', name=n.filter_out) | selectattr('set_community') | rejectattr('set_community', 'equalto', ['none']) | list | length"
+    when: "n.filter_out and sets > 0 and n.send_community not in [true, 'true']"
+    note: "BGP ネイバー {{ n.neighbor }}: 送信の経路制御 {{ n.filter_out }} がコミュニティを付けますが、「コミュニティを送る」が有効でないので、相手には届きません（Cisco は neighbor … send-community が要ります）。値は変えていません。届けるなら、「コミュニティを送る」を有効にしてください"
+  # IPv6 (appendix A 3.23). The device forwards no IPv6 packet, sends no
+  # router advertisement and runs no OSPFv3 without "ipv6 unicast-routing":
+  # a dataset that came from a vendor without such a switch has the cell empty.
+  - id: ipv6.adapt.routing
+    for: devices
+    as: d
+    let:
+      ras: "rows('ipv6_interfaces') | selectattr('ra', 'equalto', 'send') | list | length"
+      need: "(rows('ipv6_routes') | length) + (rows('ospfv3_processes') | length) + (rows('bgp_ipv6_neighbors') | length) + ras"
+    when: "not d.ipv6_routing and need > 0"
+    row: {table: devices, key: {}}
+    set: {ipv6_routing: true}
+    note: "IPv6 の経路・OSPFv3・BGP・RA の送信があるので、「IPv6 の転送」を有効にして書きます（ipv6 unicast-routing。Cisco は、この行が無いと IPv6 を転送しません）"
+  # The line that advertises a DNS server takes its lifetime in seconds.
+  - id: ipv6.ra_dns.lifetime
+    for: ipv6_interfaces
+    as: v
+    when: "v.ra_dns and v.ra_dns_lifetime == ''"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ v.if_name }}"}}
+    set: {ra_dns_lifetime: 1800}
+    note: "{{ v.if_name }}: 「RA で配る DNS の生存時間」が空なので、1800 秒で書きます（Cisco の行には秒数が要ります。NEC IX が省いたときに使う値と同じです）"
+
+  # ---- the device as a whole (appendix A 3.26) ----
+  # What only another vendor writes is taken away, or written the way of
+  # this device, and told.
+  - id: sys.adapt.timestamp.time
+    for: devices
+    as: d
+    when: "d.log_timestamp == 'time'"
+    row: {table: devices, key: {}}
+    set: {log_timestamp: datetime}
+    note: "ログの時刻の付け方 time（時刻だけ）は Cisco に無いので、datetime（日付と時刻）として書きます"
+  - id: sys.adapt.log_buffer.cyclic
+    for: devices
+    as: d
+    when: "d.log_buffer_mode == 'cyclic'"
+    clear: [log_buffer_mode]
+    note: "機器内ログがいっぱいのときの動き cyclic（古いものから上書き）は、Cisco ではいつもそうなので、行を書かずに進めます"
+  - id: sys.adapt.ntp_serve
+    for: devices
+    as: d
+    when: "d.ntp_serve | string | lower == 'true'"
+    clear: [ntp_serve]
+    note: "「NTP サーバとして動く」を有効にする行は Cisco にありません（時刻が合っていれば、問い合わせに答えます）。行を書かずに進めます。答える相手を絞るなら、追加コンフィグに ntp access-group を書いてください"
+  - id: sys.adapt.forward_cache
+    for: devices
+    as: d
+    when: "d.forward_cache | string | lower == 'true'"
+    clear: [forward_cache]
+    note: "「転送のキャッシュ」を有効にする行は書きません（Cisco は既定で高速転送（CEF）が働きます）"
+  - id: sys.adapt.forward_cache.v6
+    for: devices
+    as: d
+    when: "d.forward_cache_ipv6 | string | lower == 'true'"
+    clear: [forward_cache_ipv6]
+    note: "「転送のキャッシュ（IPv6）」を有効にする行は書きません（Cisco は、IPv6 の転送を有効にすれば高速転送が働きます）"
+  # "auto" for the MSS is not of this device: the MTU of IP less 40.
+  - id: if.adapt.mss.auto
+    for: interfaces
+    as: i
+    let:
+      base: "i.ip_mtu if i.ip_mtu != '' else i.mtu"
+    when: "i.tcp_mss == 'auto' and base != ''"
+    row: {table: interfaces, key: {name: "{{ i.name }}"}}
+    set: {tcp_mss: "{{ base | int - 40 }}"}
+    note: "{{ i.name }}: TCP MSS 調整の auto は Cisco に無いので、{{ 'IP MTU' if i.ip_mtu != '' else 'MTU' }} {{ base }} − 40 = {{ base | int - 40 }} として書きます"
+  - id: if.adapt.mss.auto.none
+    for: interfaces
+    as: i
+    when: "i.tcp_mss == 'auto' and i.ip_mtu == '' and i.mtu == ''"
+    note: "{{ fail(i.name ~ ': TCP MSS 調整の auto は Cisco にありません。IP MTU か MTU を書くか、MSS を数で書いてください（IP MTU − 40 が目安です）') }}"
+  # The description of a port (a vendor that keeps ports apart from
+  # interfaces): the interface is the port here.
+  - id: if.adapt.port_description.move
+    for: interfaces
+    as: i
+    when: "i.port_description and not i.description"
+    row: {table: interfaces, key: {name: "{{ i.name }}"}}
+    set: {description: "{{ i.port_description }}"}
+    clear: [port_description]
+    note: "{{ i.name }}: 「ポートの説明」を、IF の「説明」として書きます（Cisco は、ポートと IF を分けません）"
+  - id: if.adapt.port_description.drop
+    for: interfaces
+    as: i
+    when: "i.port_description and i.description"
+    clear: [port_description]
+    note: "{{ i.name }}: 「ポートの説明」（{{ i.port_description }}）は書きません（Cisco は、ポートと IF を分けません。IF の「説明」だけを書きます）"
+
+  # ---- secrets in the encrypted form of a device (appendix A 3.26) ----
+  # The keys of IPsec: "6 <value>" is the form of this device.
+  - id: secret.form.ipsec
+    for: ipsec_tunnels
+    as: x
+    when: "(' ' in x.psk and not x.psk is startingwith('6 ')) or (' ' in x.psk_remote and not x.psk_remote is startingwith('6 '))"
+    note: "{{ fail('IPsec ' ~ x.name ~ ' の鍵は、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+  # A transform set without a word of ESP authentication has none: "none"
+  # of the row is what the device does with the empty cell.
+  - id: ipsec.esp_hash.none
+    for: ipsec_tunnels
+    as: r
+    when: "r.esp_hash == 'none'"
+    clear: [esp_hash]
+    note: "{{ '' }}"
+  # A secret with a space is "<kind> <value>" as a device saved it. This
+  # device writes back its own form ("7 <value>") where the import reads it;
+  # the form of another vendor cannot be carried over.
+  - id: secret.form.ospf
+    for: ospf_interfaces
+    as: x
+    when: "' ' in x.auth_key and not x.auth_key is startingwith('7 ')"
+    note: "{{ fail('' ~ x.if_name ~ ' の OSPF の鍵は、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.line
+    for: remote_access
+    as: x
+    when: "' ' in x.line_password and not x.line_password is startingwith('7 ')"
+    note: "{{ fail('遠隔ログインの回線パスワードは、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.pppoe
+    for: pppoe
+    as: x
+    when: "' ' in x.password and not x.password is startingwith('7 ')"
+    note: "{{ fail('PPPoE ' ~ x.name ~ ' の接続パスワードは、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.l2tp
+    for: l2tp_groups
+    as: x
+    when: "' ' in x.password"
+    note: "{{ fail('L2TP ' ~ x.name ~ ' のトンネルのパスワードは、機器が暗号化した形です（この列の暗号化した形は、読み書きを確かめていません。平文を入れ直してください）') }}"
+  - id: secret.form.l2tpv3
+    for: l2tpv3
+    as: x
+    when: "' ' in x.password"
+    note: "{{ fail('L2 延伸 ' ~ x.if_name ~ ' のトンネルのパスワードは、機器が暗号化した形です（この列の暗号化した形は、読み書きを確かめていません。平文を入れ直してください）') }}"
+  - id: secret.form.l2tp_user
+    for: l2tp_users
+    as: x
+    when: "' ' in x.password"
+    note: "{{ fail('L2TP 接続ユーザ ' ~ x.name ~ ' の接続パスワードは、機器が暗号化した形です（この列の暗号化した形は、読み書きを確かめていません。平文を入れ直してください）') }}"
+  - id: secret.form.bgp
+    for: bgp_neighbors
+    as: x
+    when: "' ' in x.password and not x.password is startingwith('7 ')"
+    note: "{{ fail('BGP ネイバー ' ~ x.neighbor ~ ' のパスワードは、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+  - id: secret.form.bgp6
+    for: bgp_ipv6_neighbors
+    as: x
+    when: "' ' in x.password and not x.password is startingwith('7 ')"
+    note: "{{ fail('BGP IPv6 ネイバー ' ~ x.neighbor ~ ' のパスワードは、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+
+  # ---- QoS (appendix A 3.26) ----
+  # "average" is what the device does without the word: the cell says
+  # nothing (the import leaves it empty).
+  - id: qos.adapt.shape.average
+    for: qos_policies
+    as: p
+    when: "p.shape_mode == 'average'"
+    clear: [shape_mode]
+    note: "{{ '' }}"
+
+  # ---- EtherIP (appendix A 3.26) ----
+  # "tunnel mode" of this device has no EtherIP.
+  - id: etherip.none
+    for: tunnels
+    as: u
+    when: "u.type == 'etherip'"
+    note: "{{ fail(u.if_name ~ ': 種類が etherip（EtherIP）のトンネルは Cisco に書けません（tunnel mode に EtherIP がありません）。L2 をつなぐなら、両端を L2TPv3（L2 延伸の表）などの同じ方式に作り直してください') }}"
+  # ---- IPsec (appendix A 3.20) ----
+  # "Always on" has no line on this device. A tunnel interface keeps trying
+  # to connect by itself, and a crypto map connects when traffic comes: a
+  # cell that asks for just that says nothing. A tunnel interface that is
+  # to wait for traffic cannot be written: that is told. (A crypto map that
+  # is to be always on is left as it is: a value that is not written, G-602.)
+  - id: ipsec.always_on.same
+    for: ipsec_tunnels
+    as: r
+    when: "(r.style == 'tunnel_if' and (r.always_on | string | lower) == 'true') or (r.style == 'policy' and (r.always_on | string | lower) == 'false')"
+    clear: [always_on]
+    note: "{{ '' }}"
+  - id: ipsec.always_on.tunnel
+    for: ipsec_tunnels
+    as: r
+    when: "r.style == 'tunnel_if' and (r.always_on | string | lower) == 'false'"
+    clear: [always_on]
+    note: "IPsec {{ r.name }}: 「いつもつないでおく」の「無効」は Cisco のトンネル IF に書き方が無いので、書きません（Cisco のトンネル IF は、通信が無くてもつなぎに行きます）"
+  # ---- what a switch of another vendor says in another way (appendix A 3.4
+  # and 3.22, the columns of 2026-11-21) ----
+  # No line of this pack switches spanning tree on.
+  - id: sw.adapt.stp.enabled
+    for: l2_settings
+    as: g
+    when: "g.stp_enabled | string == 'true'"
+    clear: [stp_enabled]
+    note: "「スパニングツリーを使う」の「有効」は書きません（このパックは、スパニングツリーを有効にする行を書きません。Catalyst 系で何も書かないときに有効であることは、コマンドリファレンスの文では確かめていません。機器で確かめてください）"
+  # One tree for the device is what MST runs without a region of its own.
+  - id: sw.adapt.stp.mode
+    for: l2_settings
+    as: g
+    when: "g.stp_mode in ['rstp', 'stp']"
+    row: {table: l2_settings, key: {}}
+    set: {stp_mode: mst}
+    note: "スパニングツリーの方式 {{ g.stp_mode }}（機器に 1 本の木）を、mst として書きます（spanning-tree mode mst。Cisco の方式は pvst・rapid-pvst・mst の 3 つです。VLAN ごとの木にするなら rapid_pvst と書いてください）"
+  - id: sw.adapt.vlan.description
+    for: vlans
+    as: v
+    when: "v.description"
+    clear: [description]
+    note: "VLAN {{ v.vlan_id }} の説明「{{ v.description }}」は書きません（Cisco の VLAN には、名前の行だけがあります）"
+  - id: sw.adapt.user.services
+    for: users
+    as: u
+    when: "u.services"
+    clear: [services]
+    note: "ユーザ {{ u.name }}: 「使える接続方式」（{{ u.services | join('・') }}）は書きません（Cisco には、ユーザごとに方式を決める行がありません）"
+  # The roles "level-0" to "level-15" of another vendor are the numbers.
+  - id: sw.adapt.user.level
+    for: users
+    as: u
+    let:
+      n: "u.privilege | replace('level-', '')"
+    when: "u.privilege is startingwith('level-') and n is digits and n | int <= 15"
+    row: {table: users, key: {name: "{{ u.name }}"}}
+    set: {privilege: "{{ n }}"}
+    note: "ユーザ {{ u.name }}: 権限 {{ u.privilege }} を、特権レベル {{ n }} として書きます（できることの範囲は、元の機器の同じ番号と同じとは限りません）"
+  # A list of another vendor may count its entries from 0, which is no
+  # sequence number here (1 and up). Such a list is counted anew, 10, 20,
+  # 30 ..., in the same order. The entries are first copied to numbers far
+  # above (1000000 and up), so that no new number meets an old one.
+  - id: sw.adapt.acl.seq.up
+    for: acl_entries
+    only_if: "rows('acl_entries', seq=0)"
+    as: e
+    let:
+      zero: "lookup('acl_entries', acl=e.acl, seq=0)"
+      rank: "rows('acl_entries', acl=e.acl) | map(attribute='seq') | map('int') | select('le', e.seq | int) | select('lt', 1000000) | list | length"
+    when: "zero and e.seq | int < 1000000"
+    row: {table: acl_entries, key: {acl: "{{ e.acl }}", seq: "{{ 1000000 + rank * 10 }}"}}
+    set: &acl_copy_set
+      action: "{{ e.action }}"
+      protocol: "{{ e.protocol }}"
+      src: "{{ e.src }}"
+      src_port: "{{ e.src_port }}"
+      dst: "{{ e.dst }}"
+      dst_port: "{{ e.dst_port }}"
+      icmp_type: "{{ e.icmp_type }}"
+      icmp_code: "{{ e.icmp_code }}"
+      remark: "{{ e.remark }}"
+      dscp: "{{ e.dscp }}"
+      precedence: "{{ e.precedence }}"
+      tos: "{{ e.tos }}"
+      time_range: "{{ e.time_range }}"
+      comment: "{{ e.comment }}"
+    append: &acl_copy_append
+      flags: "{{ e.flags | join(' ') }}"
+    note: "{{ '' }}"
+  - id: sw.adapt.acl.seq.old
+    for: acl_entries
+    only_if: "rows('acl_entries', seq=1000010)"
+    as: e
+    let:
+      moved: "lookup('acl_entries', acl=e.acl, seq=1000010)"
+    when: "moved and e.seq | int < 1000000"
+    remove: true
+    note: "{{ 'ACL ' ~ e.acl ~ ': 順番が 0 から始まっています（Cisco の順番は 1 以上です）。同じ並びのまま、10・20・30 … と振り直して書きます' if e.seq | int == 0 else '' }}"
+  - id: sw.adapt.acl.seq.down
+    for: acl_entries
+    only_if: "rows('acl_entries', seq=1000010)"
+    as: e
+    when: "e.seq | int >= 1000000"
+    row: {table: acl_entries, key: {acl: "{{ e.acl }}", seq: "{{ e.seq | int - 1000000 }}"}}
+    set: *acl_copy_set
+    append: *acl_copy_append
+    note: "{{ '' }}"
+  - id: sw.adapt.acl.seq.done
+    for: acl_entries
+    only_if: "rows('acl_entries', seq=1000010)"
+    as: e
+    when: "e.seq | int >= 1000000"
+    remove: true
+    note: "{{ '' }}"
+  # A list of another vendor may have a number as its name that is no number
+  # of a list here (NEC QX: basic 2000-2999, advanced 3000-3999). Such a list
+  # is written by a name, "ACL-<number>": the list, its entries and what
+  # names it (appendix A 3.24).
+  - id: sw.adapt.acl.number
+    for: acls
+    as: a
+    let:
+      ok: "(a.name is not digits or (a.type == 'standard' and (((a.name | int) >= 1 and (a.name | int) <= 99) or ((a.name | int) >= 1300 and (a.name | int) <= 1999))) or (a.type == 'extended' and (((a.name | int) >= 100 and (a.name | int) <= 199) or ((a.name | int) >= 2000 and (a.name | int) <= 2699))))"
+      taken: "lookup('acls', name='ACL-' ~ a.name)"
+    when: "not ok"
+    row: {table: acls, key: {name: "{{ ('ACL-' ~ a.name) if not taken else fail('ACL ' ~ a.name ~ ' を名前 ACL-' ~ a.name ~ ' に付け替えますが、その名前の ACL がすでにあります（どちらかの名前を変えてください）') }}"}}
+    set: {type: "{{ a.type }}", description: "{{ a.description }}"}
+    note: "ACL {{ a.name }}: この番号は、Cisco の {{ a.type }} の ACL の番号ではないので（標準は 1〜99・1300〜1999、拡張は 100〜199・2000〜2699）、名前 ACL-{{ a.name }} に付け替えて書きます（この ACL を指す列も、同じ名前に読み替えて書きます）"
+  - id: sw.adapt.acl.number.entries
+    for: acl_entries
+    only_if: "rows('acls') | map(attribute='name') | select('digits') | list"
+    as: e
+    let:
+      a: "lookup('acls', name=e.acl)"
+      ok: "not a.type or (e.acl is not digits or (a.type == 'standard' and (((e.acl | int) >= 1 and (e.acl | int) <= 99) or ((e.acl | int) >= 1300 and (e.acl | int) <= 1999))) or (a.type == 'extended' and (((e.acl | int) >= 100 and (e.acl | int) <= 199) or ((e.acl | int) >= 2000 and (e.acl | int) <= 2699))))"
+    when: "not ok"
+    row: {table: acl_entries, key: {acl: "ACL-{{ e.acl }}", seq: "{{ e.seq }}"}}
+    set: {action: "{{ e.action }}", protocol: "{{ e.protocol }}", src: "{{ e.src }}", src_port: "{{ e.src_port }}", dst: "{{ e.dst }}", dst_port: "{{ e.dst_port }}", icmp_type: "{{ e.icmp_type }}", icmp_code: "{{ e.icmp_code }}", remark: "{{ e.remark }}", dscp: "{{ e.dscp }}", precedence: "{{ e.precedence }}", tos: "{{ e.tos }}", time_range: "{{ e.time_range }}", comment: "{{ e.comment }}"}
+    append: {flags: "{{ e.flags | join(' ') }}"}
+    note: "{{ '' }}"
+  - id: sw.adapt.acl.number.interfaces.acl_in
+    for: interfaces
+    as: x
+    let:
+      a: "lookup('acls', name=x.acl_in)"
+      ok: "not a.type or (x.acl_in is not digits or (a.type == 'standard' and (((x.acl_in | int) >= 1 and (x.acl_in | int) <= 99) or ((x.acl_in | int) >= 1300 and (x.acl_in | int) <= 1999))) or (a.type == 'extended' and (((x.acl_in | int) >= 100 and (x.acl_in | int) <= 199) or ((x.acl_in | int) >= 2000 and (x.acl_in | int) <= 2699))))"
+    when: "not ok"
+    row: {table: interfaces, key: {name: "{{ x.name }}"}}
+    set: {acl_in: "ACL-{{ x.acl_in }}"}
+    note: "{{ '' }}"
+  - id: sw.adapt.acl.number.interfaces.acl_out
+    for: interfaces
+    as: x
+    let:
+      a: "lookup('acls', name=x.acl_out)"
+      ok: "not a.type or (x.acl_out is not digits or (a.type == 'standard' and (((x.acl_out | int) >= 1 and (x.acl_out | int) <= 99) or ((x.acl_out | int) >= 1300 and (x.acl_out | int) <= 1999))) or (a.type == 'extended' and (((x.acl_out | int) >= 100 and (x.acl_out | int) <= 199) or ((x.acl_out | int) >= 2000 and (x.acl_out | int) <= 2699))))"
+    when: "not ok"
+    row: {table: interfaces, key: {name: "{{ x.name }}"}}
+    set: {acl_out: "ACL-{{ x.acl_out }}"}
+    note: "{{ '' }}"
+  - id: sw.adapt.acl.number.remote_access.acl
+    for: remote_access
+    as: x
+    let:
+      a: "lookup('acls', name=x.acl)"
+      ok: "not a.type or (x.acl is not digits or (a.type == 'standard' and (((x.acl | int) >= 1 and (x.acl | int) <= 99) or ((x.acl | int) >= 1300 and (x.acl | int) <= 1999))) or (a.type == 'extended' and (((x.acl | int) >= 100 and (x.acl | int) <= 199) or ((x.acl | int) >= 2000 and (x.acl | int) <= 2699))))"
+    when: "not ok"
+    row: {table: remote_access, key: {}}
+    set: {acl: "ACL-{{ x.acl }}"}
+    note: "{{ '' }}"
+  - id: sw.adapt.acl.number.snmp_communities.acl
+    for: snmp_communities
+    as: x
+    let:
+      a: "lookup('acls', name=x.acl)"
+      ok: "not a.type or (x.acl is not digits or (a.type == 'standard' and (((x.acl | int) >= 1 and (x.acl | int) <= 99) or ((x.acl | int) >= 1300 and (x.acl | int) <= 1999))) or (a.type == 'extended' and (((x.acl | int) >= 100 and (x.acl | int) <= 199) or ((x.acl | int) >= 2000 and (x.acl | int) <= 2699))))"
+    when: "not ok"
+    row: {table: snmp_communities, key: {community: "{{ x.community }}"}}
+    set: {acl: "ACL-{{ x.acl }}"}
+    note: "{{ '' }}"
+  - id: sw.adapt.acl.number.qos_class_matches.acl
+    for: qos_class_matches
+    as: x
+    let:
+      a: "lookup('acls', name=x.acl)"
+      ok: "not a.type or (x.acl is not digits or (a.type == 'standard' and (((x.acl | int) >= 1 and (x.acl | int) <= 99) or ((x.acl | int) >= 1300 and (x.acl | int) <= 1999))) or (a.type == 'extended' and (((x.acl | int) >= 100 and (x.acl | int) <= 199) or ((x.acl | int) >= 2000 and (x.acl | int) <= 2699))))"
+    when: "not ok"
+    row: {table: qos_class_matches, key: {class: "{{ x.class }}", seq: "{{ x.seq }}"}}
+    set: {acl: "ACL-{{ x.acl }}"}
+    note: "{{ '' }}"
+  - id: sw.adapt.acl.number.entries.old
+    for: acl_entries
+    only_if: "rows('acls') | map(attribute='name') | select('digits') | list"
+    as: e
+    let:
+      a: "lookup('acls', name=e.acl)"
+      ok: "not a.type or (e.acl is not digits or (a.type == 'standard' and (((e.acl | int) >= 1 and (e.acl | int) <= 99) or ((e.acl | int) >= 1300 and (e.acl | int) <= 1999))) or (a.type == 'extended' and (((e.acl | int) >= 100 and (e.acl | int) <= 199) or ((e.acl | int) >= 2000 and (e.acl | int) <= 2699))))"
+    when: "not ok"
+    remove: true
+    note: "{{ '' }}"
+  - id: sw.adapt.acl.number.old
+    for: acls
+    as: a
+    let:
+      ok: "(a.name is not digits or (a.type == 'standard' and (((a.name | int) >= 1 and (a.name | int) <= 99) or ((a.name | int) >= 1300 and (a.name | int) <= 1999))) or (a.type == 'extended' and (((a.name | int) >= 100 and (a.name | int) <= 199) or ((a.name | int) >= 2000 and (a.name | int) <= 2699))))"
+    when: "not ok"
+    remove: true
+    note: "{{ '' }}"
+  # A routing policy keeps its lists in one cell, which the pack does not
+  # rewrite: a policy that names a renamed list stops the run.
+  - id: sw.adapt.acl.number.policy
+    for: route_policies
+    as: r
+    let:
+      names: "rows('acls') | map(attribute='name') | list"
+      gone: "r.match_acl | reject('in', rows('acls') | map(attribute='name') | list) | list"
+    when: "gone | length > 0 and (gone | join('')) is digits"
+    note: "{{ fail('経路制御の方針 ' ~ r.name ~ ' の ' ~ r.seq ~ ' 番が指す番号の ACL（' ~ (gone | join('・')) ~ '）は、名前 ACL-<番号> に付け替えて書いています。「条件: ACL」を ACL-<番号> に直してください（方針が指す ACL は、パックが読み替えません）') }}"
+  # ---- access lists, NAT and tracking (appendix A 3.25) ----
+  # An interface takes one list for a direction. Where the design data has
+  # more (NEC IX looks at them one after the other, and goes on to the next
+  # list where none of the entries fits: FD 2.30), the entries are joined, in
+  # that order, into one list named after the interface. The meaning is the
+  # same; the lists themselves stay as they are.
+  - id: acl.merge.in.list
+    for: interfaces
+    as: i
+    let:
+      name: "(i.name | ifshort | replace('/', '-') | replace('.', '-')) ~ '-in'"
+      have: "lookup('acls', name=name)"
+    when: "i.acl_in and i.acl_in_more"
+    row: {table: acls, key: {name: "{{ name }}"}}
+    set: {type: "{{ fail('ACL をつないだリストの名前 ' ~ name ~ ' が、すでに ACL の表にあります（その ACL の名前を変えてください）') if have.name else 'extended' }}"}
+    note: "{{ i.name }}: 入力の ACL が複数あります（{{ i.acl_in }} {{ i.acl_in_more | join(' ') }}）。Cisco は 1 つの向きに 1 つなので、行を順につないだリスト {{ name }} を作って当てます（上から順に見て、どれにも合わない通信を捨てるので、意味は同じです）"
+  - id: acl.merge.in
+    for: interfaces
+    as: i
+    let:
+      name: "(i.name | ifshort | replace('/', '-') | replace('.', '-')) ~ '-in'"
+      l1: "rows('acl_entries', acl=i.acl_in)"
+      l2: "rows('acl_entries', acl=i.acl_in_more[0]) if i.acl_in_more | length > 0 else []"
+      l3: "rows('acl_entries', acl=i.acl_in_more[1]) if i.acl_in_more | length > 1 else []"
+      l4: "rows('acl_entries', acl=i.acl_in_more[2]) if i.acl_in_more | length > 2 else []"
+      l5: "rows('acl_entries', acl=i.acl_in_more[3]) if i.acl_in_more | length > 3 else []"
+      all: "l1 + l2 + l3 + l4 + l5"
+    each: {e: "all"}
+    when: "i.acl_in and i.acl_in_more"
+    row: {table: acl_entries, key: {acl: "{{ name }}", seq: "{{ e_n * 10 }}"}}
+    set:
+      action: "{{ e.action if i.acl_in_more | length <= 4 else fail(i.name ~ ': 入力のACLが 6 つ以上あります（つないで書けるのは 5 つまでです。リストをまとめてください）') }}"
+      protocol: "{{ e.protocol if (e.protocol or e.action == 'remark') else 'ip' }}"
+      src: "{{ e.src }}"
+      src_port: "{{ e.src_port }}"
+      dst: "{{ e.dst if (e.dst or e.action == 'remark') else 'any' }}"
+      dst_port: "{{ e.dst_port }}"
+      icmp_type: "{{ e.icmp_type }}"
+      icmp_code: "{{ e.icmp_code }}"
+      remark: "{{ e.remark }}"
+      dscp: "{{ e.dscp }}"
+      precedence: "{{ e.precedence }}"
+      tos: "{{ e.tos }}"
+      time_range: "{{ e.time_range }}"
+    append: {flags: "{{ e.flags | join(' ') }}"}
+    note: "{{ '' }}"
+  - id: acl.merge.in.if
+    for: interfaces
+    as: i
+    let:
+      name: "(i.name | ifshort | replace('/', '-') | replace('.', '-')) ~ '-in'"
+    when: "i.acl_in and i.acl_in_more"
+    row: {table: interfaces, key: {name: "{{ i.name }}"}}
+    set: {acl_in: "{{ name }}"}
+    clear: [acl_in_more]
+    note: "{{ '' }}"
+  - id: acl.merge.out.list
+    for: interfaces
+    as: i
+    let:
+      name: "(i.name | ifshort | replace('/', '-') | replace('.', '-')) ~ '-out'"
+      have: "lookup('acls', name=name)"
+    when: "i.acl_out and i.acl_out_more"
+    row: {table: acls, key: {name: "{{ name }}"}}
+    set: {type: "{{ fail('ACL をつないだリストの名前 ' ~ name ~ ' が、すでに ACL の表にあります（その ACL の名前を変えてください）') if have.name else 'extended' }}"}
+    note: "{{ i.name }}: 出力の ACL が複数あります（{{ i.acl_out }} {{ i.acl_out_more | join(' ') }}）。Cisco は 1 つの向きに 1 つなので、行を順につないだリスト {{ name }} を作って当てます（上から順に見て、どれにも合わない通信を捨てるので、意味は同じです）"
+  - id: acl.merge.out
+    for: interfaces
+    as: i
+    let:
+      name: "(i.name | ifshort | replace('/', '-') | replace('.', '-')) ~ '-out'"
+      l1: "rows('acl_entries', acl=i.acl_out)"
+      l2: "rows('acl_entries', acl=i.acl_out_more[0]) if i.acl_out_more | length > 0 else []"
+      l3: "rows('acl_entries', acl=i.acl_out_more[1]) if i.acl_out_more | length > 1 else []"
+      l4: "rows('acl_entries', acl=i.acl_out_more[2]) if i.acl_out_more | length > 2 else []"
+      l5: "rows('acl_entries', acl=i.acl_out_more[3]) if i.acl_out_more | length > 3 else []"
+      all: "l1 + l2 + l3 + l4 + l5"
+    each: {e: "all"}
+    when: "i.acl_out and i.acl_out_more"
+    row: {table: acl_entries, key: {acl: "{{ name }}", seq: "{{ e_n * 10 }}"}}
+    set:
+      action: "{{ e.action if i.acl_out_more | length <= 4 else fail(i.name ~ ': 出力のACLが 6 つ以上あります（つないで書けるのは 5 つまでです。リストをまとめてください）') }}"
+      protocol: "{{ e.protocol if (e.protocol or e.action == 'remark') else 'ip' }}"
+      src: "{{ e.src }}"
+      src_port: "{{ e.src_port }}"
+      dst: "{{ e.dst if (e.dst or e.action == 'remark') else 'any' }}"
+      dst_port: "{{ e.dst_port }}"
+      icmp_type: "{{ e.icmp_type }}"
+      icmp_code: "{{ e.icmp_code }}"
+      remark: "{{ e.remark }}"
+      dscp: "{{ e.dscp }}"
+      precedence: "{{ e.precedence }}"
+      tos: "{{ e.tos }}"
+      time_range: "{{ e.time_range }}"
+    append: {flags: "{{ e.flags | join(' ') }}"}
+    note: "{{ '' }}"
+  - id: acl.merge.out.if
+    for: interfaces
+    as: i
+    let:
+      name: "(i.name | ifshort | replace('/', '-') | replace('.', '-')) ~ '-out'"
+    when: "i.acl_out and i.acl_out_more"
+    row: {table: interfaces, key: {name: "{{ i.name }}"}}
+    set: {acl_out: "{{ name }}"}
+    clear: [acl_out_more]
+    note: "{{ '' }}"
+  - id: acl6.merge.in
+    for: ipv6_interfaces
+    as: i
+    let:
+      name: "(i.if_name | ifshort | replace('/', '-') | replace('.', '-')) ~ '-in'"
+      l1: "rows('ipv6_acl_entries', acl=i.acl_in)"
+      l2: "rows('ipv6_acl_entries', acl=i.acl_in_more[0]) if i.acl_in_more | length > 0 else []"
+      l3: "rows('ipv6_acl_entries', acl=i.acl_in_more[1]) if i.acl_in_more | length > 1 else []"
+      l4: "rows('ipv6_acl_entries', acl=i.acl_in_more[2]) if i.acl_in_more | length > 2 else []"
+      l5: "rows('ipv6_acl_entries', acl=i.acl_in_more[3]) if i.acl_in_more | length > 3 else []"
+      all: "l1 + l2 + l3 + l4 + l5"
+    each: {e: "all"}
+    when: "i.acl_in and i.acl_in_more"
+    row: {table: ipv6_acl_entries, key: {acl: "{{ name }}", seq: "{{ e_n * 10 }}"}}
+    set:
+      action: "{{ e.action if i.acl_in_more | length <= 4 else fail(i.if_name ~ ': 入力のIPv6 フィルタが 6 つ以上あります（つないで書けるのは 5 つまでです。リストをまとめてください）') }}"
+      protocol: "{{ e.protocol if (e.protocol or e.action == 'remark') else 'ip' }}"
+      src: "{{ e.src }}"
+      src_port: "{{ e.src_port }}"
+      dst: "{{ e.dst if (e.dst or e.action == 'remark') else 'any' }}"
+      dst_port: "{{ e.dst_port }}"
+      icmp_type: "{{ e.icmp_type }}"
+      icmp_code: "{{ e.icmp_code }}"
+      remark: "{{ e.remark }}"
+      dscp: "{{ e.dscp }}"
+    append: {flags: "{{ e.flags | join(' ') }}"}
+    note: "{% if e_n == 1 %}{{ i.if_name }}: 入力の IPv6 フィルタが複数あります（{{ i.acl_in }} {{ i.acl_in_more | join(' ') }}）。Cisco は 1 つの向きに 1 つなので、行を順につないだリスト {{ name }} を作って当てます（意味は同じです）{% endif %}"
+  - id: acl6.merge.in.if
+    for: ipv6_interfaces
+    as: i
+    let:
+      name: "(i.if_name | ifshort | replace('/', '-') | replace('.', '-')) ~ '-in'"
+    when: "i.acl_in and i.acl_in_more"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ i.if_name }}"}}
+    set: {acl_in: "{{ name }}"}
+    clear: [acl_in_more]
+    note: "{{ '' }}"
+  - id: acl6.merge.out
+    for: ipv6_interfaces
+    as: i
+    let:
+      name: "(i.if_name | ifshort | replace('/', '-') | replace('.', '-')) ~ '-out'"
+      l1: "rows('ipv6_acl_entries', acl=i.acl_out)"
+      l2: "rows('ipv6_acl_entries', acl=i.acl_out_more[0]) if i.acl_out_more | length > 0 else []"
+      l3: "rows('ipv6_acl_entries', acl=i.acl_out_more[1]) if i.acl_out_more | length > 1 else []"
+      l4: "rows('ipv6_acl_entries', acl=i.acl_out_more[2]) if i.acl_out_more | length > 2 else []"
+      l5: "rows('ipv6_acl_entries', acl=i.acl_out_more[3]) if i.acl_out_more | length > 3 else []"
+      all: "l1 + l2 + l3 + l4 + l5"
+    each: {e: "all"}
+    when: "i.acl_out and i.acl_out_more"
+    row: {table: ipv6_acl_entries, key: {acl: "{{ name }}", seq: "{{ e_n * 10 }}"}}
+    set:
+      action: "{{ e.action if i.acl_out_more | length <= 4 else fail(i.if_name ~ ': 出力のIPv6 フィルタが 6 つ以上あります（つないで書けるのは 5 つまでです。リストをまとめてください）') }}"
+      protocol: "{{ e.protocol if (e.protocol or e.action == 'remark') else 'ip' }}"
+      src: "{{ e.src }}"
+      src_port: "{{ e.src_port }}"
+      dst: "{{ e.dst if (e.dst or e.action == 'remark') else 'any' }}"
+      dst_port: "{{ e.dst_port }}"
+      icmp_type: "{{ e.icmp_type }}"
+      icmp_code: "{{ e.icmp_code }}"
+      remark: "{{ e.remark }}"
+      dscp: "{{ e.dscp }}"
+    append: {flags: "{{ e.flags | join(' ') }}"}
+    note: "{% if e_n == 1 %}{{ i.if_name }}: 出力の IPv6 フィルタが複数あります（{{ i.acl_out }} {{ i.acl_out_more | join(' ') }}）。Cisco は 1 つの向きに 1 つなので、行を順につないだリスト {{ name }} を作って当てます（意味は同じです）{% endif %}"
+  - id: acl6.merge.out.if
+    for: ipv6_interfaces
+    as: i
+    let:
+      name: "(i.if_name | ifshort | replace('/', '-') | replace('.', '-')) ~ '-out'"
+    when: "i.acl_out and i.acl_out_more"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ i.if_name }}"}}
+    set: {acl_out: "{{ name }}"}
+    clear: [acl_out_more]
+    note: "{{ '' }}"
+  # The pool of NEC IX has no length. The line of this device needs one: the
+  # length of the network of the interface outside, where the pool lies in
+  # it. Elsewhere the cell stays empty, and the template asks for it.
+  - id: nat.pool.prefix
+    for: nat_rules
+    as: n
+    let:
+      oi: "lookup('interfaces', name=n.outside_if)"
+    when: "n.type in ['pat_pool', 'dynamic_pool'] and n.pool_prefix == '' and n.pool_start and oi.ipv4 is cidr and (n.pool_start | in_net(oi.ipv4 | network))"
+    row: {table: nat_rules, key: {name: "{{ n.name }}"}}
+    set: {pool_prefix: "{{ oi.ipv4 | prefixlen }}"}
+    note: "NAT {{ n.name }}: 「範囲のプレフィックス長」が空なので、外側 IF {{ n.outside_if }} のネットワークの長さ（{{ oi.ipv4 | prefixlen }}）で書きます（Cisco のプールの行には長さが要ります）"
+  # A track has a number from 1 to 1000 here; another vendor names its
+  # watches (NEC IX: the name of the watch group). Each named row gets the
+  # next free number, in the order of the names, and every row that points
+  # to it follows (appendix A 3.25, 2026-11-21). The pointers move first,
+  # while the numbers are still free; then the rows are copied; then the
+  # named rows leave.
+  - id: track.number.routes
+    for: static_routes
+    as: r
+    only_if: "rows('tracks') | rejectattr('id', 'digits') | list"
+    let:
+      names: "rows('tracks') | rejectattr('id', 'digits') | map(attribute='id') | sort | list"
+      top: "(rows('tracks') | selectattr('id', 'digits') | map(attribute='id') | map('int') | list + [0]) | max"
+    when: "r.track and r.track in names"
+    row: {table: static_routes, key: {vrf: "{{ r.vrf }}", prefix: "{{ r.prefix }}", next_hop: "{{ r.next_hop }}", out_if: "{{ r.out_if }}"}}
+    set: {track: "{% for nm in names %}{% if nm == r.track %}{{ top + loop.index }}{% endif %}{% endfor %}"}
+    note: "{{ '' }}"
+  - id: track.number.fhrp
+    for: fhrp
+    as: f
+    only_if: "rows('tracks') | rejectattr('id', 'digits') | list"
+    let:
+      names: "rows('tracks') | rejectattr('id', 'digits') | map(attribute='id') | sort | list"
+      top: "(rows('tracks') | selectattr('id', 'digits') | map(attribute='id') | map('int') | list + [0]) | max"
+    when: "f.track and f.track in names"
+    row: {table: fhrp, key: {if_name: "{{ f.if_name }}", group: "{{ f.group }}"}}
+    set: {track: "{% for nm in names %}{% if nm == f.track %}{{ top + loop.index }}{% endif %}{% endfor %}"}
+    note: "{{ '' }}"
+  - id: track.number.members
+    for: tracks
+    as: k
+    only_if: "rows('tracks') | rejectattr('id', 'digits') | list"
+    let:
+      names: "rows('tracks') | rejectattr('id', 'digits') | map(attribute='id') | sort | list"
+      top: "(rows('tracks') | selectattr('id', 'digits') | map(attribute='id') | map('int') | list + [0]) | max"
+    when: "k.type == 'list' and k.members | select('in', names) | list"
+    row: {table: tracks, key: {id: "{{ k.id }}"}}
+    replace:
+      members: "{% for x in k.members %}{% if x in names %}{% for nm in names %}{% if nm == x %}{{ top + loop.index }}{% endif %}{% endfor %}{% else %}{{ x }}{% endif %} {% endfor %}"
+    note: "{{ '' }}"
+  - id: track.number.copy
+    for: devices
+    as: d
+    only_if: "rows('tracks') | rejectattr('id', 'digits') | list"
+    let:
+      names: "rows('tracks') | rejectattr('id', 'digits') | map(attribute='id') | sort | list"
+      top: "(rows('tracks') | selectattr('id', 'digits') | map(attribute='id') | map('int') | list + [0]) | max"
+    each: {m: "names"}
+    when: "top + m_n <= 1000"
+    row: {table: tracks, key: {id: "{{ top + m_n }}"}}
+    set:
+      type: "{{ lookup('tracks', id=m).type }}"
+      target: "{{ lookup('tracks', id=m).target }}"
+      source_if: "{{ lookup('tracks', id=m).source_if }}"
+      vrf: "{{ lookup('tracks', id=m).vrf }}"
+      interval: "{{ lookup('tracks', id=m).interval }}"
+      timeout: "{{ lookup('tracks', id=m).timeout }}"
+      fail_count: "{{ lookup('tracks', id=m).fail_count }}"
+      restore_count: "{{ lookup('tracks', id=m).restore_count }}"
+      down_delay: "{{ lookup('tracks', id=m).down_delay }}"
+      up_delay: "{{ lookup('tracks', id=m).up_delay }}"
+      source_ip: "{{ lookup('tracks', id=m).source_ip }}"
+      via_if: "{{ lookup('tracks', id=m).via_if }}"
+      via_next_hop: "{{ lookup('tracks', id=m).via_next_hop }}"
+      threshold: "{{ lookup('tracks', id=m).threshold }}"
+      up_when: "{{ lookup('tracks', id=m).up_when }}"
+      restore_interval: "{{ lookup('tracks', id=m).restore_interval }}"
+      list_rule: "{{ lookup('tracks', id=m).list_rule }}"
+    append:
+      members: "{{ lookup('tracks', id=m).members | join(' ') }}"
+      shutdown_ifs: "{{ lookup('tracks', id=m).shutdown_ifs | join(' ') }}"
+    note: "回線監視 {{ m }}: Cisco の監視は 1〜1000 の番号なので、{{ top + m_n }} 番として書きます（この監視を指す経路・冗長化・まとめる監視の行も、その番号にします）"
+  - id: track.number.old
+    for: tracks
+    as: k
+    only_if: "rows('tracks') | rejectattr('id', 'digits') | list"
+    when: "k.id is not digits and (rows('tracks', type=k.type, target=k.target) | selectattr('id', 'digits') | list)"
+    remove: true
+    note: "{{ '' }}"
+  # The operation runs at one interval, also while the target is down.
+  - id: track.restore_interval
+    for: tracks
+    as: k
+    when: "k.restore_interval != ''"
+    clear: [restore_interval]
+    note: "回線監視 {{ k.id }}: 「断の間の監視間隔」（{{ k.restore_interval }} 秒）は Cisco に無いので、書きません（断の間も「間隔」{{ k.interval }} 秒のまま監視します）"
+  # An IPv6 probe takes its source as an interface here (whether
+  # "icmp-echo <IPv6> source-ip <IPv6>" is written so is not confirmed): the
+  # interface that has the address (appendix A 3.23, 2026-11-21).
+  - id: track.source_ip6
+    for: tracks
+    as: k
+    each: {i: "rows('interfaces')"}
+    when: "k.source_ip and ':' in k.source_ip and not k.source_if and k.source_ip in (i.ipv6 | map('ip') | list)"
+    row: {table: tracks, key: {id: "{{ k.id }}"}}
+    set: {source_if: "{{ i.name }}"}
+    clear: [source_ip]
+    note: "回線監視 {{ k.id }}: 送信元アドレス {{ k.source_ip }} を、そのアドレスを持つ IF {{ i.name }} にして書きます（Cisco の IPv6 の監視は、送信元を IF で書きます）"
+  # NEC IX names the output interface of every IPv6 probe (CRM p.17-18).
+  # When it is the interface of the IPv6 static route to the target, the
+  # probe leaves by it here too: the cell says nothing more.
+  - id: track.via_if6
+    for: tracks
+    as: k
+    let:
+      r: "covering('ipv6_routes', 'prefix', k.target)"
+    when: "k.type == 'icmp' and ':' in k.target and k.via_if and not k.via_next_hop and r.out_if == k.via_if and not r.vrf"
+    clear: [via_if]
+    note: "回線監視 {{ k.id }}: 「監視の出口の IF」{{ k.via_if }} は書きません（Cisco の監視は経路表に従って送ります。監視先への IPv6 の経路 {{ r.prefix }} の出力 IF と同じです）"
+  # A threshold of the same value as the timeout is what the template
+  # writes for a short timeout anyway: it says nothing of its own.
+  - id: track.threshold.same
+    for: tracks
+    as: k
+    when: "k.threshold != '' and k.threshold == k.timeout"
+    clear: [threshold]
+    note: "{{ '' }}"
+  # The device always keeps the numbers of the entries of a list: the step
+  # of the numbering (the sequence mode of NEC IX) needs no line here, and
+  # nothing is lost without it.
+  - id: acl.seq_step
+    for: acls
+    as: a
+    when: "a.seq_step != ''"
+    clear: [seq_step]
+    note: "{{ '' }}"
+  # A design that names the interface outside in every rule of NAT and marks
+  # no interface (NEC IX) gets the marks this device needs: the interfaces
+  # the rules name are outside, every other interface with an IPv4 address
+  # is inside. A book that marks any interface itself is left alone.
+  - id: nat.role.outside
+    for: devices
+    as: d
+    let:
+      had: "rows('interfaces', nat_role='inside') | length + rows('interfaces', nat_role='outside') | length"
+    each: {i: "rows('interfaces') if had == 0 and rows('nat_rules') | length > 0 else []"}
+    when: "had == 0 and not i.nat_role and rows('nat_rules', outside_if=i.name) | length > 0"
+    row: {table: interfaces, key: {name: "{{ i.name }}"}}
+    set: {nat_role: outside}
+    note: "{{ i.name }}: 「NAT の向き」が空なので、outside として書きます（NAT の行が外側 IF に指している IF です。Cisco は、内側と外側の IF に向きを書きます）"
+  - id: nat.role.inside
+    for: devices
+    as: d
+    let:
+      had: "rows('interfaces', nat_role='inside') | length"
+    each: {i: "rows('interfaces') if had == 0 and rows('nat_rules') | length > 0 else []"}
+    when: "had == 0 and rows('interfaces', nat_role='outside') | length > 0 and rows('nat_rules') | length > 0 and not i.nat_role and i.ipv4 and i.kind != 'loopback' and not (i.name is startingwith('Loopback')) and rows('nat_rules', outside_if=i.name) | length == 0"
+    row: {table: interfaces, key: {name: "{{ i.name }}"}}
+    set: {nat_role: inside}
+    note: "{{ i.name }}: 「NAT の向き」が空なので、inside として書きます（外側 IF ではない、IPv4 アドレスを持つ IF です。NAT を通さない IF があるなら、内側にする IF の「NAT の向き」に inside を書いてください。1 つでも書いてあれば、パックは補いません）"
+  # Where the address of the interface outside is not part of the line, the
+  # interface outside is told by its direction ("ip nat outside"): the cell
+  # of the rule says nothing more.
+  - id: nat.outside.role
+    for: nat_rules
+    as: n
+    let:
+      oi: "lookup('interfaces', name=n.outside_if)"
+    when: "n.outside_if and n.type != 'pat_interface' and n.global_ip != 'interface' and oi.nat_role == 'outside'"
+    clear: [outside_if]
+    note: "{{ '' }}"
+  # A row for the peers whose address is not known, without an interface
+  # (another vendor puts IPsec for the callers of L2TP on their tunnel
+  # interfaces): the crypto map goes on the interface the default route
+  # leaves by. Where that is not known, the template asks for the cell.
+  - id: ipsec.any.local_if
+    for: ipsec_tunnels
+    as: r
+    let:
+      dr: "first('static_routes', prefix='0.0.0.0/0')"
+      via: "covering('interfaces', 'ipv4', dr.next_hop)"
+      lif: "dr.out_if or via.name"
+    when: "r.style == 'policy' and r.peer_address == 'any' and not r.local_if and lif"
+    row: {table: ipsec_tunnels, key: {name: "{{ r.name }}"}}
+    set: {local_if: "{{ lif }}"}
+    note: "IPsec {{ r.name }}: 「自分側 IF」が空なので、デフォルト経路の出口の {{ lif }} にクリプトマップを当てます（Cisco は、外向きのインタフェースに IPsec を当てます。違うときは「自分側 IF」を書いてください）"
+  # "Bound to this IKE peer" is how another vendor ties a map for unknown
+  # peers to one IKE policy; this device has no line for it.
+  - id: ipsec.ike_bind
+    for: ipsec_tunnels
+    as: r
+    when: "(r.ike_bind | string | lower) in ['true', 'false']"
+    clear: [ike_bind]
+    note: "{{ ('IPsec ' ~ r.name ~ ': 「この IKE の相手だけに使う」は Cisco に書き方が無いので、書きません（相手を絞るなら、相手の ID を書いてください）') if (r.ike_bind | string | lower) == 'true' else '' }}"
+  # GCM is encryption and proof in one: this device writes it without an
+  # ESP hash, and another vendor may list one beside it.
+  - id: ipsec.gcm.hash
+    for: ipsec_tunnels
+    as: r
+    when: "r.esp_encryption in ['aes128gcm', 'aes256gcm'] and r.esp_hash and not r.esp_encryption_more and not r.esp_hash_more"
+    clear: [esp_hash]
+    note: "IPsec {{ r.name }}: ESP 暗号が GCM なので、ESP ハッシュ（{{ r.esp_hash }}）は書きません（GCM は暗号が認証を兼ねます。Cisco は、GCM にほかの ESP の語を並べられません）"
+  # ---- candidates of IKE version 2 (appendix A 3.20) ----
+  # A transform set is one combination of ESP algorithms. The lists of
+  # values another vendor writes on one proposal ("ESP encryption (more)",
+  # "ESP hash (more)": any combination of the listed values) are written as
+  # one transform set for each combination, in the order the lists give
+  # (the first value of each list first): rows of "IPsec more proposals"
+  # after those the row has. PFS has one group on this device.
+  - id: ipsec.v2.esp_more
+    for: ipsec_tunnels
+    as: r
+    let:
+      encs: "[r.esp_encryption] + (r.esp_encryption_more or [])"
+      hashes: "[r.esp_hash] + (r.esp_hash_more or [])"
+      have: "rows('ipsec_proposals', tunnel=r.name, phase='ipsec') | length"
+      go: "(r.ike_version | string) == '2' and r.esp_encryption and (r.esp_encryption_more or r.esp_hash_more) and (r.esp_hash or not r.esp_hash_more)"
+    each: {k: "range(1, (encs | length) * (hashes | length)) | list"}
+    when: "go"
+    row: {table: ipsec_proposals, key: {tunnel: "{{ r.name }}", phase: ipsec, seq: "{{ (have + k + 1) * 10 + 100000 }}"}}
+    set:
+      encryption: "{{ encs[k // (hashes | length)] }}"
+      hash: "{{ hashes[k % (hashes | length)] }}"
+    clear: [esp_encryption_more, esp_hash_more]
+    note: "{{ ('IPsec ' ~ r.name ~ ': 「ESP 暗号（追加）」「ESP ハッシュ（追加）」の値を、組み合わせごとのトランスフォームセット（全部で ' ~ ((encs | length) * (hashes | length)) ~ ' 個）として書きます（Cisco のトランスフォームセットは、1 つが 1 つの組み合わせです）') if k == 1 else '' }}"
+  - id: ipsec.v2.pfs_more
+    for: ipsec_tunnels
+    as: r
+    when: "r.pfs_more"
+    clear: [pfs_more]
+    note: "IPsec {{ r.name }}: 「PFS（追加）」（{{ r.pfs_more | join('、') }}）は書きません（Cisco の PFS は、項目に 1 つのグループです。1 つ目の {{ r.pfs }} だけを書きます）"
+  # A tunnel of IPsec says where it sends to and from on this device. The
+  # destination is the peer of the IPsec row (not told: the row says it);
+  # the source, where another vendor leaves it to the routes, is the
+  # interface the default route leaves by (told).
+  - id: tunnel.ipsec.destination
+    for: tunnels
+    as: u
+    let:
+      r: "first('ipsec_tunnels', tunnel_if=u.if_name, style='tunnel_if')"
+    when: "u.type == 'ipsec' and not u.destination and r.name and ((r.peer_address ~ '/32') is cidr)"
+    row: {table: tunnels, key: {if_name: "{{ u.if_name }}"}}
+    set: {destination: "{{ r.peer_address }}"}
+    note: "{{ '' }}"
+  # A peer by its name: the destination of the tunnel is that name.
+  - id: tunnel.ipsec.destination.name
+    for: tunnels
+    as: u
+    let:
+      r: "first('ipsec_tunnels', tunnel_if=u.if_name, style='tunnel_if')"
+    when: "u.type == 'ipsec' and not u.destination and not u.destination_fqdn and r.name and r.peer_address != 'any' and not ((r.peer_address ~ '/32') is cidr) and ' ' not in r.peer_address"
+    row: {table: tunnels, key: {if_name: "{{ u.if_name }}"}}
+    set: {destination_fqdn: "{{ r.peer_address }}"}
+    note: "{{ '' }}"
+  - id: tunnel.ipsec.source
+    for: tunnels
+    as: u
+    let:
+      r: "first('ipsec_tunnels', tunnel_if=u.if_name, style='tunnel_if')"
+      dr: "first('static_routes', prefix='0.0.0.0/0')"
+      via: "covering('interfaces', 'ipv4', dr.next_hop)"
+      src: "dr.out_if or via.name"
+    when: "u.type == 'ipsec' and not u.source and r.name and src and src != u.if_name and not (u.if_name is startingwith('Virtual-Template'))"
+    row: {table: tunnels, key: {if_name: "{{ u.if_name }}"}}
+    set: {source: "{{ src }}"}
+    note: "トンネル {{ u.if_name }}: 「送信元」が空なので、デフォルト経路の出口の {{ src }} から送ると書きます（Cisco のトンネルは、送信元を書きます。違うときは「送信元」を書いてください）"
+
+  # ---- what a dataset read from NEC QX may hold (appendix A 3.24) ----
+  - id: qx.secret.device
+    for: devices
+    as: d
+    when: "d.secret_form == 'encrypted'"
+    note: "{{ fail('特権パスワードは、別メーカーの機器が暗号化して保存した形（encrypted）です（引き継げません。平文を入れ直してください）') }}"
+  - id: qx.secret.snmp
+    for: snmp_communities
+    as: x
+    when: "' ' in x.community"
+    note: "{{ fail('SNMP コミュニティに、別メーカーの機器が暗号化した形の値があります（引き継げません。平文を入れ直してください）') }}"
+  - id: qx.secret.fhrp
+    for: fhrp
+    as: x
+    when: "x.auth_key is startingwith('cipher ') or x.auth_key is startingwith('hash ')"
+    note: "{{ fail(x.if_name ~ ' のグループ ' ~ x.group ~ ' の認証の鍵は、別メーカーの機器が暗号化した形です（引き継げません。平文を入れ直してください）') }}"
+  - id: qx.ospf.hmac
+    for: ospf_interfaces
+    as: x
+    when: "x.auth_type == 'hmac_md5'"
+    note: "{{ fail(x.if_name ~ ' の OSPF の認証 hmac_md5 は、NEC QX の語です（このメーカーの認証 md5 と同じ動きかを、公開資料で確かめられていません。両端の機器で確かめたうえで、md5 に書き直してください）') }}"
+  # A hybrid port that sends only its own VLAN without a tag is what a trunk
+  # with that native VLAN does.
+  - id: qx.sw.hybrid
+    for: switchports
+    as: p
+    let:
+      un: "p.hybrid_untagged | ranges"
+      ok: "p.native_vlan | string != '' and (p.hybrid_untagged | ranges) == [p.native_vlan | int]"
+    when: "p.mode == 'hybrid'"
+    row: {table: switchports, key: {if_name: "{{ p.if_name }}"}}
+    set: {mode: "{{ 'trunk' if ok else fail(p.if_name ~ ': モード hybrid（タグなしで通す VLAN が複数、または「ネイティブ VLAN」と違う）は、このメーカーでは書けません（タグなしで通す VLAN を 1 つにして、それを「ネイティブ VLAN」に書いてください）') }}"}
+    append: {allowed_vlans: "{{ (p.hybrid_tagged | join(' ')) ~ ' ' ~ (p.hybrid_untagged | join(' ')) }}"}
+    clear: [hybrid_tagged, hybrid_untagged]
+    note: "{{ p.if_name }}: モード hybrid を、trunk として書きます（タグなしで通す VLAN {{ p.native_vlan }} をネイティブ VLAN、タグ付きで通す VLAN を許可 VLAN にします。動きは同じです）"
+
+  # ---- VLANs and switches, the rest (appendix A 3.22, 2026-11-21) ----
+  # A VLAN is there only when it is defined ("vlan <n>"). A dataset from a
+  # vendor that has no such line (NEC IX) names VLANs on its ports and has no
+  # row for them. Only for a device that says nothing about its spanning
+  # tree and VTP (a router with switch ports, or a dataset of another
+  # vendor): a switch that keeps its VLANs outside of the configuration (VTP
+  # server or client) would show none of these lines, and the comparison
+  # with its configuration would tell them every time. VLAN 1 is always
+  # there.
+  - id: sw.adapt.vlan.define
+    for: devices
+    as: d
+    let:
+      g: "lookup('l2_settings')"
+      have: "rows('vlans') | length"
+      acc: "rows('switchports') | selectattr('access_vlan') | map(attribute='access_vlan') | map('int') | list"
+      voice: "rows('switchports') | selectattr('voice_vlan') | map(attribute='voice_vlan') | map('int') | list"
+      svi: "rows('interfaces') | selectattr('vlan_id') | map(attribute='vlan_id') | map('int') | list"
+    each: {v: "((acc + voice + svi) | unique | sort | reject('eq', 1) | list) if not have and not g.stp_mode and not g.vtp_mode else []"}
+    row: {table: vlans, key: {vlan_id: "{{ v }}"}}
+    note: "VLAN {{ v }} を使っているのに「VLAN」の表に行が無いので、定義（vlan {{ v }}）を足して書きます（名前を付けるなら、シート「VLAN」に行を足してください）"
+  # "The root of the tree of the device" (a vendor with one tree) is the
+  # root of instance 0 here, the common tree of MST.
+  - id: sw.adapt.stp.root
+    for: l2_settings
+    as: g
+    when: "g.stp_root and g.stp_mode == 'mst'"
+    row: {table: stp_instances, key: {instance: "0"}}
+    set: {root: "{{ g.stp_root }}"}
+    clear: [stp_root]
+    note: "「ルートブリッジの指定（機器全体）」{{ g.stp_root }} を、MST のインスタンス 0（共通の木）の指定として書きます（spanning-tree mst 0 root {{ g.stp_root }}）"
+  - id: sw.adapt.stp.priority
+    for: l2_settings
+    as: g
+    when: "g.stp_priority | string != '' and g.stp_mode == 'mst'"
+    row: {table: stp_instances, key: {instance: "0"}}
+    set: {priority: "{{ g.stp_priority }}"}
+    clear: [stp_priority]
+    note: "「優先度（機器全体）」{{ g.stp_priority }} を、MST のインスタンス 0（共通の木）の優先度として書きます（spanning-tree mst 0 priority {{ g.stp_priority }}）"
+
+  # ---- what another vendor has no line for (appendix A 3.25) ----
+  # How often a probe may fail (NEC IX) has no line here: the object goes
+  # down on the first probe that fails. The nearest thing is the delay of
+  # the object: the state has to last that long before it counts.
+  - id: track.fail_count.one
+    for: tracks
+    as: k
+    when: "(k.fail_count | string) == '1' or (k.fail_count != '' and k.type != 'icmp')"
+    clear: [fail_count]
+    note: "{{ '' if k.type == 'icmp' else '回線監視 ' ~ k.id ~ ': 「断と判断する回数」は、監視の方法が icmp の行だけのものです（書きません）' }}"
+  - id: track.fail_count.kept
+    for: tracks
+    as: k
+    when: "k.fail_count != '' and k.down_delay != ''"
+    clear: [fail_count]
+    note: "回線監視 {{ k.id }}: 「断と判断する回数」（{{ k.fail_count }} 回）は Cisco に無いので、書きません（「断の反映の待ち」{{ k.down_delay }} 秒は、そのまま書きます）"
+  - id: track.fail_count.delay
+    for: tracks
+    as: k
+    let:
+      every: "(k.interval | int) if k.interval != '' else 60"
+      n: "((k.fail_count | int) - 1) if k.fail_count != '' else 0"
+    when: "k.fail_count != '' and k.down_delay == ''"
+    row: {table: tracks, key: {id: "{{ k.id }}"}}
+    set: {down_delay: "{{ every * n }}"}
+    clear: [fail_count]
+    note: "回線監視 {{ k.id }}: 「断と判断する回数」（{{ k.fail_count }} 回）は Cisco に無いので、「断の反映の待ち」{{ every * n }} 秒（間隔 {{ every }} 秒 × {{ n }}）にして書きます（1 回の失敗では断にせず、その間ずっと届かないときに断にします）"
+  - id: track.restore_count.one
+    for: tracks
+    as: k
+    when: "(k.restore_count | string) == '1' or (k.restore_count != '' and k.type != 'icmp')"
+    clear: [restore_count]
+    note: "{{ '' if k.type == 'icmp' else '回線監視 ' ~ k.id ~ ': 「復旧と判断する回数」は、監視の方法が icmp の行だけのものです（書きません）' }}"
+  - id: track.restore_count.kept
+    for: tracks
+    as: k
+    when: "k.restore_count != '' and k.up_delay != ''"
+    clear: [restore_count]
+    note: "回線監視 {{ k.id }}: 「復旧と判断する回数」（{{ k.restore_count }} 回）は Cisco に無いので、書きません（「復旧の反映の待ち」{{ k.up_delay }} 秒は、そのまま書きます）"
+  - id: track.restore_count.delay
+    for: tracks
+    as: k
+    let:
+      every: "(k.interval | int) if k.interval != '' else 60"
+      n: "((k.restore_count | int) - 1) if k.restore_count != '' else 0"
+    when: "k.restore_count != '' and k.up_delay == ''"
+    row: {table: tracks, key: {id: "{{ k.id }}"}}
+    set: {up_delay: "{{ every * n }}"}
+    clear: [restore_count]
+    note: "回線監視 {{ k.id }}: 「復旧と判断する回数」（{{ k.restore_count }} 回）は Cisco に無いので、「復旧の反映の待ち」{{ every * n }} 秒（間隔 {{ every }} 秒 × {{ n }}）にして書きます（1 回届いただけでは戻さず、その間ずっと届くときに戻します）"
+
+  # ---- BGP (appendix A 3.19) ----
+  # The three distances stand on one line ("distance bgp"): an empty one is
+  # the default of the device (BGP Command Reference: 20, 200, 200), so
+  # writing it says nothing new.
+  - id: bgp.distance.fill
+    for: bgp_processes
+    as: b
+    when: "(b.distance_ebgp != '' or b.distance_ibgp != '' or b.distance_local != '') and (b.distance_ebgp == '' or b.distance_ibgp == '' or b.distance_local == '')"
+    row: {table: bgp_processes, key: {vrf: "{{ b.vrf }}"}}
+    set:
+      distance_ebgp: "{{ 20 if b.distance_ebgp == '' else '' }}"
+      distance_ibgp: "{{ 200 if b.distance_ibgp == '' else '' }}"
+      distance_local: "{{ 200 if b.distance_local == '' else '' }}"
+    note: "{{ '' }}"
+
+  # ---- IPv6 (appendix A 3.23) ----
+  # "auto" (NEC IX) is not a value here: the MSS that fits the MTU is the
+  # MTU less the IPv6 header (40) and the TCP header (20).
+  - id: ipv6.mss.auto
+    for: ipv6_interfaces
+    as: v
+    let:
+      i: "lookup('interfaces', name=v.if_name)"
+      base: "v.mtu if v.mtu != '' else i.mtu"
+    when: "v.tcp_mss == 'auto' and base != ''"
+    row: {table: ipv6_interfaces, key: {if_name: "{{ v.if_name }}"}}
+    set: {tcp_mss: "{{ base | int - 60 }}"}
+    note: "{{ v.if_name }}: IPv6 の TCP MSS 調整の auto は Cisco に無いので、{{ 'IPv6 MTU' if v.mtu != '' else 'MTU' }} {{ base }} − 60 = {{ base | int - 60 }} として書きます"
+  - id: ipv6.mss.auto.none
+    for: ipv6_interfaces
+    as: v
+    let:
+      i: "lookup('interfaces', name=v.if_name)"
+    when: "v.tcp_mss == 'auto' and v.mtu == '' and i.mtu == ''"
+    note: "{{ fail(v.if_name ~ ': IPv6 の TCP MSS 調整の auto は Cisco にありません。IPv6 MTU か MTU を書くか、MSS を数で書いてください（IPv6 MTU − 60 が目安です）') }}"
+  # ---- RIP and RIPng (appendix A 3.27) ----
+  # The hold-down timer stands in the line of the timers: without a value
+  # the default of the device is written (RIP Command Reference "timers
+  # basic": 180; IPv6 Command Reference "timers (IPv6 RIP)": 0). Not told:
+  # nothing changes.
+  - id: rip.holddown
+    for: rip_processes
+    as: p
+    when: "(p.timer_update or p.timer_invalid or p.timer_flush) and p.timer_holddown == ''"
+    row: {table: rip_processes, key: {family: "{{ p.family }}"}}
+    set: {timer_holddown: "{{ 180 if p.family == 'ipv4' else 0 }}"}
+    note: "{{ '' }}"
+  # The line names the OSPF process: the one process of the device.
+  - id: rip.redistribute.ospf
+    for: rip_redistribute
+    as: d
+    let:
+      procs: "rows('ospf_processes') if d.family == 'ipv4' else rows('ospfv3_processes')"
+    when: "d.source == 'ospf' and d.process_id == '' and procs | length == 1"
+    row: {table: rip_redistribute, key: {family: "{{ d.family }}", source: ospf}}
+    set: {process_id: "{{ (procs | first).process_id }}"}
+    note: "{{ '' }}"
+  # IPv6 VRRP (appendix A 3.23, "IPv6 の VRRP"): it is written only with the
+  # whole device on version 3 ("fhrp version vrrp v3"), which moves the IPv4
+  # groups to version 3 as well. A group that came on version 2 keeps
+  # talking to its version 2 peers with "vrrpv2" (Network Services
+  # Configuration Guide, "VRRPv3 Protocol Support"). The groups first: the
+  # step of the device changes the cell they look at.
+  - id: vrrp3.adapt.v2
+    for: fhrp
+    as: f
+    let:
+      d: "lookup('devices')"
+    when: "f.protocol == 'vrrp' and d.vrrp_version != '3' and rows('ipv6_fhrp') and f.vrrpv2 not in [true, 'true']"
+    row: {table: fhrp, key: {if_name: "{{ f.if_name }}", group: "{{ f.group }}"}}
+    set: {vrrpv2: true}
+    note: "{{ f.if_name }} の VRRP {{ f.group }}: IPv6 の VRRP を書くために機器を VRRP の版 3 にするので、この IPv4 のグループも版 3 の書き方（vrrp {{ f.group }} address-family ipv4）になります。版 2 の相手とつながるままにするため、「版 2 の相手とも話す」（vrrpv2）を有効にして書きます"
+  - id: vrrp3.adapt.device
+    for: devices
+    as: d
+    when: "d.vrrp_version != '3' and rows('ipv6_fhrp')"
+    row: {table: devices, key: {}}
+    set: {vrrp_version: "3"}
+    note: "IPv6 の VRRP があるので、機器全体を VRRP の版 3 にして書きます（fhrp version vrrp v3。Cisco は、これが無いと IPv6 の VRRP を書けません）"

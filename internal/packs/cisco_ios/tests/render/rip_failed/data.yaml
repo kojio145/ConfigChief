@@ -1,0 +1,24 @@
+# What this vendor cannot write of RIP (made-up values): an interface in a
+# network of RIP that has no row (RIP would run on it too); an interface
+# without a fixed address; "does not receive"; poisoned reverse and a default
+# route of one interface (RIP); a default route of the process, "passive by
+# default" and a default metric (RIPng); split horizon that differs between
+# the interfaces of RIPng; timers that are not a full set.
+tables:
+  devices:
+    - hostname: rt-r03
+      vendor: cisco_ios
+      ipv6_routing: true
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 192.0.2.1/30, ipv6: ["2001:db8:0:1::1/64"]}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 192.0.2.129/25, ipv6: ["2001:db8:0:2::1/64"]}
+    - {name: GigabitEthernet0/2, enabled: true, ipv4: dhcp}
+  rip_processes:
+    - {family: ipv4, timer_update: 10}
+    - {family: ipv6, passive_default: true, default_originate: true, default_metric: 3}
+  rip_interfaces:
+    - {family: ipv4, if_name: GigabitEthernet0/0, receive: false, split_horizon: poisoned_reverse, default_originate: true}
+    - {family: ipv4, if_name: GigabitEthernet0/2}
+    - {family: ipv6, if_name: GigabitEthernet0/0, split_horizon: none, send: false}
+    - {family: ipv6, if_name: GigabitEthernet0/1, split_horizon: poisoned_reverse, send_version: ["2"]}
+findings: [G-601, G-601, G-601, G-601, G-601, G-601, G-601, G-601, G-601, G-601, G-601, G-601]

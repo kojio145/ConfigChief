@@ -1,0 +1,16 @@
+# The candidates of IPsec (made-up values; appendix A 3.20): the lines of an
+# IKEv2 profile with several values (the first value on the row, the others
+# in its "(more)" columns), and a map of IKE version 1 that names six
+# proposals (the second and the later ones are rows of ipsec_proposals).
+tables:
+  ipsec_tunnels:
+    - {name: Tunnel0.0, style: tunnel_if, tunnel_if: Tunnel0.0, peer_address: 203.0.113.20, ike_version: 2, psk: dummy-psk-sample-a, ike_encryption: aes256, ike_encryption_more: [aes128], ike_hash: sha512, ike_hash_more: [sha256], ike_dh: dh14, ike_dh_more: [dh5], ike_prf: sha512, ike_prf_more: [sha256], esp_encryption: aes256, esp_encryption_more: [aes128], esp_hash: sha256, esp_hash_more: [sha1], pfs: dh14, pfs_more: [dh5]}
+    - {name: Tunnel1.0, style: tunnel_if, tunnel_if: Tunnel1.0, peer_address: 203.0.113.30, ike_version: 1, psk: dummy-psk-sample-b, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, esp_encryption: aes256, esp_hash: sha1}
+  ipsec_proposals:
+    - {tunnel: Tunnel1.0, phase: ike, seq: 20, encryption: aes128, hash: sha1, dh: dh2}
+    - {tunnel: Tunnel1.0, phase: ipsec, seq: 20, encryption: aes192, hash: sha1}
+    - {tunnel: Tunnel1.0, phase: ipsec, seq: 30, encryption: aes128, hash: sha1}
+    - {tunnel: Tunnel1.0, phase: ipsec, seq: 40, encryption: 3des, hash: sha1}
+    - {tunnel: Tunnel1.0, phase: ipsec, seq: 50, encryption: aes256, hash: sha256}
+    - {tunnel: Tunnel1.0, phase: ipsec, seq: 60, encryption: aes128, hash: sha256}
+unknown: []

@@ -1,0 +1,70 @@
+hostname ix-s03
+!
+bridge irb enable
+!
+device GigaEthernet2
+  vlan-group 1 port 1 2
+  vlan-group 2 port 6
+  vlan-group 3 port 3 4
+  vlan-group 5 port 5
+  vlan-group 7 port 7
+  vlan-group 8 port 8
+  port 3 speed 100
+  port 3 duplex full
+  port 5 shutdown
+!
+interface BVI0
+  ip address 192.0.2.65/26
+  bridge-group 20
+  no shutdown
+!
+interface BVI1
+  ip address 192.0.2.129/26
+  bridge-group 30
+  no shutdown
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.2/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.129/25
+  no shutdown
+!
+interface GigaEthernet2:1.0
+  ip address 192.0.2.1/26
+  no shutdown
+!
+interface GigaEthernet2:2.0
+  shutdown
+!
+interface GigaEthernet2:3.0
+  bridge-group 20
+  no shutdown
+!
+interface GigaEthernet2:5.0
+  bridge-group 30
+  no shutdown
+!
+interface GigaEthernet2:7.0
+  no shutdown
+!
+interface GigaEthernet2:7.1
+  encapsulation dot1q 20
+  bridge-group 20
+  no shutdown
+!
+interface GigaEthernet2:7.2
+  encapsulation dot1q 30
+  bridge-group 30
+  no shutdown
+!
+interface GigaEthernet2:8.0
+  bridge-group 30
+  no shutdown
+!
+interface GigaEthernet2:8.1
+  encapsulation dot1q 20
+  bridge-group 20
+  no shutdown
+!

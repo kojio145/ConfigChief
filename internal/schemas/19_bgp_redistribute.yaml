@@ -7,4 +7,5 @@ columns:
   - {name: vrf, title: {ja: VRF, en: VRF}, type: ref, ref: vrfs.name, note: {ja: "空 = VRF なし（全体の経路表）", en: "Empty = no VRF (the global table)"}}
   - {name: source, title: {ja: 再配布の元, en: Source}, type: enum, values: [connected, static, ospf, rip], required: true}
   - {name: metric, title: {ja: メトリック, en: Metric}, type: int}
-  - {name: filter, title: {ja: 経路制御の条件, en: Filter}, type: string, note: {ja: "条件の名前。中身は追加コンフィグに書く", en: "The name of the policy. What it does goes into the extra config"}}
+  - {name: filter, title: {ja: 経路制御の条件, en: Filter}, type: string, note: {ja: "経路制御の方針の表の名前。方針を追加コンフィグに書くときは、その名前", en: "A name of the table of route policies, or of a policy written in the extra config"}}
+  - {name: process_id, title: {ja: OSPF のプロセス番号, en: OSPF process}, type: int, note: {ja: "再配布の元が ospf のとき。空なら、同じ VRF にちょうど 1 つあるプロセス", en: "For the source ospf. Empty = the one process of the same VRF"}}

@@ -1,0 +1,153 @@
+{# The lines of a layer-2 port or a layer-2 aggregate interface (README,
+   "VLAN とスイッチ"). "s" is the row of the switch port, "i" the interface. #}
+{% set what = i.name ~ ' のスイッチポート' %}
+{% if s.mode in ['dynamic_auto', 'dynamic_desirable'] %}
+{{ fail(what ~ ': モード ' ~ s.mode ~ ' は、QX では書けません（相手と交渉してモードを決める仕組みがありません。access か trunk に決めてください）') }}
+{% endif %}
+{% if s.trunk_encapsulation %}
+{{ fail(what ~ ': トランクのタグ方式 ' ~ s.trunk_encapsulation ~ ' は、QX では書けません（タグは 802.1Q だけです。セルを空にしてください）') }}
+{% endif %}
+{% if s.nonegotiate == false %}
+{{ fail(what ~ ': 「モードの自動交渉を止める」の「無効」は書けません（QX は交渉しません。セルを空にしてください）') }}
+{% endif %}
+{% if s.mode == 'trunk' %}
+ port link-type trunk
+{% if s.access_vlan != '' %}
+{{ fail(what ~ ': トランクのポートに、アクセス VLAN は書けません（セルを空にしてください）') }}
+{% endif %}
+{% set all = 'all' in s.allowed_vlans %}
+{% set nothing = 'none' in s.allowed_vlans %}
+{% if (all or nothing) and s.allowed_vlans | length > 1 %}
+{{ fail(what ~ 'の許可 VLAN: all・none は、それだけを書きます') }}
+{% endif %}
+{% if not s.allowed_vlans %}
+{{ fail(what ~ 'の許可 VLAN が空です（QX のトランクは、書かなければ VLAN 1 だけを通します。通す VLAN か all を書いてください）') }}
+{% endif %}
+{% if all %}
+ port trunk permit vlan all
+{% else %}
+{% if nothing or 1 not in (s.allowed_vlans | ranges) %}
+ undo port trunk permit vlan 1
+{% endif %}
+{% if not nothing %}
+{% for part in s.allowed_vlans | batch(10) %}
+ port trunk permit vlan {{ part | join(' ') | replace('-', ' to ') }}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% if s.native_vlan != '' %}
+ port trunk pvid vlan {{ s.native_vlan }}
+{% endif %}
+{% elif s.mode == 'hybrid' %}
+ port link-type hybrid
+{% if s.access_vlan != '' or s.allowed_vlans %}
+{{ fail(what ~ ': hybrid のポートに、アクセス VLAN・許可 VLAN は書けません（「タグ付きで通す VLAN」「タグなしで通す VLAN」に書いてください）') }}
+{% endif %}
+{% if 1 not in (s.hybrid_tagged | ranges) and 1 not in (s.hybrid_untagged | ranges) %}
+ undo port hybrid vlan 1
+{% endif %}
+{% for part in s.hybrid_tagged | batch(10) %}
+ port hybrid vlan {{ part | join(' ') | replace('-', ' to ') }} tagged
+{% endfor %}
+{% for part in s.hybrid_untagged | batch(10) %}
+ port hybrid vlan {{ part | join(' ') | replace('-', ' to ') }} untagged
+{% endfor %}
+{% if s.native_vlan != '' %}
+ port hybrid pvid vlan {{ s.native_vlan }}
+{% endif %}
+{% else %}
+{% if s.mode == 'access' %}
+ port link-type access
+{% endif %}
+{% if s.native_vlan != '' or s.allowed_vlans %}
+{{ fail(what ~ ': ネイティブ VLAN・許可 VLAN は、トランクのポートにだけ書けます（モードを trunk にするか、セルを空にしてください）') }}
+{% endif %}
+{% if s.access_vlan != '' %}
+ port access vlan {{ s.access_vlan }}
+{% endif %}
+{% endif %}
+{% if s.mode != 'hybrid' and (s.hybrid_tagged or s.hybrid_untagged) %}
+{{ fail(what ~ ': 「タグ付きで通す VLAN」「タグなしで通す VLAN」は、モードが hybrid のポートにだけ書けます') }}
+{% endif %}
+{% if s.voice_vlan != '' %}
+ voice-vlan {{ s.voice_vlan }} enable
+{% endif %}
+{% if s.stp_enabled == true %}
+ stp enable
+{% elif s.stp_enabled == false %}
+ undo stp enable
+{% endif %}
+{% if s.stp_guard %}
+ stp {{ s.stp_guard }}-protection
+{% endif %}
+{% if s.stp_cost != '' %}
+ stp cost {{ s.stp_cost }}
+{% endif %}
+{% if s.stp_port_priority != '' %}
+{% if s.stp_port_priority % 16 != 0 %}
+{{ fail(what ~ ': ポートの優先度 ' ~ s.stp_port_priority ~ ' は書けません（QX では 0〜240 の 16 の倍数です）') }}
+{% endif %}
+ stp port priority {{ s.stp_port_priority }}
+{% endif %}
+{% if s.stp_edge == 'on' %}
+ stp edged-port
+{% elif s.stp_edge %}
+{{ fail(what ~ ': 「すぐ転送にする」の ' ~ s.stp_edge ~ ' は、QX では書けません（on か空にしてください）') }}
+{% endif %}
+{% if s.stp_bpdu_guard == true %}
+ stp port bpdu-protection enable
+{% elif s.stp_bpdu_guard == false %}
+ stp port bpdu-protection disable
+{% endif %}
+{% for kind in ['broadcast', 'multicast', 'unicast'] %}
+{% set v = s.storm_broadcast if kind == 'broadcast' else (s.storm_multicast if kind == 'multicast' else s.storm_unicast) %}
+{% if v != '' %}
+{% if agg %}
+{{ fail(what ~ ': ストーム制御は、LAG の IF には書けません（メンバーのポートに書いてください）') }}
+{% endif %}
+{% if v is endingwith('kbps') and (v | replace('kbps', '')) is digits %}
+ {{ kind }}-suppression kbps {{ v | replace('kbps', '') }}
+{% elif v is endingwith('pps') and (v | replace('pps', '')) is digits %}
+ {{ kind }}-suppression pps {{ v | replace('pps', '') }}
+{% elif v is not digits or v | int > 100 %}
+{{ fail(what ~ ': ストーム制御の値「' ~ v ~ '」は、QX では書けません（0〜100 の整数の %、500pps、64kbps の形で書きます）') }}
+{% else %}
+ {{ kind }}-suppression {{ v }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for part in s.loop_detect_vlans | batch(10) %}
+ loopback-detection enable vlan {{ part | join(' ') | replace('-', ' to ') }}
+{% endfor %}
+{% if s.loop_detect_action %}
+{% if agg and s.loop_detect_action != 'shutdown' %}
+{{ fail(what ~ ': LAG の IF の「ループのときの動作」は、shutdown だけです') }}
+{% endif %}
+ loopback-detection action {{ s.loop_detect_action | replace('_', '-') }}
+{% endif %}
+{% if s.dhcp_snooping_trust == true %}
+ dhcp snooping trust
+{% elif s.dhcp_snooping_trust == false %}
+{{ fail(what ~ ': 「DHCP スヌーピングで信頼する」の「無効」は書けません（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}
+{% if s.port_security == true %}
+{% if agg %}
+{{ fail(what ~ ': ポートセキュリティは、LAG の IF には書けません') }}
+{% endif %}
+{% if s.port_security_sticky == false %}
+{{ fail(what ~ ': 「覚えた MAC を設定に残す」の「無効」は、QX では書けません（autolearn は、覚えたアドレスを残します）') }}
+{% endif %}
+{% if s.port_security_max != '' %}
+ port-security max-mac-count {{ s.port_security_max }}
+{% endif %}
+ port-security port-mode autolearn
+{% if s.port_security_violation == 'protect' %}
+ port-security intrusion-mode blockmac
+{% elif s.port_security_violation == 'shutdown' %}
+ port-security intrusion-mode disableport
+{% elif s.port_security_violation %}
+{{ fail(what ~ ': 違反のときの動作 ' ~ s.port_security_violation ~ ' は、QX では書けません（protect = blockmac、shutdown = disableport）') }}
+{% endif %}
+{% elif s.port_security_max != '' or s.port_security_violation or s.port_security == false or s.port_security_sticky != '' %}
+{{ fail(what ~ ': ポートセキュリティの「覚える MAC の数」「違反のときの動作」は、「ポートセキュリティ」が有効のときだけ書けます（無効は、行が無いのと同じです。セルを空にしてください）') }}
+{% endif %}

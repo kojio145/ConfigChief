@@ -53,6 +53,7 @@ func (e *Env) saveBook(now time.Time, data []byte) (backup string, err error) {
 	if backup, err = e.Proj.Backup(now); err != nil {
 		return "", err
 	}
+	e.Edit.Drop()
 	return backup, e.Proj.WriteBook(data)
 }
 
@@ -171,7 +172,7 @@ func (e *Env) RunImport(source, choose string, now time.Time) (*ImportOutcome, e
 		if bk != nil {
 			have = bk.Devices
 		}
-		dev, ifs := convert.Propose(src.Data, data(out.New), have)
+		dev, ifs := convert.ProposeWith(src.Data, data(out.New), have, e.shapes)
 		file := e.Proj.Config.Book
 		next, sum, err := book.Update(old, file, e.Schema, e.lang(), book.Change{Devices: dev, Ifs: ifs})
 		if err != nil {
@@ -260,7 +261,7 @@ func (e *Env) MakeBook(from string, replace bool, now time.Time) (*BookOutcome, 
 		}
 		// The rows the book lacks: the devices that came since, and the
 		// interfaces of the devices whose new host name a person wrote.
-		ch.Devices, ch.Ifs = convert.Propose(src.Data, data(nw), devs)
+		ch.Devices, ch.Ifs = convert.ProposeWith(src.Data, data(nw), devs, e.shapes)
 		devs = append(append([]book.DeviceMap{}, devs...), ch.Devices...)
 		ifs = append(append([]book.IfMap{}, ifs...), ch.Ifs...)
 		out.Applied = convert.Apply(e.Schema, src.Data, devs, ifs)
@@ -479,4 +480,18 @@ func (e *Env) Compare(a, b string, now time.Time) (*CompareOutcome, error) {
 	e.Proj.Log(now, "compare %s %s: %s にだけある行 %d、%s にだけある行 %d、値が違うセル %d、レポート %s",
 		a, b, a, len(r.OnlyA), b, len(r.OnlyB), len(r.Cells), out.Report.XLSX)
 	return out, nil
+}
+
+// shapes finds the model a row of 機器対応 names in the pack of its vendor
+// (appendix B 6.3).
+func (e *Env) shapes(vendor, name string) *convert.Shape {
+	m := e.Packs[vendor].Model(name)
+	if m == nil {
+		return nil
+	}
+	sh := &convert.Shape{ID: m.ID, Logical: m.Logical}
+	for _, p := range m.Ports {
+		sh.Ports = append(sh.Ports, convert.ShapePort{Name: p.Name, Role: p.Role, Sub: p.Sub, VlanIf: p.VlanIf})
+	}
+	return sh
 }

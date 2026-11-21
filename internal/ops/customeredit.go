@@ -9,6 +9,7 @@ import (
 
 	"github.com/kojio145/configchief/internal/listimport"
 	"github.com/kojio145/configchief/internal/model"
+	"github.com/kojio145/configchief/internal/project"
 	"github.com/kojio145/configchief/internal/report"
 	"github.com/kojio145/configchief/internal/sheet"
 )
@@ -257,11 +258,45 @@ func (e *Env) SaveMapping(rel string, r *listimport.Rule) (string, error) {
 	if err := os.MkdirAll(e.Proj.Path("mappings"), 0o755); err != nil {
 		return "", fmt.Errorf("mappings を作れません: %v", err)
 	}
-	head := "# お客様の一覧の列対応（仕様書 6.5）。画面の「お客様の一覧」で保存したものです。\n"
+	head := "# 外部一覧の列対応（仕様書 6.5）。画面の「外部一覧」で保存したものです。\n"
 	if err := os.WriteFile(e.Proj.Path(rel), append([]byte(head), data...), 0o644); err != nil {
 		return "", fmt.Errorf("%s を書けません: %v", rel, err)
 	}
 	return rel, nil
+}
+
+// DeleteMapping takes a column mapping out of mappings/ (spec 14.3): the file
+// is moved to state/backup, so that nothing a person wrote is lost. Only a
+// file the list of the mappings shows is moved (one that cannot be read as a
+// mapping too). It gives the path of the copy.
+func (e *Env) DeleteMapping(rel string, now time.Time) (string, error) {
+	files, _, err := e.MappingFiles()
+	if err != nil {
+		return "", err
+	}
+	ok := false
+	for _, f := range files {
+		ok = ok || f.Path == rel
+	}
+	if !ok {
+		return "", fmt.Errorf("%s は、この案件の列対応ファイルではありません", rel)
+	}
+	ext := path.Ext(rel)
+	base := "state/backup/mappings_" + strings.TrimSuffix(path.Base(rel), ext) + "_" + project.Stamp(now)
+	to := base + ext
+	for n := 2; ; n++ {
+		if _, err := os.Stat(e.Proj.Path(to)); err != nil {
+			break
+		}
+		to = fmt.Sprintf("%s_%d%s", base, n, ext)
+	}
+	if err := os.MkdirAll(e.Proj.Path("state/backup"), 0o755); err != nil {
+		return "", fmt.Errorf("state/backup を作れません: %v", err)
+	}
+	if err := os.Rename(e.Proj.Path(rel), e.Proj.Path(to)); err != nil {
+		return "", fmt.Errorf("%s を消せません: %v", rel, err)
+	}
+	return to, nil
 }
 
 // CustomerDoc gives the outcome of reading the lists as a screen shows it:

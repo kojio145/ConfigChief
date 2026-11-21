@@ -52,6 +52,10 @@ type Book struct {
 	Sheets   map[string]*SheetInfo
 	Memo     []string // the sheets the tool does not know (left alone)
 	Problems []Problem
+
+	// layout: only the places of the sheets and of their columns are read,
+	// not the rows (the table of a screen reads the rows by itself).
+	layout bool
 }
 
 func (b *Book) problemf(sheet, addr, format string, a ...any) {
@@ -71,7 +75,14 @@ func Read(data []byte, file string, sc *schema.Set) (*Book, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s を読めません: %v", file, err)
 	}
-	b := &Book{File: file, Data: model.NewDataset("book"), Sheets: map[string]*SheetInfo{}}
+	return fromSheets(src, file, sc, false), nil
+}
+
+// fromSheets makes the book of the sheets of a file. With layout, the rows
+// are left out: the book tells which sheet is which table and where its
+// columns are, and nothing else.
+func fromSheets(src *sheet.Book, file string, sc *schema.Set, layout bool) *Book {
+	b := &Book{File: file, Data: model.NewDataset("book"), Sheets: map[string]*SheetInfo{}, layout: layout}
 
 	tables := map[string]*schema.Table{}
 	for _, t := range sc.Tables {
@@ -109,7 +120,7 @@ func Read(data []byte, file string, sc *schema.Set) (*Book, error) {
 			b.Memo = append(b.Memo, s.Name)
 		}
 	}
-	return b, nil
+	return b
 }
 
 // header finds the columns of a sheet by the text of the header row. names
@@ -181,6 +192,9 @@ func (b *Book) readTable(s *sheet.Sheet, t *schema.Table) {
 	}
 	info, free := b.header(s, names)
 	b.Sheets[t.Name] = info
+	if b.layout {
+		return
+	}
 
 	for r := 1; r < len(s.Rows); r++ {
 		line := s.Rows[r]
@@ -256,6 +270,9 @@ func (b *Book) readMgmt(s *sheet.Sheet, m *mgmt) {
 	}
 	info, _ := b.header(s, names)
 	b.Sheets[m.id] = info
+	if b.layout {
+		return
+	}
 	get := func(line []string, name string) string {
 		ci, ok := info.Cols[name]
 		if !ok {

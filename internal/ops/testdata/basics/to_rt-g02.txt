@@ -1,0 +1,40 @@
+hostname rt-g02
+!
+service timestamps log datetime
+!
+username admin privilege 15 secret 0 dummy-admin-secret-1
+!
+class-map match-any cm-g-voice
+ match cos 5
+ match qos-group 10
+!
+policy-map pm-g-in
+ class cm-g-voice
+  set qos-group 10
+!
+interface GigabitEthernet0/0
+ description sample uplink port
+ ip address 203.0.113.69 255.255.255.252
+ ip mtu 1454
+ ip tcp adjust-mss 1414
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description sample-lan
+ ip address 198.51.100.1 255.255.255.0
+ service-policy input pm-g-in
+ no shutdown
+!
+interface Loopback0
+ ip address 192.0.2.1 255.255.255.255
+ no shutdown
+!
+logging buffered 131072 warnings
+!
+logging facility local0
+logging source-interface Loopback0
+logging host 192.0.2.50
+!
+ntp server 192.0.2.123
+!
+end

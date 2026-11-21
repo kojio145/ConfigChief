@@ -1,0 +1,59 @@
+hostname rt-c05
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+ lifetime 86400
+crypto isakmp policy 20
+ encryption aes
+ hash sha
+ authentication pre-share
+ group 14
+ lifetime 28800
+crypto isakmp policy 30
+ encryption 3des
+ hash sha
+ authentication pre-share
+ group 2
+crypto isakmp key dummy-psk-more-b address 203.0.113.30
+crypto isakmp key dummy-psk-more-a address 203.0.113.20
+!
+crypto ipsec transform-set TS-CMAP-SAMPLE-10 esp-aes 256 esp-sha-hmac
+!
+crypto ipsec transform-set TS-CMAP-SAMPLE-10-2 esp-aes esp-sha-hmac
+!
+crypto ipsec transform-set TS-CMAP-SAMPLE-10-3 ah-sha-hmac esp-3des
+!
+crypto ipsec transform-set TS-Tunnel1 esp-aes 256 esp-sha-hmac
+!
+crypto ipsec transform-set TS-Tunnel1-2 esp-aes esp-sha-hmac
+!
+crypto ipsec profile PROF-Tunnel1
+ set transform-set TS-Tunnel1 TS-Tunnel1-2
+ set security-association lifetime seconds 3600
+!
+ip access-list extended ACL-CMAP-SAMPLE-10
+ 10 permit ip 198.51.100.0 0.0.0.255 192.0.2.0 0.0.0.127
+!
+crypto map CMAP-SAMPLE 10 ipsec-isakmp
+ set peer 203.0.113.30
+ set transform-set TS-CMAP-SAMPLE-10 TS-CMAP-SAMPLE-10-2 TS-CMAP-SAMPLE-10-3
+ set security-association lifetime seconds 3600
+ match address ACL-CMAP-SAMPLE-10
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.9 255.255.255.248
+ crypto map CMAP-SAMPLE
+ no shutdown
+!
+interface Tunnel1
+ ip address 192.0.2.209 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.20
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile PROF-Tunnel1
+ no shutdown
+!
+end

@@ -1,0 +1,22 @@
+# IPsec rows written in another way than the design data has them
+# (adapt.yaml, made-up values): each step tells what it did (G-614). How the
+# peer is watched is not chosen on this device, and IKE version 2 writes the
+# retries as a pair of a count and an interval.
+tables:
+  devices:
+    - hostname: ix-c03
+      vendor: nec_ix
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.9/29}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.1/24}
+    - {name: Tunnel0.0, enabled: true, ipv4: "unnumbered:GigaEthernet1.0"}
+    - {name: Tunnel1.0, enabled: true, ipv4: "unnumbered:GigaEthernet1.0"}
+  tunnels:
+    - {if_name: Tunnel0.0, type: ipsec}
+    - {if_name: Tunnel1.0, type: ipsec, source: 203.0.113.9, destination: 203.0.113.30}
+  ipsec_tunnels:
+    # Version 1 asks only while nothing comes from the peer.
+    - {name: Tunnel0.0, style: tunnel_if, tunnel_if: Tunnel0.0, peer_address: 203.0.113.20, psk: dummy-psk-sample-a, ike_version: 1, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 28800, esp_encryption: aes256, esp_hash: sha1, dpd_interval: 30, dpd_mode: periodic}
+    # Version 2 asks at every interval; the retry interval comes with a count.
+    - {name: Tunnel1.0, style: tunnel_if, tunnel_if: Tunnel1.0, peer_address: 203.0.113.30, psk: dummy-psk-sample-b, ike_version: 2, ike_lifetime: 86400, ipsec_lifetime: 28800, dpd_interval: 30, dpd_retry_interval: 5, dpd_mode: on_demand}
+findings: [G-614]

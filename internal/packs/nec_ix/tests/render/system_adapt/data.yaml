@@ -1,0 +1,21 @@
+# The device as a whole the way another vendor has it (made-up values;
+# appendix A 3.26): adapt.yaml writes it the way of this device, or leaves
+# it out, and tells it (G-614).
+tables:
+  devices:
+    - hostname: ix-d03
+      vendor: nec_ix
+      log_timestamp: datetime
+      log_timestamp_options: [msec, localtime]
+      debug_timestamp: datetime
+      debug_timestamp_options: [msec]
+      console_timeout: 5
+      console_timeout_sec: 30
+  users:
+    - {name: sample-user, secret: dummy-chap-secret-sample, secret_form: plain, reversible: true}
+  remote_access:
+    - {protocols: [ssh], idle_timeout: 9, idle_timeout_sec: 30}
+  syslog_servers:
+    - {server: 192.0.2.50, severity: warnings}
+    - {server: 192.0.2.51, severity: warnings}
+findings: [G-614]

@@ -1,0 +1,53 @@
+hostname rt-s02
+!
+vlan 10
+ name sample-office
+!
+bridge irb
+bridge 1 route ip
+!
+interface BVI1
+ ip address 198.51.100.1 255.255.255.128
+ no shutdown
+!
+interface FastEthernet0
+ switchport access vlan 10
+ switchport mode access
+ no shutdown
+!
+interface FastEthernet1
+ switchport access vlan 10
+ no shutdown
+!
+interface FastEthernet7
+ switchport trunk allowed vlan all
+ switchport mode trunk
+ no shutdown
+!
+interface GigabitEthernet8
+ ip address 203.0.113.2 255.255.255.252
+ no shutdown
+!
+interface GigabitEthernet9
+ channel-group 1
+ no shutdown
+!
+interface GigabitEthernet9.10
+ encapsulation dot1Q 10 native
+ ip address 198.51.100.129 255.255.255.128
+ no shutdown
+!
+interface GigabitEthernet9.20
+ encapsulation dot1Q 20
+ bridge-group 1
+ no shutdown
+!
+interface Port-channel1
+ bridge-group 1
+ no shutdown
+!
+interface Vlan10
+ ip address 192.0.2.1 255.255.255.128
+ no shutdown
+!
+end

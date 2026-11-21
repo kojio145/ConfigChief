@@ -1,0 +1,48 @@
+# RIP and RIPng (appendix A 3.27; made-up values). RIP runs on the
+# interfaces that say "enable" (GigaEthernet2.0 does not: what it says of
+# RIP stays unknown). "compatible" is version 2 sent by broadcast. The last
+# timer counts from when a route became invalid: the table counts from the
+# last update (60 + 20).
+tables:
+  rip_processes:
+    - family: ipv4
+      auto_summary: true
+      default_metric: 3
+      distance: 130
+      prefix_list_in: pl-sample-in
+      default_originate: true
+      default_originate_metric: 2
+      timer_update: 10
+      timer_invalid: 60
+      timer_flush: 80
+      version: ""
+    - {family: ipv6, distance: 130, prefix_list_in: pl6-sample-in, default_originate: true, default_originate_metric: "", auto_summary: ""}
+  rip_interfaces:
+    - family: ipv4
+      if_name: GigaEthernet0.0
+      send: ""
+      send_version: ["1", "2"]
+      receive_version: ["2"]
+      auth_mode: text
+      auth_key: Example-Rip-0
+      metric_offset: 2
+      split_horizon: none
+      summary: ["198.51.100.0/24"]
+      default_originate: true
+      default_originate_metric: 3
+      prefix_list_out: pl-sample-out
+    - {family: ipv4, if_name: GigaEthernet1.0, send: false, receive: "", send_version: ["2"], v2_broadcast: true}
+    - {family: ipv6, if_name: GigaEthernet0.0, metric_offset: 2, split_horizon: split_horizon, summary: ["2001:db8:10::/48"], default_originate: true, default_originate_metric: 3, prefix_list_out: pl6-sample-out}
+    - {family: ipv6, if_name: GigaEthernet1.0, receive: false}
+  rip_redistribute:
+    - {family: ipv4, source: static, metric: 2, tag: 10, filter: rm-sample-rip}
+    - {family: ipv4, source: ospf, process_id: 1}
+    - {family: ipv4, source: bgp, process_id: "", metric: 5}
+    - {family: ipv6, source: static, metric: 2, tag: 10, filter: rm-sample-rip}
+    - {family: ipv6, source: ospf, process_id: 1}
+unknown:
+  - "ip rip neighbor 192.0.2.2"
+  - "ip rip send unicast"
+  - "no ip rip receive-default"
+  - "ip rip send version 2"
+  - "ip rip summary-address 203.0.113.0/24 send-all"

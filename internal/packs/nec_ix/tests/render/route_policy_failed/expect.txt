@@ -1,0 +1,15 @@
+hostname ix-r05
+!
+ip access-list al-r-a permit ip src 198.51.100.0/25 dest any
+ip access-list al-r-b permit ip src 198.51.100.128/25 dest any
+ip prefix-list pl-r-a 5 permit 198.51.100.0/24
+ip prefix-list pl-r-b 5 permit 192.0.2.0/24
+!
+interface GigaEthernet0.0
+  ip address 203.0.113.1/30
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 198.51.100.1/24
+  no shutdown
+!

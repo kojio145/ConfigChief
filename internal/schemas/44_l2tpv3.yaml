@@ -1,0 +1,22 @@
+table: l2tpv3
+title: {ja: L2 延伸（L2TPv3）, en: L2TPv3}
+since: M7
+key: [device, if_name]
+columns:
+  - {name: device, title: {ja: 機器, en: Device}, type: ref, ref: devices.hostname, required: true, note: {ja: "ホスト名。* は全機器、@グループ名 はそのグループの機器", en: "Host name. * = every device, @group = the devices of the group"}}
+  - {name: if_name, title: {ja: 延伸する IF, en: Attachment interface}, type: ifname, required: true, note: {ja: "この IF に入ったフレームを、そのまま相手へ運ぶ。インタフェースのシートに行を持つ", en: "The frames that come in here are carried to the peer as they are. It has a row on the Interfaces sheet"}}
+  - {name: peer_address, title: {ja: 相手アドレス, en: Peer address}, type: ip4, required: true, note: {ja: "相手の機器の「送信元 IF」のアドレス", en: "The address of the peer's local interface"}}
+  - {name: vc_id, title: {ja: 回線番号（VC ID）, en: VC ID}, type: int, min: 1, max: 4294967295, required: true, note: {ja: "両端で同じ値", en: "The same on both ends"}}
+  - {name: profile, title: {ja: 設定名, en: Profile}, type: string, note: {ja: "pseudowire-class の名前。空ならパックが付ける", en: "The name of the pseudowire class. The pack names it when empty"}}
+  - {name: local_if, title: {ja: 送信元 IF, en: Local interface}, type: ifname, required: true, note: {ja: "この IF のアドレスから送る", en: "Packets are sent from the address of this interface"}}
+  - {name: signaling, title: {ja: 張り方, en: Signaling}, type: enum, values: [dynamic, manual], required: true, note: {ja: "dynamic = 両端が制御の通信で決める。manual = セッション ID とクッキーを手で決める", en: "dynamic = negotiated by the control channel. manual = session IDs and cookies are set by hand"}}
+  - {name: password, title: {ja: トンネルのパスワード, en: Tunnel password}, type: secret, note: {ja: "dynamic のとき。空 = 認証しない", en: "For dynamic. Empty = no authentication"}}
+  - {name: local_name, title: {ja: 自分の名前, en: Local name}, type: string, note: {ja: "認証で名乗る名前。空なら機器のホスト名", en: "The name used for authentication. The host name when empty"}}
+  - {name: hello, title: {ja: Hello 間隔（秒）, en: Hello interval (s)}, type: int, min: 0}
+  - {name: local_session_id, title: {ja: 自分のセッション ID, en: Local session ID}, type: int, min: 1, note: {ja: "manual のとき必須。相手の「相手のセッション ID」と同じ値", en: "Needed for manual. The same as the peer's remote session ID"}}
+  - {name: remote_session_id, title: {ja: 相手のセッション ID, en: Remote session ID}, type: int, min: 1, note: {ja: "manual のとき必須", en: "Needed for manual"}}
+  - {name: local_cookie, title: {ja: 自分のクッキー, en: Local cookie}, type: string, note: {ja: "manual のとき。大きさ（4 か 8）と値。例 4 54321", en: "For manual. The size (4 or 8) and the value, e.g. 4 54321"}}
+  - {name: remote_cookie, title: {ja: 相手のクッキー, en: Remote cookie}, type: string, note: {ja: "manual のとき。相手の「自分のクッキー」と同じ値", en: "For manual. The same as the peer's local cookie"}}
+  - {name: sequencing, title: {ja: 順序の確認, en: Sequencing}, type: enum, values: [transmit, receive, both]}
+  - {name: pmtu, title: {ja: 経路 MTU の検出, en: Path MTU discovery}, type: bool}
+  - {name: df_bit, title: {ja: DF ビットを立てる, en: Set the DF bit}, type: bool}

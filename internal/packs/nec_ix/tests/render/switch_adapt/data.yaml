@@ -1,0 +1,39 @@
+# VLANs and switch ports as another vendor has them (made-up values), after
+# the names of the interfaces were mapped: VLAN 10 on a port VLAN, VLANs 20
+# and 30 bridged (a trunk carries them), a port with no line of its own, and
+# spanning tree. adapt.yaml rewrites the rows and tells it (G-614).
+tables:
+  devices:
+    - hostname: ix-s03
+      vendor: nec_ix
+  l2_settings:
+    - {stp_mode: rapid_pvst, stp_edge_default: true}
+  stp_vlans:
+    - {vlans: "10,20", priority: 4096}
+  vlans:
+    - {vlan_id: 10, name: sample-office}
+    - {vlan_id: 20}
+  interfaces:
+    - {name: GigaEthernet0.0, enabled: true, ipv4: 203.0.113.2/30}
+    - {name: GigaEthernet1.0, enabled: true, ipv4: 198.51.100.129/25, encap_vlan: 5, encap_native: true}
+    - {name: "GigaEthernet2:1.0", enabled: true, ipv4: 192.0.2.1/26, vlan_id: 10}
+    - {name: "GigaEthernet2:2.0", enabled: false, vlan_id: 1}
+    - {name: BVI0, enabled: true, ipv4: 192.0.2.65/26, vlan_id: 20}
+    - {name: BVI1, enabled: true, ipv4: 192.0.2.129/26, vlan_id: 30}
+    - {name: "GigaEthernet2:port1", enabled: true, description: sample desk}
+    - {name: "GigaEthernet2:port2", enabled: true}
+    - {name: "GigaEthernet2:port3", enabled: true, speed: 100, duplex: full}
+    - {name: "GigaEthernet2:port4", enabled: true}
+    - {name: "GigaEthernet2:port5", enabled: false}
+    - {name: "GigaEthernet2:port6", enabled: true}
+    - {name: "GigaEthernet2:port7", enabled: true}
+    - {name: "GigaEthernet2:port8", enabled: true}
+  switchports:
+    - {if_name: "GigaEthernet2:port1", mode: access, access_vlan: 10, stp_edge: "on", stp_bpdu_guard: true}
+    - {if_name: "GigaEthernet2:port2", access_vlan: 10}
+    - {if_name: "GigaEthernet2:port3", mode: access, access_vlan: 20}
+    - {if_name: "GigaEthernet2:port4", mode: access, access_vlan: 20}
+    - {if_name: "GigaEthernet2:port5", mode: access, access_vlan: 30}
+    - {if_name: "GigaEthernet2:port7", mode: trunk, allowed_vlans: [20, 30-31, 99], trunk_encapsulation: dot1q}
+    - {if_name: "GigaEthernet2:port8", mode: trunk, native_vlan: 30, allowed_vlans: [20, 30], nonegotiate: true}
+findings: [G-614]

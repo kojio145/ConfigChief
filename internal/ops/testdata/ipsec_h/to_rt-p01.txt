@@ -1,0 +1,109 @@
+hostname rt-p01
+!
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+ lifetime 28800
+crypto isakmp policy 20
+ encryption aes
+ hash sha
+ authentication pre-share
+ group 2
+crypto isakmp key dummy-psk-sample-c address 203.0.113.40
+crypto isakmp key dummy-psk-sample-a address 203.0.113.20
+!
+crypto ikev2 proposal IKEV2-PROP
+ encryption aes-cbc-256 aes-cbc-128
+ integrity sha256 sha1
+ group 14 5
+!
+crypto ikev2 policy IKEV2-POL
+ proposal IKEV2-PROP
+!
+crypto ikev2 keyring IKEV2-KEYS
+ peer Tunnel1
+  address 203.0.113.30
+  pre-shared-key dummy-psk-sample-b
+!
+crypto ikev2 profile IKEV2-Tunnel1
+ match identity remote address 203.0.113.30 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local IKEV2-KEYS
+ lifetime 86400
+!
+crypto ipsec transform-set TS-Tunnel1 esp-aes 256 esp-sha-hmac
+ mode tunnel
+!
+crypto ipsec transform-set TS-Tunnel1-2 esp-aes esp-sha-hmac
+!
+crypto ipsec transform-set TS-Tunnel2 esp-aes 256 esp-sha-hmac
+ mode tunnel
+!
+crypto ipsec transform-set TS-CMAP-GigabitEthernet0-0-10 esp-aes 256 esp-sha-hmac
+ mode tunnel
+!
+crypto ipsec transform-set TS-CMAP-GigabitEthernet0-0-10-2 esp-aes esp-sha-hmac
+!
+ip access-list extended ACL-Tunnel1
+ 10 permit ip 192.0.2.0 0.0.0.127 198.51.100.128 0.0.0.127
+!
+crypto ipsec profile PROF-Tunnel1
+ set transform-set TS-Tunnel1 TS-Tunnel1-2
+ set security-association lifetime seconds 28800
+ set ikev2-profile IKEV2-Tunnel1
+!
+ip access-list extended ACL-Tunnel2
+ 10 permit ip 192.0.2.0 0.0.0.127 203.0.113.128 0.0.0.127
+!
+crypto ipsec profile PROF-Tunnel2
+ set transform-set TS-Tunnel2
+ set security-association lifetime seconds 3600
+!
+ip access-list extended ACL-CMAP-GigabitEthernet0-0-10
+ 10 permit ip 192.0.2.0 0.0.0.127 198.51.100.0 0.0.0.127
+ 20 permit ip 192.0.2.0 0.0.0.127 host 198.51.100.200
+!
+crypto map CMAP-GigabitEthernet0-0 10 ipsec-isakmp
+ set peer 203.0.113.20
+ set transform-set TS-CMAP-GigabitEthernet0-0-10 TS-CMAP-GigabitEthernet0-0-10-2
+ set pfs group14
+ set security-association lifetime seconds 3600
+ match address ACL-CMAP-GigabitEthernet0-0-10
+!
+interface GigabitEthernet0/0
+ description sample-wan
+ ip address 203.0.113.9 255.255.255.248
+ crypto map CMAP-GigabitEthernet0-0
+ no shutdown
+!
+interface GigabitEthernet0/1
+ description sample-lan
+ ip address 192.0.2.1 255.255.255.128
+ no shutdown
+!
+interface Tunnel1
+ ip unnumbered GigabitEthernet0/1
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.30
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec policy ipv4 ACL-Tunnel1
+ tunnel protection ipsec profile PROF-Tunnel1
+ no shutdown
+!
+interface Tunnel2
+ ip unnumbered GigabitEthernet0/1
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.40
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec policy ipv4 ACL-Tunnel2
+ tunnel protection ipsec profile PROF-Tunnel2
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.14 1
+ip route 198.51.100.128 255.255.255.128 Tunnel1 1
+ip route 203.0.113.128 255.255.255.128 Tunnel2 1
+!
+end

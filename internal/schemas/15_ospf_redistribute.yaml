@@ -8,4 +8,5 @@ columns:
   - {name: source, title: {ja: 再配布の元, en: Source}, type: enum, values: [connected, static, bgp, rip], required: true}
   - {name: metric, title: {ja: メトリック, en: Metric}, type: int}
   - {name: metric_type, title: {ja: メトリックの種類, en: Metric type}, type: enum, values: ["1", "2"]}
-  - {name: filter, title: {ja: 経路制御の条件, en: Filter}, type: string, note: {ja: "条件の名前。中身は追加コンフィグに書く", en: "The name of the policy. What it does goes into the extra config"}}
+  - {name: filter, title: {ja: 経路制御の条件, en: Filter}, type: string, note: {ja: "経路制御の方針の表の名前。方針を追加コンフィグに書くときは、その名前", en: "A name of the table of route policies, or of a policy written in the extra config"}}
+  - {name: tag, title: {ja: タグ, en: Tag}, type: int, min: 0, note: {ja: "再配布した経路に付ける印", en: "A mark put on the redistributed routes"}}

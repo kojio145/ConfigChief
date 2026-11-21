@@ -1,0 +1,24 @@
+# IPsec, the third round (made-up values; appendix A 3.20 and 3.26).
+# expect.txt is the configuration the tables must turn into: keys in the
+# form the device saved them ("6 <value>": written back as they stand), a
+# default peer with a backup peer, "set nat demux" in a dynamic map, "nat
+# force-encap" in an IKEv2 profile, and "none" for the ESP hash (a
+# transform set without a word of ESP authentication; not told), and what
+# the device does as a whole (the table ipsec_settings).
+tables:
+  devices:
+    - hostname: rt-v02
+      vendor: cisco_ios
+  ipsec_settings:
+    - {replay_window: 128, df_bit: clear, idle_time: 600, aggressive_mode: false, invalid_spi_recovery: true}
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true, ipv4: 203.0.113.9/29}
+    - {name: Tunnel1, enabled: true, ipv4: 198.51.100.1/30}
+  tunnels:
+    - {if_name: Tunnel1, type: ipsec, source: GigabitEthernet0/0, destination: 203.0.113.30}
+  ipsec_tunnels:
+    - {name: Tunnel1, style: tunnel_if, tunnel_if: Tunnel1, peer_address: 203.0.113.30, ike_version: 2, psk: "6 DUMMYENCSAMPLEBBBB", psk_remote: "6 DUMMYENCSAMPLECCCC", ike_lifetime: 86400, esp_encryption: aes256, esp_hash: none, pfs: none, ipsec_lifetime: 3600, nat_force: true}
+    - {name: CMAP-SAMPLE/10, style: policy, local_if: GigabitEthernet0/0, peer_address: 203.0.113.20, peer_backup: [203.0.113.21], peer_default: true, ike_version: 1, psk: "6 DUMMYENCSAMPLEAAAA", ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha256, pfs: none, ipsec_lifetime: 7200, ipsec_lifetime_kb: 2000000}
+    - {name: CMAP-SAMPLE/20, style: policy, local_if: GigabitEthernet0/0, peer_address: any, ike_version: 1, psk: dummy-psk-sample-any, ike_encryption: aes256, ike_hash: sha256, ike_dh: dh14, ike_lifetime: 86400, esp_encryption: aes256, esp_hash: sha1, ipsec_mode: transport, pfs: none, ipsec_lifetime: 7200, nat_demux: true}
+  ipsec_selectors:
+    - {tunnel: CMAP-SAMPLE/10, seq: 10, local_net: 192.0.2.0/25, remote_net: 198.51.100.128/25, protocol: ip}

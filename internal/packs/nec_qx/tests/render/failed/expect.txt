@@ -1,0 +1,13 @@
+#
+ sysname sw-q04
+#
+ stp global enable
+traffic classifier sample-class operator or
+ if-match dscp 46
+#
+interface GigabitEthernet1/0/1
+ snmp-agent
+ snmp-agent community read 7 dummyDummyDummy
+ snmp-agent sys-info version v2c
+#
+return

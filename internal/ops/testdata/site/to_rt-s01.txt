@@ -39,6 +39,7 @@ ip sla 1
  frequency 5
 ip sla schedule 1 life forever start-time now
 track 1 ip sla 1 reachability
+ delay down 25
 !
 ip route 0.0.0.0 0.0.0.0 203.0.113.50 1 track 1
 !

@@ -1,0 +1,14 @@
+# VRRP version 3 (appendix A 3.23, "IPv6 の VRRP"; made-up values): an IPv4
+# group in the form of version 3 and an IPv6 group with a global address.
+tables:
+  devices:
+    - {hostname: rt-w02, vendor: cisco_ios, vrrp_version: "3"}
+  interfaces:
+    - {name: GigabitEthernet0/0, enabled: true}
+    - {name: GigabitEthernet0/1, enabled: true, ipv4: 192.0.2.3/24, ipv6: ["2001:db8:0:1::3/64"]}
+  tracks:
+    - {id: 1, type: interface, target: GigabitEthernet0/0}
+  fhrp:
+    - {if_name: GigabitEthernet0/1, group: 1, protocol: vrrp, virtual_ip: 192.0.2.1, priority: 90, preempt: true, preempt_delay: 30, advert_interval: 2, track: 1, track_decrement: 20, vrrpv2: true}
+  ipv6_fhrp:
+    - {if_name: GigabitEthernet0/1, group: 2, link_local: "fe80::1", addresses: ["2001:db8:0:1::1"], priority: 110, preempt: false, advert_interval: 500}

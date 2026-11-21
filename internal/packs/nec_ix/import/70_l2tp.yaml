@@ -1,0 +1,119 @@
+# L2TP (appendix A 3.21): an LNS for remote access (L2TP over IPsec) and a
+# LAC that carries the PPPoE sessions behind it. Syntax: CRM chapter 7 (PPP,
+# PPPoE), chapter 12 (tunnel mode, L2TP) and chapter 13 (url-list); the
+# shape of the two settings: FD 2.36 and 2.37 (README.md names the books).
+# The device has no L2TPv3 (FD: "L2TPv3 は対応しておりません").
+#
+# The lines under an interface are read in 20_interfaces.yaml, those of a
+# PPP profile in 50_services.yaml; they are joined here.
+rules:
+  # The domains a LAC carries: the entries "permit domain *<name>" (what
+  # ends in the name) of the list its PPPoE interfaces point at. Other
+  # entries (deny, ip, any, a name with "*" elsewhere) stay unknown.
+  - id: l2tp.url_list
+    match: '^url-list (?P<list>\S+) permit domain \*(?P<dom>[^\s*]+)$'
+    emit:
+      - table: x_url_domain
+        key: {list: "{{ list }}", domain: "{{ dom }}"}
+
+derive:
+  # ---- LNS ----
+  # A tunnel interface in the mode "l2tp-lns ipsec" is bound to a PPP
+  # profile: the profile is the row, and each such interface is one caller
+  # at a time. The three lines the vendor tells to write as they are
+  # ("lcp pfc", "lcp acfc", "ipcp ip-compression") are read and not kept:
+  # the template writes them for every LNS.
+  - id: l2tp.lns
+    for: x_ppp_bind
+    as: b
+    let:
+      i: "lookup('x_l2tp_if', if_name=b.if_name)"
+      p: "lookup('x_ppp_profile', name=b.profile)"
+      have: "lookup('l2tp_groups', name=b.profile)"
+      opts: "p.lcp_pfc ~ p.lcp_acfc ~ p.ipcp_ip_compression"
+      tun: "lookup('tunnels', if_name=b.if_name)"
+    when: "i.mode == 'lns' and i.ipsec and p.name and not p.username and not b.service_name and not tun.destination_fqdn"
+    row: {table: l2tp_groups, key: {name: "{{ b.profile }}"}}
+    set:
+      role: lns
+      tunnel_auth: "{{ 'true' if i.password else 'false' }}"
+      password: "{{ i.password }}"
+      auth: "{{ p.request }}"
+      pool_start: "{{ p.pool_start }}"
+      pool_end: "{{ p.pool_end }}"
+      ipsec_policy: "{{ i.ipsec }}"
+      idle_timeout: "{{ i.idle }}"
+    append:
+      logical_ifs: "{{ b.if_name }}"
+      dns_servers: "{{ p.dns if not have.name else '' }}"
+
+  # The callers the profile knows by itself.
+  - id: l2tp.lns.user
+    for: x_ppp_user
+    as: u
+    let:
+      g: "lookup('l2tp_groups', name=u.profile)"
+    when: "g.role == 'lns' and u.password"
+    row: {table: l2tp_users, key: {group: "{{ u.profile }}", name: "{{ u.name }}"}}
+    set: {password: "{{ u.password }}", address: "{{ u.address }}"}
+
+  # ---- LAC ----
+  # A PPPoE interface names the tunnel and the list of the domains; the
+  # tunnel interface in the mode "l2tp-lac ip" names the LNS. The row takes
+  # the name of the list.
+  - id: l2tp.lac
+    for: x_l2tp_access
+    as: a
+    let:
+      i: "lookup('x_l2tp_if', if_name=a.tunnel)"
+      tun: "lookup('tunnels', if_name=a.tunnel)"
+      dom: "first('x_url_domain', list=a.list)"
+      have: "lookup('l2tp_groups', name=a.list)"
+    when: "i.mode == 'lac' and not i.ipsec and dom.domain and (tun.destination or tun.destination_fqdn) and not (tun.destination and tun.destination_fqdn) and not tun.destination_v6"
+    row: {table: l2tp_groups, key: {name: "{{ a.list }}"}}
+    set:
+      role: lac
+      peer_address: "{{ tun.destination if tun.destination else tun.destination_fqdn }}"
+      tunnel_auth: "{{ 'true' if i.password else 'false' }}"
+      password: "{{ i.password }}"
+      idle_timeout: "{{ i.idle }}"
+    append:
+      logical_ifs: "{{ a.tunnel if not have.name else '' }}"
+      access_ifs: "{{ a.if_name }}"
+
+  # The PPPoE server on an interface of a LAC (appendix A 3.26): its profile
+  # says what the callers are asked for. The name of the profile is not kept
+  # (the template writes "<name>-pppoe"). "auto-connect" and "encapsulation
+  # pppoe" say what such an interface does anyway.
+  - id: l2tp.lac.server
+    for: x_ppp_bind
+    as: b
+    let:
+      a: "lookup('x_l2tp_access', if_name=b.if_name)"
+      g: "lookup('l2tp_groups', name=(a.list if a.list else '-'))"
+      sp: "lookup('x_ppp_profile', name=(b.profile if b.profile else '-'))"
+      known: "b.auto ~ b.encap"
+    when: "b.server and g.role == 'lac' and sp.request and not sp.username and not b.on_demand and not b.idle and not b.service_name"
+    row: {table: l2tp_groups, key: {name: "{{ a.list }}"}}
+    set: {auth: "{{ sp.request }}"}
+
+  - id: l2tp.lac.domain
+    for: x_url_domain
+    as: d
+    let:
+      g: "lookup('l2tp_groups', name=d.list)"
+    when: "g.role == 'lac'"
+    row: {table: l2tp_groups, key: {name: "{{ d.list }}"}}
+    append: {domains: "{{ d.domain }}"}
+
+  # "tunnel destination <address>" or "tunnel destination fqdn <name>" of
+  # the LAC's tunnel went to the table of the tunnels (20_interfaces.yaml);
+  # it stands in the row of L2TP now.
+  - id: l2tp.lac.tunnel.taken
+    for: tunnels
+    as: t
+    let:
+      i: "lookup('x_l2tp_if', if_name=t.if_name)"
+      g: "first('l2tp_groups', role='lac', peer_address=(t.destination if t.destination else t.destination_fqdn))"
+    when: "i.mode == 'lac' and g.name and not t.destination_v6 and not t.type and not t.source and not t.key and not t.keepalive_interval"
+    remove: true

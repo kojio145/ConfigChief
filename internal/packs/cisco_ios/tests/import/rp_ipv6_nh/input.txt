@@ -1,0 +1,11 @@
+version 15.9
+service timestamps log datetime
+!
+hostname rt-v05
+!
+ipv6 prefix-list PL6-SAMPLE-NH seq 5 permit 2001:DB8:0:1::/64 le 128
+!
+route-map RM6-SAMPLE-NH permit 10
+ match ipv6 next-hop prefix-list PL6-SAMPLE-NH
+!
+end
