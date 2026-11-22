@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"errors"
 	"fmt"
 	"sort"
@@ -357,6 +358,9 @@ type MappingView struct {
 	By       string        `json:"by"`       // the name the last approval was given with
 	Problems []string      `json:"problems"` // what the book says
 	Notes    []string      `json:"notes"`    // files of the old side that were not read
+	// Hosts are the new host names of 機器対応, for making the proposals of
+	// IF 対応 again (spec 14.11.4).
+	Hosts []string `json:"hosts"`
 }
 
 // Mapping reads the old side and the book and tells what of the mapping is
@@ -372,7 +376,7 @@ func (s *Session) Mapping() (*MappingView, error) {
 	if err != nil {
 		return nil, err
 	}
-	v := &MappingView{Book: e.Proj.Config.Book, Counts: []Pair{}, Problems: []string{}, Notes: []string{}, Findings: migFindings(e, m.Mig), By: s.name}
+	v := &MappingView{Book: e.Proj.Config.Book, Counts: []Pair{}, Problems: []string{}, Notes: []string{}, Findings: migFindings(e, m.Mig), By: s.name, Hosts: []string{}}
 	s.mig = m.Mig
 	v.Devices = Table{Name: "機器対応", Header: []string{"ブックの行", "旧ホスト名", "旧メーカー", "新ホスト名", "新メーカー", "新機種", "新 OS 版", "備考"}}
 	v.Ifs = Table{Name: "IF 対応", Header: []string{"ブックの行", "新ホスト名", "旧 IF 名", "新 IF 名", "案の根拠"}}
@@ -404,6 +408,9 @@ func (s *Session) Mapping() (*MappingView, error) {
 	var devs, ifs []ranked
 	openDevs, outDevs, openIfs, outIfs := 0, 0, 0, 0
 	for _, d := range m.Book.Devices {
+		if d.NewHost != "" && !slices.Contains(v.Hosts, d.NewHost) {
+			v.Hosts = append(v.Hosts, d.NewHost)
+		}
 		r := ranked{rank: 2, row: []string{fmt.Sprint(d.Row), d.OldHost, d.OldVendor, d.NewHost, d.NewVendor, d.NewModel, d.NewOS, d.Note}}
 		switch {
 		case d.NewHost == "" && d.Note == "":

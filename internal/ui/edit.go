@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/kojio145/configchief/internal/book"
+	"github.com/kojio145/configchief/internal/ops"
 	"github.com/kojio145/configchief/internal/project"
 )
 
@@ -110,6 +112,9 @@ type EditSavedView struct {
 	Saved     bool            `json:"saved"`
 	Message   string          `json:"message"`
 	Draft     int             `json:"draft"` // the changes that are left in the draft
+	// Redo are the new host names whose new model was changed: their
+	// proposals of IF 対応 can be made again (spec 14.11.4).
+	Redo []string `json:"redo"`
 }
 
 // EditSave writes the draft into the parameter book. choice tells for the
@@ -126,7 +131,7 @@ func (s *Session) EditSave(choice map[string]string) (*EditSavedView, error) {
 	if err != nil {
 		return nil, err
 	}
-	v := &EditSavedView{Conflicts: []book.Conflict{}, Draft: e.DraftCount()}
+	v := &EditSavedView{Conflicts: []book.Conflict{}, Draft: e.DraftCount(), Redo: []string{}}
 	if o.Summary == nil {
 		for _, c := range o.Conflicts {
 			if c.Secret { // a screen masks the secrets
@@ -179,7 +184,40 @@ func (s *Session) EditSave(choice map[string]string) (*EditSavedView, error) {
 			}
 		}
 	}
+	if len(o.Models) > 0 {
+		v.Redo = o.Models
+		v.Message += fmt.Sprintf("\n新機種を変えた機器（%s）の IF 対応には、前の案が残っています。「対応」の画面の「案を作り直す」で作り直せます", strings.Join(o.Models, "、"))
+	}
 	return v, nil
+}
+
+// RedoIfsView is the proposals of IF 対応 made again (spec 14.11.4).
+type RedoIfsView struct {
+	Message string       `json:"message"`
+	Rows    []ops.IfRedo `json:"rows"`
+	Written bool         `json:"written"`
+}
+
+// RedoIfs makes the proposals of IF 対応 again for the new host names: with
+// write false it tells what would change and writes nothing.
+func (s *Session) RedoIfs(hosts []string, write bool) (*RedoIfsView, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var e *ops.Env
+	var err error
+	if write {
+		e, err = s.beginWrite()
+	} else {
+		e, err = s.begin()
+	}
+	if err != nil {
+		return nil, err
+	}
+	r, err := e.RedoIfs(hosts, write, s.now())
+	if err != nil {
+		return nil, err
+	}
+	return &RedoIfsView{Message: r.Said(), Rows: r.Rows, Written: r.Backup != ""}, nil
 }
 
 // ProposeIfs makes the proposals of IF 対応 again from input/old (spec

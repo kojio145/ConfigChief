@@ -495,3 +495,8 @@ table.listed .rz:hover { background: #bcd5f3; }
   background: var(--panel);
 }
 td.pickbox, th.pickbox { width: 28px; text-align: center; }
+
+/* the settings of the checks (spec 14.11.5) */
+.checks-set { max-height: 420px; overflow: auto; }
+.checks-set tr.marked td { background: var(--warn-bg); }
+.redo-hosts { flex-wrap: wrap; }

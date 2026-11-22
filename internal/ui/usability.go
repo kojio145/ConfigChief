@@ -179,3 +179,46 @@ func (s *Session) BookWritable() bool {
 	}
 	return s.env.Proj.BookWritable() == nil
 }
+
+// CheckSettings lists the checks with what project.yaml says of them (spec
+// 14.11.5).
+func (s *Session) CheckSettings() (*ops.CheckSettings, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, err := s.begin()
+	if err != nil {
+		return nil, err
+	}
+	return e.CheckSettings(), nil
+}
+
+// SaveCheckSettings writes the settings of the checks into project.yaml and
+// tells what it did.
+func (s *Session) SaveCheckSettings(set map[string]string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, err := s.beginWrite()
+	if err != nil {
+		return "", err
+	}
+	copyTo, err := e.SaveCheckSettings(set, s.now())
+	if err != nil {
+		return "", err
+	}
+	if copyTo == "" {
+		return "変わったところはありません", nil
+	}
+	return "チェックの設定を project.yaml に書きました（書く前の控え: " + copyTo + "）。次のチェックから効きます（結果の画面は、チェックし直すまで前のままです）", nil
+}
+
+// MakeSample writes a sample template of the delivery sheets into
+// templates/ (spec 14.11.2) and tells where.
+func (s *Session) MakeSample(kind string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, err := s.beginWrite()
+	if err != nil {
+		return "", err
+	}
+	return e.MakeSample(kind, s.now())
+}

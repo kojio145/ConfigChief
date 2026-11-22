@@ -21,7 +21,7 @@
     create: { dir: "", name: "", kind: "migration" },
     imp: { source: "old", views: {}, tab: {}, lines: {}, pick: {}, onlyBad: false },
     jdg: newJdg(),
-    map: { view: null, tab: "open", book: null, replace: false },
+    map: { view: null, tab: "open", book: null, replace: false, redo: null }, // redo: making the proposals of IF 対応 again (spec 14.11.4)
     cmp: { a: "old", b: "new", view: null, tab: 0 },
     diff: { a: "", b: "", view: null, shown: LINES, mode: "line", stamps: true, secrets: true, layout: "stack", cur: -1 },
     tree: newTree(),
@@ -30,6 +30,7 @@
     mig: newMig(),
     cus: newCus(),
     fil: newFil(),
+    xtra: newXtra(), // the extra configurations (spec 14.11.3)
     logs: newLogs(),
     exp: { mask: "show", view: null },
     nb: { from: "", to: "", said: [] },
@@ -39,6 +40,7 @@
     upd: { found: null, busy: "", error: "", path: "" },
     readOnly: "", // why the open case is only read (spec 14.8.3)
     cx: { noSecrets: false, seal: true, pw: "", pw2: "", view: null }, // the case written out (spec 14.9)
+    cks: null, // the settings of the checks: { list, set, q, only, msg } (spec 14.11.5)
     caseNote: "", // what the home tells once of a case read back
     zoom: 100,
     added: null, // what adding files told: { source, text } (spec 14.10.1)
@@ -51,6 +53,12 @@
   // (spec 14.8.8).
   function newSrch() {
     return { q: "", regex: false, cs: false, misses: false, scopes: null, out: "", view: null, file: null, fq: "", fhits: [], fcur: -1 };
+  }
+
+  // newXtra is the screen of the extra configurations with nothing open
+  // (spec 14.11.3).
+  function newXtra() {
+    return { places: null, name: "", text: "", saved: "", isNew: false, kind: "device", target: "", from: null, msg: "", notes: [] };
   }
 
   // newJdg is the screen of the unhandled lines with nothing to show. changed
@@ -418,7 +426,9 @@
     st.hint = "";
     st.imp = { source: "old", views: {}, tab: {}, lines: {}, pick: {}, onlyBad: false };
     st.jdg = newJdg();
-    st.map = { view: null, tab: "open", book: null, replace: false };
+    st.map = { view: null, tab: "open", book: null, replace: false, redo: null };
+    st.xtra = newXtra();
+    st.cks = null;
     st.cmp = { a: "old", b: "new", view: null, tab: 0 };
     st.tree = newTree();
     st.sites = { source: "book", view: null, tab: 1 };
@@ -479,6 +489,10 @@
       loadFill();
       return;
     }
+    if (page === "extra" && !st.xtra.places) {
+      loadExtra();
+      return;
+    }
     if (page === "judge" && !st.jdg.views[st.jdg.source]) {
       loadJudge();
       return;
@@ -504,6 +518,7 @@
         item("home", "ホーム", true),
         item("import", "取り込み", true),
         item("judge", "未対応の行", true),
+        item("extra", "追加コンフィグ", true),
         item("mapping", "対応", true),
         item("edit", "表の編集", true),
         item("customer", "外部一覧", true)),
@@ -533,7 +548,7 @@
     if (st.error) {
       main.appendChild(h("div", { class: "box error" }, button("閉じる", () => { st.error = ""; render(); }, { class: "link close" }), st.error));
     }
-    const pages = { cases: casesPage, home: homePage, import: importPage, judge: judgePage, mapping: mappingPage, edit: editPage, customer: customerPage, fill: fillPage, result: resultPage, logs: logsPage, search: searchPage, compare: comparePage, about: aboutPage };
+    const pages = { cases: casesPage, home: homePage, import: importPage, judge: judgePage, extra: extraPage, mapping: mappingPage, edit: editPage, customer: customerPage, fill: fillPage, result: resultPage, logs: logsPage, search: searchPage, compare: comparePage, about: aboutPage };
     afterDraw = [];
     add(main, [pages[st.page]()]);
     main.scrollTop = same ? top : 0;
@@ -722,7 +737,73 @@
           seg([["migration", "更改（旧コンフィグから作る）"], ["new", "新規"]], c.kind, (k) => { c.kind = k; render(); })),
         h("div", { class: "row" }, button("作る", create, { class: "primary", disabled: !c.dir }))),
       casePart(),
+      st.cas ? checksPart() : null,
     ];
+  }
+
+  // checksPart sets, for the case, how heavy each check is or stops it: it
+  // writes checks.severity and checks.disable of project.yaml (spec 14.11.5).
+  function checksPart() {
+    const k = st.cks;
+    const SEV = { error: "エラー", warning: "警告", info: "情報" };
+    const load = () => run("チェックの一覧を読んでいます", async () => {
+      const list = await api().CheckSettings();
+      const set = {};
+      for (const c of list.checks) set[c.id] = c.now;
+      st.cks = { list, set, q: "", only: false, msg: "" };
+    });
+    if (!k) {
+      return h("div", { class: "card", id: "checks-card" },
+        h("h2", null, "チェックの設定"),
+        h("p", { class: "dim" }, "この案件で、チェックごとに重さ（エラー・警告・情報）を変えたり、止めたりします。project.yaml の checks.severity・checks.disable に書きます。"),
+        h("div", { class: "row" }, button("チェックの設定を開く", load, { id: "checks-open" })));
+    }
+    const changed = k.list.checks.filter((c) => (k.set[c.id] || "") !== (c.now || ""));
+    const shown = k.list.checks.filter((c) => !k.only || k.set[c.id]);
+    const count = h("span", { class: "dim" });
+    // The text filter hides rows in place: the field keeps the focus.
+    const narrow = () => {
+      const q = k.q.trim().toLowerCase();
+      let n = 0;
+      for (const tr of body.children) {
+        const hit = !q || tr.dataset.text.includes(q);
+        tr.hidden = !hit;
+        if (hit) n++;
+      }
+      count.textContent = `${n} / ${k.list.checks.length} 個`;
+    };
+    const save = () => run("project.yaml に書いています", async () => {
+      k.msg = await api().SaveCheckSettings(k.set);
+      const list = await api().CheckSettings();
+      k.list = list;
+      for (const c of list.checks) k.set[c.id] = c.now;
+    });
+    const choices = (c) => [["", `既定のまま（${SEV[c.default] || c.default}）`], ["error", "エラー"], ["warning", "警告"], ["info", "情報"]].concat(c.stays ? [] : [["off", "止める"]]);
+    const body = h("tbody", null, shown.map((c) => {
+      const tr = h("tr", { class: k.set[c.id] ? "marked" : null },
+        h("td", null, c.id), h("td", null, c.title), h("td", null, SEV[c.default] || c.default),
+        h("td", null, (() => { const el = select(choices(c), k.set[c.id] || "", (x) => { k.set[c.id] = x; render(); }); el.dataset.check = c.id; return el; })()));
+      tr.dataset.text = (c.id + " " + c.title).toLowerCase();
+      return tr;
+    }));
+    narrow();
+    return h("div", { class: "card", id: "checks-card" },
+      h("h2", null, "チェックの設定"),
+      h("p", { class: "dim" }, "重さを変えた・止めたチェックは、次のチェックから効きます。値の誤りがある機器を生成しないためのチェック（V-101〜V-107・V-109）は止められません。 ",
+        tip("書くのは project.yaml の checks.severity と checks.disable だけです（ほかの行とコメントは変えません）。書く前の project.yaml は state/backup に控えます。この版に無い ID の設定は、消さずに残します。")),
+      boxes("info", k.msg ? [k.msg] : []),
+      k.list.unknown.length ? boxes("warn", [`この版に無いチェックの設定（そのまま残します）: ${k.list.unknown.join("、")}`]) : null,
+      h("div", { class: "row" },
+        h("input", { type: "text", placeholder: "ID・名前で絞り込む", value: k.q, id: "checks-q", oninput: (e) => { k.q = e.target.value; narrow(); } }),
+        h("label", null, h("input", { type: "checkbox", checked: k.only, onchange: (e) => { k.only = e.target.checked; render(); } }), " 既定と違うものだけ"),
+        count),
+      h("div", { class: "table-wrap checks-set" }, h("table", null,
+        h("thead", null, h("tr", null, h("th", null, "ID"), h("th", null, "名前"), h("th", null, "既定"), h("th", null, "この案件"))),
+        body)),
+      h("div", { class: "row" },
+        button(changed.length ? `保存する（${changed.length} 個）` : "保存する", save, { class: "primary", disabled: !changed.length, id: "checks-save" }),
+        button("元に戻す", () => { for (const c of k.list.checks) k.set[c.id] = c.now; render(); }, { disabled: !changed.length }),
+        button("閉じる", () => { st.cks = null; render(); })));
   }
 
   // casePart writes the open case out to one file and reads such a file
@@ -876,6 +957,17 @@
           button("納品用パラメータシートを出す", () => doExport("sheet"), { disabled: !m.hasBook }),
           button("相手に渡すパラメータ表を出す", () => doExport("peer"), { disabled: !m.hasBook }),
           button("ひな形のフォルダを開く", () => show("templates"))),
+        h("div", { class: "row" },
+          h("span", null, "ひな形の見本: "),
+          select([["sheets", "1 ブックで機器ごとのシート"], ["files", "機器ごとに 1 ファイル"], ["list", "全台を 1 枚の一覧"]], exp.sample || "sheets", (v) => { exp.sample = v; }),
+          button("ひな形の見本を作る", () => run("ひな形の見本を作っています", async () => {
+            const rel = await api().MakeSample(exp.sample || "sheets");
+            exp.sampleMsg = `${rel} を作りました。templates フォルダのひな形は、すべて使います（ひな形 1 つにつき、納品用シートが 1 つ出ます）。見本を直して使うか、要らなければ消してください。書き方は使い方の「納品用パラメータシートのひな形」にあります。`;
+            exp.sampleFile = rel;
+          }), { id: "make-sample" }),
+          tip("見出し・罫線・色の付いたひな形を templates フォルダに作ります。機器の基本・インタフェース・スタティック経路の欄があり、そのまま「納品用パラメータシートを出す」で出せます。自社の書式に合わせて直して使います")),
+        exp.sampleMsg ? h("div", { class: "box info", id: "sample-msg" }, exp.sampleMsg,
+          h("div", { class: "row" }, button("見本を開く", () => show(exp.sampleFile)), button("ひな形のフォルダを開く", () => show("templates")))) : null,
         exp.view ? h("div", { id: "export-result" },
           h("p", null, exp.view.summary),
           boxes("warn", exp.view.notes),
@@ -1256,7 +1348,9 @@
         h("div", null, h("b", null, name(d)), " ",
           h("span", { class: cls("tag", d.verdict && d.verdict !== "hold" ? "judged" : "unknown") }, d.word),
           d.verdict ? h("span", { class: "dim small" }, ` ${d.own ? "この機器への判定、" : ""}${d.by}、${when(d.at)}${d.reason ? "、理由: " + d.reason : ""}`) : null),
-        h("div", { class: "code" }, d.heads.map(lineText).join("\n") + (d.more ? `\n…（ほか ${d.more} 行）` : "")))));
+        h("div", { class: "code" }, d.heads.map(lineText).join("\n") + (d.more ? `\n…（ほか ${d.more} 行）` : "")),
+        d.device ? h("div", { class: "row" }, button("追加コンフィグに書く", () => draftExtra(s, g.id, d.device), { class: "small", "data-extra": d.device,
+          title: "この機器のこのかたまりの行（下の行も全部）を、この機器の追加コンフィグの末尾に足した下書きを開きます。保存すると、この機器のこの行に「手動で対応」を付けます" })) : null)));
 
     const some = jd.scope === "some";
     const hosts = g.devices.filter((d) => d.device && jd.picked[d.device]).map((d) => d.device);
@@ -1302,6 +1396,143 @@
     }, true);
   }
 
+  // ---- 追加コンフィグ ----
+
+  function loadExtra() {
+    run("追加コンフィグを読んでいます", async () => {
+      st.xtra.places = await api().ExtraPlaces();
+      st.page = "extra";
+    }, true);
+  }
+
+  // xtraLeave asks before the text that is not saved goes.
+  async function xtraLeave() {
+    const x = st.xtra;
+    if (!x.name || x.text === x.saved) return true;
+    return ask("編集をやめますか", `extra/${x.name} の保存していない変更は消えます。`, "やめる");
+  }
+
+  async function openExtra(name, isNew) {
+    if (!(await xtraLeave())) return;
+    const x = st.xtra;
+    await run("追加コンフィグを読んでいます", async () => {
+      const text = isNew ? "" : await api().ReadExtra(name);
+      Object.assign(x, { name, text, saved: text, isNew: !!isNew, from: null, msg: "", notes: [] });
+    });
+  }
+
+  // draftExtra opens the extra configuration of a device with the unhandled
+  // lines of a group added at its end; nothing is written until it is saved.
+  async function draftExtra(source, group, device) {
+    if (!(await xtraLeave())) return;
+    await run("追加コンフィグの下書きを作っています", async () => {
+      const d = await api().DraftExtra(source, group, device);
+      const x = st.xtra;
+      x.places = await api().ExtraPlaces();
+      const there = x.places.files.some((f) => f.name === d.name);
+      Object.assign(x, { name: d.name, text: d.text, saved: there ? await api().ReadExtra(d.name) : "", isNew: !there,
+        from: { source, group, device, by: st.jdg.by || "" }, notes: [],
+        msg: `未対応の行 ${d.lines} 行を、extra/${d.name} の末尾に足しました（まだ保存していません）。メーカーの書き方に合っているかを見て、直してから保存してください。` });
+      st.page = "extra";
+    });
+  }
+
+  const POS_LINE = /^\{#\s*position:\s*(after|before)\s+(\S+)\s*#\}\s*$/;
+
+  function extraPage() {
+    const x = st.xtra;
+    const pl = x.places;
+    const out = [
+      h("h1", null, "追加コンフィグ"),
+      h("p", { class: "dim" }, "パックが書けない設定を、extra フォルダのファイルに書いて、生成したコンフィグに差し込みます。全機器・グループ・機器ごとに 1 ファイルです。パラメータブックの値は {{ device.hostname }} のように書けます。 ",
+        tip("ファイル名の決まり: _all.j2（全機器）・@グループ名.j2（そのグループ）・ホスト名.j2（その機器）。当てる先を選べば、名前はツールが決めます。保存する前の中身は state/backup に控えます。")),
+      h("div", { class: "row" }, button("読み直す", loadExtra), button("フォルダを開く", () => show("extra"))),
+    ];
+    if (!pl) return out;
+    const kinds = [["device", "機器"], ["group", "グループ"], ["all", "全機器"]];
+    const targets = x.kind === "device" ? pl.devices : x.kind === "group" ? pl.groups : [];
+    if (x.kind !== "all" && !targets.includes(x.target)) x.target = targets[0] || "";
+    const kindWord = { all: "全機器", group: "グループ", device: "機器" };
+    const create = async () => {
+      let name = "";
+      try {
+        name = await api().ExtraName(x.kind, x.target);
+      } catch (e) {
+        st.error = errText(e);
+        render();
+        return;
+      }
+      openExtra(name, !pl.files.some((f) => f.name === name));
+    };
+    out.push(h("div", { class: "card" },
+      h("h2", null, `ファイル（${pl.files.length}）`),
+      pl.files.length ? h("div", { class: "table-wrap" }, h("table", null,
+        h("thead", null, h("tr", null, h("th", null, "ファイル"), h("th", null, "当てる先"), h("th", null, ""))),
+        h("tbody", null, pl.files.map((f) => h("tr", { class: f.name === x.name ? "sel" : null },
+          h("td", { class: "code" }, "extra/" + f.name),
+          h("td", null, `${kindWord[f.kind]}${f.target ? " " + f.target : ""}`, f.applies ? null : h("span", { class: "dim small" }, "（ブックのどの機器にも当たりません）")),
+          h("td", null, button("開く", () => openExtra(f.name, false), { "data-open": f.name })))))))
+        : h("p", { class: "dim" }, "まだありません。"),
+      h("div", { class: "row" },
+        h("span", null, "新しく作る・開く: "),
+        select(kinds, x.kind, (v) => { x.kind = v; x.target = ""; render(); }),
+        x.kind === "all" ? null : targets.length ? select(targets.map((t) => [t, t]), x.target, (v) => { x.target = v; })
+          : h("span", { class: "dim" }, x.kind === "group" ? "（ブックの機器にグループがありません）" : "（ブックに機器がありません）"),
+        button("開く", create, { disabled: x.kind !== "all" && !x.target, id: "extra-new" }))));
+    if (!x.name) return out;
+
+    const lines = x.text.split("\n");
+    const m = POS_LINE.exec(lines[0] || "");
+    const pos = m ? `${m[1]}:${m[2]}` : "";
+    const posOpts = [["", "末尾の手前（既定）"]];
+    for (const id of pl.positions) posOpts.push([`after:${id}`, `${id} の後`], [`before:${id}`, `${id} の前`]);
+    if (pos && !posOpts.some((o) => o[0] === pos)) posOpts.push([pos, `${m[2]} の${m[1] === "after" ? "後" : "前"}（どのパックにもありません）`]);
+    const setPos = (v) => {
+      // The text as it is now: typing does not draw the page again.
+      const now = x.text.split("\n");
+      const rest = POS_LINE.test(now[0] || "") ? now.slice(1) : now;
+      x.text = (v ? [`{# position: ${v.replace(":", " ")} #}`].concat(rest) : rest).join("\n");
+      render();
+    };
+    const save = () => run("追加コンフィグを保存しています", async () => {
+      const r = await api().SaveExtra(x.name, x.text, x.from);
+      x.saved = x.text;
+      x.isNew = false;
+      x.msg = r.message;
+      x.notes = r.notes || [];
+      if (x.from) {
+        x.from = null;
+        st.jdg.views = {}; // the judgments changed: read again when the screen opens
+      }
+      x.places = await api().ExtraPlaces();
+    });
+    const del = async () => {
+      if (!(await ask("追加コンフィグを消しますか", `extra/${x.name} を state/backup に移します（生成に使わなくなります）。`, "消す"))) return;
+      run("追加コンフィグを消しています", async () => {
+        x.msg = await api().DeleteExtra(x.name);
+        Object.assign(x, { name: "", text: "", saved: "", from: null, notes: [] });
+        x.places = await api().ExtraPlaces();
+      });
+    };
+    const dirty = h("span", { class: "dim small" }, "（保存していない変更があります）");
+    dirty.hidden = x.text === x.saved;
+    const ta = h("textarea", { class: "fill-text", spellcheck: "false", rows: "24", value: x.text, id: "extra-text",
+      oninput: (e) => { x.text = e.target.value; dirty.hidden = x.text === x.saved; } });
+    out.push(h("div", { class: "card", id: "extra-edit" },
+      h("h2", null, `extra/${x.name}`, x.isNew ? h("span", { class: "dim small" }, "（新しいファイル）") : null, " ", dirty),
+      boxes("info", x.msg ? [x.msg] : []),
+      boxes("warn", x.notes),
+      h("div", { class: "row" }, h("span", null, "差し込む位置: "), select(posOpts, pos, setPos),
+        tip("節の名前はパックの render.yaml の sections です（system・interfaces・routing など）。選ぶと 1 行目に {# position: … #} を書きます")),
+      ta,
+      h("div", { class: "row" },
+        button("保存", save, { class: "primary", id: "extra-save" }),
+        x.isNew ? null : button("消す", del, { id: "extra-delete" }),
+        button("閉じる", async () => { if (await xtraLeave()) { Object.assign(x, { name: "", text: "", saved: "", from: null, msg: "", notes: [] }); render(); } }))));
+    if (!x.name) return out;
+    return out;
+  }
+
   // ---- 対応 ----
 
   function loadMapping() {
@@ -1319,6 +1550,51 @@
       st.map.view = await api().Mapping();
       st.map.tab = "ifs";
     }, true);
+  }
+
+  // openRedo shows the card that makes the proposals of IF 対応 again for
+  // the new host names picked (spec 14.11.4).
+  function openRedo(hosts) {
+    const picked = {};
+    for (const x of hosts) picked[x] = true;
+    st.map.redo = { picked, view: null };
+    st.map.tab = "ifs";
+    if (st.page !== "mapping") go("mapping");
+    else render();
+  }
+
+  function redoCard(v) {
+    const rd = st.map.redo;
+    const hosts = v.hosts || [];
+    const chosen = () => hosts.filter((x) => rd.picked[x]);
+    const look = (write) => run(write ? "IF 対応の案を作り直しています" : "作り直した案を作っています", async () => {
+      const r = await api().RedoIfs(chosen(), write);
+      if (write) {
+        st.mig.msg = r.message;
+        st.map.redo = null;
+        st.map.view = await api().Mapping();
+      } else rd.view = r;
+    }, true);
+    const all = hosts.length > 0 && hosts.every((x) => rd.picked[x]);
+    const rv = rd.view;
+    return h("div", { class: "card", id: "redo" },
+      h("h2", null, "IF 対応の案を作り直す"),
+      h("p", null, "選んだ機器の IF 対応の新 IF 名を、今の「新機種」・新コンフィグから作り直します。入れ替えるのは、根拠の入っている行（ツールの案のまま）と、新 IF 名が空の行です。根拠が空で新 IF 名のある行（人が書いた名前と -）は変えません。新しい案の無い行は、新 IF 名と根拠を空にします。"),
+      h("p", { class: "dim small" }, "Excel で新 IF 名を直したときは、根拠も空にしておくと、作り直しで上書きされません（画面の表で直したときは、保存で根拠を空にします）。下の一覧で、書く前に確かめられます。"),
+      h("div", { class: "row redo-hosts" },
+        h("label", null, h("input", { type: "checkbox", checked: all, onchange: (e) => { for (const x of hosts) rd.picked[x] = e.target.checked; rd.view = null; render(); } }), " 全部"),
+        hosts.map((x) => h("label", null, h("input", { type: "checkbox", checked: !!rd.picked[x], "data-host": x, onchange: (e) => { rd.picked[x] = e.target.checked; rd.view = null; render(); } }), " " + x))),
+      h("div", { class: "row" },
+        button("前と後を見る", () => look(false), { class: rv ? null : "primary", disabled: !chosen().length, id: "redo-look" }),
+        button("書く", async () => {
+          if (!(await ask("IF 対応の案を作り直す", `IF 対応の ${rv.rows.length} 行の新 IF 名と根拠を書き換えます。書く前に、今のブックの控えを state/backup に取ります。`, "書く"))) return;
+          look(true);
+        }, { class: rv ? "primary" : null, disabled: !rv || !rv.rows.length, id: "redo-write" }),
+        button("やめる", () => { st.map.redo = null; render(); })),
+      rv ? h("div", { id: "redo-result" },
+        h("p", null, rv.message),
+        rv.rows.length ? tableView({ name: "作り直す行", header: ["新ホスト名", "旧 IF 名", "今の新 IF 名", "今の根拠", "→ 新 IF 名", "→ 根拠"],
+          rows: rv.rows.map((r) => [r.newHost, r.oldIf, r.was || "（空）", r.wasBasis, r.now || "（空）", r.basis]) }, { id: "redo/rows" }) : null) : null);
   }
 
   // loadNext asks what to do next for the home screen (spec 14.10.4). The
@@ -1382,11 +1658,14 @@
         button("IF 対応を表で編集", () => openEdit({ sheet: "@ifs" }), { disabled: !v || !v.hasBook, id: "edit-ifs" }),
         button("Excel で開く", () => show(st.cas.book), { disabled: !v || !v.hasBook }),
         button("IF 対応の案を作る", proposeIfs, { disabled: !v || !v.hasBook, id: "propose-ifs",
-          title: "input/old を読み直し、新ホスト名を書いた機器の IF 対応の行を足し、空の新 IF 名を案で埋めます（人が書いた名前と - は変えません）。取り込み直す必要はありません" })),
+          title: "input/old を読み直し、新ホスト名を書いた機器の IF 対応の行を足し、空の新 IF 名を案で埋めます（人が書いた名前と - は変えません）。取り込み直す必要はありません" }),
+        button("案を作り直す", () => openRedo([]), { disabled: !v || !v.hasBook || !(v.hosts || []).length, id: "redo-ifs",
+          title: "後から新機種を書いた・変えた機器の IF 対応の案を、今の機種で作り直します。ツールの案（根拠のある行）だけを入れ替え、人が書いた名前は変えません" })),
       h("p", { class: "dim small" }, "機器対応を画面の表で保存すると、IF 対応の案は自動で作ります。Excel で書いたときは「IF 対応の案を作る」を押してください。"),
       draftNote(),
     ];
     if (!v) return out;
+    if (mp.redo) out.push(redoCard(v));
     out.push(boxes("warn", v.notes));
     if (!v.hasBook) {
       out.push(h("div", { class: "box info" }, `パラメータブック ${v.book} はまだありません。旧コンフィグを取り込むと作られます。`),
@@ -3583,6 +3862,7 @@
       }
       await run("パラメータブックを読み直しています", async () => {
         st.edit.msg = res.message;
+        st.edit.redo = res.redo && res.redo.length ? res.redo : null;
         st.edit.list = await api().EditSheets();
         if (st.home) st.home = await api().Home();
         await gLoad(id);
@@ -5729,7 +6009,8 @@
   function editPage() {
     const ed = st.edit;
     const out = [h("h1", null, "表の編集")];
-    if (ed.msg) out.push(h("div", { class: "box info", id: "edit-msg" }, button("閉じる", () => { ed.msg = ""; render(); }, { class: "link close" }), ed.msg));
+    if (ed.msg) out.push(h("div", { class: "box info", id: "edit-msg" }, button("閉じる", () => { ed.msg = ""; ed.redo = null; render(); }, { class: "link close" }), ed.msg,
+      ed.redo ? h("div", { class: "row" }, button("案を作り直す", () => { const hs = ed.redo; ed.msg = ""; ed.redo = null; openRedo(hs); }, { id: "edit-redo" })) : null));
     if (!ed.list) {
       out.push(h("p", { class: "dim" }, "パラメータブックのシートを、表として開いて直します。"), h("div", { class: "row" }, button("開く", () => openEdit(null), { class: "primary" })));
       return out;
@@ -6017,6 +6298,7 @@
       render();
       try {
         u.path = await api().DownloadLatest();
+        u.swap = await api().CanSwap();
         toast("ダウンロードしました");
       } catch (e) {
         u.error = errText(e);
@@ -6025,6 +6307,26 @@
       render();
     };
     const showErr = (e) => toast(errText(e), "err");
+    // swap puts the downloaded exe in the place of this one and starts it
+    // (spec 14.11.1).
+    const swap = async () => {
+      const ok = await ask("入れ替えて起動し直す",
+        `ConfigChief を閉じて、v${i.latest} で起動し直します。今の exe は ConfigChief-v${i.current}.exe の名前で同じフォルダに残します（戻すときは名前を戻します）。`
+        + (st.cas ? "開いている案件は、新しい版で開き直します。表の編集の下書きは案件に残っています。" : ""), "入れ替える");
+      if (!ok) return;
+      u.busy = "swap";
+      u.error = "";
+      render();
+      try {
+        await api().SwapAndRestart();
+        toast("新しい版を起動しました。この窓は閉じます");
+      } catch (e) {
+        u.error = errText(e);
+        u.busy = "";
+        try { setState((await api().Start()).state); } catch (x) { /* the state stays */ }
+        render();
+      }
+    };
     const out = [
       h("h1", null, "バージョン情報"),
       h("p", { class: "dim" }, "GitHub の公開リリースと、この ConfigChief の版を比べます。", h("b", null, "ボタンを押したときだけ通信します"), "（送るのは GitHub への問い合わせだけで、案件の中身は送りません）。 ",
@@ -6041,7 +6343,10 @@
               button(u.busy === "dl" ? "ダウンロード中…" : `⬇ 最新版をダウンロード（${(i.exeSize / 1048576).toFixed(1)} MB）`, download, { class: "primary", id: "upd-dl", disabled: !!u.busy })]
             : h("p", { class: "dim small" }, "最新版に ConfigChief.exe が添付されていません。リリースのページから入手してください。"))
             : [h("p", null, "✓ ダウンロードしました: " + u.path),
-              h("div", { class: "section-label" }, "あとの手順"),
+              u.swap ? h("div", { class: "row" },
+                button("入れ替えて起動し直す", swap, { class: "primary", id: "upd-swap", disabled: !!u.busy }),
+                tip(`今の exe は ConfigChief-v${i.current}.exe の名前で同じフォルダに残します（戻すときは名前を戻します）。開いている案件は、新しい版で開き直します`)) : null,
+              h("div", { class: "section-label" }, u.swap ? "手で入れ替えるときの手順" : "あとの手順"),
               h("ol", null,
                 h("li", null, "ConfigChief の窓を閉じます。"),
                 h("li", null, i.inAppDir ? "今の ConfigChief.exe を消してから、ダウンロードしたファイルの名前を ConfigChief.exe に変えます（同じフォルダにあります）。"

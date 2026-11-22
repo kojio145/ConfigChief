@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kojio145/configchief/internal/book"
 	"github.com/kojio145/configchief/internal/check"
 	"github.com/kojio145/configchief/internal/model"
 )
@@ -218,5 +219,104 @@ func TestLastOutput(t *testing.T) {
 	}
 	if Stamped(dir) != "2026-01-02 03:04:05" {
 		t.Errorf("stamp = %s", Stamped(dir))
+	}
+}
+
+// The proposals are made again for the rows that hold one, never for a name
+// a person wrote (spec 14.11.4).
+func TestRedoIfs(t *testing.T) {
+	e := migCase(t)
+	setCell(t, e, "IF 対応", "旧 IF 名", "Loopback0", "新 IF 名", "Loopback9")
+	setCell(t, e, "IF 対応", "旧 IF 名", "Loopback0", "案の根拠", "前の機種の案")
+	setCell(t, e, "IF 対応", "旧 IF 名", "GigabitEthernet0/0", "新 IF 名", "GigabitEthernet0/9")
+	setCell(t, e, "IF 対応", "旧 IF 名", "GigabitEthernet0/0", "案の根拠", "")
+	_, bk, err := e.readBook()
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := bk.Ifs[0].NewHost
+	if _, err := e.RedoIfs(nil, false, at); err == nil {
+		t.Error("no device was taken")
+	}
+	look, err := e.RedoIfs([]string{host}, false, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if look.Backup != "" || look.Kept == 0 {
+		t.Fatalf("look = %+v", look)
+	}
+	var lo *IfRedo
+	for i, r := range look.Rows {
+		if r.OldIf == "GigabitEthernet0/0" {
+			t.Errorf("a name a person wrote is in the list: %+v", r)
+		}
+		if r.OldIf == "Loopback0" {
+			lo = &look.Rows[i]
+		}
+	}
+	if lo == nil || lo.Was != "Loopback9" || lo.Now != "Loopback0" || lo.Basis == "" {
+		t.Fatalf("Loopback0 = %+v", lo)
+	}
+	if _, bk2, _ := e.readBook(); bk2.Ifs[0].NewIf != bk.Ifs[0].NewIf {
+		t.Error("looking wrote the book")
+	}
+	done, err := e.RedoIfs([]string{host}, true, at)
+	if err != nil || done.Backup == "" || len(done.Rows) != len(look.Rows) {
+		t.Fatalf("done = %v, %+v", err, done)
+	}
+	_, bk, _ = e.readBook()
+	for _, m := range bk.Ifs {
+		switch m.OldIf {
+		case "Loopback0":
+			if m.NewIf != "Loopback0" || m.Basis == "" {
+				t.Errorf("Loopback0 after: %+v", m)
+			}
+		case "GigabitEthernet0/0":
+			if m.NewIf != "GigabitEthernet0/9" {
+				t.Errorf("a name a person wrote was changed: %+v", m)
+			}
+		}
+	}
+	if again, err := e.RedoIfs([]string{host}, true, at); err != nil || len(again.Rows) != 0 || again.Backup != "" {
+		t.Errorf("again: %v, %+v", err, again)
+	}
+}
+
+// A new name written in the table of the screen is a person's: the basis
+// goes with the save. A new model changed tells that the proposals can be
+// made again (spec 14.11.4).
+func TestEditClearsBasis(t *testing.T) {
+	e := migCase(t)
+	_, bk, err := e.readBook()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lo book.IfMap
+	for _, m := range bk.Ifs {
+		if m.OldIf == "Loopback0" {
+			lo = m
+		}
+	}
+	if lo.Basis == "" {
+		t.Fatalf("Loopback0 has no proposal: %+v", lo)
+	}
+	key := map[string]string{"new_host": lo.NewHost, "old_if": lo.OldIf}
+	draft(t, e, book.DraftSheet{Sheet: "@ifs", Changed: []book.DraftRow{{Row: lo.Row, Key: key,
+		Old: map[string]string{"new_if": lo.NewIf}, New: map[string]string{"new_if": "Loopback7"}}}})
+	dm := bk.Devices[0]
+	draft(t, e, book.DraftSheet{Sheet: "@devices", Changed: []book.DraftRow{{Row: dm.Row, Key: map[string]string{"old_host": dm.OldHost},
+		Old: map[string]string{"new_model": dm.NewModel}, New: map[string]string{"new_model": "ix-2ge-8sw"}}}})
+	saved, err := e.SaveEdits(nil, at)
+	if err != nil || saved.Summary == nil {
+		t.Fatalf("saved = %+v, %v", saved, err)
+	}
+	if strings.Join(saved.Models, ",") != dm.NewHost {
+		t.Errorf("models = %v", saved.Models)
+	}
+	_, bk, _ = e.readBook()
+	for _, m := range bk.Ifs {
+		if m.OldIf == "Loopback0" && (m.NewIf != "Loopback7" || m.Basis != "") {
+			t.Errorf("Loopback0 after the save: %+v", m)
+		}
 	}
 }

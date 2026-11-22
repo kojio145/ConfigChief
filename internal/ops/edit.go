@@ -261,6 +261,10 @@ type EditSaved struct {
 	// Devices tells that the draft had changes in 機器対応: the proposals of
 	// IF 対応 are made again after it (spec 14.10.2).
 	Devices bool
+	// Models are the new host names whose new model was changed and whose
+	// rows of IF 対応 hold proposals: the page offers to make them again
+	// (spec 14.11.4).
+	Models []string
 }
 
 // SaveEdits writes the draft into the parameter book: the cells that were
@@ -289,6 +293,11 @@ func (e *Env) SaveEdits(choice map[string]string, now time.Time) (*EditSaved, er
 	if err := e.Proj.BookWritable(); err != nil {
 		return nil, fmt.Errorf("%v（下書きは残っています）", err)
 	}
+	_, bk, err := e.readBook()
+	if err != nil {
+		return nil, err
+	}
+	clearBasis(d, bk)
 	next, sum, conflicts, err := book.Apply(old, file, e.Schema, e.lang(), d, choice)
 	if err != nil {
 		return nil, err
@@ -299,6 +308,7 @@ func (e *Env) SaveEdits(choice map[string]string, now time.Time) (*EditSaved, er
 	}
 	out.Summary = sum
 	out.Devices = d.Of("@devices") != nil
+	out.Models = modelsChanged(d, bk)
 	if sum.Changed() {
 		if out.Backup, err = e.saveBook(now, next); err != nil {
 			return nil, fmt.Errorf("%v（下書きは残っています）", err)
@@ -407,4 +417,59 @@ func (e *Env) modelChoices() ([]string, map[string]string) {
 		}
 	}
 	return ids, notes
+}
+
+// clearBasis empties the basis of the rows of IF 対応 whose new interface
+// name was changed in the draft, unless the basis was changed too: the name
+// is a person's then, and a proposal made again leaves it (spec 14.11.4).
+func clearBasis(d *book.Draft, bk *book.Book) {
+	part := d.Of("@ifs")
+	if part == nil || bk == nil {
+		return
+	}
+	basis := map[string]string{}
+	for _, m := range bk.Ifs {
+		basis[book.IfMap{NewHost: m.NewHost, OldIf: m.OldIf}.Key()] = m.Basis
+	}
+	for i := range part.Changed {
+		r := &part.Changed[i]
+		if _, ok := r.New["new_if"]; !ok {
+			continue
+		}
+		if _, ok := r.New["basis"]; ok {
+			continue
+		}
+		was := basis[book.IfMap{NewHost: r.Key["new_host"], OldIf: r.Key["old_if"]}.Key()]
+		if was == "" {
+			continue
+		}
+		r.Old["basis"], r.New["basis"] = was, ""
+	}
+}
+
+// modelsChanged gives the new host names whose new model was changed in the
+// draft and whose rows of IF 対応 hold a proposal of the tool.
+func modelsChanged(d *book.Draft, bk *book.Book) []string {
+	part := d.Of("@devices")
+	if part == nil || bk == nil {
+		return nil
+	}
+	proposed := map[string]bool{}
+	for _, m := range bk.Ifs {
+		if m.Basis != "" {
+			proposed[m.NewHost] = true
+		}
+	}
+	var out []string
+	for _, r := range part.Changed {
+		if _, ok := r.New["new_model"]; !ok {
+			continue
+		}
+		for _, dm := range bk.Devices {
+			if dm.OldHost == r.Key["old_host"] && proposed[dm.NewHost] {
+				out = append(out, dm.NewHost)
+			}
+		}
+	}
+	return out
 }

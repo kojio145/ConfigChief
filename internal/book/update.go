@@ -29,6 +29,11 @@ type Change struct {
 	// and old interface whose new interface name is empty (spec 10.2). A
 	// name a person wrote, and "-", stay.
 	IfFill []IfMap
+	// IfSet are new names for rows of IF 対応 that are in the book, put in
+	// whatever the row holds: the new interface name and the basis go into
+	// the row of the same new host name and old interface, and an empty one
+	// empties the cell (spec 14.11.4: the proposals made again).
+	IfSet []IfMap
 }
 
 // CellSet puts a value into one cell of a row of the book.
@@ -49,6 +54,7 @@ type Summary struct {
 	Sheets     int            // sheets made in a book that was there
 	Cells      int            // cells of rows of the book that were changed
 	IfFilled   int            // rows of IF 対応 whose empty new interface name was filled
+	IfSet      int            // rows of IF 対応 whose new interface name was put anew
 	Replaced   bool           // the sheets of the tables were emptied first
 	Problems   []Problem      // what Read said about the book as it was
 }
@@ -56,7 +62,7 @@ type Summary struct {
 // Changed tells whether the bytes differ from the book as it was, so that the
 // caller has something to write.
 func (s *Summary) Changed() bool {
-	return s.Created || s.Replaced || s.Sheets > 0 || s.DeviceRows > 0 || s.IfRows > 0 || s.Rows() > 0 || s.Cells > 0 || s.IfFilled > 0
+	return s.Created || s.Replaced || s.Sheets > 0 || s.DeviceRows > 0 || s.IfRows > 0 || s.Rows() > 0 || s.Cells > 0 || s.IfFilled > 0 || s.IfSet > 0
 }
 
 // Rows is the number of rows added to the sheets of the tables.
@@ -253,6 +259,37 @@ func Update(old []byte, file string, sc *schema.Set, lang string, ch Change) ([]
 		}
 	}
 
+	if info := bk.Sheets[ifSheet.id]; info != nil && len(ch.IfSet) > 0 {
+		at := map[string]IfMap{}
+		for _, m := range bk.Ifs {
+			if m.Row > 0 {
+				at[ifKey(m)] = m
+			}
+		}
+		for _, p := range ch.IfSet {
+			m, ok := at[ifKey(p)]
+			if !ok {
+				return nil, nil, fmt.Errorf("%s の IF 対応に、%s の %s の行がありません", file, p.NewHost, p.OldIf)
+			}
+			for _, cv := range []struct{ name, v string }{{"new_if", p.NewIf}, {"basis", p.Basis}} {
+				c := ifSheet.cols[ifSheet.col(cv.name)]
+				ci, err := column(f, info, st, c.name, c.title.In(lang))
+				if err != nil {
+					return nil, nil, err
+				}
+				if cv.v == "" {
+					err = emptyCell(f, info.Name, addr(ci, m.Row-1))
+				} else {
+					err = f.SetCellStr(info.Name, addr(ci, m.Row-1), cv.v)
+				}
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+			sum.IfSet++
+		}
+	}
+
 	dev, ifs := uniqueMaps(bk, ch)
 	sum.DeviceRows, sum.IfRows = len(dev), len(ifs)
 	var devRows, ifRows [][]string
@@ -397,3 +434,9 @@ func sheetRow(r *model.Row) int {
 	}
 	return -1
 }
+
+// ifKey names a row of IF 対応: its new host name and old interface.
+func ifKey(m IfMap) string { return m.Key() }
+
+// Key names a row of IF 対応 by its new host name and old interface.
+func (m IfMap) Key() string { return m.NewHost + "\x00" + m.OldIf }

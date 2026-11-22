@@ -60,6 +60,7 @@ func exeDir() string {
 var downloaded struct {
 	sync.Mutex
 	path string
+	sha  string // its SHA-256 as it was saved (spec 14.11.1)
 }
 
 // CheckLatest asks GitHub for the newest public release: the only place,
@@ -76,8 +77,9 @@ func (a *App) DownloadLatest() (r0 string, err error) {
 	defer a.guard("DownloadLatest", &err)
 	p, err := update.Download(a.ctx, version, exeDir())
 	if err == nil {
+		sum, _ := update.FileSHA256(p)
 		downloaded.Lock()
-		downloaded.path = p
+		downloaded.path, downloaded.sha = p, sum
 		downloaded.Unlock()
 	}
 	return p, err
@@ -248,6 +250,71 @@ func (a *App) PickFiles(title string) (r0 []string, err error) {
 func (a *App) ProposeIfs() (r0 string, err error) {
 	defer a.guard("ProposeIfs", &err)
 	return a.s.ProposeIfs()
+}
+
+// RedoIfs makes the proposals of IF 対応 again for the new host names
+// (spec 14.11.4); write false only tells what would change.
+func (a *App) RedoIfs(hosts []string, write bool) (r0 *ui.RedoIfsView, err error) {
+	defer a.guard("RedoIfs", &err)
+	return a.s.RedoIfs(hosts, write)
+}
+
+// CheckSettings lists the checks with the settings of the case (spec
+// 14.11.5).
+func (a *App) CheckSettings() (r0 *ops.CheckSettings, err error) {
+	defer a.guard("CheckSettings", &err)
+	return a.s.CheckSettings()
+}
+
+// SaveCheckSettings writes the settings of the checks into project.yaml.
+func (a *App) SaveCheckSettings(set map[string]string) (r0 string, err error) {
+	defer a.guard("SaveCheckSettings", &err)
+	return a.s.SaveCheckSettings(set)
+}
+
+// MakeSample writes a sample template of the delivery sheets into
+// templates/ (spec 14.11.2).
+func (a *App) MakeSample(kind string) (r0 string, err error) {
+	defer a.guard("MakeSample", &err)
+	return a.s.MakeSample(kind)
+}
+
+// ExtraPlaces lists the extra configurations (spec 14.11.3).
+func (a *App) ExtraPlaces() (r0 *ops.ExtraPlaces, err error) {
+	defer a.guard("ExtraPlaces", &err)
+	return a.s.ExtraPlaces()
+}
+
+// ExtraName gives the file name of an extra configuration for a target.
+func (a *App) ExtraName(kind, target string) (r0 string, err error) {
+	defer a.guard("ExtraName", &err)
+	return a.s.ExtraName(kind, target)
+}
+
+// ReadExtra gives the text of an extra configuration.
+func (a *App) ReadExtra(name string) (r0 string, err error) {
+	defer a.guard("ReadExtra", &err)
+	return a.s.ReadExtra(name)
+}
+
+// SaveExtra writes an extra configuration; from names the unhandled lines
+// it was drafted from (nil = none).
+func (a *App) SaveExtra(name, text string, from *ui.ExtraFrom) (r0 *ui.ExtraSavedView, err error) {
+	defer a.guard("SaveExtra", &err)
+	return a.s.SaveExtra(name, text, from)
+}
+
+// DeleteExtra moves an extra configuration to state/backup.
+func (a *App) DeleteExtra(name string) (r0 string, err error) {
+	defer a.guard("DeleteExtra", &err)
+	return a.s.DeleteExtra(name)
+}
+
+// DraftExtra gives the extra configuration of a device with the unhandled
+// lines of a group added at its end.
+func (a *App) DraftExtra(source, group, device string) (r0 *ops.ExtraDraft, err error) {
+	defer a.guard("DraftExtra", &err)
+	return a.s.DraftExtra(source, group, device)
 }
 
 // Next tells the one thing to do next (spec 14.10.4).
