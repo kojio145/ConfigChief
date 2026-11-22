@@ -57,6 +57,11 @@ func main() {
 		OnBeforeClose:    app.beforeClose,
 		OnShutdown:       app.shutdown,
 		Bind:             []interface{}{app},
+		// Files can be dropped on the places of the page that take them
+		// (spec 14.10.1; the page listens with runtime.OnFileDrop and the
+		// places carry --wails-drop-target). Elsewhere a drop does nothing:
+		// the runtime keeps the view from opening a dropped file.
+		DragAndDrop: &options.DragAndDrop{EnableFileDrop: true},
 		Windows: &windows.Options{
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,

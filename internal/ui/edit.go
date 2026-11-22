@@ -168,7 +168,34 @@ func (s *Session) EditSave(choice map[string]string) (*EditSavedView, error) {
 	if sum.Skipped > 0 {
 		v.Message += fmt.Sprintf("\n式の入ったセル %d 個は書き換えていません", sum.Skipped)
 	}
+	// 機器対応 was changed: the proposals of IF 対応 follow without a second
+	// import (spec 14.10.2).
+	if o.Devices {
+		if old, _ := e.Proj.Inputs("old"); len(old) > 0 {
+			if p, err := e.ProposeIfs(s.now()); err != nil {
+				v.Message += "\nIF 対応の案は作れませんでした: " + err.Error()
+			} else if p.Added+p.Filled > 0 {
+				v.Message += "\n" + p.Said()
+			}
+		}
+	}
 	return v, nil
+}
+
+// ProposeIfs makes the proposals of IF 対応 again from input/old (spec
+// 14.10.2).
+func (s *Session) ProposeIfs() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, err := s.beginWrite()
+	if err != nil {
+		return "", err
+	}
+	p, err := e.ProposeIfs(s.now())
+	if err != nil {
+		return "", err
+	}
+	return p.Said(), nil
 }
 
 func masked(v string) string {

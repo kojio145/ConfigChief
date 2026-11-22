@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -147,9 +148,22 @@ func TestMigrationApproveScope(t *testing.T) {
 
 func TestMigrationMapping(t *testing.T) {
 	e := migCase(t)
+	// An empty new name is filled again where there is a proposal (spec
+	// 10.2): the new configuration has the interface.
 	setCell(t, e, "IF 対応", "旧 IF 名", "Loopback0", "新 IF 名", "")
 	o, err := e.RunImport("old", "", at)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if len(o.Applied.Undecided) != 0 || o.Book.IfFilled != 1 {
+		t.Fatalf("with a proposal: undecided %d, filled %d", len(o.Applied.Undecided), o.Book.IfFilled)
+	}
+	// Without the new configuration there is none: the name stays empty.
+	if err := os.Remove(e.Proj.Path("input/new/rt-a01.txt")); err != nil {
+		t.Fatal(err)
+	}
+	setCell(t, e, "IF 対応", "旧 IF 名", "Loopback0", "新 IF 名", "")
+	if o, err = e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
 	if len(o.Applied.Undecided) != 1 || len(o.Mig.Items) != 1 || o.Mig.Open() != 1 {

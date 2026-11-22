@@ -453,3 +453,45 @@ table.listed .rz:hover { background: #bcd5f3; }
 /* M10 (spec 14.8.12): the menu in framed groups, as PalaTerm's. */
 .nav-group { border: 1px solid #34445c; border-radius: 8px; padding: 14px 4px 4px; margin: 10px 0 4px; position: relative; display: flex; flex-direction: column; }
 .nav-group-title { position: absolute; top: -8px; left: 10px; background: var(--nav); padding: 0 6px; font-size: 11px; color: #8d99ab; letter-spacing: 0.05em; }
+
+/* A place files can be dropped on (spec 14.10.1). */
+.drop {
+  border: 2px dashed var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin: 8px 0;
+}
+.drop.wails-drop-target-active {
+  border-color: var(--accent);
+  background: rgba(37, 99, 235, 0.06);
+}
+.drop .box { margin: 6px 0 0; }
+
+/* The one thing to do next, at the top of the home screen (spec 14.10.4). */
+.next {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-left: 4px solid var(--accent);
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 8px 0 12px;
+}
+.next b { white-space: nowrap; }
+.next span { flex: 1; }
+.hint { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* The text of a configuration in the result screen (spec 14.10.5). */
+.conf-text {
+  font-family: Consolas, "MS Gothic", monospace;
+  font-size: 12px;
+  white-space: pre;
+  overflow: auto;
+  max-height: 60vh;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--panel);
+}
+td.pickbox, th.pickbox { width: 28px; text-align: center; }

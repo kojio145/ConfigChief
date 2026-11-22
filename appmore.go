@@ -10,6 +10,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/kojio145/configchief/internal/errlog"
+	"github.com/kojio145/configchief/internal/ops"
 	"github.com/kojio145/configchief/internal/ui"
 	"github.com/kojio145/configchief/internal/update"
 )
@@ -228,3 +229,41 @@ func (a *App) CaseImport(path, password string) (r0 *ui.CaseImportView, err erro
 	}
 	return a.s.CaseImport(path, password, parent)
 }
+
+// The things that save a person work (spec 14.10).
+
+// AddFiles copies files into input/<source> (spec 14.10.1).
+func (a *App) AddFiles(source string, paths []string, overwrite bool) (r0 *ui.AddView, err error) {
+	defer a.guard("AddFiles", &err)
+	return a.s.AddFiles(source, paths, overwrite)
+}
+
+// PickFiles lets the user choose files to add (nil = the dialog was closed).
+func (a *App) PickFiles(title string) (r0 []string, err error) {
+	defer a.guard("PickFiles", &err)
+	return runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{Title: title})
+}
+
+// ProposeIfs makes the proposals of IF 対応 again (spec 14.10.2).
+func (a *App) ProposeIfs() (r0 string, err error) {
+	defer a.guard("ProposeIfs", &err)
+	return a.s.ProposeIfs()
+}
+
+// Next tells the one thing to do next (spec 14.10.4).
+func (a *App) Next() *ops.Next { defer a.guard("Next", nil); return a.s.Next() }
+
+// LastResult gives the result of the newest output (spec 14.10.6).
+func (a *App) LastResult() (r0 *ui.ResultView, err error) {
+	defer a.guard("LastResult", &err)
+	return a.s.LastResult()
+}
+
+// ApproveMany approves the findings picked, one approval each (spec 14.10.8).
+func (a *App) ApproveMany(keys []string, reason, by string) (r0 *ui.ResultView, err error) {
+	defer a.guard("ApproveMany", &err)
+	return a.s.ApproveMany(keys, reason, by)
+}
+
+// BookWritable tells whether Excel has let the book go (spec 14.10.7).
+func (a *App) BookWritable() bool { defer a.guard("BookWritable", nil); return a.s.BookWritable() }

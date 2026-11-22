@@ -41,6 +41,10 @@
     cx: { noSecrets: false, seal: true, pw: "", pw2: "", view: null }, // the case written out (spec 14.9)
     caseNote: "", // what the home tells once of a case read back
     zoom: 100,
+    added: null, // what adding files told: { source, text } (spec 14.10.1)
+    next: null, // the one thing to do next (spec 14.10.4)
+    nextFor: null, // the home view the next step was asked for
+    hint: "", // the id of the control the next step points at
   };
 
   // newSrch is the search over the files of a case with nothing to show
@@ -81,7 +85,10 @@
 
   // newRes is the result screen with nothing to show.
   function newRes() {
-    return { view: null, tab: "devices", ctab: 0, device: "", sev: "", state: "", sel: "", onlyBad: false, scope: "", reason: "", by: null };
+    return { view: null, tab: "devices", ctab: 0, device: "", sev: "", state: "", sel: "", onlyBad: false, scope: "", reason: "", by: null,
+      many: {}, manyReason: "", // the findings picked to approve together (spec 14.10.8)
+      conf: null, confHost: "", confPick: null, // the configuration shown (spec 14.10.5)
+      lastTried: false }; // the result of the newest output was asked for (spec 14.10.6)
   }
 
   const $ = (id) => document.getElementById(id);
@@ -179,17 +186,131 @@
     showBusy(label, canStop);
     const began = Date.now();
     try {
-      await fn();
-      // A step the user waited for tells it is over (spec 14.8.10).
-      if (Date.now() - began >= TOAST_AFTER) toast(doneText(label));
-    } catch (e) {
-      st.error = errText(e);
-      toast(st.error, "err");
+      for (;;) {
+        try {
+          await fn();
+          // A step the user waited for tells it is over (spec 14.8.10).
+          if (Date.now() - began >= TOAST_AFTER) toast(doneText(label));
+        } catch (e) {
+          const text = errText(e);
+          // Excel holds the book: wait for it to let go, then do it again
+          // (spec 14.10.7).
+          if (text.includes(EXCEL_OPEN) && st.cas && (await waitBook(label, canStop))) continue;
+          st.error = text;
+          toast(st.error, "err");
+        }
+        break;
+      }
     } finally {
       busy = false;
       hideBusy();
       render();
     }
+  }
+
+  // ---- waiting for Excel to let the book go (spec 14.10.7) ----
+
+  const EXCEL_OPEN = "Excel を閉じてください";
+  let bookWait = null; // { stop } while the page waits
+
+  // waitBook shows that the step waits for Excel, and tells true when the
+  // book can be written (the step is then done again), false when the user
+  // stopped waiting.
+  async function waitBook(label, canStop) {
+    clearTimeout(busyTimer);
+    $("busy-label").textContent = "Excel でパラメータブックを閉じると、続けます";
+    $("busy-text").textContent = `「${label}」は、パラメータブックを書くところで止まっています。Excel でブックを閉じてください（保存してから閉じてください）。まだ何も書いていません。`;
+    $("busy-bar").style.width = "0";
+    $("busy-stop").textContent = "やめる";
+    $("busy-stop").hidden = false;
+    $("busy-stop").disabled = false;
+    $("busy").hidden = false;
+    bookWait = { stop: false };
+    const w = bookWait;
+    try {
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 1000));
+        if (w.stop) return false;
+        let ok = false;
+        try {
+          ok = await api().BookWritable();
+        } catch (e) {
+          return false;
+        }
+        if (ok) {
+          showBusy(label, canStop);
+          $("busy").hidden = false;
+          return true;
+        }
+      }
+    } finally {
+      bookWait = null;
+      $("busy-stop").textContent = "止める";
+    }
+  }
+
+  // ---- adding files to input/ (spec 14.10.1) ----
+
+  const ADD_WHERE = { old: "旧コンフィグ", new: "新コンフィグ", logs: "ログ", customer: "外部一覧" };
+
+  // dropZone is a place files and folders can be dropped on, with the
+  // button that chooses them.
+  function dropZone(source) {
+    const said = st.added && st.added.source === source ? st.added.text : "";
+    return h("div", { class: "drop", "data-drop": source, style: "--wails-drop-target: drop", id: "drop-" + source },
+      h("div", { class: "row" },
+        h("span", { class: "dim" }, `ここにファイルかフォルダを落とすと、input/${source} に写します（元のファイルはそのままです）。`),
+        button("ファイルを足す", () => pickAdd(source), { id: "add-" + source })),
+      said ? h("div", { class: "box info small" }, button("閉じる", () => { st.added = null; render(); }, { class: "link close" }), said) : null);
+  }
+
+  async function pickAdd(source) {
+    let paths = null;
+    try {
+      paths = await api().PickFiles(`${ADD_WHERE[source]}のファイルを選ぶ（input/${source} に写します）`);
+    } catch (e) {
+      toast(errText(e), "err");
+      return;
+    }
+    if (paths && paths.length) await addFiles(source, paths);
+  }
+
+  // addFiles copies the files; a name that is there with another content is
+  // written over only when the user says so.
+  async function addFiles(source, paths) {
+    const label = `${ADD_WHERE[source]}のファイルを写しています`;
+    let v = null;
+    await run(label, async () => { v = await api().AddFiles(source, paths, false); });
+    if (!v) return;
+    let said = v.message;
+    if (v.clash.length) {
+      const list = v.clash.slice(0, 10).join("\n") + (v.clash.length > 10 ? `\nほか ${v.clash.length - 10}` : "");
+      const yes = await ask("同じ名前のファイル", `input/${source} に、同じ名前で中身の違うファイルが ${v.clash.length} 個あります。\n${list}\n\n上書きしますか？（元のファイルは state/backup に控えます）`, "上書きする");
+      if (yes) {
+        let w = null;
+        await run(label, async () => { w = await api().AddFiles(source, paths, true); });
+        if (w) said = (said ? said + "\n" : "") + `上書きしました: ${w.copied} ファイル（元のファイルは state/backup に控えました）`;
+      } else {
+        said = (said ? said + "\n" : "") + `同じ名前で中身の違う ${v.clash.length} ファイルは、写していません`;
+      }
+    }
+    st.added = { source, text: said };
+    try {
+      st.home = await api().Home();
+    } catch (e) {
+      // the home screen is drawn again the next time
+    }
+    toast(said.split("\n")[0]);
+    render();
+    loadNext();
+  }
+
+  // onFileDrop takes files dropped on a place that takes them.
+  function onFileDrop(x, y, paths) {
+    const el = document.elementFromPoint(x, y);
+    const zone = el && el.closest("[data-drop]");
+    if (!zone || !paths || !paths.length || busy || !st.cas) return;
+    addFiles(zone.dataset.drop, paths);
   }
 
   function ask(title, text, yes) {
@@ -291,6 +412,10 @@
 
   // forgetViews drops what was drawn for the case that was open before.
   function forgetViews() {
+    st.next = null; // the next step, the files told and the pointer are of that case
+    st.nextFor = null;
+    st.added = null;
+    st.hint = "";
     st.imp = { source: "old", views: {}, tab: {}, lines: {}, pick: {}, onlyBad: false };
     st.jdg = newJdg();
     st.map = { view: null, tab: "open", book: null, replace: false };
@@ -327,6 +452,8 @@
   }
 
   function goTo(page) {
+    // The pointer of the next step stays only on the screen it points into.
+    if (st.hint && !(st.next && page === st.next.page)) st.hint = "";
     if (page === "edit") {
       openEdit(null);
       return;
@@ -415,12 +542,20 @@
     if (to) to.scrollIntoView();
     for (const fn of afterDraw) fn();
     afterDraw = [];
+    // The control the next step points at (spec 14.10.4).
+    const hint = st.hint && $(st.hint);
+    if (hint) {
+      hint.classList.add("hint");
+      hint.scrollIntoView({ block: "nearest" });
+    }
   }
 
   // ---- lists ----
 
   // tableView draws a list with a filter over all its rows. opts: id (where
-  // the filter is kept), onPick(i, tr), selected (the row that is picked).
+  // the filter is kept), onPick(i, tr), selected (the row that is picked),
+  // checks (a box in front of each row: can(i), on(i), set(i, on), and
+  // changed() after the boxes changed; spec 14.10.8).
   function tableView(t, opts) {
     opts = opts || {};
     const key = opts.id || t.name;
@@ -433,6 +568,17 @@
     const body = h("tbody");
     const note = h("span", { class: "dim small" });
     const more = button("さらに表示", () => { fs.shown += ROWS; fill(); });
+    const ck = opts.checks;
+    let shownRows = []; // the rows drawn, for the box of the heading
+    const allBox = ck ? h("input", { type: "checkbox", title: "見えている行をすべて選ぶ・外す" }) : null;
+    if (allBox) {
+      allBox.addEventListener("click", (e) => e.stopPropagation());
+      allBox.addEventListener("change", () => {
+        shownRows.filter((i) => ck.can(i)).forEach((i) => ck.set(i, allBox.checked));
+        fill();
+        ck.changed();
+      });
+    }
 
     function fill() {
       const words = fs.text.toLowerCase().split(/\s+/).filter(Boolean);
@@ -452,11 +598,24 @@
       for (const i of hit.slice(0, fs.shown)) {
         const mark = (t.marks && t.marks[i]) || "";
         const tr = h("tr", { class: cls(mark && "mark-" + mark, opts.onPick && "pick", opts.selected === i && "sel") });
+        if (ck) {
+          const box = h("input", { type: "checkbox", checked: ck.on(i), disabled: !ck.can(i), class: "pick-one" });
+          box.addEventListener("click", (e) => e.stopPropagation());
+          box.addEventListener("change", () => { ck.set(i, box.checked); ck.changed(); });
+          const td = h("td", { class: "pickbox" }, box);
+          td.addEventListener("click", (e) => { e.stopPropagation(); if (!box.disabled) { box.checked = !box.checked; ck.set(i, box.checked); ck.changed(); } });
+          tr.appendChild(td);
+        }
         t.rows[i].forEach((cell, c) => tr.appendChild(h("td", { class: cls(code.has(c) && "code", whole.has(c) && "whole") || null }, cell)));
         if (opts.onPick) tr.addEventListener("click", () => opts.onPick(i, tr));
         body.appendChild(tr);
       }
       const drawn = Math.min(hit.length, fs.shown);
+      shownRows = hit.slice(0, fs.shown);
+      if (allBox) {
+        const can = shownRows.filter((i) => ck.can(i));
+        allBox.checked = can.length > 0 && can.every((i) => ck.on(i));
+      }
       note.textContent = hit.length === t.rows.length && drawn === hit.length
         ? `${t.rows.length} 行`
         : `${t.rows.length} 行のうち ${hit.length} 行が当てはまり、${drawn} 行を出しています`;
@@ -505,7 +664,7 @@
     return h("div", null,
       t.lead ? h("p", { class: "dim" }, t.lead) : null,
       h("div", { class: "row" }, filter, note, more),
-      h("div", { class: "table-wrap" }, h("table", { class: "listed" }, h("thead", null, h("tr", null, heads)), body)));
+      h("div", { class: "table-wrap" }, h("table", { class: "listed" }, h("thead", null, h("tr", null, allBox ? h("th", { class: "pickbox" }, allBox) : null, heads)), body)));
   }
 
   const listSorter = new Intl.Collator("ja", { numeric: true });
@@ -663,14 +822,16 @@
     });
     const input = (source, n) => h("div", { class: "card" },
       h("h2", null, `${SRC[source]}（input/${source}）`),
-      h("p", null, n ? `${n} ファイルあります。` : "まだファイルがありません。フォルダを開いて、コンフィグ（テキスト、端末ログでも可）を置いてください。"),
+      h("p", null, n ? `${n} ファイルあります。` : "まだファイルがありません。コンフィグ（テキスト、端末ログでも可）を下の枠に落とすか、「ファイルを足す」で選んでください。"),
+      dropZone(source),
       h("div", { class: "row" },
         button("フォルダを開く", () => show("input/" + source)),
-        button("取り込みへ", () => toImport(source), { class: n ? "primary" : null, disabled: !n })));
+        button("取り込みへ", () => toImport(source), { class: n ? "primary" : null, disabled: !n, id: "to-import-" + source })));
 
     return [
       h("h1", null, m.case.name),
       h("p", null, `種類: ${m.case.kind}`),
+      nextBox(),
       h("div", { class: "row" }, h("span", { class: "path" }, m.case.dir), button("案件フォルダを開く", () => show(""))),
       m.shared ? h("div", { class: "box warn", id: "shared-note" }, m.shared) : null,
       st.caseNote ? h("div", { class: "box info" }, button("閉じる", () => { st.caseNote = ""; render(); }, { class: "link close" }), st.caseNote) : null,
@@ -702,9 +863,9 @@
         h("p", null, "パラメータブックを読んでチェックし、全台のコンフィグ・チェック結果表・変更一覧（2 回目から）を出力フォルダに書きます。値の誤りがある機器のコンフィグは書きません。"),
         h("p", { class: "dim" }, !m.hasBook ? "パラメータブックがまだありません。" : m.lastGen ? `最後の生成: ${m.lastGen}` : "まだ生成していません。"),
         h("div", { class: "row" },
-          button("生成とチェック", () => generate(false), { class: "primary", disabled: !m.hasBook }),
+          button("生成とチェック", () => generate(false), { class: "primary", disabled: !m.hasBook, id: "generate" }),
           button("チェックだけ", () => generate(true), { disabled: !m.hasBook }),
-          st.res.view ? button("結果を見る", () => go("result")) : null)),
+          m.lastGen || st.res.view ? button("結果を見る", () => go("result")) : null)),
       h("div", { class: "card" },
         h("h2", null, "納品物"),
         h("p", null, "パラメータブックの値を、納品用パラメータシート（templates フォルダのひな形に流し込みます。ひな形が無ければ標準の形）と、相手に渡すパラメータ表（管理外の相手と合わせる値）に書き出します。チェックはしません。"),
@@ -752,8 +913,9 @@
       h("h1", null, "取り込み"),
       h("div", { class: "row" },
         seg([["old", "旧コンフィグ（input/old）"], ["new", "新コンフィグ（input/new）"]], s, (x) => { im.source = x; render(); }),
-        button("取り込む", doImport, { class: "primary" }),
+        button("取り込む", doImport, { class: "primary", id: "import-run" }),
         button("フォルダを開く", () => show("input/" + s))),
+      dropZone(s),
       h("p", { class: "dim" }, s === "old"
         ? "input/old のファイルを読んで、取り込みレポートを書きます。パラメータブックの機器対応・IF 対応に、足りない行を足します。"
         : "input/new のファイルを読んで、取り込みレポートを書きます。"),
@@ -1149,6 +1311,51 @@
     }, true);
   }
 
+  // proposeIfs makes the proposals of IF 対応 without a second import
+  // (spec 14.10.2).
+  function proposeIfs() {
+    run("IF 対応の案を作っています", async () => {
+      st.mig.msg = await api().ProposeIfs();
+      st.map.view = await api().Mapping();
+      st.map.tab = "ifs";
+    }, true);
+  }
+
+  // loadNext asks what to do next for the home screen (spec 14.10.4). The
+  // home is drawn first; the answer comes after it.
+  async function loadNext() {
+    if (!st.cas) return;
+    st.nextFor = st.home;
+    let n = null;
+    try {
+      n = await api().Next();
+    } catch (e) {
+      n = null;
+    }
+    st.next = n;
+    if (st.page === "home" && !busy) render();
+  }
+
+  // nextBox is the one thing to do next, at the top of the home.
+  function nextBox() {
+    if (st.nextFor !== st.home) {
+      st.nextFor = st.home;
+      setTimeout(loadNext, 0);
+    }
+    const n = st.next;
+    if (!n) return null;
+    const goNext = () => {
+      st.hint = n.act;
+      if (n.page === "import") st.imp.source = "old";
+      if (n.page === "home") { render(); return; }
+      go(n.page);
+    };
+    return h("div", { class: "next", id: "next" },
+      h("b", null, "次にやること"),
+      h("span", null, n.text),
+      n.page === "home" && !n.act ? null : button(n.page === "home" ? "そこへ" : "移る", goNext, { class: "primary", id: "next-go" }));
+  }
+
   function makeBook(from, replace) {
     run("パラメータブックに書いています", async () => {
       st.map.book = await api().MakeBook(from, replace);
@@ -1173,7 +1380,10 @@
         button("読み直す", loadMapping),
         button("機器対応を表で編集", () => openEdit({ sheet: "@devices" }), { disabled: !v || !v.hasBook, id: "edit-devices" }),
         button("IF 対応を表で編集", () => openEdit({ sheet: "@ifs" }), { disabled: !v || !v.hasBook, id: "edit-ifs" }),
-        button("Excel で開く", () => show(st.cas.book), { disabled: !v || !v.hasBook })),
+        button("Excel で開く", () => show(st.cas.book), { disabled: !v || !v.hasBook }),
+        button("IF 対応の案を作る", proposeIfs, { disabled: !v || !v.hasBook, id: "propose-ifs",
+          title: "input/old を読み直し、新ホスト名を書いた機器の IF 対応の行を足し、空の新 IF 名を案で埋めます（人が書いた名前と - は変えません）。取り込み直す必要はありません" })),
+      h("p", { class: "dim small" }, "機器対応を画面の表で保存すると、IF 対応の案は自動で作ります。Excel で書いたときは「IF 対応の案を作る」を押してください。"),
       draftNote(),
     ];
     if (!v) return out;
@@ -1205,7 +1415,7 @@
         h("div", { class: "row" }, button("対応を当ててパラメータブックに書く", async () => {
           if (mp.replace && !(await ask("作り直しますか", "設計データのシートを空にしてから書きます。画面の表や Excel で手で直した値は消えます（書く前の控えは残ります）。機器対応・IF 対応のシートは変えません。", "作り直す"))) return;
           makeBook("old", mp.replace);
-        }, { class: "primary" }))),
+        }, { class: "primary", id: "make-book" }))),
       mp.book && mp.book.from === "old" ? bookResult(mp.book) : null);
     return out;
   }
@@ -1248,10 +1458,16 @@
       button("チェックだけ", () => generate(true), { disabled: !hasBook }),
     ];
     if (!v) {
+      // After the case was opened again: the newest output is shown (spec
+      // 14.10.6).
+      if (hasBook && !rs.lastTried && st.cas) {
+        rs.lastTried = true;
+        setTimeout(loadLastResult, 0);
+      }
       return [
         h("h1", null, "結果"),
         h("p", { class: "dim" }, hasBook
-          ? "まだ結果がありません。「生成とチェック」か「チェックだけ」を押すと、ここに出ます（結果は、案件を開いている間だけ覚えています）。"
+          ? "まだ結果がありません。「生成とチェック」か「チェックだけ」を押すと、ここに出ます。"
           : "パラメータブックがまだありません。旧コンフィグを取り込むと作られます。"),
         h("div", { class: "row" }, again),
       ];
@@ -1289,6 +1505,50 @@
     return out;
   }
 
+  // loadLastResult shows the result of the newest output of generate or
+  // check, with the checks run again (spec 14.10.6).
+  function loadLastResult() {
+    run("前回の結果を読んでいます", async () => {
+      const r = await api().LastResult();
+      if (r) {
+        showResult(r);
+        st.res.tab = "devices";
+      }
+    }, true, "台");
+  }
+
+  // showConf shows the configuration of a device written to the output
+  // folder, to read and copy (spec 14.10.5).
+  function showConf(d) {
+    const rs = st.res;
+    run("コンフィグを読んでいます", async () => {
+      rs.conf = await api().ReadFile(d.file);
+      rs.confHost = d.label;
+      st.jump = "conf-view";
+    });
+  }
+
+  function confView(v) {
+    const rs = st.res;
+    const c = rs.conf;
+    if (!c) return null;
+    const failed = c.rel.includes("/_failed/");
+    const copy = () => api().ClipboardSet(c.lines.join("\r\n") + "\r\n")
+      .then(() => toast(`${rs.confHost} のコンフィグ（${c.lines.length} 行）をコピーしました`))
+      .catch((e) => toast(errText(e), "err"));
+    const host = (v.devices.find((d) => d.file === c.rel) || {}).host || "";
+    return h("div", { class: "card", id: "conf-view" },
+      h("h2", null, `${rs.confHost} のコンフィグ`),
+      h("p", { class: "dim small" }, `${c.rel}（${c.lines.length} 行）。ファイルの中身そのままです（秘密の値も入っています）。`
+        + (failed ? "文面がそろわなかった機器のファイルです。このまま機器に入れないでください。" : "")
+        + (c.cut ? "長いため、先頭の部分だけを出しています（コピーはファイルを開いて行ってください）。" : "")),
+      h("div", { class: "row" },
+        button("全部コピー", copy, { class: "primary", id: "conf-copy", disabled: c.cut }),
+        host ? button("この機器の指摘を見る", () => { rs.device = host; rs.tab = "findings"; rs.sel = ""; render(); }) : null,
+        button("閉じる", () => { rs.conf = null; render(); })),
+      h("pre", { class: "conf-text", id: "conf-text" }, c.lines.join("\n")));
+  }
+
   function resultDevices(v) {
     const rs = st.res;
     const list = rs.onlyBad ? v.devices.filter((d) => d.mark) : v.devices;
@@ -1303,10 +1563,18 @@
       rs.sel = "";
       render();
     };
+    const withFile = v.devices.filter((d) => d.file);
+    if (rs.confPick == null || !withFile.some((d) => d.file === rs.confPick)) rs.confPick = withFile.length ? withFile[0].file : "";
     return h("div", null,
       h("div", { class: "row" },
         h("label", null, h("input", { type: "checkbox", checked: rs.onlyBad, onchange: (e) => { rs.onlyBad = e.target.checked; render(); } }), " 指摘がある台だけ"),
         h("span", { class: "dim small" }, "機器を押すと、その機器の指摘を見られます。")),
+      withFile.length ? h("div", { class: "row", id: "conf-row" },
+        h("span", null, "コンフィグを見る:"),
+        select(withFile.map((d) => [d.file, d.label]), rs.confPick, (x) => { rs.confPick = x; }),
+        button("見る・コピー", () => showConf(withFile.find((d) => d.file === rs.confPick) || withFile[0]), { id: "conf-show" })) :
+        h("p", { class: "dim small" }, v.configs ? "書き出したコンフィグはありません（値の誤りのある機器は書きません）。" : "「チェックだけ」ではコンフィグを書きません。コンフィグを見るには「生成とチェック」を押してください。"),
+      confView(v),
       tableView(t, { id: `result/devices/${rs.onlyBad}`, onPick: pick }));
   }
 
@@ -1340,6 +1608,30 @@
     };
     const sel = list.findIndex((f) => f.key === rs.sel);
     detail(list[sel]);
+    // Findings picked to approve together (spec 14.10.8): only those a
+    // person can approve.
+    const can = (i) => list[i].state === "open";
+    for (const k of Object.keys(rs.many)) if (!v.findings.some((f) => f.key === k && f.state === "open")) delete rs.many[k];
+    const bar = h("div", { class: "row", id: "many-bar" });
+    const drawBar = () => {
+      const n = Object.keys(rs.many).length;
+      bar.textContent = "";
+      if (!n) {
+        add(bar, [h("span", { class: "dim small" }, "左の箱で指摘を選ぶと、同じ理由でまとめて承認できます（エラーも。承認は 1 件ずつ残ります）。")]);
+        return;
+      }
+      const ok = button(`選んだ ${n} 件を承認する`, approveMany, { class: "primary", id: "many-go" });
+      const check = () => { ok.disabled = !rs.manyReason.trim() || !(rs.by || "").trim(); };
+      add(bar, [
+        h("b", null, `${n} 件を選んでいます`),
+        h("input", { type: "text", id: "many-reason", placeholder: "承認の理由", value: rs.manyReason, oninput: (e) => { rs.manyReason = e.target.value; check(); } }),
+        h("input", { type: "text", id: "many-by", placeholder: "承認者", value: rs.by || "", oninput: (e) => { rs.by = e.target.value; check(); } }),
+        ok,
+        button("選ぶのをやめる", () => { rs.many = {}; render(); }, { class: "link" })]);
+      check();
+    };
+    drawBar();
+    const checks = { can, on: (i) => !!rs.many[list[i].key], set: (i, on) => { if (on) rs.many[list[i].key] = true; else delete rs.many[list[i].key]; }, changed: drawBar };
     // The row that is picked stays in sight when the list is drawn again.
     afterDraw.push(() => {
       const tr = document.querySelector("#findings tr.sel");
@@ -1352,9 +1644,25 @@
         select([["", "すべての重大度"], ["error", "エラー"], ["warning", "警告"], ["info", "情報"]], rs.sev, set("sev")),
         select([["", "すべての状態"], ["todo", "未承認・要修正"], ["approved", "承認済み"], ["info", "情報"]], rs.state, set("state")),
         rs.device || rs.sev || rs.state ? button("絞り込みを外す", () => { rs.device = ""; rs.sev = ""; rs.state = ""; render(); }, { class: "link" }) : null),
+      bar,
       h("div", { class: "lines", id: "findings" },
-        h("div", { class: "findings-list" }, tableView(t, { id: "result/findings", onPick: pick, selected: sel })),
+        h("div", { class: "findings-list" }, tableView(t, { id: "result/findings", onPick: pick, selected: sel, checks })),
         side));
+  }
+
+  // approveMany approves the findings picked, one approval each, with one
+  // reason (spec 14.10.8).
+  async function approveMany() {
+    const rs = st.res;
+    const keys = Object.keys(rs.many);
+    if (!keys.length) return;
+    const errors = rs.view.findings.filter((f) => rs.many[f.key] && f.severity === "error").length;
+    if (!(await ask("まとめて承認しますか", `選んだ ${keys.length} 件（うちエラー ${errors} 件）を、同じ理由で承認します。\n理由: ${rs.manyReason}\n\n承認は 1 件ずつ残ります（後から増えた指摘には当たりません）。`, "承認する"))) return;
+    run("承認して、チェックをやり直しています", async () => {
+      showResult(await api().ApproveMany(keys, rs.manyReason, rs.by || ""));
+      rs.many = {};
+      rs.manyReason = "";
+    }, true, "台");
   }
 
   // findingDetail shows a finding and lets it be approved. o, for a finding
@@ -1497,6 +1805,13 @@
   function resultChanges(v) {
     const rs = st.res;
     const c = v.changes;
+    if (!c.has && c.report && c.report.xlsx) {
+      return h("div", null,
+        h("p", { class: "dim" }, "変更一覧は、生成したときにだけ画面に出ます。この出力の変更一覧のファイルは開けます。"),
+        h("div", { class: "row" },
+          button("変更一覧を Excel で開く", () => show(c.report.xlsx)),
+          button("変更一覧をブラウザで開く", () => show(c.report.html))));
+    }
     if (!c.has) {
       return h("div", { class: "table-wrap" }, h("div", { class: "empty" },
         v.configs ? "比べる相手（前の生成）がないので、変更一覧はありません。2 回目の生成から出ます。" : "変更一覧は、「生成とチェック」のときに出ます（「チェックだけ」では作りません）。"));
@@ -1545,6 +1860,7 @@
         seg([["compare", "比べる"], ["maps", "列対応"]], cu.tab, pickTab),
         button("input/customer を開く", () => show("input/customer")),
         button("mappings を開く", () => show("mappings"))),
+      dropZone("customer"),
       cu.tab === "compare" ? customerCompare() : customerMaps(),
     ];
   }
@@ -2061,6 +2377,7 @@
       h("div", { class: "row" },
         seg([["load", "投入ログ"], ["verify", "反映確認"]], what, (x) => { lg.tab = x; mg.sel = ""; render(); }),
         button("input/logs を開く", () => show("input/logs"))),
+      dropZone("logs"),
       h("div", { class: "row" }, button(label, start, { class: "primary", id: "logs-run" })),
     ];
     if (!v) return out;
@@ -4018,7 +4335,9 @@
     el.textContent = "";
     const opts = [""].concat(col.choices);
     opts.forEach((v, i) => {
-      const o = h("div", { class: cls("g-opt", v === now && "on"), "data-i": String(i) }, v === "" ? "（空にする）" : v);
+      const note = v && col.choiceNotes && col.choiceNotes[v];
+      const o = h("div", { class: cls("g-opt", v === now && "on"), "data-i": String(i) }, v === "" ? "（空にする）" : v,
+        note ? h("span", { class: "dim small" }, "　" + note) : null);
       el.appendChild(o);
     });
     const b = gBox(cur);
@@ -5776,6 +6095,11 @@
 
   async function boot() {
     $("busy-stop").addEventListener("click", () => {
+      if (bookWait) { // waiting for Excel: stop waiting, nothing is written
+        bookWait.stop = true;
+        $("busy-stop").disabled = true;
+        return;
+      }
       $("busy-stop").disabled = true;
       $("busy-text").textContent = "止めています…";
       api().Cancel();
@@ -5801,6 +6125,8 @@
     try {
       window.runtime.EventsOn("progress", onProgress);
       window.runtime.EventsOn("internal-error", (m) => toast(m, "err"));
+      // Files dropped on the places that take them (spec 14.10.1).
+      if (window.runtime.OnFileDrop) window.runtime.OnFileDrop(onFileDrop, true);
       const s = await api().Start();
       setState(s.state);
       st.error = s.notice || "";

@@ -258,3 +258,60 @@ func (e *Env) Unapprove(id string, now time.Time) error {
 	e.Proj.Log(now, "approve: %s を取り消しました", id)
 	return nil
 }
+
+// ApproveFindings approves findings of a result that is shown, one approval
+// each with the same reason (appendix C 3.2: picked and approved together).
+// The checks do not run again for each: items are the findings the screen
+// has. It gives the approvals written and, for each key that was left out,
+// why.
+func (e *Env) ApproveFindings(items []Judged, keys []string, reason, by string, now time.Time) (done []project.Approval, left []string, err error) {
+	reason, by = strings.TrimSpace(reason), strings.TrimSpace(by)
+	switch {
+	case reason == "":
+		return nil, nil, fmt.Errorf("承認の理由を書いてください")
+	case by == "":
+		return nil, nil, fmt.Errorf("承認者の名前を書いてください")
+	}
+	byKey := map[string]Judged{}
+	for _, f := range items {
+		byKey[f.Key] = f
+	}
+	all, err := e.Proj.Approvals()
+	if err != nil {
+		return nil, nil, err
+	}
+	seen := map[string]bool{}
+	for _, k := range keys {
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		f, ok := byKey[k]
+		switch {
+		case !ok:
+			left = append(left, "今の結果に無い指摘です（チェックをやり直してください）")
+			continue
+		case f.Severity == check.Info:
+			left = append(left, f.RuleID+" は情報です。承認は要りません")
+			continue
+		case !check.Approvable(f.RuleID):
+			left = append(left, f.RuleID+" は承認できません。値や文面を直してください")
+			continue
+		case f.Approval != nil:
+			left = append(left, "すでに承認されています")
+			continue
+		}
+		a := project.Approval{ID: project.NextApprovalID(all), Finding: f.Key, Rule: f.RuleID, Device: f.Device,
+			Reason: reason, By: by, At: now.Format(time.RFC3339)}
+		all = append(all, a)
+		done = append(done, a)
+	}
+	if len(done) == 0 {
+		return nil, left, nil
+	}
+	if err := e.Proj.SaveApprovals(all); err != nil {
+		return nil, nil, err
+	}
+	e.Proj.Log(now, "approve: %d 件をまとめて承認しました（%s〜%s、1 件ずつ、承認者 %s）", len(done), done[0].ID, done[len(done)-1].ID, by)
+	return done, left, nil
+}

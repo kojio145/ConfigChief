@@ -35,7 +35,10 @@ type EditColumn struct {
 	Secret   bool     `json:"secret"`
 	Free     bool     `json:"free"`
 	Choices  []string `json:"choices"`
-	Note     string   `json:"note"`
+	// ChoiceNotes says a few words of a choice, shown beside it in the list
+	// (the model of a pack, spec 14.10.3). nil = none.
+	ChoiceNotes map[string]string `json:"choiceNotes,omitempty"`
+	Note        string            `json:"note"`
 	// What the draft does to a free column: Added = the sheet gets it with
 	// the save, Was = the heading it has in the sheet (Title is the new
 	// one), Dropped = the save takes it out.

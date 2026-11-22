@@ -50,6 +50,11 @@ func (e *Env) readBook() ([]byte, *book.Book, error) {
 // saveBook writes the book, after a copy of the one that is there went to
 // state/backup (spec 15).
 func (e *Env) saveBook(now time.Time, data []byte) (backup string, err error) {
+	// A book that Excel holds open is told before the copy is taken: a step
+	// that is done again when Excel lets it go leaves one copy (spec 14.10.7).
+	if err := e.Proj.BookWritable(); err != nil {
+		return "", err
+	}
 	if backup, err = e.Proj.Backup(now); err != nil {
 		return "", err
 	}
@@ -174,7 +179,7 @@ func (e *Env) RunImport(source, choose string, now time.Time) (*ImportOutcome, e
 		}
 		dev, ifs := convert.ProposeWith(src.Data, data(out.New), have, e.shapes)
 		file := e.Proj.Config.Book
-		next, sum, err := book.Update(old, file, e.Schema, e.lang(), book.Change{Devices: dev, Ifs: ifs})
+		next, sum, err := book.Update(old, file, e.Schema, e.lang(), book.Change{Devices: dev, Ifs: ifs, IfFill: ifs})
 		if err != nil {
 			return nil, err
 		}
@@ -207,6 +212,80 @@ func (e *Env) RunImport(source, choose string, now time.Time) (*ImportOutcome, e
 	e.Proj.Log(now, "import %s: %d ファイル、%d 行（取り込み済み %d、無視 %d、未対応 %d、うち未判定・保留 %d）、レポート %s",
 		source, len(src.Files), c.Total, c.Taken, c.Ignored+c.Separators, c.Unknown, out.Judging.Open+out.Judging.Hold, out.Report.XLSX)
 	return out, nil
+}
+
+// fillIfs gives the rows of IF 対応 with the proposals put into the rows
+// whose new interface name is empty, as book.Update does with IfFill.
+func fillIfs(have, prop []book.IfMap) []book.IfMap {
+	by := map[string]book.IfMap{}
+	for _, p := range prop {
+		if p.NewIf != "" {
+			by[p.NewHost+"\x00"+p.OldIf] = p
+		}
+	}
+	out := make([]book.IfMap, len(have))
+	for i, m := range have {
+		if p, ok := by[m.NewHost+"\x00"+m.OldIf]; ok && m.NewIf == "" {
+			m.NewIf, m.Basis = p.NewIf, p.Basis
+			delete(by, m.NewHost+"\x00"+m.OldIf)
+		}
+		out[i] = m
+	}
+	return out
+}
+
+// IfProposal is what ProposeIfs did.
+type IfProposal struct {
+	Added    int            // rows added to IF 対応
+	Filled   int            // rows of IF 対応 whose empty new name was filled
+	Backup   string         // the copy of the book taken first ("" = nothing was written)
+	Problems []book.Problem // what Read said about the book
+}
+
+// ProposeIfs makes the proposals of IF 対応 again from input/old, without
+// the report of an import (spec 10.2, 14.10.2): the rows the book lacks are
+// added, and the empty new names are filled. Nothing else changes.
+func (e *Env) ProposeIfs(now time.Time) (*IfProposal, error) {
+	old, bk, err := e.readBook()
+	if err != nil {
+		return nil, err
+	}
+	if bk == nil {
+		return nil, fmt.Errorf("%s がありません。先に旧コンフィグを取り込んでください", e.Proj.Config.Book)
+	}
+	src, err := e.importSide("old", "")
+	if err != nil {
+		return nil, err
+	}
+	nw, err := e.newSide()
+	if err != nil {
+		return nil, err
+	}
+	_, ifs := convert.ProposeWith(src.Data, data(nw), bk.Devices, e.shapes)
+	next, sum, err := book.Update(old, e.Proj.Config.Book, e.Schema, e.lang(), book.Change{Ifs: ifs, IfFill: ifs})
+	if err != nil {
+		return nil, err
+	}
+	out := &IfProposal{Added: sum.IfRows, Filled: sum.IfFilled, Problems: sum.Problems}
+	if !sum.Changed() {
+		return out, nil
+	}
+	if err := e.Proj.BookWritable(); err != nil {
+		return nil, err
+	}
+	if out.Backup, err = e.saveBook(now, next); err != nil {
+		return nil, err
+	}
+	e.Proj.Log(now, "IF 対応の案: %d 行を足し、%d 行の新 IF 名を埋めました（控え %s）", out.Added, out.Filled, out.Backup)
+	return out, nil
+}
+
+// Said tells what ProposeIfs did, in a sentence.
+func (p *IfProposal) Said() string {
+	if p.Added == 0 && p.Filled == 0 {
+		return "IF 対応に足す行・埋める新 IF 名はありませんでした（新ホスト名の書かれた機器の IF は、すべて行があり、案の出せる空の新 IF 名もありません）"
+	}
+	return fmt.Sprintf("IF 対応に %d 行を足し、%d 行の新 IF 名を案で埋めました（控え %s）", p.Added, p.Filled, p.Backup)
 }
 
 // BookOutcome is what MakeBook did.
@@ -262,8 +341,9 @@ func (e *Env) MakeBook(from string, replace bool, now time.Time) (*BookOutcome, 
 		// The rows the book lacks: the devices that came since, and the
 		// interfaces of the devices whose new host name a person wrote.
 		ch.Devices, ch.Ifs = convert.ProposeWith(src.Data, data(nw), devs, e.shapes)
+		ch.IfFill = ch.Ifs
 		devs = append(append([]book.DeviceMap{}, devs...), ch.Devices...)
-		ifs = append(append([]book.IfMap{}, ifs...), ch.Ifs...)
+		ifs = append(fillIfs(ifs, ch.Ifs), ch.Ifs...)
 		out.Applied = convert.Apply(e.Schema, src.Data, devs, ifs)
 		ch.Data = out.Applied.Data
 	}

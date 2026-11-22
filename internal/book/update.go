@@ -24,6 +24,11 @@ type Change struct {
 	// the tool changes what a person wrote, and only when asked to (spec
 	// 6.5.4).
 	Cells []CellSet
+	// IfFill are proposals for rows of IF 対応 that are in the book: the new
+	// interface name and the basis go into a row of the same new host name
+	// and old interface whose new interface name is empty (spec 10.2). A
+	// name a person wrote, and "-", stay.
+	IfFill []IfMap
 }
 
 // CellSet puts a value into one cell of a row of the book.
@@ -43,6 +48,7 @@ type Summary struct {
 	IfRows     int            // rows added to IF 対応
 	Sheets     int            // sheets made in a book that was there
 	Cells      int            // cells of rows of the book that were changed
+	IfFilled   int            // rows of IF 対応 whose empty new interface name was filled
 	Replaced   bool           // the sheets of the tables were emptied first
 	Problems   []Problem      // what Read said about the book as it was
 }
@@ -50,7 +56,7 @@ type Summary struct {
 // Changed tells whether the bytes differ from the book as it was, so that the
 // caller has something to write.
 func (s *Summary) Changed() bool {
-	return s.Created || s.Replaced || s.Sheets > 0 || s.DeviceRows > 0 || s.IfRows > 0 || s.Rows() > 0 || s.Cells > 0
+	return s.Created || s.Replaced || s.Sheets > 0 || s.DeviceRows > 0 || s.IfRows > 0 || s.Rows() > 0 || s.Cells > 0 || s.IfFilled > 0
 }
 
 // Rows is the number of rows added to the sheets of the tables.
@@ -214,6 +220,37 @@ func Update(old []byte, file string, sc *schema.Set, lang string, ch Change) ([]
 			return nil, nil, err
 		}
 		sum.Cells++
+	}
+
+	if info := bk.Sheets[ifSheet.id]; info != nil && len(ch.IfFill) > 0 {
+		empty := map[string]IfMap{}
+		for _, m := range bk.Ifs {
+			if m.NewIf == "" && m.Row > 0 {
+				empty[m.NewHost+"\x00"+m.OldIf] = m
+			}
+		}
+		for _, p := range ch.IfFill {
+			k := p.NewHost + "\x00" + p.OldIf
+			m, ok := empty[k]
+			if !ok || p.NewIf == "" {
+				continue
+			}
+			delete(empty, k)
+			for _, cv := range []struct{ name, v string }{{"new_if", p.NewIf}, {"basis", p.Basis}} {
+				if cv.v == "" {
+					continue
+				}
+				c := ifSheet.cols[ifSheet.col(cv.name)]
+				ci, err := column(f, info, st, c.name, c.title.In(lang))
+				if err != nil {
+					return nil, nil, err
+				}
+				if err := f.SetCellStr(info.Name, addr(ci, m.Row-1), cv.v); err != nil {
+					return nil, nil, err
+				}
+			}
+			sum.IfFilled++
+		}
 	}
 
 	dev, ifs := uniqueMaps(bk, ch)

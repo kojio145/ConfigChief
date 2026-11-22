@@ -146,8 +146,13 @@ func (e *Env) editSheets() ([]byte, []*book.EditSheet, error) {
 		cp := *es
 		cp.Columns = append([]book.EditColumn{}, es.Columns...)
 		for k := range cp.Columns {
-			if cp.Columns[k].Key == "new_vendor" {
+			switch cp.Columns[k].Key {
+			case "new_vendor":
 				cp.Columns[k].Choices = append([]string{}, e.PackIDs...)
+			case "new_model":
+				// The models the packs know (spec 14.10.3); another value
+				// can still be written.
+				cp.Columns[k].Choices, cp.Columns[k].ChoiceNotes = e.modelChoices()
 			}
 		}
 		out[i] = &cp
@@ -253,6 +258,9 @@ type EditSaved struct {
 	Conflicts []book.Conflict
 	Summary   *book.EditSummary // nil = nothing was written
 	Backup    string
+	// Devices tells that the draft had changes in 機器対応: the proposals of
+	// IF 対応 are made again after it (spec 14.10.2).
+	Devices bool
 }
 
 // SaveEdits writes the draft into the parameter book: the cells that were
@@ -290,6 +298,7 @@ func (e *Env) SaveEdits(choice map[string]string, now time.Time) (*EditSaved, er
 		return out, nil
 	}
 	out.Summary = sum
+	out.Devices = d.Of("@devices") != nil
 	if sum.Changed() {
 		if out.Backup, err = e.saveBook(now, next); err != nil {
 			return nil, fmt.Errorf("%v（下書きは残っています）", err)
@@ -372,4 +381,30 @@ func (e *Env) ReplaceAll(query, with string, opt book.FindOptions, skip string) 
 	}
 	out.Draft = d.Count()
 	return out, e.writeDraft(d)
+}
+
+// modelChoices lists the IDs of the models of the packs that can be used,
+// pack by pack, with the pack and the title of each (spec 14.10.3).
+func (e *Env) modelChoices() ([]string, map[string]string) {
+	ids, notes := []string{}, map[string]string{}
+	for _, id := range e.PackIDs {
+		p := e.Packs[id]
+		if p == nil {
+			continue
+		}
+		for _, m := range p.Models {
+			if _, dup := notes[m.ID]; dup {
+				continue
+			}
+			ids = append(ids, m.ID)
+			note := id
+			if t := m.Title[e.lang()]; t != "" {
+				note += "・" + t
+			} else if t := m.Title["ja"]; t != "" {
+				note += "・" + t
+			}
+			notes[m.ID] = note
+		}
+	}
+	return ids, notes
 }
