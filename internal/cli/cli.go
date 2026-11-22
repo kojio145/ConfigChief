@@ -10,9 +10,12 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 
+	"github.com/kojio145/configchief/internal/errlog"
 	"github.com/kojio145/configchief/internal/pack"
 	"github.com/kojio145/configchief/internal/packtest"
+	"github.com/kojio145/configchief/internal/project"
 	"github.com/kojio145/configchief/internal/schemas"
 )
 
@@ -22,7 +25,7 @@ var Version = "0.0.0-dev"
 // Commands are the first words that make an invocation a command. Anything
 // else given to the program of the window is a case folder to open.
 var Commands = []string{"version", "--version", "help", "--help", "init", "import", "book", "clone", "compare", "generate", "check", "approve",
-	"judge", "customer", "fill", "sites", "logs", "verify", "export", "diff", "pack"}
+	"judge", "customer", "fill", "case", "sites", "logs", "verify", "export", "diff", "pack"}
 
 // IsCommand tells whether the arguments of the program are a command.
 func IsCommand(args []string) bool {
@@ -60,6 +63,8 @@ const usage = `usage:
   ConfigChief.exe fill    --project <dir> --list
   ConfigChief.exe fill    --project <dir> --template <名前> [--diff old|new|logs] [--device <機器>[,<機器>...]]
   ConfigChief.exe fill    --project <dir> --draft <コンフィグのファイル> --device <機器> [--name <ひな形の名前>]
+  ConfigChief.exe case export --project <dir> --out <ファイル> [--no-secrets] [--password-env <環境変数名>]
+  ConfigChief.exe case import <ファイル> --to <親フォルダ> [--password-env <環境変数名>]
   ConfigChief.exe export  --project <dir> --what sheet|peer [--secrets show|mask]
   ConfigChief.exe export  --project <dir> --what unhandled [--source old|new]
   ConfigChief.exe logs    --project <dir>
@@ -74,7 +79,18 @@ const usage = `usage:
 
 // Run gives the exit code: 0 = fine, 1 = something to look at, 2 = could not
 // run (spec 15).
-func Run(args []string, out, errOut io.Writer) int {
+func Run(args []string, out, errOut io.Writer) (code int) {
+	// An internal error ends the command with 2 and a record (spec 14.8.4).
+	defer func() {
+		if r := recover(); r != nil {
+			errlog.Version = Version
+			fmt.Fprintln(errOut, errlog.Panic(strings.Join(head(args, 1), " "), r))
+			code = 2
+		}
+		held.Release()
+		held = nil
+	}()
+	writing = len(args) > 0 && (writes[args[0]] || (args[0] == "import" && hasArg(args, "--use")))
 	switch {
 	case len(args) == 1 && (args[0] == "version" || args[0] == "--version"):
 		fmt.Fprintln(out, "ConfigChief "+Version)
@@ -101,6 +117,10 @@ func Run(args []string, out, errOut io.Writer) int {
 		return cmdCustomer(args[1:], out, errOut)
 	case len(args) >= 1 && args[0] == "fill":
 		return cmdFill(args[1:], out, errOut)
+	case len(args) >= 2 && args[0] == "case" && args[1] == "export":
+		return cmdCaseExport(args[2:], out, errOut)
+	case len(args) >= 2 && args[0] == "case" && args[1] == "import":
+		return cmdCaseImport(args[2:], out, errOut)
 	case len(args) >= 1 && args[0] == "sites":
 		return cmdSites(args[1:], out, errOut)
 	case len(args) >= 1 && args[0] == "logs":
@@ -239,4 +259,30 @@ func packColumns(dir string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, n)
 	}
 	return 0
+}
+
+// writes are the commands that write the case beyond a new folder of out/
+// (spec 14.8.3): a case used by a newer ConfigChief stops them.
+var writes = map[string]bool{"book": true, "clone": true, "generate": true, "check": true, "approve": true, "judge": true, "customer": true, "fill": true}
+
+// writing: the command that runs writes the case.
+var writing bool
+
+// held is the mark of the case the command has open (spec 14.8.2).
+var held *project.Held
+
+func hasArg(args []string, a string) bool {
+	for _, x := range args {
+		if x == a {
+			return true
+		}
+	}
+	return false
+}
+
+func head(args []string, n int) []string {
+	if len(args) < n {
+		return args
+	}
+	return args[:n]
 }

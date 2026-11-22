@@ -2,6 +2,8 @@ module github.com/kojio145/configchief
 
 go 1.26.7
 
+toolchain go1.26.11
+
 require (
 	github.com/mitsuhiko/minijinja/minijinja-go/v3 v3.1.0
 	github.com/wailsapp/wails/v2 v2.9.2

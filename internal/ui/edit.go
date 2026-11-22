@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/kojio145/configchief/internal/book"
+	"github.com/kojio145/configchief/internal/project"
 )
 
 // The table over the parameter book (spec 14.6). The page holds the cells
@@ -68,6 +69,9 @@ func (s *Session) EditSheet(id string) (*book.View, error) {
 func (s *Session) EditDraft(part book.DraftSheet) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.readOnly() {
+		return 0, &project.ReadOnlyError{Newer: s.newer, Mine: s.version}
+	}
 	if s.env == nil {
 		return 0, errors.New("案件を開いていません")
 	}
@@ -79,6 +83,9 @@ func (s *Session) EditDraft(part book.DraftSheet) (int, error) {
 func (s *Session) EditDiscard(sheet string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.readOnly() {
+		return 0, &project.ReadOnlyError{Newer: s.newer, Mine: s.version}
+	}
 	if s.env == nil {
 		return 0, errors.New("案件を開いていません")
 	}
@@ -111,7 +118,7 @@ type EditSavedView struct {
 func (s *Session) EditSave(choice map[string]string) (*EditSavedView, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +215,7 @@ type EditReplacedView struct {
 func (s *Session) EditReplace(query, with string, opt book.FindOptions, skip string) (*EditReplacedView, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return nil, err
 	}

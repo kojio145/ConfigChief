@@ -18,8 +18,11 @@ Only the latest release is supported. Older releases do not receive fixes.
 
 ConfigChief is designed for use inside closed networks:
 
-- No telemetry, no auto-update, no external communication of any kind, no listening port
-  (a test in the repository checks that the program's own code calls no network function)
+- No telemetry, no auto-update, no listening port. The only network access is the version
+  page's "check for the latest version" and "download the latest version", and only when you
+  press them: they ask GitHub's public releases of ConfigChief and send nothing of your case
+  (a test in the repository checks that no other code of the program calls a network function,
+  and that this one names no other address)
 - It never connects to a device: it reads and writes text files and Excel files in a case folder
 - Passwords and keys of the configurations are kept as plain text in the parameter book
   (the Excel file of the case), as they are in the configurations themselves. Keep the case
@@ -33,4 +36,4 @@ ConfigChief is designed for use inside closed networks:
 
 脆弱性は、このリポジトリの Security タブの「Report a vulnerability」から、非公開で知らせてください（公開の Issue には書かないでください）。対応するのは最新のリリースだけです。
 
-ConfigChief は外部と通信せず、機器にもつなぎません。コンフィグの中のパスワードや鍵は、パラメータブック（Excel）に平文で入ります。案件フォルダは、コンフィグと同じ扱いで保管してください。
+ConfigChief は外部と通信せず（例外は「バージョン情報」で最新版の確認・ダウンロードを押したときの GitHub への問い合わせだけです。案件の中身は送りません）、機器にもつなぎません。コンフィグの中のパスワードや鍵は、パラメータブック（Excel）に平文で入ります。案件フォルダは、コンフィグと同じ扱いで保管してください。

@@ -96,7 +96,7 @@ func (s *Session) Judge(source, group, devices, verdict, reason, by string) (*Ju
 	if err := checkSource(source); err != nil {
 		return nil, err
 	}
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return nil, err
 	}

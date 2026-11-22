@@ -23,7 +23,7 @@
     jdg: newJdg(),
     map: { view: null, tab: "open", book: null, replace: false },
     cmp: { a: "old", b: "new", view: null, tab: 0 },
-    diff: { a: "", b: "", view: null, shown: LINES, mode: "line", stamps: true, secrets: true },
+    diff: { a: "", b: "", view: null, shown: LINES, mode: "line", stamps: true, secrets: true, layout: "stack", cur: -1 },
     tree: newTree(),
     sites: { source: "book", view: null, tab: 1 },
     res: newRes(),
@@ -35,7 +35,19 @@
     nb: { from: "", to: "", said: [] },
     edit: { list: null, want: null, msg: "", prefs: {}, find: { open: false, replace: false, q: "", r: "", cs: false, whole: false, scope: "sheet", onlySel: false, range: null, said: "", all: 0, focus: false } }, // as newEdit() makes it
     filters: {},
+    srch: newSrch(),
+    upd: { found: null, busy: "", error: "", path: "" },
+    readOnly: "", // why the open case is only read (spec 14.8.3)
+    cx: { noSecrets: false, seal: true, pw: "", pw2: "", view: null }, // the case written out (spec 14.9)
+    caseNote: "", // what the home tells once of a case read back
+    zoom: 100,
   };
+
+  // newSrch is the search over the files of a case with nothing to show
+  // (spec 14.8.8).
+  function newSrch() {
+    return { q: "", regex: false, cs: false, misses: false, scopes: null, out: "", view: null, file: null, fq: "", fhits: [], fcur: -1 };
+  }
 
   // newJdg is the screen of the unhandled lines with nothing to show. changed
   // tells the sides that were judged after their last import.
@@ -165,10 +177,14 @@
     busyUnit = unit || "ファイル";
     st.error = "";
     showBusy(label, canStop);
+    const began = Date.now();
     try {
       await fn();
+      // A step the user waited for tells it is over (spec 14.8.10).
+      if (Date.now() - began >= TOAST_AFTER) toast(doneText(label));
     } catch (e) {
       st.error = errText(e);
+      toast(st.error, "err");
     } finally {
       busy = false;
       hideBusy();
@@ -200,12 +216,77 @@
     });
   }
 
+  // ---- toasts, tips and the zoom (spec 14.8.6, 14.8.10) ----
+
+  const TOAST_AFTER = 2500; // a step that took this long (ms) tells it is over
+
+  // toast shows a short message at the bottom right: an error for 9 s, any
+  // other for 4 s.
+  function toast(text, kind) {
+    let box = $("toasts");
+    if (!box) {
+      box = h("div", { id: "toasts" });
+      document.body.appendChild(box);
+    }
+    const el = h("div", { class: cls("toast", kind === "err" && "err") }, text);
+    el.addEventListener("click", () => el.remove());
+    box.appendChild(el);
+    while (box.children.length > 4) box.firstChild.remove();
+    setTimeout(() => el.remove(), kind === "err" ? 9000 : 4000);
+  }
+
+  // doneText turns the label of a step ("生成しています") into what it did.
+  function doneText(label) {
+    if (/ています$/.test(label)) return label.replace(/ています$/, "ました");
+    return "終わりました（" + label + "）";
+  }
+
+  // tip is the ⓘ that shows a longer explanation when the mouse is on it.
+  const tip = (text) => h("span", { class: "tip", tabindex: "0", "data-tip": text }, "ⓘ");
+
+  const ZOOMS = [70, 80, 90, 100, 110, 120, 130, 140, 150];
+
+  function applyZoom(z) {
+    st.zoom = z;
+    document.body.style.zoom = z === 100 ? "" : String(z / 100);
+  }
+
+  // zoomBy changes the zoom of the page by steps (0 = back to 100 %) and
+  // keeps it in the settings.
+  function zoomBy(step) {
+    let i = ZOOMS.indexOf(st.zoom);
+    if (i < 0) i = 3;
+    const z = step === 0 ? 100 : ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, i + step))];
+    applyZoom(z);
+    toast(`画面の拡大率 ${z}%`);
+    api().SetZoom(z).catch(() => {});
+    if (typeof gFit === "function" && G) gFit();
+  }
+
+  function zoomKey(e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    if (e.key === "+" || e.key === "=" || e.key === ";" || e.code === "NumpadAdd") zoomBy(1);
+    else if (e.key === "-" || e.code === "NumpadSubtract") zoomBy(-1);
+    else if (e.key === "0" || e.code === "Numpad0") zoomBy(0);
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function zoomWheel(e) {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    zoomBy(e.deltaY < 0 ? 1 : -1);
+  }
+
   // ---- the frame ----
 
   function setState(s) {
     st.version = s.version;
     st.cas = s.case;
     st.recent = s.recent;
+    st.readOnly = s.readOnly || "";
+    if (s.zoom) applyZoom(s.zoom);
   }
 
   // forgetViews drops what was drawn for the case that was open before.
@@ -225,6 +306,7 @@
     st.edit = newEdit();
     G = null;
     st.filters = {};
+    st.srch = newSrch();
   }
 
   async function opened(home) {
@@ -274,6 +356,10 @@
       loadJudge();
       return;
     }
+    if (page === "search" && !st.srch.view) {
+      loadSearch();
+      return;
+    }
     render();
   }
 
@@ -281,21 +367,29 @@
     const nav = $("nav");
     nav.textContent = "";
     const item = (page, label, needsCase) => button(label, () => go(page), { class: st.page === page ? "on" : null, disabled: needsCase && !st.cas });
+    // The menu in framed groups, as PalaTerm's (spec 14.8.12); a heading is
+    // not a button.
+    const group = (title, ...items) => h("div", { class: "nav-group" }, h("div", { class: "nav-group-title" }, title), items);
     add(nav, [
       h("div", { class: "brand" }, "ConfigChief"),
       h("div", { class: "nav-case" }, st.cas ? st.cas.name : "案件を開いていません"),
-      item("cases", "案件", false),
-      item("home", "ホーム", true),
-      item("import", "取り込み", true),
-      item("judge", "未対応の行", true),
-      item("mapping", "対応", true),
-      item("edit", "表の編集", true),
-      item("customer", "外部一覧", true),
-      item("fill", "ひな形から作る", true),
-      item("result", "結果", true),
-      item("logs", "ログ", true),
-      item("compare", "比較", false),
-      h("div", { class: "nav-foot" }, "版 " + st.version),
+      group("準備",
+        item("home", "ホーム", true),
+        item("import", "取り込み", true),
+        item("judge", "未対応の行", true),
+        item("mapping", "対応", true),
+        item("edit", "表の編集", true),
+        item("customer", "外部一覧", true)),
+      group("作る・確かめる",
+        item("fill", "ひな形から作る", true),
+        item("result", "結果", true),
+        item("logs", "ログ", true),
+        item("compare", "比較", false),
+        item("search", "検索", true)),
+      group("管理",
+        item("cases", "案件", false),
+        item("about", "バージョン情報", false)),
+      button("版 " + st.version, () => go("about"), { class: "nav-foot", title: "バージョン情報を開く" }),
     ]);
   }
 
@@ -306,10 +400,13 @@
     const same = main.dataset.page === st.page;
     main.textContent = "";
     main.dataset.page = st.page;
+    if (st.readOnly && st.cas) {
+      main.appendChild(h("div", { class: "box warn", id: "read-only" }, st.readOnly));
+    }
     if (st.error) {
       main.appendChild(h("div", { class: "box error" }, button("閉じる", () => { st.error = ""; render(); }, { class: "link close" }), st.error));
     }
-    const pages = { cases: casesPage, home: homePage, import: importPage, judge: judgePage, mapping: mappingPage, edit: editPage, customer: customerPage, fill: fillPage, result: resultPage, logs: logsPage, compare: comparePage };
+    const pages = { cases: casesPage, home: homePage, import: importPage, judge: judgePage, mapping: mappingPage, edit: editPage, customer: customerPage, fill: fillPage, result: resultPage, logs: logsPage, search: searchPage, compare: comparePage, about: aboutPage };
     afterDraw = [];
     add(main, [pages[st.page]()]);
     main.scrollTop = same ? top : 0;
@@ -327,7 +424,9 @@
   function tableView(t, opts) {
     opts = opts || {};
     const key = opts.id || t.name;
-    const fs = st.filters[key] || (st.filters[key] = { text: "", shown: ROWS });
+    const fs = st.filters[key] || (st.filters[key] = { text: "", shown: ROWS, sort: { ci: -1, dir: 1 }, widths: {} });
+    if (!fs.sort) fs.sort = { ci: -1, dir: 1 };
+    if (!fs.widths) fs.widths = {};
     if (!t.rows.length) return h("div", { class: "table-wrap" }, h("div", { class: "empty" }, "ありません"));
     const code = new Set(t.code || []);
     const whole = new Set(t.whole || []); // the columns that are not broken into lines
@@ -345,6 +444,10 @@
         }
         hit.push(i);
       });
+      if (fs.sort.ci >= 0) {
+        const c = fs.sort.ci;
+        hit.sort((x, y) => fs.sort.dir * listSorter.compare(String(t.rows[x][c] == null ? "" : t.rows[x][c]), String(t.rows[y][c] == null ? "" : t.rows[y][c])) || x - y);
+      }
       body.textContent = "";
       for (const i of hit.slice(0, fs.shown)) {
         const mark = (t.marks && t.marks[i]) || "";
@@ -362,11 +465,50 @@
 
     const filter = h("input", { type: "text", value: fs.text, placeholder: "絞り込み（空白で区切ると、すべてを含む行）", oninput: (e) => { fs.text = e.target.value; fs.shown = ROWS; fill(); } });
     fill();
+    // The headings sort (ascending, descending, as given) and their right
+    // edges are dragged to widen a column; a double click puts it back.
+    const heads = t.header.map((x, c) => {
+      const mark = fs.sort.ci === c ? (fs.sort.dir > 0 ? " ▲" : " ▼") : "";
+      const th = h("th", { class: "sortable", title: "押すと並べ替えます（昇順 → 降順 → 元の順）" }, x, h("span", { class: "sort-mark" }, mark));
+      if (fs.widths[c]) th.style.width = th.style.minWidth = th.style.maxWidth = fs.widths[c] + "px";
+      th.addEventListener("click", (e) => {
+        if (e.target.classList.contains("rz")) return;
+        if (fs.sort.ci !== c) fs.sort = { ci: c, dir: 1 };
+        else if (fs.sort.dir > 0) fs.sort.dir = -1;
+        else fs.sort = { ci: -1, dir: 1 };
+        heads.forEach((th2, c2) => { th2.querySelector(".sort-mark").textContent = fs.sort.ci === c2 ? (fs.sort.dir > 0 ? " ▲" : " ▼") : ""; });
+        fill();
+      });
+      const rz = h("span", { class: "rz", title: "ドラッグで幅を変えます（ダブルクリックで元に戻す）" });
+      rz.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const x0 = e.clientX;
+        const w0 = th.getBoundingClientRect().width / (st.zoom / 100);
+        const move = (m) => {
+          const w = Math.max(40, Math.round(w0 + (m.clientX - x0) / (st.zoom / 100)));
+          fs.widths[c] = w;
+          th.style.width = th.style.minWidth = th.style.maxWidth = w + "px";
+        };
+        const up = () => { document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); };
+        document.addEventListener("mousemove", move);
+        document.addEventListener("mouseup", up);
+      });
+      rz.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        delete fs.widths[c];
+        th.style.width = th.style.minWidth = th.style.maxWidth = "";
+      });
+      th.appendChild(rz);
+      return th;
+    });
     return h("div", null,
       t.lead ? h("p", { class: "dim" }, t.lead) : null,
       h("div", { class: "row" }, filter, note, more),
-      h("div", { class: "table-wrap" }, h("table", null, h("thead", null, h("tr", null, t.header.map((x) => h("th", null, x)))), body)));
+      h("div", { class: "table-wrap" }, h("table", { class: "listed" }, h("thead", null, h("tr", null, heads)), body)));
   }
+
+  const listSorter = new Intl.Collator("ja", { numeric: true });
 
   // ---- 案件 ----
 
@@ -420,7 +562,75 @@
         h("div", { class: "row" }, h("span", null, "種類"),
           seg([["migration", "更改（旧コンフィグから作る）"], ["new", "新規"]], c.kind, (k) => { c.kind = k; render(); })),
         h("div", { class: "row" }, button("作る", create, { class: "primary", disabled: !c.dir }))),
+      casePart(),
     ];
+  }
+
+  // casePart writes the open case out to one file and reads such a file
+  // back (spec 14.9; PalaTerm's 一式書き出し・読み込み).
+  function casePart() {
+    const x = st.cx;
+    const write = () => {
+      if (x.seal) {
+        if (x.pw.length < 8) { st.error = "パスワードは 8 文字以上にしてください"; render(); return; }
+        if (x.pw !== x.pw2) { st.error = "パスワードが 2 回で違います"; render(); return; }
+      }
+      run("案件を書き出しています", async () => {
+        if (!x.seal && !(await ask("暗号化しない書き出し", "パスワードで暗号化せずに書き出します。受け取った人でなくても中身を読めます。よろしいですか？", "暗号化せずに書き出す"))) return;
+        const v = await api().CaseExport(x.noSecrets, x.seal ? x.pw : "");
+        if (!v || !v.path) return; // the dialog was closed
+        x.view = v;
+        x.pw = x.pw2 = "";
+        toast("書き出しました: " + v.path);
+      });
+    };
+    const read = async () => {
+      let f = null;
+      try {
+        f = await api().CasePick();
+      } catch (e) {
+        st.error = errText(e);
+        render();
+        return;
+      }
+      if (!f) return;
+      let pw = "";
+      if (f.sealed) {
+        pw = await askText("パスワード", "このファイルはパスワードで暗号化されています。書き出した人から聞いたパスワードを入れてください。", "", "読み込む", true);
+        if (pw == null) return;
+      }
+      run("案件を読み込んでいます", async () => {
+        const got = await api().CaseImport(f.path, pw);
+        if (!got) return; // the dialog was closed
+        await opened(got.home);
+        st.caseNote = `案件「${got.name}」を ${got.dir} に広げて開きました（${got.files} ファイル。${got.written.slice(0, 16).replace("T", " ")} に ConfigChief ${got.version} で書き出したもの）。`
+          + (got.noSecrets ? "秘密の値を外した案件です。パラメータブックの **** を本当の値に書き換えてください（チェックで V-218 が出ます）。" : "");
+      });
+    };
+    const v = x.view;
+    return h("div", { class: "card" },
+      h("h2", null, "案件の書き出し・読み込み"),
+      h("p", { class: "dim" }, "案件は手元のフォルダで持ちます。人に渡すときは、フォルダごとコピーするか、ここで 1 つのファイル（.ccase）に書き出します。受け取った人は「読み込む」で、手元のフォルダに案件として広げます。 ",
+        tip("入れないもの: 作ったコンフィグとレポート（out）、ブックの控え（state/backup）、使用中の印。受け取った人が作り直します。パスワードは覚えません。忘れると読めません。")),
+      h("h3", null, "書き出す"),
+      st.cas ? [
+        h("div", { class: "row" }, h("span", null, "案件"), h("b", null, st.cas.name)),
+        h("div", { class: "row" },
+          h("label", null, h("input", { type: "checkbox", checked: x.seal, onchange: (e) => { x.seal = e.target.checked; render(); } }), " パスワードで暗号化する（おすすめ）"),
+          h("label", null, h("input", { type: "checkbox", checked: x.noSecrets, onchange: (e) => { x.noSecrets = e.target.checked; } }), " 秘密の値（パスワード・鍵）を外す"),
+          tip("外すと、パラメータブックの秘密の列と、取り込めたコンフィグ・ログの中の秘密の値を **** にします。取り込めなかった行（未対応の行）と、Excel の一覧の中は伏せられません。書き出した後に一覧が出るので、渡す前に中身を見てください。")),
+        x.seal ? h("div", { class: "row" },
+          h("input", { type: "password", id: "cx-pw", value: x.pw, placeholder: "パスワード（8 文字以上）", autocomplete: "new-password", oninput: (e) => { x.pw = e.target.value; } }),
+          h("input", { type: "password", id: "cx-pw2", value: x.pw2, placeholder: "もう一度", autocomplete: "new-password", oninput: (e) => { x.pw2 = e.target.value; } })) : null,
+        h("div", { class: "row" }, button("書き出す", write, { class: "primary", id: "cx-write" })),
+      ] : h("p", { class: "dim" }, "案件を開くと書き出せます。"),
+      v ? h("div", { class: "box info", id: "cx-done" },
+        `${v.path} に書き出しました（${v.files} ファイル・${(v.size / 1048576).toFixed(1)} MB・${v.encrypted ? "パスワードで暗号化" : "暗号化なし"}）。`
+        + (v.noSecrets ? `\n秘密の値を外しました: 値 ${v.values} 個、テキストの ${v.masked} か所（${v.maskedFiles.length} ファイル）。` : "")
+        + (v.notes.length ? "\n" + v.notes.join("\n") : "")) : null,
+      v && v.left.length ? h("div", { class: "box warn" }, "伏せられなかったもの（渡す前に中身を見てください）:\n" + v.left.join("\n")) : null,
+      h("h3", null, "読み込む"),
+      h("div", { class: "row" }, button("ファイルを選んで読み込む", read, { id: "cx-read" }), h("span", { class: "dim small" }, "読み込んだ案件は、選んだ場所に新しいフォルダを作って広げ、そのまま開きます。")));
   }
 
   // ---- ホーム ----
@@ -462,6 +672,8 @@
       h("h1", null, m.case.name),
       h("p", null, `種類: ${m.case.kind}`),
       h("div", { class: "row" }, h("span", { class: "path" }, m.case.dir), button("案件フォルダを開く", () => show(""))),
+      m.shared ? h("div", { class: "box warn", id: "shared-note" }, m.shared) : null,
+      st.caseNote ? h("div", { class: "box info" }, button("閉じる", () => { st.caseNote = ""; render(); }, { class: "link close" }), st.caseNote) : null,
       boxes("warn", m.problems),
       draftNote(),
       input("old", m.old),
@@ -2382,6 +2594,46 @@
     return out;
   }
 
+  // diffJump moves to the next (1) or the previous (-1) difference of the
+  // comparison side by side (F7 / F8 as in PalaTerm's diff window).
+  function diffJump(dir) {
+    const rows = Array.from(document.querySelectorAll("#diff-side tr.chg"));
+    if (!rows.length) return;
+    const df = st.diff;
+    df.cur = dir > 0 ? Math.min(rows.length - 1, df.cur + 1) : Math.max(0, df.cur - 1);
+    rows.forEach((r, i) => r.classList.toggle("cur", i === df.cur));
+    rows[df.cur].scrollIntoView({ block: "center" });
+  }
+
+  // marked draws a text with the parts in spans ([from, to) in UTF-16
+  // units) marked.
+  function marked(text, spans) {
+    if (!spans || !spans.length) return [text];
+    const out = [];
+    let at = 0;
+    for (const [a, b] of spans) {
+      if (a > at) out.push(text.slice(at, a));
+      out.push(h("mark", null, text.slice(a, b)));
+      at = b;
+    }
+    if (at < text.length) out.push(text.slice(at));
+    return out;
+  }
+
+  function diffSide(df) {
+    const d = df.view;
+    const rows = d.side.slice(0, df.shown).map((r) => r.op === "gap"
+      ? h("tr", { class: "gap" }, h("td", { colspan: "4" }, "… " + r.ta + " …"))
+      : h("tr", { class: cls(r.op, r.op !== "same" && "chg") },
+        h("td", { class: "no" }, r.a ? String(r.a) : ""),
+        h("td", { class: "tx a" }, r.a || r.op === "same" ? marked(r.ta, r.sa) : ""),
+        h("td", { class: "no" }, r.b ? String(r.b) : ""),
+        h("td", { class: "tx b" }, r.b || r.op === "same" ? marked(r.tb, r.sb) : "")));
+    return h("div", { class: "diff side" }, h("table", { id: "diff-side" },
+      h("thead", null, h("tr", null, h("th", { class: "no" }), h("th", null, "A"), h("th", { class: "no" }), h("th", null, "B"))),
+      h("tbody", null, rows)));
+  }
+
   // treeChecks is the two choices of what a structured comparison leaves out.
   function treeChecks(o) {
     return [
@@ -2524,11 +2776,23 @@
         h("span", { class: "no" }, l.b ? String(l.b) : ""),
         h("span", { class: "sign" }, sign[l.op]),
         h("span", { class: "tx" }, l.text)));
+    const save = async () => {
+      try {
+        const p = await api().DiffSave(df.a, df.b);
+        if (p) toast("保存しました: " + p);
+      } catch (e) {
+        toast(errText(e), "err");
+      }
+    };
+    const total = df.layout === "side" ? d.side.length : d.lines.length;
     return h("div", null,
       h("div", { class: "row" },
+        seg([["stack", "上下"], ["side", "左右"]], df.layout, (m) => { df.layout = m; df.cur = -1; render(); }),
+        df.layout === "side" ? [button("前の違い ▲", () => diffJump(-1), { title: "F8" }), button("次の違い ▼", () => diffJump(1), { title: "F7" })] : null,
+        button("HTML に保存", save, { title: "左右に並べた差分を、1 つの HTML ファイルに保存します" }),
         h("span", null, `A にだけある行 ${d.removed} 行、B にだけある行 ${d.added} 行`),
-        d.lines.length > df.shown ? [h("span", { class: "dim small" }, `${d.lines.length} 行のうち ${df.shown} 行を出しています`), button("さらに表示", () => { df.shown += LINES; render(); })] : null),
-      h("div", { class: "diff" }, lines));
+        total > df.shown ? [h("span", { class: "dim small" }, `${total} 行のうち ${df.shown} 行を出しています`), button("さらに表示", () => { df.shown += LINES; render(); })] : null),
+      df.layout === "side" ? diffSide(df) : h("div", { class: "diff" }, lines));
   }
 
   // ---- 表の編集 ----
@@ -2583,8 +2847,8 @@
   const gDialogOpen = () => !!document.querySelector(".g-dialog") || !$("ask").hidden || !$("busy").hidden;
 
   // askText asks for one line of text; null = given up.
-  function askText(title, text, value, yes) {
-    const input = h("input", { type: "text", value: value || "", class: "g-ask" });
+  function askText(title, text, value, yes, secret) {
+    const input = h("input", { type: secret ? "password" : "text", value: value || "", class: "g-ask" });
     const body = h("div", null, h("p", null, text), input);
     const answer = dialog(title, body, [{ id: "cancel", label: "キャンセル" }, { id: "ok", label: yes, cls: "primary" }]);
     input.addEventListener("keydown", (e) => {
@@ -5275,6 +5539,239 @@
     return out;
   }
 
+  // ---- 検索 (spec 14.8.8; PalaTerm's ログの grep) ----
+
+  function loadSearch() {
+    run("検索の準備をしています", async () => {
+      st.srch.view = await api().Search({ query: "", regex: false, case: false, scopes: [], out: "", misses: false });
+      st.page = "search";
+    });
+  }
+
+  function searchPage() {
+    const sr = st.srch;
+    const v = sr.view;
+    if (!v) return [h("h1", null, "検索")];
+    if (!sr.scopes) {
+      sr.scopes = {};
+      for (const sc of v.scopes) sr.scopes[sc.id] = true;
+    }
+    const search = () => {
+      if (!sr.q.trim()) return;
+      run("ファイルを検索しています", async () => {
+        const scopes = v.scopes.filter((sc) => sr.scopes[sc.id]).map((sc) => sc.id);
+        if (!scopes.length) throw new Error("探す場所を 1 つ以上選んでください");
+        sr.view = await api().Search({ query: sr.q, regex: sr.regex, case: sr.cs, scopes, out: sr.out, misses: sr.misses });
+        sr.file = null;
+      });
+    };
+    if (sr.file) return fileViewer(sr);
+    const q = h("input", { type: "text", id: "srch-q", value: sr.q, placeholder: "探す文字（例: 192.0.2.1、ip route）", oninput: (e) => { sr.q = e.target.value; },
+      onkeydown: (e) => { if (e.key === "Enter" && !e.isComposing) search(); } });
+    afterDraw.push(() => { if (!sr.view.files.length && document.activeElement === document.body) q.focus(); });
+    const out = [
+      h("h1", null, "検索"),
+      h("p", { class: "dim" }, "案件のファイルをまとめて検索します。当たった行を押すと、そのファイルをその行で開きます。 ", tip("旧コンフィグ・新コンフィグ・ログ（input の各フォルダの直下）、追加コンフィグ、ひな形、作ったコンフィグ（out の選んだフォルダの configs と fill）を探します。Excel のファイルは探しません。")),
+      h("div", { class: "box warn" }, "ファイルの文字をそのまま出します（秘密の値も伏せません）。"),
+      h("div", { class: "row" }, q, button("検索", search, { class: "primary", id: "srch-run" })),
+      h("div", { class: "row" },
+        h("label", null, h("input", { type: "checkbox", checked: sr.regex, onchange: (e) => { sr.regex = e.target.checked; } }), " 正規表現"),
+        h("label", null, h("input", { type: "checkbox", checked: sr.cs, onchange: (e) => { sr.cs = e.target.checked; } }), " 大文字と小文字を区別"),
+        h("label", null, h("input", { type: "checkbox", checked: sr.misses, onchange: (e) => { sr.misses = e.target.checked; } }), " 当たらなかったファイルも出す")),
+      h("div", { class: "row" }, h("span", null, "探す場所"),
+        v.scopes.map((sc) => h("label", null, h("input", { type: "checkbox", checked: !!sr.scopes[sc.id], onchange: (e) => { sr.scopes[sc.id] = e.target.checked; } }), " " + sc.label)),
+        v.outs.length ? [h("span", { class: "dim" }, "作ったコンフィグのフォルダ"), select([["", "一番新しいもの"]].concat(v.outs.map((o) => [o, o])), sr.out, (x) => { sr.out = x; })] : null),
+    ];
+    if (v.read || v.files.length || v.errors.length) {
+      const lines = [];
+      for (const f of v.files) for (const hit of f.hits) lines.push(`${f.rel}:${hit.line}: ${hit.text}`);
+      const text = lines.join("\n") + (v.missed.length ? "\n\n当たらなかったファイル:\n" + v.missed.join("\n") : "");
+      out.push(h("div", { class: "row" },
+        h("span", null, `${v.read} ファイルを読み、${v.files.length} ファイルの ${v.hits} 行が当たりました` + (v.out ? `（作ったコンフィグは ${v.out}）` : "")),
+        button("結果をコピー", () => api().ClipboardSet(text).then(() => toast("コピーしました")).catch((e) => toast(errText(e), "err")), { disabled: !lines.length }),
+        button("テキストに保存", () => api().SearchSave(text).then((p) => { if (p) toast("保存しました: " + p); }).catch((e) => toast(errText(e), "err")), { disabled: !lines.length })));
+      if (v.capped) out.push(h("div", { class: "box warn" }, "当たった行が多いため、先頭の 5000 行だけを出しています。探す文字を絞ってください。"));
+      out.push(boxes("error", v.errors));
+      for (const f of v.files) {
+        out.push(h("div", { class: "srch-file" },
+          h("div", { class: "srch-head" }, h("b", null, f.rel), h("span", { class: "dim small" }, ` ${f.scope}・${f.hits.length} 行`)),
+          f.hits.map((hit) => h("div", { class: "srch-hit", onclick: () => openFile(f.rel, hit.line) },
+            h("span", { class: "no" }, String(hit.line)), h("span", { class: "tx" }, marked(hit.text, hit.spans))))));
+      }
+      if (v.missed.length) out.push(h("h2", null, `当たらなかったファイル（${v.missed.length}）`), h("div", { class: "box" }, v.missed.join("\n")));
+    }
+    return out;
+  }
+
+  // openFile shows a file of the case at a line (read only).
+  function openFile(rel, line) {
+    run("ファイルを開いています", async () => {
+      const f = await api().ReadFile(rel);
+      const sr = st.srch;
+      sr.file = { rel: f.rel, lines: f.lines, cut: f.cut, at: line };
+      sr.fq = sr.regex ? "" : sr.q;
+      srchFind(sr);
+      sr.fcur = sr.fhits.indexOf(line - 1);
+    });
+  }
+
+  const VIEW_LINES = 20000; // lines of a file drawn around where it is read
+
+  // srchFind marks the lines of the open file that hold what is looked for.
+  function srchFind(sr) {
+    sr.fhits = [];
+    const w = sr.fq.toLowerCase();
+    if (!w) return;
+    sr.file.lines.forEach((l, i) => { if (l.toLowerCase().includes(w)) sr.fhits.push(i); });
+  }
+
+  function srchJump(dir) {
+    const sr = st.srch;
+    if (!sr.file || !sr.fhits.length) return;
+    sr.fcur = sr.fcur < 0 ? (dir > 0 ? 0 : sr.fhits.length - 1) : (sr.fcur + dir + sr.fhits.length) % sr.fhits.length;
+    sr.file.at = sr.fhits[sr.fcur] + 1;
+    render();
+  }
+
+  function fileViewer(sr) {
+    const f = sr.file;
+    const w = sr.fq.toLowerCase();
+    const from = Math.max(0, f.at - 1 - VIEW_LINES / 2);
+    const to = Math.min(f.lines.length, from + VIEW_LINES);
+    const spans = (l) => {
+      if (!w) return [];
+      const out = [];
+      const low = l.toLowerCase();
+      for (let i = low.indexOf(w); i >= 0; i = low.indexOf(w, i + w.length)) out.push([i, i + w.length]);
+      return out;
+    };
+    const rows = [];
+    for (let i = from; i < to; i++) {
+      rows.push(h("div", { class: cls("fv-line", i === f.at - 1 && "at"), id: i === f.at - 1 ? "fv-at" : null },
+        h("span", { class: "no" }, String(i + 1)), h("span", { class: "tx" }, marked(f.lines[i], spans(f.lines[i])))));
+    }
+    afterDraw.push(() => { const at = $("fv-at"); if (at) at.scrollIntoView({ block: "center" }); });
+    const find = h("input", { type: "text", value: sr.fq, placeholder: "このファイルの中を検索", oninput: (e) => { sr.fq = e.target.value; },
+      onkeydown: (e) => { if (e.key === "Enter" && !e.isComposing) { srchFind(sr); sr.fcur = -1; srchJump(e.shiftKey ? -1 : 1); render(); } } });
+    return [
+      h("h1", null, "検索"),
+      h("div", { class: "row" }, button("← 結果に戻る", () => { sr.file = null; render(); }), h("b", { class: "path" }, f.rel), h("span", { class: "dim small" }, `${f.lines.length} 行`)),
+      f.cut ? h("div", { class: "box warn" }, "長いファイルのため、先頭の 200000 行だけを読んでいます。") : null,
+      h("div", { class: "row" }, find,
+        button("前 ▲", () => srchJump(-1), { title: "Shift+F3" }), button("次 ▼", () => srchJump(1), { title: "F3" }),
+        h("span", { class: "dim small" }, sr.fhits.length ? `${sr.fcur >= 0 ? sr.fcur + 1 : 0} / ${sr.fhits.length} か所` : (sr.fq ? "当たりはありません" : ""))),
+      from > 0 || to < f.lines.length ? h("p", { class: "dim small" }, `${from + 1} 行目から ${to} 行目を出しています。`) : null,
+      h("div", { class: "diff fv" }, rows),
+    ];
+  }
+
+  // ---- バージョン情報 (spec 14.8.1; PalaTerm's バージョン情報) ----
+
+  function aboutPage() {
+    const u = st.upd;
+    const i = u.found;
+    const check = async () => {
+      const was = u;
+      st.upd = { found: null, busy: "check", error: "", path: "" };
+      render();
+      try {
+        st.upd.found = await api().CheckLatest();
+      } catch (e) {
+        st.upd.error = errText(e);
+      }
+      // The exe downloaded before this check is still the latest: its steps
+      // stay on the page.
+      if (st.upd.found && was.found && was.path && st.upd.found.latest === was.found.latest) st.upd.path = was.path;
+      st.upd.busy = "";
+      render();
+    };
+    const download = async () => {
+      const mb = (i.exeSize / 1048576).toFixed(1);
+      const ok = await ask("最新版のダウンロード",
+        `ConfigChief v${i.latest} の ConfigChief.exe（${mb} MB）を GitHub の公開リリースからダウンロードして、${i.saveDir} に保存します。よろしいですか？\n\n`
+        + (i.hasDigest ? "保存したファイルは、リリースに登録された SHA-256 と照合します。" : "このリリースには SHA-256 の登録がないため、保存したファイルは大きさだけ照合します。")
+        + "今の ConfigChief は置き換えず、起動もしません。", "ダウンロードする");
+      if (!ok) return;
+      u.busy = "dl";
+      u.error = "";
+      u.path = "";
+      render();
+      try {
+        u.path = await api().DownloadLatest();
+        toast("ダウンロードしました");
+      } catch (e) {
+        u.error = errText(e);
+      }
+      u.busy = "";
+      render();
+    };
+    const showErr = (e) => toast(errText(e), "err");
+    const out = [
+      h("h1", null, "バージョン情報"),
+      h("p", { class: "dim" }, "GitHub の公開リリースと、この ConfigChief の版を比べます。", h("b", null, "ボタンを押したときだけ通信します"), "（送るのは GitHub への問い合わせだけで、案件の中身は送りません）。 ",
+        tip("通信するのは「最新版を確認する」と「最新版をダウンロード」の 2 つだけです。プロキシは環境変数 HTTPS_PROXY か、Windows の設定に手動で入れたものを使います。自動設定のスクリプト（PAC）と認証の要るプロキシには対応していません。")),
+      h("div", { class: "card about" },
+        h("div", { class: "kv" },
+          h("span", { class: "dim" }, "この ConfigChief"), h("b", null, "v" + (i ? i.current : st.version)),
+          i ? [h("span", { class: "dim" }, "最新版"), h("span", null, h("b", null, "v" + i.latest), i.published ? h("span", { class: "dim small" }, `（${i.published} 公開）`) : null)] : null),
+        i && !i.newer ? h("div", { class: "box info" }, "お使いの版は最新です。") : null,
+        i && i.newer ? h("div", { class: "box upd-new" },
+          h("div", { class: "upd-title" }, `新しい版があります（v${i.current} → v${i.latest}）`),
+          !u.path ? (i.hasExe
+            ? [h("p", { class: "dim small" }, `最新版の ConfigChief.exe を ${i.saveDir} に保存します（今の ConfigChief はそのまま動きます）。`),
+              button(u.busy === "dl" ? "ダウンロード中…" : `⬇ 最新版をダウンロード（${(i.exeSize / 1048576).toFixed(1)} MB）`, download, { class: "primary", id: "upd-dl", disabled: !!u.busy })]
+            : h("p", { class: "dim small" }, "最新版に ConfigChief.exe が添付されていません。リリースのページから入手してください。"))
+            : [h("p", null, "✓ ダウンロードしました: " + u.path),
+              h("div", { class: "section-label" }, "あとの手順"),
+              h("ol", null,
+                h("li", null, "ConfigChief の窓を閉じます。"),
+                h("li", null, i.inAppDir ? "今の ConfigChief.exe を消してから、ダウンロードしたファイルの名前を ConfigChief.exe に変えます（同じフォルダにあります）。"
+                  : "ダウンロードしたファイルの名前を ConfigChief.exe に変えて、今の ConfigChief.exe に上書きします。"),
+                h("li", null, "ConfigChief.exe を起動します。案件フォルダと設定はそのまま使えます。")),
+              h("div", { class: "row" },
+                button("ダウンロードしたフォルダを開く", () => api().ShowDownloaded().catch(showErr), { class: "primary" }),
+                i.inAppDir ? null : button("今の ConfigChief のフォルダを開く", () => api().ShowAppFolder().catch(showErr)))]) : null,
+        u.error ? h("div", { class: "box error" }, u.error) : null,
+        h("div", { class: "row" },
+          button(u.busy === "check" ? "確認中…" : i ? "もう一度確認する" : "最新版を確認する", check, { class: i ? null : "primary", id: "upd-check", disabled: !!u.busy }),
+          i || u.error ? button("変更点をブラウザで見る", () => api().OpenWeb(i ? "notes:" + i.latest : "release"), { title: "最新版のリリースのページを、既定のブラウザで開きます" }) : null),
+        i && i.notes.length ? [
+          h("div", { class: "section-label" }, `この版から最新版までの変更点（${i.notes.length} 版分・新しい順）`),
+          h("div", { class: "upd-notes" }, i.notes.map((n) => h("div", { class: "upd-note" },
+            h("div", { class: "upd-note-h" }, h("b", null, "v" + n.version), h("span", { class: "dim small" }, n.published || "")),
+            noteBody(n.body))))] : null),
+      h("div", { class: "card about-card" },
+        h("div", { class: "brand-big" }, "ConfigChief"),
+        h("div", { class: "dim" }, "Network device configurations ⇄ a vendor-neutral Excel workbook"),
+        h("p", null, "作者: KJO", h("br"), "MIT License © 2026 KJO"),
+        h("div", { class: "row" },
+          button("GitHub", () => api().OpenWeb("github"), { class: "link" }),
+          button("使い方", () => api().OpenWeb("manual"), { class: "link" }))),
+    ];
+    return out;
+  }
+
+  // noteBody draws the Markdown of release notes plainly: **bold** and
+  // `code` kept, "- " lines as items, "#" lines as headings.
+  function noteBody(md) {
+    return h("div", { class: "upd-note-b" }, String(md || "").split(/\r?\n/).map((l) => {
+      const parts = [];
+      const re = /\*\*(.+?)\*\*|`([^`]+)`/g;
+      let at = 0;
+      let m;
+      const text = l.replace(/^\s*[-*] /, "").replace(/^#+ /, "");
+      while ((m = re.exec(text))) {
+        if (m.index > at) parts.push(text.slice(at, m.index));
+        parts.push(m[1] != null ? h("b", null, m[1]) : h("code", null, m[2]));
+        at = re.lastIndex;
+      }
+      if (at < text.length) parts.push(text.slice(at));
+      if (/^\s*[-*] /.test(l)) return h("div", { class: "upd-li" }, parts);
+      if (/^#+ /.test(l)) return h("div", { class: "upd-sub" }, parts);
+      return l.trim() ? h("div", null, parts) : h("div", { class: "upd-gap" });
+    }));
+  }
+
   // ---- the start ----
 
   async function boot() {
@@ -5289,8 +5786,21 @@
     document.addEventListener("mousedown", (e) => { if (!(e.target instanceof Element) || !e.target.closest(".g-menu, .g-hpop")) gCloseMenus(); }, true);
     document.addEventListener("keydown", gDocKey, true);
     window.addEventListener("resize", () => { gCloseMenus(); gFit(); });
+    document.addEventListener("keydown", zoomKey, true);
+    document.addEventListener("wheel", zoomWheel, { passive: false });
+    document.addEventListener("keydown", (e) => {
+      if (st.page === "compare" && st.diff.view && st.diff.layout === "side" && (e.key === "F7" || e.key === "F8")) {
+        e.preventDefault();
+        diffJump(e.key === "F7" ? 1 : -1);
+      }
+      if (st.page === "search" && st.srch.file && e.key === "F3") {
+        e.preventDefault();
+        srchJump(e.shiftKey ? -1 : 1);
+      }
+    });
     try {
       window.runtime.EventsOn("progress", onProgress);
+      window.runtime.EventsOn("internal-error", (m) => toast(m, "err"));
       const s = await api().Start();
       setState(s.state);
       st.error = s.notice || "";

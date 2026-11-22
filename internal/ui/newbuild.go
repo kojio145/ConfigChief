@@ -12,7 +12,7 @@ import (
 func (s *Session) NewBook() ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +30,7 @@ func (s *Session) NewBook() ([]string, error) {
 func (s *Session) CloneDevice(from, to string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return nil, err
 	}

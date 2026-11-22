@@ -172,7 +172,7 @@ func (s *Session) ChoosePack(source, path, pack string) (*ImportView, error) {
 	if err := checkSource(source); err != nil {
 		return nil, err
 	}
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (s *Session) ChooseFile(source, path string) (*ImportView, error) {
 	if err := checkSource(source); err != nil {
 		return nil, err
 	}
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +466,7 @@ type BookView struct {
 func (s *Session) MakeBook(from string, replace bool) (*BookView, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return nil, err
 	}
@@ -596,6 +596,7 @@ type DiffView struct {
 	Added   int        `json:"added"`
 	Removed int        `json:"removed"`
 	Lines   []DiffLine `json:"lines"` // the lines that differ, with the lines around them
+	Side    []DiffRow  `json:"side"`  // the same lines side by side (spec 14.8.9)
 }
 
 // diffContext is how many lines that are the same are shown around a line
@@ -618,7 +619,7 @@ func (s *Session) Diff(a, b string) (*DiffView, error) {
 		return nil, err
 	}
 	r := textdiff.Diff(ta, tb)
-	v := &DiffView{A: a, B: b, Equal: r.Equal(), Added: r.Added, Removed: r.Removed, Lines: []DiffLine{}}
+	v := &DiffView{A: a, B: b, Equal: r.Equal(), Added: r.Added, Removed: r.Removed, Lines: []DiffLine{}, Side: []DiffRow{}}
 	if v.Equal {
 		return v, nil
 	}
@@ -649,5 +650,6 @@ func (s *Session) Diff(a, b string) (*DiffView, error) {
 		v.Lines = append(v.Lines, DiffLine{Op: ops[l.Op], A: l.ALine, B: l.BLine, Text: strings.TrimRight(l.Text, "\r\n")})
 	}
 	flush()
+	v.Side = side(v.Lines)
 	return v, nil
 }

@@ -207,7 +207,7 @@ func (s *Session) ListTry(r listimport.Rule) (*TryView, error) {
 func (s *Session) ListSave(path string, r listimport.Rule) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return "", err
 	}
@@ -219,7 +219,7 @@ func (s *Session) ListSave(path string, r listimport.Rule) (string, error) {
 func (s *Session) ListDelete(path string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return "", err
 	}
@@ -345,7 +345,7 @@ func (s *Session) Customer() (*CustomerView, error) {
 		return nil, err
 	}
 	now := s.now()
-	o, err := e.Customer(true, now)
+	o, err := e.Customer(!s.readOnly(), now) // a case only read keeps its marks (spec 14.8.3)
 	if err != nil {
 		return nil, err
 	}
@@ -369,7 +369,7 @@ func (s *Session) Reflect(keys []string, rule string) (string, error) {
 	if s.env == nil {
 		return "", errors.New("案件を開いていません")
 	}
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return "", err
 	}

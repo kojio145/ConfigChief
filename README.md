@@ -3,13 +3,15 @@
 **Network device configurations ⇄ a vendor-neutral Excel workbook.**
 ConfigChief reads router and switch configurations into a vendor-neutral table (an Excel "parameter book"), and writes configurations, a check report and delivery sheets back from that table. It is made for replacing devices, also across vendors.
 
-- One Windows exe. No installer, no network access, no listening port
+- One Windows exe. No installer, no listening port. No network access, except when you press "check for the latest version" on the version page: it then asks GitHub's public releases of ConfigChief, and nothing of your case is sent
 - The same input always gives the same output (no AI, no randomness inside)
 - A line that could not be read is always listed as "unknown" — nothing is dropped silently
 - The program knows no vendor: everything about a vendor lives in a text "vendor pack"
 - Bundled packs: Cisco IOS / IOS-XE (routers, small routers with a built-in switch, Catalyst switches), NEC UNIVERGE IX (routers) and NEC QX series (switches)
 - The parameter book can be edited in Excel or in a table editor inside the program (with a draft that survives a restart)
 - Templates with variables: write one configuration with `{{variables}}`, fill it from another system's list (Excel / CSV) or the parameter book, and get each site's configuration — or the change commands against its configuration now
+- A search over the files of a case, a comparison of two files side by side, and a case folder that two people cannot open at once
+- A case written out to one file, sealed with a password (AES-256-GCM), with its secrets taken out if you choose, and read back on another PC
 - The user interface and the documents are in Japanese (for now)
 
 > **Not verified on real devices.** The bundled packs were written from the vendors' public command references. Run every generated configuration on a lab device before you use it.
@@ -37,6 +39,8 @@ License: [MIT](LICENSE). Third-party notices: [THIRD-PARTY-NOTICES.md](THIRD-PAR
 - **検証と投入の後**: 検証機の投入ログから弾かれた行を探し、投入後の設定とパラメータブックの違いを出します
 - **納品物**: Excel のひな形に値を流し込んだ納品用パラメータシート、相手に渡すパラメータ表
 - **新規構築**: 空のパラメータブックから 1 台目を作り、複製して増やせます
+- **案件の書き出し・読み込み**: 案件を 1 つのファイルにして人に渡せます。パスワードで暗号化でき、パスワード・鍵（秘密の値）を外しても書き出せます。受け取った人は読み込むだけで手元に案件ができます
+- **検索・左右の差分**: 旧コンフィグ・ログ・作ったコンフィグを一度に検索し、当たった行からファイルを開けます。ファイル 2 つの比較は左右に並べて見られ、HTML に保存できます
 - **ひな形から作る**: 変数入りのコンフィグ（`{{変数}}`・`{{#each}}`）を 1 つ書けば、他システムの一覧ファイル（Excel・CSV）やパラメータブックの値から、拠点ごとの新規コンフィグや変更コマンドをまとめて作れます。今のコンフィグとの差から投入（足す行と、印を付けた所だけ消す行）も作れます。実機 1 台のコンフィグから、ひな形の案も作れます
 
 同梱のパック: Cisco IOS / IOS-XE（ルータ、内蔵スイッチ付きの小型ルータ、Catalyst 系のスイッチ）、NEC UNIVERGE IX（ルータ）、NEC QX シリーズ（スイッチ）。
@@ -45,7 +49,7 @@ License: [MIT](LICENSE). Third-party notices: [THIRD-PARTY-NOTICES.md](THIRD-PAR
 
 ## 守っていること
 
-- exe 1 つ。インストール不要。**外部と通信しません。待ち受けポートを開きません**
+- exe 1 つ。インストール不要。**待ち受けポートを開きません。外部と通信しません**（例外は「バージョン情報」で「最新版を確認する」「最新版をダウンロード」を押したときだけで、GitHub の公開リリースに問い合わせます。案件の中身は送りません）
 - 同じ入力からは、いつも同じ出力（AI や乱数を使いません）
 - 読めなかった行は「未対応」として必ず一覧に出します
 - 本体はメーカーを知りません。メーカーの知識は、テキストのメーカーパックにあります

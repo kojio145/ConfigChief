@@ -48,6 +48,13 @@ type Session struct {
 	tree    *ops.TreeOutcome              // the comparison of every device the screen showed last (nil = none)
 	wrote   written                       // what the last generation or check wrote
 	stop    atomic.Bool
+	zoom    int // the zoom of the page in per cent (0 = 100; spec 14.8.6)
+
+	// held is the mark of the open case (spec 14.8.2; nil = none could be
+	// made); newer is the version of a newer ConfigChief that used the case
+	// ("" = this one may write it; spec 14.8.3).
+	held  *project.Held
+	newer string
 }
 
 // SettingsFile gives the place of the settings of the user: the recent cases
@@ -81,6 +88,8 @@ type settingsFile struct {
 	// Grid: sheet → the hidden columns and the widths of the table over the
 	// book (spec 14.6).
 	Grid map[string]GridPref `json:"grid,omitempty"`
+	// Zoom: the zoom of the page in per cent (spec 14.8.6; 0 = 100).
+	Zoom int `json:"zoom,omitempty"`
 }
 
 func (s *Session) load() {
@@ -96,6 +105,7 @@ func (s *Session) load() {
 		return // a broken file is as good as none: it is written anew
 	}
 	s.name = strings.TrimSpace(f.Name)
+	s.zoom = cleanZoom(f.Zoom)
 	s.grid = map[string]GridPref{}
 	for k, p := range f.Grid {
 		if p = p.clean(); k != "" && len(p.Hidden)+len(p.Widths) > 0 {
@@ -115,7 +125,7 @@ func (s *Session) save() {
 	if s.settings == "" {
 		return
 	}
-	f := settingsFile{Recent: []Recent{}, Name: s.name, Grid: s.grid}
+	f := settingsFile{Recent: []Recent{}, Name: s.name, Grid: s.grid, Zoom: s.zoom}
 	for _, r := range s.recent {
 		f.Recent = append(f.Recent, Recent{Dir: r.Dir, Name: r.Name})
 	}
@@ -158,6 +168,10 @@ type State struct {
 	Version string   `json:"version"`
 	Case    *Case    `json:"case"` // nil = no case is open
 	Recent  []Recent `json:"recent"`
+	// ReadOnly says why the open case is only read ("" = it is not; spec
+	// 14.8.3).
+	ReadOnly string `json:"readOnly"`
+	Zoom     int    `json:"zoom"` // per cent
 }
 
 // State tells which case is open and which were open before.
@@ -168,9 +182,15 @@ func (s *Session) State() State {
 }
 
 func (s *Session) state() State {
-	st := State{Version: s.version, Recent: []Recent{}}
+	st := State{Version: s.version, Recent: []Recent{}, Zoom: s.zoom}
+	if st.Zoom == 0 {
+		st.Zoom = 100
+	}
 	if s.env != nil {
 		st.Case = caseOf(s.env)
+		if s.newer != "" {
+			st.ReadOnly = (&project.ReadOnlyError{Newer: s.newer, Mine: s.version}).Error()
+		}
 	}
 	for _, r := range s.recent {
 		if _, err := os.Stat(filepath.Join(r.Dir, project.ConfigFile)); err != nil {
@@ -228,10 +248,27 @@ func cleanDir(dir string) (string, error) {
 }
 
 func (s *Session) open(dir string) (*Home, error) {
+	// The mark of the case first (spec 14.8.2): a case open elsewhere is not
+	// read at all. The case this window has open keeps its mark.
+	var held *project.Held
+	same := s.env != nil && sameDir(s.env.Proj.Dir, dir)
+	if !same && lockCases {
+		h, err := project.Lock(dir)
+		if err != nil {
+			return nil, err
+		}
+		held = h
+	}
 	e, err := ops.Open(dir)
 	if err != nil {
+		held.Release()
 		return nil, err
 	}
+	if !same {
+		s.held.Release()
+		s.held = held
+	}
+	s.newer = project.NoteTool(dir, s.version)
 	s.use(e)
 	s.forget()
 	s.remember(dir, e.Proj.Config.Name)
@@ -257,6 +294,8 @@ func (s *Session) Close() State {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.env = nil
+	s.held.Release()
+	s.held, s.newer = nil, ""
 	s.forget()
 	return s.state()
 }
@@ -309,6 +348,53 @@ func (s *Session) begin() (*ops.Env, error) {
 	return e, nil
 }
 
+// lockCases: a case is held while it is open (spec 14.8.2). The tests of the
+// package open one case from several sessions and turn it off.
+var lockCases = true
+
+// beginWrite is begin for a step that writes the case: a case used by a
+// newer ConfigChief is only read (spec 14.8.3).
+func (s *Session) beginWrite() (*ops.Env, error) {
+	if s.env != nil && s.newer != "" {
+		return nil, &project.ReadOnlyError{Newer: s.newer, Mine: s.version}
+	}
+	return s.begin()
+}
+
+// ReadOnly tells whether the open case is only read.
+func (s *Session) readOnly() bool { return s.env != nil && s.newer != "" }
+
+// cleanZoom keeps the zoom between 70 and 150 per cent, in steps of 10 (0 =
+// 100, nothing chosen).
+func cleanZoom(z int) int {
+	if z == 0 {
+		return 0
+	}
+	z = (z + 5) / 10 * 10
+	if z < 70 {
+		z = 70
+	}
+	if z > 150 {
+		z = 150
+	}
+	if z == 100 {
+		return 0
+	}
+	return z
+}
+
+// SetZoom keeps the zoom of the page (spec 14.8.6) and gives it as kept.
+func (s *Session) SetZoom(z int) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.zoom = cleanZoom(z)
+	s.save()
+	if s.zoom == 0 {
+		return 100
+	}
+	return s.zoom
+}
+
 // PackInfo names a vendor pack that can be used.
 type PackInfo struct {
 	ID      string `json:"id"`
@@ -329,6 +415,9 @@ type Home struct {
 	// Draft is the number of changes made in the tables of the screen that
 	// are not in the parameter book yet (spec 14.6).
 	Draft int `json:"draft"`
+	// Shared says the case is on a shared place ("" = it is not; spec
+	// 14.8.13).
+	Shared string `json:"shared"`
 }
 
 // Home tells where the case stands.
@@ -353,6 +442,9 @@ func (s *Session) home(e *ops.Env) (*Home, error) {
 		return nil, err
 	}
 	h.Old, h.New = len(old), len(nw)
+	if why := project.SharedPlace(e.Proj.Dir); why != "" {
+		h.Shared = fmt.Sprintf(project.SharedNote, why)
+	}
 	if info, err := os.Stat(e.Proj.BookPath()); err == nil {
 		h.HasBook = true
 		h.BookTime = info.ModTime().Format("2006-01-02 15:04")

@@ -129,7 +129,7 @@ func (s *Session) Check() (*ResultView, error) { return s.generate(true) }
 func (s *Session) generate(checkOnly bool) (*ResultView, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +183,7 @@ func (s *Session) Approve(key, scope, reason, by string) (*ResultView, error) {
 	default:
 		return nil, fmt.Errorf("承認の範囲「%s」は使えません", scope)
 	}
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +207,7 @@ func (s *Session) Unapprove(id string) (*ResultView, error) {
 	if s.env == nil || s.shown == nil {
 		return nil, errors.New("先に「生成とチェック」か「チェックだけ」を行ってください")
 	}
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return nil, err
 	}

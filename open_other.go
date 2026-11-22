@@ -9,3 +9,5 @@ import "fmt"
 func openPath(path string) error {
 	return fmt.Errorf("この OS では開けません。場所: %s", path)
 }
+
+func selectInExplorer(path string) error { return openPath(path) }

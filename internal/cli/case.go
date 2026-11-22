@@ -55,9 +55,23 @@ func openCase(dir string, out, errOut io.Writer) (*ops.Env, bool) {
 		fmt.Fprintln(errOut, "--project <案件フォルダ> を指定してください")
 		return nil, false
 	}
+	// The mark of a case in use (spec 14.8.2): a case open in the window is
+	// left alone.
+	if held == nil {
+		h, err := project.Lock(dir)
+		if err != nil {
+			fmt.Fprintln(errOut, strings.Replace(err.Error(), "別の場所で開かれています", "画面など別の場所で開かれています", 1))
+			return nil, false
+		}
+		held = h
+	}
 	e, err := ops.Open(dir)
 	if err != nil {
 		fmt.Fprintln(errOut, err)
+		return nil, false
+	}
+	if newer := project.NoteTool(dir, Version); newer != "" && writing {
+		fmt.Fprintln(errOut, (&project.ReadOnlyError{Newer: newer, Mine: Version}).Error())
 		return nil, false
 	}
 	e.Version = Version

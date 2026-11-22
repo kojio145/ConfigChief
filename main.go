@@ -16,6 +16,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 
 	"github.com/kojio145/configchief/internal/cli"
+	"github.com/kojio145/configchief/internal/errlog"
 	"github.com/kojio145/configchief/internal/ui"
 )
 
@@ -41,17 +42,20 @@ func main() {
 	if len(os.Args) > 1 {
 		app.openAtStart(os.Args[1])
 	}
+	errlog.Version = version
 	err := wails.Run(&options.App{
 		Title:     "ConfigChief",
-		Width:     1280,
-		Height:    820,
-		MinWidth:  960,
-		MinHeight: 600,
+		Width:     winWidth,
+		Height:    winHeight,
+		MinWidth:  winMinWidth,
+		MinHeight: winMinHeight,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 246, G: 247, B: 249, A: 1},
 		OnStartup:        app.startup,
+		OnBeforeClose:    app.beforeClose,
+		OnShutdown:       app.shutdown,
 		Bind:             []interface{}{app},
 		Windows: &windows.Options{
 			WebviewIsTransparent: false,

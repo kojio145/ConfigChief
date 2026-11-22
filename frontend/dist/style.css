@@ -390,3 +390,66 @@ table.grid td.fillp { background: #eaf2fd; box-shadow: inset 0 0 0 1px #8fb4e8; 
 .fill-names .row { flex-wrap: wrap; }
 
 label.check { white-space: nowrap; margin-right: 10px; }
+
+/* M9 (spec 14.8): the version page, the search, the comparison side by
+   side, the lists, toasts and tips. */
+
+#nav button.nav-foot { margin-top: auto; background: none; color: #8d99ab; font-size: 11px; text-align: left; padding: 4px 8px; }
+#nav button.nav-foot:hover { color: var(--nav-text); background: none; text-decoration: underline; }
+
+#toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 50; max-width: 480px; }
+.toast { background: #24324a; color: #fff; padding: 9px 14px; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.18); font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; cursor: pointer; }
+.toast.err { background: var(--unknown); }
+
+.tip { display: inline-block; position: relative; color: var(--accent); cursor: help; font-size: 13px; margin-left: 2px; }
+.tip:hover::after, .tip:focus::after { content: attr(data-tip); position: absolute; left: 0; top: 1.6em; z-index: 40; width: 340px; background: #24324a; color: #fff; padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.6; white-space: normal; font-weight: normal; }
+
+table.listed th.sortable { cursor: pointer; position: sticky; padding-right: 14px; }
+table.listed th.sortable:hover { background: #e3e8ef; }
+table.listed th { overflow: hidden; text-overflow: ellipsis; }
+table.listed .sort-mark { color: var(--accent); font-size: 11px; }
+table.listed .rz { position: absolute; right: 0; top: 0; bottom: 0; width: 7px; cursor: col-resize; }
+table.listed .rz:hover { background: #bcd5f3; }
+
+.diff.side { padding: 0; }
+.diff.side table { table-layout: fixed; font-family: Consolas, "BIZ UDGothic", "MS Gothic", monospace; font-size: 12px; }
+.diff.side td, .diff.side th { border: 0; padding: 1px 6px; }
+.diff.side .no { width: 52px; color: var(--dim); text-align: right; user-select: none; }
+.diff.side .tx { white-space: pre-wrap; word-break: break-all; }
+.diff.side tr.del td.a, .diff.side tr.change td.a { background: var(--del-bg); }
+.diff.side tr.add td.b, .diff.side tr.change td.b { background: var(--add-bg); }
+.diff.side tr.del td.b, .diff.side tr.add td.a { background: #f3f4f6; }
+.diff.side tr.gap td { background: #eef1f5; color: var(--dim); text-align: center; font-family: inherit; }
+.diff.side td.a mark { background: #f6b3ab; color: inherit; }
+.diff.side td.b mark { background: #9bdca5; color: inherit; }
+.diff.side tr.cur td { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.srch-file { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; margin: 8px 0; overflow: hidden; }
+.srch-head { padding: 6px 10px; background: #eef1f5; font-family: Consolas, "MS Gothic", monospace; font-size: 12px; word-break: break-all; }
+.srch-hit, .fv-line { display: flex; font-family: Consolas, "BIZ UDGothic", "MS Gothic", monospace; font-size: 12px; }
+.srch-hit { cursor: pointer; border-top: 1px solid #eef1f5; }
+.srch-hit:hover { background: #e8f1fc; }
+.srch-hit .no, .fv-line .no { flex: none; width: 60px; text-align: right; padding: 1px 8px 1px 0; color: var(--dim); user-select: none; }
+.srch-hit .tx, .fv-line .tx { flex: 1; white-space: pre-wrap; word-break: break-all; padding: 1px 0; }
+.srch-hit mark, .fv-line mark { background: #ffe58f; color: inherit; }
+.fv-line.at { background: #e8f1fc; }
+.diff.fv { max-height: calc(100vh - 230px); overflow: auto; }
+#srch-q { min-width: 360px; }
+
+.about .kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; margin-bottom: 12px; align-items: baseline; }
+.upd-new { background: #e8f1fc; border: 1px solid #bcd5f3; }
+.upd-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.section-label { font-weight: 700; margin: 14px 0 6px; }
+.upd-notes { display: flex; flex-direction: column; gap: 10px; }
+.upd-note { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; background: #fbfcfd; }
+.upd-note-h { display: flex; gap: 10px; align-items: baseline; margin-bottom: 4px; }
+.upd-note-b { font-size: 13px; line-height: 1.7; }
+.upd-li { padding-left: 1.1em; text-indent: -0.8em; }
+.upd-li::before { content: "・"; }
+.upd-sub { font-weight: 700; margin-top: 6px; }
+.upd-gap { height: 6px; }
+.about-card .brand-big { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
+
+/* M10 (spec 14.8.12): the menu in framed groups, as PalaTerm's. */
+.nav-group { border: 1px solid #34445c; border-radius: 8px; padding: 14px 4px 4px; margin: 10px 0 4px; position: relative; display: flex; flex-direction: column; }
+.nav-group-title { position: absolute; top: -8px; left: 10px; background: var(--nav); padding: 0 6px; font-size: 11px; color: #8d99ab; letter-spacing: 0.05em; }

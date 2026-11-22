@@ -51,7 +51,7 @@ func (s *Session) ApproveMigration(key, scope, reason, by string) (string, error
 	default:
 		return "", fmt.Errorf("承認の範囲「%s」は使えません", scope)
 	}
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return "", err
 	}
@@ -74,7 +74,7 @@ func (s *Session) UnapproveMigration(id string) error {
 	if s.env == nil {
 		return errors.New("案件を開いていません")
 	}
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return err
 	}

@@ -53,9 +53,9 @@ type Project struct {
 // ConfigFile is the name of the settings file of a case folder.
 const ConfigFile = "project.yaml"
 
-// The folders of a case folder (spec 4). The tool writes under state and out
-// only; the rest is for the user to fill.
-var folders = []string{
+// Folders are the folders of a case folder (spec 4). The tool writes under
+// state and out only; the rest is for the user to fill.
+var Folders = []string{
 	"input/old", "input/new", "input/customer", "input/logs",
 	"extra", "mappings", "fill", "vars", "rules", "templates", "packs",
 	"state/snapshots", "state/backup", "out",
@@ -100,7 +100,7 @@ func Init(dir, name, kind string) (*Project, error) {
 		}
 		name = filepath.Base(abs)
 	}
-	for _, f := range folders {
+	for _, f := range Folders {
 		if err := os.MkdirAll(filepath.Join(dir, filepath.FromSlash(f)), 0o755); err != nil {
 			return nil, fmt.Errorf("フォルダを作れません: %v", err)
 		}

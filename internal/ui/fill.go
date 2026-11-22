@@ -145,7 +145,7 @@ func (s *Session) Fill() (*FillView, error) {
 func (s *Session) TemplateSave(path, name, text string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func (s *Session) TemplateSave(path, name, text string) ([]string, error) {
 func (s *Session) TemplateDelete(path string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return "", err
 	}
@@ -197,7 +197,7 @@ func (s *Session) TemplateCheck(text string) ([]string, error) {
 func (s *Session) VarSave(path, name string, r listimport.VarRule) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return "", err
 	}
@@ -208,7 +208,7 @@ func (s *Session) VarSave(path, name string, r listimport.VarRule) (string, erro
 func (s *Session) VarDelete(path string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, err := s.begin()
+	e, err := s.beginWrite()
 	if err != nil {
 		return "", err
 	}
