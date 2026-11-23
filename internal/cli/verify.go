@@ -43,7 +43,7 @@ func cmdVerify(args []string, out, errOut io.Writer) int {
 		fmt.Fprintf(out, "注意: %s\n", n)
 	}
 	c := o.Verdicts.Count()
-	fmt.Fprintf(out, "機器の設定にない行 %d、ブックにない行 %d、値が違うセル %d、見つからない追加コンフィグの行 %d、機器にだけある未対応の行 %d\n",
+	fmt.Fprintf(out, "機器の設定にない行 %d、ブックにない行 %d、値が違うセル %d、見つからない追加コンフィグの行 %d、機器にだけある読めなかった行 %d\n",
 		len(o.Missing), len(o.Surplus), len(o.Cells), len(o.Extras), len(o.Unknown))
 	fmt.Fprintf(out, "未承認のエラー %d、未承認の警告 %d、承認済み %d、情報 %d\n", c.Errors, c.Warnings, c.Approved, c.Info)
 	shown := 0

@@ -153,6 +153,11 @@ func Datasets(sc *schema.Set, a, b *model.Dataset) *Result {
 				if equal(filled(va.Cells[col]), cb) {
 					continue
 				}
+				// A value filled in as the default on one side and nothing on
+				// the other: neither side wrote it, so they do not differ.
+				if (ca == nil && isDefault(cb)) || (cb == nil && isDefault(ca)) {
+					continue
+				}
 				same = false
 				res.Cells = append(res.Cells, CellDiff{
 					Table: name, Device: ra.Get(devCol), Column: col,
@@ -391,6 +396,12 @@ func filled(c *model.Cell) *model.Cell {
 		}
 	}
 	return nil
+}
+
+// isDefault tells that the cell holds a default filled in, not a value
+// that was written.
+func isDefault(c *model.Cell) bool {
+	return c != nil && len(c.Origins) > 0 && c.Origins[0].Kind == "default"
 }
 
 func equal(a, b *model.Cell) bool {

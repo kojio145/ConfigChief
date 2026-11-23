@@ -55,7 +55,7 @@ html, body {
   border-radius: 6px;
   color: inherit;
   font: inherit;
-  padding: 9px 10px;
+  padding: 7px 10px;
   margin-bottom: 2px;
   cursor: pointer;
 }
@@ -525,3 +525,11 @@ details.menu .menu-items button { text-align: left; }
 #nav .nav-group { flex: none; }
 #nav .nav-group button { padding: 7px 10px; }
 .wide-input { min-width: 28em; }
+/* そのほか of the menu: folded, opened by its heading (spec 14.14.2). */
+details.nav-others { padding: 4px; display: block; }
+details.nav-others > summary.nav-group-title { position: static; display: block; cursor: pointer; padding: 4px 8px; background: none; font-size: 12px; letter-spacing: 0.05em; }
+details.nav-others > summary.nav-group-title:hover { color: var(--nav-text); }
+details.nav-others[open] > summary.nav-group-title { margin-bottom: 2px; }
+details.nav-others > button { display: block; width: 100%; }
+details.nav-others > summary.nav-group-title::before { content: "▸ "; }
+details.nav-others[open] > summary.nav-group-title::before { content: "▾ "; }

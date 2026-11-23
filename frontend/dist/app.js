@@ -21,7 +21,7 @@
     create: { dir: "", name: "", kind: "migration" },
     imp: { source: "old", views: {}, tab: {}, lines: {}, pick: {}, onlyBad: false },
     jdg: newJdg(),
-    map: { view: null, tab: "open", book: null, replace: false, redo: null }, // redo: making the proposals of IF 対応 again (spec 14.11.4)
+    map: { view: null, tab: "open", book: null, replace: false, redo: null }, // redo: making the proposals of 新旧対照表（ポート） again (spec 14.11.4)
     cmp: { a: "old", b: "new", view: null, tab: 0 },
     diff: { a: "", b: "", view: null, shown: LINES, mode: "line", stamps: true, secrets: true, layout: "stack", cur: -1 },
     tree: newTree(),
@@ -260,7 +260,7 @@
 
   // ---- adding files to input/ (spec 14.10.1) ----
 
-  const ADD_WHERE = { old: "旧コンフィグ", new: "新コンフィグ", logs: "ログ", customer: "外部一覧" };
+  const ADD_WHERE = { old: "旧コンフィグ", new: "新コンフィグ", logs: "検証機のログ", customer: "外部一覧" };
 
   // dropZone is a place files and folders can be dropped on, with the
   // button that chooses them.
@@ -421,6 +421,8 @@
 
   function setState(s) {
     st.version = s.version;
+    // An error told for the case that was open before is not about this one.
+    if ((st.cas && st.cas.dir) !== (s.case && s.case.dir)) document.querySelectorAll("#toasts .toast.err").forEach((x) => x.remove());
     st.cas = s.case;
     st.recent = s.recent;
     st.readOnly = s.readOnly || "";
@@ -460,6 +462,9 @@
     G = null;
     st.filters = {};
     st.srch = newSrch();
+    st.caseNote = "";
+    st.mig = newMig();
+    st.cx = { noSecrets: false, seal: true, pw: "", pw2: "", view: null };
   }
 
   async function opened(home) {
@@ -500,6 +505,13 @@
         st.page = "home";
       });
       return;
+    }
+    if (st.page !== page) {
+      // The lists of the mapping, the comparison, the lists and the logs
+      // share st.mig: what one told is not about the next (spec 14.10).
+      st.mig.msg = "";
+      st.mig.sel = "";
+      st.mig.reason = "";
     }
     st.page = page;
     st.error = "";
@@ -542,33 +554,44 @@
     const nav = $("nav");
     nav.textContent = "";
     const item = (page, label, needsCase) => button(label, () => go(page), { class: st.page === page ? "on" : null, disabled: needsCase && !st.cas });
-    // The menu in framed groups, as PalaTerm's (spec 14.8.12); a heading is
-    // not a button.
+    // The menu in the order of the steps of the case, the rest folded
+    // (spec 14.14.2); a heading is not a button.
     const group = (title, ...items) => h("div", { class: "nav-group" }, h("div", { class: "nav-group-title" }, title), items);
+    const migration = !st.cas || st.cas.kind !== "新規";
+    const I = {
+      home: ["ホーム", true], import: ["取り込み", true], mapping: ["新旧対照表", true], judge: ["読めなかった行", true],
+      edit: ["表の編集", true], result: ["結果", true], logs: ["検証機のログ", true],
+      extra: ["追加コンフィグ", true], fill: ["ひな形から作る", true], delta: ["差分の投入", true], customer: ["外部一覧", true],
+      compare: ["比較", false], search: ["検索", true], outputs: ["出力", true],
+    };
+    const steps = migration ? ["home", "import", "mapping", "judge", "edit", "result", "logs"] : ["home", "edit", "result", "logs"];
+    const rest = (migration ? [] : ["import", "mapping", "judge"]).concat(["extra", "fill", "delta", "customer", "compare", "search", "outputs"]);
+    const items = (ids) => ids.map((id) => item(id, I[id][0], I[id][1]));
+    const fold = h("details", { class: "nav-group nav-others", id: "nav-others", open: rest.includes(st.page) || navOthersOpen() },
+      h("summary", { class: "nav-group-title" }, "そのほか"), items(rest));
+    fold.addEventListener("toggle", () => { if (!rest.includes(st.page)) navOthersOpen(fold.open); });
     add(nav, [
       h("div", { class: "brand" }, "ConfigChief"),
       h("div", { class: "nav-case" }, st.cas ? st.cas.name : "案件を開いていません"),
-      group("準備",
-        item("home", "ホーム", true),
-        item("import", "取り込み", true),
-        item("judge", "未対応の行", true),
-        item("extra", "追加コンフィグ", true),
-        item("mapping", "対応", true),
-        item("edit", "表の編集", true),
-        item("customer", "外部一覧", true)),
-      group("作る・確かめる",
-        item("fill", "ひな形から作る", true),
-        item("delta", "差分の投入", true),
-        item("result", "結果", true),
-        item("logs", "ログ", true),
-        item("compare", "比較", false),
-        item("search", "検索", true)),
+      group("工程", items(steps)),
+      fold,
       group("管理",
         item("cases", "案件", false),
-        item("outputs", "出力", true),
         item("about", "バージョン情報", false)),
       button("版 " + st.version, () => go("about"), { class: "nav-foot", title: "バージョン情報を開く" }),
     ]);
+  }
+
+  // navOthersOpen tells (or keeps, given a value) whether そのほか of the
+  // menu is open: a choice of this PC (spec 14.14.2).
+  function navOthersOpen(v) {
+    try {
+      if (v === undefined) return localStorage.getItem("cc.nav.others") === "1";
+      localStorage.setItem("cc.nav.others", v ? "1" : "0");
+    } catch (e) {
+      // the choice is not kept
+    }
+    return !!v;
   }
 
   function render() {
@@ -833,7 +856,7 @@
         h("div", { class: "row" }, h("span", null, "設定を写す元の案件"),
           Object.assign(select(fromChoices, c.from || "", (x) => { c.from = x; render(); }), { id: "create-from" }),
           button("フォルダを選ぶ", pickFrom),
-          tip("前の案件の、納品用シートのひな形・案件のルール・チェックの設定・追加コンフィグ・列対応・ひな形と変数ルール・パックを、新しい案件に写します。コンフィグ・パラメータブック・出力は写しません。元の案件は変えません。")),
+          tip("前の案件の、納品用シートのひな形・案件のルール・チェックの設定・追加コンフィグ・列の割り当て・ひな形と変数ルール・パックを、新しい案件に写します。コンフィグ・パラメータブック・出力は写しません。元の案件は変えません。")),
         c.from ? h("div", { class: "row create-parts" }, (st.caseParts || []).map((p) => h("label", null,
           h("input", { type: "checkbox", "data-part": p.id, checked: c.parts && p.id in c.parts ? c.parts[p.id] : p.default, onchange: (e) => { c.parts = c.parts || {}; c.parts[p.id] = e.target.checked; } }), " " + p.word))) : null,
         h("div", { class: "row" }, button("作る", create, { class: "primary", disabled: !c.dir }))),
@@ -860,7 +883,7 @@
     if (!k) {
       return h("div", { class: "card", id: "checks-card" },
         h("h2", null, "チェックの設定"),
-        h("p", { class: "dim" }, "この案件で、チェックごとに重さ（エラー・警告・情報）を変えたり、止めたりします。project.yaml の checks.severity・checks.disable に書きます。"),
+        h("p", { class: "dim" }, "この案件で、チェックごとに重さ（エラー・警告・情報）を変えたり、止めたりします。この案件だけに効きます。"),
         h("div", { class: "row" }, button("チェックの設定を開く", load, { id: "checks-open" })));
     }
     const changed = k.list.checks.filter((c) => (k.set[c.id] || "") !== (c.now || ""));
@@ -963,7 +986,7 @@
         h("div", { class: "row" },
           h("label", null, h("input", { type: "checkbox", checked: x.seal, onchange: (e) => { x.seal = e.target.checked; render(); } }), " パスワードで暗号化する（おすすめ）"),
           h("label", null, h("input", { type: "checkbox", checked: x.noSecrets, onchange: (e) => { x.noSecrets = e.target.checked; } }), " 秘密の値（パスワード・鍵）を外す"),
-          tip("外すと、パラメータブックの秘密の列と、取り込めたコンフィグ・ログの中の秘密の値を **** にします。取り込めなかった行（未対応の行）と、Excel の一覧の中は伏せられません。書き出した後に一覧が出るので、渡す前に中身を見てください。")),
+          tip("外すと、パラメータブックの秘密の列と、取り込めたコンフィグ・ログの中の秘密の値を **** にします。取り込めなかった行（読めなかった行）と、Excel の一覧の中は伏せられません。書き出した後に一覧が出るので、渡す前に中身を見てください。")),
         x.seal ? h("div", { class: "row" },
           h("input", { type: "password", id: "cx-pw", value: x.pw, placeholder: "パスワード（8 文字以上）", autocomplete: "new-password", oninput: (e) => { x.pw = e.target.value; } }),
           h("input", { type: "password", id: "cx-pw2", value: x.pw2, placeholder: "もう一度", autocomplete: "new-password", oninput: (e) => { x.pw2 = e.target.value; } })) : null,
@@ -1023,7 +1046,7 @@
       h("div", { class: "row" },
         button("表で編集", () => openEdit(null), { disabled: !m.hasBook, id: "edit-book" }),
         button("Excel で開く", () => show(m.case.book), { disabled: !m.hasBook }),
-        button("対応を見る", () => go("mapping")),
+        migration ? button("新旧対照表を見る", () => go("mapping")) : null,
         m.hasBook ? null : button("空のブックを作る（新規構築）", newBook, { id: "new-book", class: migration ? null : "primary" })),
       m.hasBook ? h("div", { class: "row", id: "clone-row" },
         h("span", null, "機器の複製: "),
@@ -1200,7 +1223,7 @@
         button("フォルダを開く", () => show("input/" + s))),
       dropZone(s),
       h("p", { class: "dim" }, s === "old"
-        ? "input/old のファイルを読んで、取り込みレポートを書きます。パラメータブックの機器対応・IF 対応に、足りない行を足します。"
+        ? "input/old のファイルを読んで、取り込みレポートを書きます。パラメータブックの新旧対照表（機器）・新旧対照表（ポート）に、足りない行を足します。"
         : "input/new のファイルを読んで、取り込みレポートを書きます。"),
       h("p", { class: "dim small" }, "画面では、秘密の列の値をいつも伏せて出します。"),
     ];
@@ -1209,13 +1232,13 @@
     out.push(
       h("h2", null, v.title),
       boxes("info", v.messages),
-      st.jdg.changed[s] ? h("div", { class: "box warn", id: "judged-since" }, "この取り込みの後に、未対応の行の判定を変えました。下の数と取り込みレポートは、取り込み直すと新しくなります。") : null,
+      st.jdg.changed[s] ? h("div", { class: "box warn", id: "judged-since" }, "この取り込みの後に、読めなかった行の判定を変えました。下の数と取り込みレポートは、取り込み直すと新しくなります。") : null,
       counts(v.counts),
       boxes("warn", v.notes),
       h("div", { class: "row" },
         button("レポートを Excel で開く", () => show(v.report.xlsx)),
         button("レポートをブラウザで開く", () => show(v.report.html)),
-        v.files.some((f) => f.unknown) ? button("未対応の行に判定を付ける", toJudge) : null,
+        v.files.some((f) => f.unknown) ? button("読めなかった行に判定を付ける", toJudge) : null,
         s === "new" ? button("新コンフィグからパラメータブックを作る", () => makeBook("new", false)) : null),
       st.map.book && st.map.book.from === "new" && s === "new" ? bookResult(st.map.book) : null,
       needPacks(s, v), needFiles(s, v));
@@ -1295,7 +1318,7 @@
   function filesTable(s, v) {
     const im = st.imp;
     const files = im.onlyBad ? v.files.filter((f) => f.mark) : v.files;
-    const header = ["ファイル", "機器", "パック", "行", "取り込み済み", "無視", "コメント・空行", "未対応", "未判定・保留", "取り込み率"];
+    const header = ["ファイル", "機器", "パック", "行", "取り込み済み", "無視", "コメント・空行", "読めなかった", "未判定・保留", "取り込み率"];
     if (s === "old") header.push("新ホスト名");
     header.push("指摘");
     const t = { name: "ファイル", lead: "", header, code: [], marks: files.map((f) => f.mark), rows: files.map((f) => {
@@ -1373,7 +1396,7 @@
         });
         list.appendChild(row);
       }
-      if (!hit.length) list.appendChild(h("div", { class: "empty" }, lv.only ? "未対応の行はありません" : "行がありません"));
+      if (!hit.length) list.appendChild(h("div", { class: "empty" }, lv.only ? "読めなかった行はありません" : "行がありません"));
       note.textContent = hit.length > lv.shown ? `${hit.length} 行のうち ${lv.shown} 行を出しています` : `${hit.length} 行`;
       more.hidden = hit.length <= lv.shown;
     }
@@ -1382,15 +1405,15 @@
     detail(v.lines.find((l) => l.no === lv.sel));
     return h("div", null,
       h("div", { class: "row" },
-        h("span", null, `${v.path}（機器 ${v.device || "不明"}）　未対応 ${unknown} 行（うち未判定・保留 ${open} 行）`),
-        h("label", null, h("input", { type: "checkbox", checked: lv.only, onchange: (e) => { lv.only = e.target.checked; lv.shown = LINES; fill(); } }), " 未対応だけ"),
+        h("span", null, `${v.path}（機器 ${v.device || "不明"}）　読めなかった ${unknown} 行（うち未判定・保留 ${open} 行）`),
+        h("label", null, h("input", { type: "checkbox", checked: lv.only, onchange: (e) => { lv.only = e.target.checked; lv.shown = LINES; fill(); } }), " 読めなかった行だけ"),
         note, more),
       h("div", { class: "lines" }, list, side));
   }
 
-  // ---- 未対応の行 ----
+  // ---- 読めなかった行 ----
 
-  const VERDICTS = [["manual", "手動で対応"], ["not_needed", "対応不要"], ["hold", "保留"]];
+  const VERDICTS = [["manual", "追加コンフィグで書く"], ["not_needed", "要らない"], ["hold", "保留"]];
 
   function loadJudge() {
     const s = st.jdg.source;
@@ -1463,7 +1486,7 @@
     const s = jd.source;
     const v = jd.views[s];
     const out = [
-      h("h1", null, "未対応の行"),
+      h("h1", null, "読めなかった行"),
       h("div", { class: "row" },
         seg([["old", "旧コンフィグ（input/old）"], ["new", "新コンフィグ（input/new）"]], s, (x) => {
           jd.source = x;
@@ -1471,8 +1494,8 @@
           else loadJudge();
         }),
         button(v ? "読み直す" : "読み込む", loadJudge, { class: v ? null : "primary" })),
-      h("p", { class: "dim" }, "どの規則にも当たらなかった行を、形（数字・アドレスなどを印に置き換えた文面）ごとのかたまりにまとめて出します。かたまりごとに「手動で対応」「対応不要」「保留」のどれかを付けます。判定は案件フォルダ（state/judgments.yaml）に残り、同じ形の行には、次の取り込みでも当たります。"),
-      h("p", { class: "dim small" }, "未対応の行は、どの値が秘密かをツールが見分けられないため、文面をそのまま出します。"),
+      h("p", { class: "dim" }, "どの規則にも当たらなかった行を、形（数字・アドレスなどを印に置き換えた文面）ごとのかたまりにまとめて出します。かたまりごとに「追加コンフィグで書く」「要らない」「保留」のどれかを付けます。判定は案件に残り、同じ形の行には、次の取り込みでも当たります。"),
+      h("p", { class: "dim small" }, "読めなかった行は、どの値が秘密かをツールが見分けられないため、文面をそのまま出します。"),
     ];
     out.push(carryPart(jd, s));
     if (!v) return out;
@@ -1511,7 +1534,7 @@
         h("label", null, h("input", { type: "checkbox", checked: jd.only, onchange: (e) => { jd.only = e.target.checked; render(); } }), " 未判定と保留だけ"),
         h("span", { class: "dim small" }, v.groups.length
           ? `かたまり ${v.groups.length} 個のうち、未判定・保留があるのは ${v.groups.filter((g) => g.open).length} 個です。`
-          : "未対応の行はありません。")),
+          : "読めなかった行はありません。")),
       h("div", { class: "lines", id: "judge" },
         h("div", { class: "findings-list" }, tableView(t, { id: `judge/${s}/${jd.only}`, onPick: pick, selected: sel })),
         side));
@@ -1540,8 +1563,8 @@
           h("span", { class: cls("tag", d.verdict && d.verdict !== "hold" ? "judged" : "unknown") }, d.word),
           d.verdict ? h("span", { class: "dim small" }, ` ${d.own ? "この機器への判定、" : ""}${d.by}、${when(d.at)}${d.reason ? "、理由: " + d.reason : ""}`) : null),
         h("div", { class: "code" }, d.heads.map(lineText).join("\n") + (d.more ? `\n…（ほか ${d.more} 行）` : "")),
-        d.device ? h("div", { class: "row" }, button("追加コンフィグに書く", () => draftExtra(s, g.id, d.device), { class: "small", "data-extra": d.device,
-          title: "この機器のこのかたまりの行（下の行も全部）を、この機器の追加コンフィグの末尾に足した下書きを開きます。保存すると、この機器のこの行に「手動で対応」を付けます" })) : null)));
+        d.device ? h("div", { class: "row" }, button("この行で追加コンフィグの下書きを作る", () => draftExtra(s, g.id, d.device), { class: "small", "data-extra": d.device,
+          title: "この機器のこのかたまりの行（下の行も全部）を、この機器の追加コンフィグの末尾に足した下書きを開きます。保存すると、この機器のこの行に「追加コンフィグで書く」を付けます" })) : null)));
 
     const some = jd.scope === "some";
     const hosts = g.devices.filter((d) => d.device && jd.picked[d.device]).map((d) => d.device);
@@ -1559,7 +1582,7 @@
     check();
     out.push(h("div", { class: "approve judge-form" },
       h("h2", null, "判定を付ける"),
-      h("p", { class: "dim small" }, "手動で対応: 追加コンフィグ（extra）に人が書きます。対応不要: 新しい機器には要りません（理由を書きます）。保留: まだ決めません（未判定と同じく、残りに数えます）。"),
+      h("p", { class: "dim small" }, "追加コンフィグで書く: 追加コンフィグ（extra）に人が書きます。要らない: 新しい機器には要りません（理由を書きます）。保留: まだ決めません（未判定と同じく、残りに数えます）。"),
       h("div", { class: "field" }, h("span", null, "範囲"),
         select([["all", "このかたまりの全台"], ["some", "選んだ機器だけ"]], jd.scope, (x) => { jd.scope = x; render(); })),
       some ? h("div", { class: "judge-pick" }, g.devices.map((d) => h("label", null,
@@ -1567,7 +1590,7 @@
         " " + name(d)))) : null,
       h("div", { class: "field" }, h("span", null, "判定"), seg(VERDICTS, jd.verdict, (x) => { jd.verdict = x; render(); })),
       h("div", { class: "field" }, h("span", null, "理由"),
-        h("input", { type: "text", id: "judge-reason", value: jd.reason, placeholder: jd.verdict === "not_needed" ? "対応不要には、理由が要ります" : "書かなくても付けられます", oninput: (e) => { jd.reason = e.target.value; check(); } })),
+        h("input", { type: "text", id: "judge-reason", value: jd.reason, placeholder: jd.verdict === "not_needed" ? "要らないには、理由が要ります" : "書かなくても付けられます", oninput: (e) => { jd.reason = e.target.value; check(); } })),
       h("div", { class: "field" }, h("span", null, "判定した人"),
         h("input", { type: "text", id: "judge-by", value: jd.by || "", oninput: (e) => { jd.by = e.target.value; check(); } })),
       h("div", { class: "row" }, put, clear)));
@@ -1623,7 +1646,7 @@
       const there = x.places.files.some((f) => f.name === d.name);
       Object.assign(x, { name: d.name, text: d.text, saved: there ? await api().ReadExtra(d.name) : "", isNew: !there,
         from: { source, group, device, by: st.jdg.by || "" }, notes: [],
-        msg: `未対応の行 ${d.lines} 行を、extra/${d.name} の末尾に足しました（まだ保存していません）。メーカーの書き方に合っているかを見て、直してから保存してください。` });
+        msg: `読めなかった行 ${d.lines} 行を、extra/${d.name} の末尾に足しました（まだ保存していません）。メーカーの書き方に合っているかを見て、直してから保存してください。` });
       st.page = "extra";
     });
   }
@@ -1714,7 +1737,7 @@
       boxes("info", x.msg ? [x.msg] : []),
       boxes("warn", x.notes),
       h("div", { class: "row" }, h("span", null, "差し込む位置: "), select(posOpts, pos, setPos),
-        tip("節の名前はパックの render.yaml の sections です（system・interfaces・routing など）。選ぶと 1 行目に {# position: … #} を書きます")),
+        tip("節の名前は、生成したコンフィグの並びの区切り（system・interfaces・routing など）です。選ぶと、ファイルの 1 行目に差し込む位置を書きます")),
       ta,
       h("div", { class: "row" },
         button("保存", save, { class: "primary", id: "extra-save" }),
@@ -1724,7 +1747,7 @@
     return out;
   }
 
-  // ---- 対応 ----
+  // ---- 新旧対照表 ----
 
   function loadMapping() {
     run("旧コンフィグとパラメータブックを読んでいます", async () => {
@@ -1733,17 +1756,17 @@
     }, true);
   }
 
-  // proposeIfs makes the proposals of IF 対応 without a second import
+  // proposeIfs makes the proposals of 新旧対照表（ポート） without a second import
   // (spec 14.10.2).
   function proposeIfs() {
-    run("IF 対応の案を作っています", async () => {
+    run("新旧対照表（ポート）の案を作っています", async () => {
       st.mig.msg = await api().ProposeIfs();
       st.map.view = await api().Mapping();
       st.map.tab = "ifs";
     }, true);
   }
 
-  // openRedo shows the card that makes the proposals of IF 対応 again for
+  // openRedo shows the card that makes the proposals of 新旧対照表（ポート） again for
   // the new host names picked (spec 14.11.4).
   function openRedo(hosts) {
     const picked = {};
@@ -1758,7 +1781,7 @@
     const rd = st.map.redo;
     const hosts = v.hosts || [];
     const chosen = () => hosts.filter((x) => rd.picked[x]);
-    const look = (write) => run(write ? "IF 対応の案を作り直しています" : "作り直した案を作っています", async () => {
+    const look = (write) => run(write ? "新旧対照表（ポート）の案を作り直しています" : "作り直した案を作っています", async () => {
       const r = await api().RedoIfs(chosen(), write);
       if (write) {
         st.mig.msg = r.message;
@@ -1769,8 +1792,8 @@
     const all = hosts.length > 0 && hosts.every((x) => rd.picked[x]);
     const rv = rd.view;
     return h("div", { class: "card", id: "redo" },
-      h("h2", null, "IF 対応の案を作り直す"),
-      h("p", null, "選んだ機器の IF 対応の新 IF 名を、今の「新機種」・新コンフィグから作り直します。入れ替えるのは、根拠の入っている行（ツールの案のまま）と、新 IF 名が空の行です。根拠が空で新 IF 名のある行（人が書いた名前と -）は変えません。新しい案の無い行は、新 IF 名と根拠を空にします。"),
+      h("h2", null, "新旧対照表（ポート）の案を作り直す"),
+      h("p", null, "選んだ機器の 新旧対照表（ポート）の新 IF 名を、今の「新機種」・新コンフィグから作り直します。入れ替えるのは、根拠の入っている行（ツールの案のまま）と、新 IF 名が空の行です。根拠が空で新 IF 名のある行（人が書いた名前と -）は変えません。新しい案の無い行は、新 IF 名と根拠を空にします。"),
       h("p", { class: "dim small" }, "Excel で新 IF 名を直したときは、根拠も空にしておくと、作り直しで上書きされません（画面の表で直したときは、保存で根拠を空にします）。下の一覧で、書く前に確かめられます。"),
       h("div", { class: "row redo-hosts" },
         h("label", null, h("input", { type: "checkbox", checked: all, onchange: (e) => { for (const x of hosts) rd.picked[x] = e.target.checked; rd.view = null; render(); } }), " 全部"),
@@ -1778,7 +1801,7 @@
       h("div", { class: "row" },
         button("前と後を見る", () => look(false), { class: rv ? null : "primary", disabled: !chosen().length, id: "redo-look" }),
         button("書く", async () => {
-          if (!(await ask("IF 対応の案を作り直す", `IF 対応の ${rv.rows.length} 行の新 IF 名と根拠を書き換えます。書く前に、今のブックの控えを state/backup に取ります。`, "書く"))) return;
+          if (!(await ask("新旧対照表（ポート）の案を作り直す", `新旧対照表（ポート）の ${rv.rows.length} 行の新 IF 名と根拠を書き換えます。書く前に、今のブックの控えを state/backup に取ります。`, "書く"))) return;
           look(true);
         }, { class: rv ? "primary" : null, disabled: !rv || !rv.rows.length, id: "redo-write" }),
         button("やめる", () => { st.map.redo = null; render(); })),
@@ -1794,6 +1817,9 @@
   async function loadNext() {
     if (!st.cas) return;
     st.nextFor = st.home;
+    // An answer that comes after the case or its home changed is dropped.
+    const dir = st.cas.dir, home = st.home;
+    const gone = () => !st.cas || st.cas.dir !== dir || st.home !== home;
     const ask = async (quick) => {
       try {
         return await api().Steps(quick);
@@ -1802,11 +1828,13 @@
       }
     };
     let p = await ask(true);
+    if (gone()) return;
     st.steps = p;
     st.next = p ? p.next : null;
     if (st.page === "home" && !busy) render();
     if (p && p.steps.some((x) => x.state === "counting")) {
       p = await ask(false);
+      if (gone()) return;
       st.steps = p;
       st.next = p ? p.next : null;
       if (st.page === "home" && !busy) render();
@@ -1829,7 +1857,7 @@
     go(page);
   }
 
-  const STEP_WORDS = { done: "済み", todo: "要対応", wait: "まだ", optional: "任意", counting: "数えています…" };
+  const STEP_WORDS = { done: "済み", todo: "残りあり", wait: "まだ", optional: "任意", counting: "数えています…" };
 
   // stepsBox is the row of the steps of the case (spec 14.12.1).
   function stepsBox() {
@@ -1879,18 +1907,18 @@
     const mp = st.map;
     const v = mp.view;
     const out = [
-      h("h1", null, "対応"),
-      h("p", { class: "dim" }, "機器対応と IF 対応は、画面の表か Excel で書きます（「機器対応を表で編集」「IF 対応を表で編集」か、「Excel で開く」）。この画面では、まだ決まっていないところを確かめ、決まったら旧コンフィグの値をパラメータブックに書きます。"),
+      h("h1", null, "新旧対照表"),
+      h("p", { class: "dim" }, "新旧対照表（機器）と 新旧対照表（ポート）は、画面の表か Excel で書きます（「新旧対照表（機器）を表で編集」「新旧対照表（ポート）を表で編集」か、「Excel で開く」）。この画面では、まだ決まっていないところを確かめ、決まったら旧コンフィグの値をパラメータブックに書きます。"),
       h("div", { class: "row" },
         button("読み直す", loadMapping),
-        button("機器対応を表で編集", () => openEdit({ sheet: "@devices" }), { disabled: !v || !v.hasBook, id: "edit-devices" }),
-        button("IF 対応を表で編集", () => openEdit({ sheet: "@ifs" }), { disabled: !v || !v.hasBook, id: "edit-ifs" }),
+        button("新旧対照表（機器）を表で編集", () => openEdit({ sheet: "@devices" }), { disabled: !v || !v.hasBook, id: "edit-devices" }),
+        button("新旧対照表（ポート）を表で編集", () => openEdit({ sheet: "@ifs" }), { disabled: !v || !v.hasBook, id: "edit-ifs" }),
         button("Excel で開く", () => show(st.cas.book), { disabled: !v || !v.hasBook }),
-        button("IF 対応の案を作る", proposeIfs, { disabled: !v || !v.hasBook, id: "propose-ifs",
-          title: "input/old を読み直し、新ホスト名を書いた機器の IF 対応の行を足し、空の新 IF 名を案で埋めます（人が書いた名前と - は変えません）。取り込み直す必要はありません" }),
+        button("新旧対照表（ポート）の案を作る", proposeIfs, { disabled: !v || !v.hasBook, id: "propose-ifs",
+          title: "input/old を読み直し、新ホスト名を書いた機器の 新旧対照表（ポート）の行を足し、空の新 IF 名を案で埋めます（人が書いた名前と - は変えません）。取り込み直す必要はありません" }),
         button("案を作り直す", () => openRedo([]), { disabled: !v || !v.hasBook || !(v.hosts || []).length, id: "redo-ifs",
-          title: "後から新機種を書いた・変えた機器の IF 対応の案を、今の機種で作り直します。ツールの案（根拠のある行）だけを入れ替え、人が書いた名前は変えません" })),
-      h("p", { class: "dim small" }, "機器対応を画面の表で保存すると、IF 対応の案は自動で作ります。Excel で書いたときは「IF 対応の案を作る」を押してください。"),
+          title: "後から新機種を書いた・変えた機器の 新旧対照表（ポート）の案を、今の機種で作り直します。ツールの案（根拠のある行）だけを入れ替え、人が書いた名前は変えません" })),
+      h("p", { class: "dim small" }, "新旧対照表（機器）を画面の表で保存すると、新旧対照表（ポート）の案は自動で作ります。Excel で書いたときは「新旧対照表（ポート）の案を作る」を押してください。"),
       draftNote(),
     ];
     if (!v) return out;
@@ -1910,18 +1938,18 @@
       boxes("info", mg.msg ? [mg.msg] : []),
       boxes("warn", v.problems),
       h("div", { class: "row" }, seg([
-        ["open", `未決（${v.open.rows.length}）`],
-        ["devices", `機器対応（${v.devices.rows.length}）`],
-        ["ifs", `IF 対応（${v.ifs.rows.length}）`]], mp.tab, (x) => { mp.tab = x; render(); })),
+        ["open", `決まっていない（${v.open.rows.length}）`],
+        ["devices", `新旧対照表（機器）（${v.devices.rows.length}）`],
+        ["ifs", `新旧対照表（ポート）（${v.ifs.rows.length}）`]], mp.tab, (x) => { mp.tab = x; render(); })),
       mp.tab === "open" ? migTable(v.open, v.findings, "mapping/open", again) : tableView(tables[mp.tab], { id: "mapping/" + mp.tab }),
       h("div", { class: "card" },
         h("h2", null, "パラメータブックに書く"),
-        h("p", null, "旧コンフィグの値に対応を当てて（ホスト名と IF 名を新しい名前に替えて）、パラメータブックの設計データのシートに書きます。すでにある行は変えず、足りない行を足します。"),
+        h("p", null, "旧コンフィグの値を、新旧対照表で新しいホスト名と IF 名に置き換えて、パラメータブックの設計データのシートに書きます。すでにある行は変えず、足りない行を足します。"),
         h("div", { class: "row" },
           h("label", null, h("input", { type: "checkbox", checked: mp.replace, onchange: (e) => { mp.replace = e.target.checked; } }),
             " 設計データのシートを空にしてから書く（作り直し）")),
-        h("div", { class: "row" }, button("対応を当ててパラメータブックに書く", async () => {
-          if (mp.replace && !(await ask("作り直しますか", "設計データのシートを空にしてから書きます。画面の表や Excel で手で直した値は消えます（書く前の控えは残ります）。機器対応・IF 対応のシートは変えません。", "作り直す"))) return;
+        h("div", { class: "row" }, button("新しい名前に置き換えてパラメータブックに書く", async () => {
+          if (mp.replace && !(await ask("作り直しますか", "設計データのシートを空にしてから書きます。画面の表や Excel で手で直した値は消えます（書く前の控えは残ります）。新旧対照表（機器）・新旧対照表（ポート）のシートは変えません。", "作り直す"))) return;
           makeBook("old", mp.replace);
         }, { class: "primary", id: "make-book" }))),
       mp.book && mp.book.from === "old" ? bookResult(mp.book) : null);
@@ -1976,7 +2004,7 @@
         h("h1", null, "結果"),
         h("p", { class: "dim" }, hasBook
           ? "まだ結果がありません。「生成とチェック」か「チェックだけ」を押すと、ここに出ます。"
-          : "パラメータブックがまだありません。旧コンフィグを取り込むと作られます。"),
+          : (st.cas && st.cas.kind === "新規" ? "パラメータブックがまだありません。ホームの「空のブックを作る」で作ります。" : "パラメータブックがまだありません。旧コンフィグを取り込むと作られます。")),
         h("div", { class: "row" }, again),
       ];
     }
@@ -2106,7 +2134,7 @@
     if (rw.for !== v && !rw.loading) load();
     const x = rw.view;
     if (!x || rw.for !== v) return h("p", { class: "dim" }, "書き換えレポートを読んでいます…");
-    if (!x.has) return h("p", { class: "dim" }, "この案件には書き換えレポートがありません（旧コンフィグがあり、「機器対応」に新ホスト名を書いた更改の案件で出ます）。");
+    if (!x.has) return h("p", { class: "dim" }, "この案件には書き換えレポートがありません（旧コンフィグがあり、「新旧対照表（機器）」に新ホスト名を書いた更改の案件で出ます）。");
     const pick = (field) => (val) => { rw[field] = val; load(); };
     return h("div", null,
       h("p", { class: "dim small" }, "旧コンフィグのすべての行を、どれか 1 つの区分に入れ、旧の行 → 行き先（パラメータブックの表と列）→ 新の行を並べます。読み合わせと入れ忘れの確認に使います。「自動で書き換えた」「無視」以外の行を見てください。"),
@@ -2250,7 +2278,7 @@
       check();
       out.push(h("div", { class: "approve" },
         h("h2", null, "承認する"),
-        h("p", { class: "dim small" }, "指摘の内容を確かめて、そのままでよいと判断したときに、理由を書いて承認します。承認は案件フォルダ（state/approvals.yaml）に残ります。"),
+        h("p", { class: "dim small" }, "指摘の内容を確かめて、そのままでよいと判断したときに、理由を書いて承認します。承認は案件に残ります。"),
         h("div", { class: "field" }, h("span", null, "範囲"),
           scopes.length > 1
             ? select(scopes, rs.scope, (x) => { rs.scope = x; })
@@ -2271,14 +2299,21 @@
   function migTable(t, items, id, reload, extra) {
     const mg = st.mig;
     const col = t.header.indexOf("指紋");
-    if (col < 0 || !items || !items.length) return tableView(t, { id });
+    // The fingerprint ties a row to its finding; it means nothing to a
+    // person, so the list does not show it (the row keeps its place).
+    const shown = col < 0 ? t : Object.assign({}, t, {
+      header: t.header.filter((_, i) => i !== col),
+      rows: t.rows.map((r) => r.filter((_, i) => i !== col)),
+      code: (t.code || []).filter((c) => c !== col).map((c) => (c > col ? c - 1 : c)),
+    });
+    if (col < 0 || !items || !items.length) return tableView(shown, { id });
     const byKey = new Map(items.map((f) => [f.key, f]));
     const side = h("div", { class: "lines-side" });
     const detail = (f) => {
       side.textContent = "";
       add(side, [f
         ? findingDetail(null, f, { rs: mg, migration: true, extra, approve: (key) => approveMig(key, reload), unapprove: (id) => unapproveMig(id, reload) })
-        : h("p", { class: "dim" }, "「指紋」の欄に字がある行を押すと、指摘の内容と根拠を出します。承認もここで行います。")]);
+        : h("p", { class: "dim" }, "指摘のある行（「状態」の欄に字がある行）を押すと、指摘の内容と根拠を出します。承認もここで行います。")]);
     };
     const pick = (i, tr) => {
       const key = t.rows[i][col];
@@ -2292,7 +2327,7 @@
     const sel = mg.sel ? t.rows.findIndex((r) => r[col] === mg.sel) : -1;
     detail(sel >= 0 ? byKey.get(mg.sel) : null);
     return h("div", { class: "lines", id: "mig-findings" },
-      h("div", { class: "findings-list" }, tableView(t, { id, onPick: pick, selected: sel })),
+      h("div", { class: "findings-list" }, tableView(shown, { id, onPick: pick, selected: sel })),
       side);
   }
 
@@ -2337,7 +2372,7 @@
     }
     const header = ["ID", "対象", "チェック", "機器", "理由", "承認者", "日時", "当たった件数", "備考", ""];
     return h("div", null,
-      h("p", { class: "dim" }, "この案件の承認（state/approvals.yaml）と、今回それぞれが当たった指摘の件数です。"),
+      h("p", { class: "dim" }, "この案件の承認と、今回それぞれが当たった指摘の件数です。"),
       h("div", { class: "table-wrap" }, h("table", null,
         h("thead", null, h("tr", null, header.map((x) => h("th", null, x)))),
         h("tbody", null, v.approvals.map((a) => h("tr", { class: a.mark ? "mark-" + a.mark : null },
@@ -2383,7 +2418,7 @@
   const SOURCES = [["column", "一覧の列"], ["template", "組み立て"], ["value", "決まった値"]];
 
   function loadMaps() {
-    run("列対応ファイルを読んでいます", async () => {
+    run("列の割り当てファイルを読んでいます", async () => {
       st.cus.maps = await api().Mappings();
     });
   }
@@ -2400,9 +2435,9 @@
     };
     return [
       h("h1", null, "外部一覧"),
-      h("p", { class: "dim" }, "他のシステムなどが出力した一覧（input/customer/）を、列対応ファイル（mappings/）のとおりに読んで、パラメータブックと比べます。"),
+      h("p", { class: "dim" }, "他のシステムなどが出力した一覧（input/customer/）を、列の割り当てファイル（mappings/）のとおりに読んで、パラメータブックと比べます。"),
       h("div", { class: "row" },
-        seg([["compare", "比べる"], ["maps", "列対応"]], cu.tab, pickTab),
+        seg([["compare", "比べる"], ["maps", "列の割り当て"]], cu.tab, pickTab),
         button("input/customer を開く", () => show("input/customer")),
         button("mappings を開く", () => show("mappings"))),
       dropZone("customer"),
@@ -2657,7 +2692,7 @@
     if (!fl.rfile || !v.lists.includes(fl.rfile)) fl.rfile = v.lists[0] || "";
     return [
       h("h2", null, "変数ルール"),
-      h("p", { class: "dim" }, "「一覧のどの列を、どの変数にするか」を書いたファイルです。一覧の読み方（見出しの行・除外・加工）は外部一覧の列対応と同じです。行を押すと開きます。"),
+      h("p", { class: "dim" }, "「一覧のどの列を、どの変数にするか」を書いたファイルです。一覧の読み方（見出しの行・除外・加工）は外部一覧の列の割り当てと同じです。行を押すと開きます。"),
       v.rules.length ? tableView(t, { id: "fill/rules", onPick: open }) : h("p", { class: "dim" }, "まだありません。"),
       h("h2", null, "新しく作る"),
       v.lists.length
@@ -2946,7 +2981,7 @@
       lg.vtab[what] = 1;
     }, true, "ログ");
     const out = [
-      h("h1", null, "ログ"),
+      h("h1", null, "検証機のログ"),
       h("p", { class: "dim" }, "検証機や本番機で取った端末ログ（input/logs/。1 台で 1 ファイル）を読みます。「投入ログ」は機器に弾かれたコマンドを探し、「反映確認」は投入後の設定全体（show running-config）をパラメータブックと比べます。"),
       h("div", { class: "row" },
         seg([["load", "投入ログ"], ["verify", "反映確認"]], what, (x) => { lg.tab = x; mg.sel = ""; render(); }),
@@ -3022,7 +3057,7 @@
     return out;
   }
 
-  // ---- 列対応 ----
+  // ---- 列の割り当て ----
 
   const tableInfo = (name) => st.cus.maps.tables.find((t) => t.name === name);
 
@@ -3117,10 +3152,10 @@
   function customerMaps() {
     const cu = st.cus;
     const m = cu.maps;
-    if (!m) return h("p", { class: "dim" }, "列対応ファイルを読んでいます。");
+    if (!m) return h("p", { class: "dim" }, "列の割り当てファイルを読んでいます。");
     if (cu.edit) return mapEditor();
     const t = {
-      name: "列対応ファイル", header: ["ファイル", "一覧", "シート", "機器名", "行き先", "状態"], code: [],
+      name: "列の割り当てファイル", header: ["ファイル", "一覧", "シート", "機器名", "行き先", "状態"], code: [],
       rows: m.mappings.map((x) => {
         const r = x.rule;
         return [x.path, r ? r.file : "", r ? r.sheet || (r.sheetIndex ? `${r.sheetIndex} 枚目` : "") : "",
@@ -3136,8 +3171,8 @@
     if (!m.mappings.some((x) => x.path === dl.path)) dl.path = m.mappings.length ? m.mappings[0].path : "";
     const removeMap = async () => {
       const path = dl.path;
-      if (!(await ask("この列対応ファイルを消しますか", `${path} を mappings から外します（state/backup に移すので、戻せます）。`, "消す"))) return;
-      run("列対応ファイルを消しています", async () => {
+      if (!(await ask("この列の割り当てファイルを消しますか", `${path} を mappings から外します（state/backup に移すので、戻せます）。`, "消す"))) return;
+      run("列の割り当てファイルを消しています", async () => {
         const kept = await api().ListDelete(path);
         cu.msg = `消しました: ${path}（控え: ${kept}）`;
         cu.maps = await api().Mappings();
@@ -3145,12 +3180,12 @@
     };
     return [
       boxes("info", cu.msg ? [cu.msg] : []),
-      h("h2", null, "列対応ファイル"),
+      h("h2", null, "列の割り当てファイル"),
       h("p", { class: "dim" }, "「一覧のどの見出しが、設計データのどの表のどの列か」を書いたファイルです。一覧 1 つ（シート 1 枚の表 1 つ）につき 1 つ作ります。行を押すと開きます。誤りがあるファイルが 1 つでもあると「読んで比べる」は始まりません。"),
       m.mappings.length
         ? tableView(t, { id: "customer/maps", onPick: (i) => {
           if (m.mappings[i].rule) openMap(m.mappings[i]);
-          else { st.error = `${m.mappings[i].path} は、列対応ファイルとして読めません。テキストエディタで直してください:\n${m.mappings[i].problems.join("\n")}`; render(); }
+          else { st.error = `${m.mappings[i].path} は、列の割り当てファイルとして読めません。テキストエディタで直してください:\n${m.mappings[i].problems.join("\n")}`; render(); }
         } })
         : h("p", { class: "dim" }, "まだありません。"),
       h("div", { class: "row" }, button("読み直す", loadMaps),
@@ -3162,7 +3197,7 @@
       m.files.length
         ? h("div", { class: "row" },
           h("span", null, "一覧のファイル"), select(m.files.map((f) => [f, f]), cs.file, (x) => { cs.file = x; }),
-          button("この一覧の列対応を作る", () => newMap(cs.file), { class: "primary", id: "map-new" }))
+          button("この一覧の列の割り当てを作る", () => newMap(cs.file), { class: "primary", id: "map-new" }))
         : h("p", { class: "dim" }, "input/customer にファイルがありません。「input/customer を開く」で、外部一覧（xlsx・xls・csv）を置いてから「読み直す」を押してください。"),
     ];
   }
@@ -3207,8 +3242,8 @@
       ];
     };
     const remove = async () => {
-      if (!(await ask("この列対応ファイルを消しますか", `${ed.path} を mappings から外します（state/backup に移すので、戻せます）。保存していない変更は消えます。`, "消す"))) return;
-      run("列対応ファイルを消しています", async () => {
+      if (!(await ask("この列の割り当てファイルを消しますか", `${ed.path} を mappings から外します（state/backup に移すので、戻せます）。保存していない変更は消えます。`, "消す"))) return;
+      run("列の割り当てファイルを消しています", async () => {
         const kept = await api().ListDelete(ed.path);
         cu.msg = `消しました: ${ed.path}（控え: ${kept}）`;
         cu.edit = null;
@@ -3216,12 +3251,12 @@
       });
     };
     const close = async () => {
-      if (!(await ask("列対応を閉じますか", "保存していない変更は消えます。", "閉じる"))) return;
+      if (!(await ask("列の割り当てを閉じますか", "保存していない変更は消えます。", "閉じる"))) return;
       cu.edit = null;
       render();
     };
     const tryIt = () => run("試しに読んでいます", async () => { ed.tryv = await api().ListTry(cleanRule(r)); st.jump = "map-try"; });
-    const save = () => run("列対応を保存しています", async () => {
+    const save = () => run("列の割り当てを保存しています", async () => {
       ed.path = await api().ListSave(ed.path, cleanRule(r));
       cu.msg = `保存しました: ${ed.path}`;
       cu.maps = await api().Mappings();
@@ -3229,7 +3264,7 @@
 
     const out = [
       boxes("info", cu.msg ? [cu.msg] : []),
-      h("h2", null, ed.path ? `列対応 ${ed.path}` : "新しい列対応（まだ保存していません）"),
+      h("h2", null, ed.path ? `列の割り当て ${ed.path}` : "新しい列の割り当て（まだ保存していません）"),
       h("div", { class: "row" },
         button("試しに読む", tryIt, { id: "map-try-button" }),
         button("保存", save, { class: "primary", id: "map-save" }),
@@ -3400,7 +3435,7 @@
   function tryView(v) {
     const out = [h("h3", { id: "map-try" }, "試しに読んだ結果（何も書いていません）")];
     if (v.faults.length) {
-      out.push(h("div", { class: "box error" }, "この列対応には誤りがあります。直してから、もう一度押してください:\n" + v.faults.join("\n")));
+      out.push(h("div", { class: "box error" }, "この列の割り当てには誤りがあります。直してから、もう一度押してください:\n" + v.faults.join("\n")));
       return out;
     }
     out.push(
@@ -6499,7 +6534,7 @@
     const out = [
       h("h1", null, "差分の投入"),
       h("p", { class: "dim" }, "パラメータブックから生成したコンフィグと、機器の今のコンフィグ（旧コンフィグ・新コンフィグ・投入後のログ）を比べて、変えるコマンドだけの投入を作ります。設定変更の案件で「変更分だけ入れる」ときに使います（全文を入れるときは「生成とチェック」のコンフィグを使います）。 ",
-        tip("消すのは、ブックで消した・変えた設定のうち、ツールが表に取り込める行だけです。取り込めない行（未対応の行）や、パックが書けない値の行は消さずに「残る行」に出します。値を変えた行は、新しい行で上書きされる前提で古い行を消しません（「置き換わる行」）。今のコンフィグのメーカーが違う機器と、IF 名が変わる機器は作りません。設定モードへの出入りは付けますが、保存のコマンドは付けません。")),
+        tip("消すのは、ブックで消した・変えた設定のうち、ツールが表に取り込める行だけです。取り込めない行（読めなかった行）や、パックが書けない値の行は消さずに「残る行」に出します。値を変えた行は、新しい行で上書きされる前提で古い行を消しません（「置き換わる行」）。今のコンフィグのメーカーが違う機器と、IF 名が変わる機器は作りません。設定モードへの出入りは付けますが、保存のコマンドは付けません。")),
     ];
     if (!v) {
       out.push(h("div", { class: "row" }, button("始める", loadDelta, { class: "primary" })));

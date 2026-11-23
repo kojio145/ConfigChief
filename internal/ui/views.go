@@ -266,9 +266,9 @@ func importView(e *ops.Env, o *ops.ImportOutcome, d *report.Doc) *ImportView {
 		name := e.Proj.Config.Book
 		switch {
 		case b.Created:
-			v.Messages = append(v.Messages, fmt.Sprintf("パラメータブック %s を作りました（機器対応 %d 行、IF 対応 %d 行）", name, b.DeviceRows, b.IfRows))
+			v.Messages = append(v.Messages, fmt.Sprintf("パラメータブック %s を作りました（新旧対照表（機器） %d 行、新旧対照表（ポート） %d 行）", name, b.DeviceRows, b.IfRows))
 		case b.Changed():
-			v.Messages = append(v.Messages, fmt.Sprintf("パラメータブック %s に足しました（機器対応 %d 行、IF 対応 %d 行）。控え: %s", name, b.DeviceRows, b.IfRows, o.Backup))
+			v.Messages = append(v.Messages, fmt.Sprintf("パラメータブック %s に足しました（新旧対照表（機器） %d 行、新旧対照表（ポート） %d 行）。控え: %s", name, b.DeviceRows, b.IfRows, o.Backup))
 		default:
 			v.Messages = append(v.Messages, fmt.Sprintf("パラメータブック %s は変えていません（足す行がありません）", name))
 		}
@@ -358,8 +358,8 @@ type MappingView struct {
 	By       string        `json:"by"`       // the name the last approval was given with
 	Problems []string      `json:"problems"` // what the book says
 	Notes    []string      `json:"notes"`    // files of the old side that were not read
-	// Hosts are the new host names of 機器対応, for making the proposals of
-	// IF 対応 again (spec 14.11.4).
+	// Hosts are the new host names of 新旧対照表（機器）, for making the proposals of
+	// 新旧対照表（ポート） again (spec 14.11.4).
 	Hosts []string `json:"hosts"`
 }
 
@@ -378,15 +378,15 @@ func (s *Session) Mapping() (*MappingView, error) {
 	}
 	v := &MappingView{Book: e.Proj.Config.Book, Counts: []Pair{}, Problems: []string{}, Notes: []string{}, Findings: migFindings(e, m.Mig), By: s.name, Hosts: []string{}}
 	s.mig = m.Mig
-	v.Devices = Table{Name: "機器対応", Header: []string{"ブックの行", "旧ホスト名", "旧メーカー", "新ホスト名", "新メーカー", "新機種", "新 OS 版", "備考"}}
-	v.Ifs = Table{Name: "IF 対応", Header: []string{"ブックの行", "新ホスト名", "旧 IF 名", "新 IF 名", "案の根拠"}}
+	v.Devices = Table{Name: "新旧対照表（機器）", Header: []string{"ブックの行", "旧ホスト名", "旧メーカー", "新ホスト名", "新メーカー", "新機種", "新 OS 版", "備考"}}
+	v.Ifs = Table{Name: "新旧対照表（ポート）", Header: []string{"ブックの行", "新ホスト名", "旧 IF 名", "新 IF 名", "案の根拠"}}
 	for _, f := range m.Source.Files {
 		if f.Err != "" {
 			v.Notes = append(v.Notes, f.Path+" は取り込めません: "+f.Err)
 		}
 	}
 	if m.Book == nil {
-		v.Devices, v.Ifs, v.Open = table(v.Devices.sheet()), table(v.Ifs.sheet()), table(report.Sheet{Name: "対応の未決"})
+		v.Devices, v.Ifs, v.Open = table(v.Devices.sheet()), table(v.Ifs.sheet()), table(report.Sheet{Name: "新旧対照表で決まっていないところ"})
 		return v, nil
 	}
 	v.HasBook = true
@@ -439,14 +439,14 @@ func (s *Session) Mapping() (*MappingView, error) {
 	a := m.Applied
 	v.Open = table(e.MappingSheet(a, m.Mig, false))
 	v.Counts = []Pair{
-		{"機器対応の行", fmt.Sprint(len(m.Book.Devices))},
-		{"うち新ホスト名も備考も空（M-407）", fmt.Sprint(openDevs)},
+		{"新旧対照表（機器）の行", fmt.Sprint(len(m.Book.Devices))},
+		{"うち新ホスト名も備考も空", fmt.Sprint(openDevs)},
 		{"うち対象外（新ホスト名が空で、備考あり）", fmt.Sprint(outDevs)},
-		{"IF 対応の行", fmt.Sprint(len(m.Book.Ifs))},
+		{"新旧対照表（ポート）の行", fmt.Sprint(len(m.Book.Ifs))},
 		{"うち新 IF 名が空", fmt.Sprint(openIfs)},
 		{"うち持っていかない IF（-）", fmt.Sprint(outIfs)},
-		{"旧コンフィグで使っていて、新 IF 名が決まっていない IF（M-406）", fmt.Sprint(len(a.Undecided))},
-		{"複数の旧 IF が当たっている新 IF（M-408）", fmt.Sprint(len(a.Shared))},
+		{"旧コンフィグで使っていて、新 IF 名が決まっていない IF", fmt.Sprint(len(a.Undecided))},
+		{"複数の旧 IF が当たっている新 IF", fmt.Sprint(len(a.Shared))},
 	}
 	for _, p := range m.Book.Problems {
 		v.Problems = append(v.Problems, p.String())
@@ -481,7 +481,7 @@ func (s *Session) MakeBook(from string, replace bool) (*BookView, error) {
 	if err != nil {
 		return nil, err
 	}
-	v := &BookView{From: from, Messages: []string{}, Problems: []string{}, Open: table(report.Sheet{Name: "対応のメモ"}), Findings: o.Findings()}
+	v := &BookView{From: from, Messages: []string{}, Problems: []string{}, Open: table(report.Sheet{Name: "新旧対照表のメモ"}), Findings: o.Findings()}
 	for _, f := range o.Source.Files {
 		if f.Err != "" {
 			v.Messages = append(v.Messages, f.Path+" は取り込めません: "+f.Err)
@@ -523,7 +523,7 @@ func (s *Session) MakeBook(from string, replace bool) (*BookView, error) {
 		v.Messages = append(v.Messages, fmt.Sprintf("%s: 足した %d 行、すでにあった %d 行", title, sum.Added[n], sum.Kept[n]))
 	}
 	if sum.DeviceRows > 0 || sum.IfRows > 0 {
-		v.Messages = append(v.Messages, fmt.Sprintf("機器対応に %d 行、IF 対応に %d 行を足しました", sum.DeviceRows, sum.IfRows))
+		v.Messages = append(v.Messages, fmt.Sprintf("新旧対照表（機器）に %d 行、新旧対照表（ポート）に %d 行を足しました", sum.DeviceRows, sum.IfRows))
 	}
 	for _, p := range o.Problems {
 		v.Problems = append(v.Problems, p.String())

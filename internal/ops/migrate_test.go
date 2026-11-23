@@ -150,7 +150,7 @@ func TestMigrationMapping(t *testing.T) {
 	e := migCase(t)
 	// An empty new name is filled again where there is a proposal (spec
 	// 10.2): the new configuration has the interface.
-	setCell(t, e, "IF 対応", "旧 IF 名", "Loopback0", "新 IF 名", "")
+	setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", "Loopback0", "新 IF 名", "")
 	o, err := e.RunImport("old", "", at)
 	if err != nil {
 		t.Fatal(err)
@@ -162,7 +162,7 @@ func TestMigrationMapping(t *testing.T) {
 	if err := os.Remove(e.Proj.Path("input/new/rt-a01.txt")); err != nil {
 		t.Fatal(err)
 	}
-	setCell(t, e, "IF 対応", "旧 IF 名", "Loopback0", "新 IF 名", "")
+	setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", "Loopback0", "新 IF 名", "")
 	if o, err = e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
@@ -225,8 +225,8 @@ func TestCompareBookFilled(t *testing.T) {
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-a01", "新ホスト名", "rt-a01")
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-a01", "新メーカー", "cisco_ios")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-a01", "新ホスト名", "rt-a01")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-a01", "新メーカー", "cisco_ios")
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestCompareBookFilled(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, m := range bk.Ifs {
-		setCell(t, e, "IF 対応", "旧 IF 名", m.OldIf, "新 IF 名", m.OldIf)
+		setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", m.OldIf, "新 IF 名", m.OldIf)
 	}
 	if _, err := e.MakeBook("old", false, at); err != nil {
 		t.Fatal(err)

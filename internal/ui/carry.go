@@ -38,7 +38,7 @@ func (s *Session) CarryOut(source string) (*CarryView, error) {
 		lines += x.Lines
 	}
 	v := &CarryView{
-		Summary: fmt.Sprintf("持ち出し用レポートを出しました: 形 %d、未対応の行 %d。人に渡す前に、すべての行を目で確かめてください。", len(o.Shapes), lines),
+		Summary: fmt.Sprintf("持ち出し用レポートを出しました: 形 %d、読めなかった行 %d。人に渡す前に、すべての行を目で確かめてください。", len(o.Shapes), lines),
 		Notes:   []string{},
 		Hidden:  Table{Name: "名前として伏せた語", Header: []string{"語", "行数"}, Rows: [][]string{}, Marks: []string{}, Code: []int{0}},
 		Report:  Files{o.Report.XLSX, o.Report.HTML},

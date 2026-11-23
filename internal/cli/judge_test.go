@@ -45,7 +45,7 @@ func TestJudgeCommand(t *testing.T) {
 		t.Fatalf("judge = %d: %s%s", code, list, errOut)
 	}
 	wants(t, "the list", list,
-		"未対応の行（旧コンフィグ）: 未判定 12 行、保留 0 行、手動で対応 0 行、対応不要 0 行。かたまり 3 個",
+		"読めなかった行（旧コンフィグ）: 未判定 12 行、保留 0 行、追加コンフィグで書く 0 行、要らない 0 行。かたまり 3 個",
 		"  未判定  2 台  3 行  cisco_ios  interface GigabitEthernet<n> > no mop enabled",
 		"  未判定  2 台  3 行（下に 4 行）  cisco_ios  ip sla <n>",
 	)
@@ -67,8 +67,8 @@ func TestJudgeCommand(t *testing.T) {
 		{"名前を書いてください", []string{"--group", sla, "--verdict", "manual"}},
 		{"理由を書いてください", []string{"--group", sla, "--verdict", "not_needed", "--by", "admin"}},
 		{"どれかです", []string{"--group", sla, "--verdict", "later", "--by", "admin"}},
-		{"未対応の行にありません", []string{"--group", "00000000", "--verdict", "hold", "--by", "admin"}},
-		{"未対応の行にありません", []string{"--group", sla, "--verdict", "hold", "--by", "admin", "--source", "new", "--devices", "rt-a09"}},
+		{"読めなかった行にありません", []string{"--group", "00000000", "--verdict", "hold", "--by", "admin"}},
+		{"読めなかった行にありません", []string{"--group", sla, "--verdict", "hold", "--by", "admin", "--source", "new", "--devices", "rt-a09"}},
 		{"行がありません: rt-a09", []string{"--group", sla, "--verdict", "hold", "--by", "admin", "--devices", "rt-a09"}},
 		{"判定はありません", []string{"--group", sla, "--verdict", "none"}},
 		{"", []string{"extra"}},
@@ -99,9 +99,9 @@ func TestJudgeCommand(t *testing.T) {
 		t.Fatalf("judge for all = %d: %s%s", code, out, errOut)
 	}
 	wants(t, "judge for all", out,
-		"かたまり "+sla+" に「手動で対応」を付けました（機器 1 台、5 行）",
+		"かたまり "+sla+" に「追加コンフィグで書く」を付けました（機器 1 台、5 行）",
 		"機器を指定した判定が 1 台に残っています",
-		"このかたまりの判定: 保留 1 台、手動で対応 1 台",
+		"このかたまりの判定: 保留 1 台、追加コンフィグで書く 1 台",
 		"残り（旧コンフィグ）: 未判定 5 行、保留 2 行",
 		"パラメータブックがまだ無い",
 	)
@@ -117,14 +117,14 @@ func TestJudgeCommand(t *testing.T) {
 		t.Errorf("the list with a line on hold = %d:\n%s", code, list)
 	}
 	wants(t, "the list of the open groups", list,
-		"未判定 0 行、保留 2 行、手動で対応 5 行、対応不要 5 行",
-		sla+"  保留 1 台、手動で対応 1 台  2 台",
+		"未判定 0 行、保留 2 行、追加コンフィグで書く 5 行、要らない 5 行",
+		sla+"  保留 1 台、追加コンフィグで書く 1 台  2 台",
 		"判定の済んだかたまりが 2 個あります",
 	)
 	if strings.Contains(list, policy) {
 		t.Errorf("a judged group is in the list without --all:\n%s", list)
 	}
-	if _, list, _ = do("judge", "--project", dir, "--all"); !strings.Contains(list, policy+"  対応不要  2 台") {
+	if _, list, _ = do("judge", "--project", dir, "--all"); !strings.Contains(list, policy+"  要らない  2 台") {
 		t.Errorf("--all lacks the judged group:\n%s", list)
 	}
 
@@ -132,7 +132,7 @@ func TestJudgeCommand(t *testing.T) {
 	if code, out, errOut = do("judge", "--project", dir, "--group", sla, "--verdict", "none", "--devices", "rt-a02"); code != 0 {
 		t.Fatalf("clear = %d: %s%s", code, out, errOut)
 	}
-	wants(t, "clear", out, "かたまり "+sla+" の判定を取り消しました（機器 1 台、2 行）", "このかたまりの判定: 手動で対応")
+	wants(t, "clear", out, "かたまり "+sla+" の判定を取り消しました（機器 1 台、2 行）", "このかたまりの判定: 追加コンフィグで書く")
 	if code, list, _ = do("judge", "--project", dir); code != 0 || !strings.Contains(list, "未判定・保留のかたまりはありません") {
 		t.Errorf("the list with every line judged = %d:\n%s", code, list)
 	}
@@ -144,9 +144,9 @@ func TestJudgeCommand(t *testing.T) {
 		t.Fatalf("import = %d: %s%s", code, out, errOut)
 	}
 	wants(t, "import", out,
-		"未対応の行: 12 行（未判定 0、保留 0、手動で対応 7、対応不要 5）",
-		"M-402: rt-a01 に「手動で対応」の行が 5 行ありますが",
-		"M-402: rt-a02 に「手動で対応」の行が 2 行ありますが",
+		"読めなかった行: 12 行（未判定 0、保留 0、追加コンフィグで書く 7、要らない 5）",
+		"M-402: rt-a01 に「追加コンフィグで書く」の行が 5 行ありますが",
+		"M-402: rt-a02 に「追加コンフィグで書く」の行が 2 行ありますが",
 	)
 	if strings.Contains(out, "judge で付けます") {
 		t.Errorf("the import asks for judgments although every line is judged:\n%s", out)
@@ -161,7 +161,7 @@ func TestJudgeCommand(t *testing.T) {
 
 	// The new side has its own judgments.
 	code, list, _ = do("judge", "--project", dir, "--source", "new")
-	if code != 1 || !strings.Contains(list, "未対応の行（新コンフィグ）: 未判定 12 行") {
+	if code != 1 || !strings.Contains(list, "読めなかった行（新コンフィグ）: 未判定 12 行") {
 		t.Errorf("the list of the new side = %d:\n%s", code, list)
 	}
 

@@ -105,7 +105,7 @@ func exportUnhandled(dir, source string, out, errOut io.Writer) int {
 	for _, s := range o.Shapes {
 		lines += s.Lines
 	}
-	fmt.Fprintf(out, "未対応行の持ち出し用レポート: %s、形 %d、未対応の行 %d\n", o.Source, len(o.Shapes), lines)
+	fmt.Fprintf(out, "読めなかった行の持ち出し用レポート: %s、形 %d、読めなかった行 %d\n", o.Source, len(o.Shapes), lines)
 	fmt.Fprintf(out, "  %s\n  %s\n", o.Report.XLSX, o.Report.HTML)
 	for _, f := range o.Unread {
 		fmt.Fprintf(out, "注意: %s は取り込めなかったので、その行は入っていません\n", f)

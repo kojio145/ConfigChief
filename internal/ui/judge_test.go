@@ -46,7 +46,7 @@ func TestJudge(t *testing.T) {
 		t.Fatal(err)
 	}
 	noNull(t, "the unhandled lines", v)
-	if v.Source != "old" || v.Title != "未対応の行（旧コンフィグ）" || v.Message != "" || len(v.Groups) != 3 || v.Left != 12 || v.By != "" {
+	if v.Source != "old" || v.Title != "読めなかった行（旧コンフィグ）" || v.Message != "" || len(v.Groups) != 3 || v.Left != 12 || v.By != "" {
 		t.Fatalf("view = %+v", v)
 	}
 	if len(v.Notes) != 1 || !strings.Contains(v.Notes[0], "input/old/short.txt は取り込めなかった") {
@@ -75,7 +75,7 @@ func TestJudge(t *testing.T) {
 		{"名前を書いてください", sla.ID, "", "manual", "", " "},
 		{"理由を書いてください", sla.ID, "", "not_needed", "", "admin"},
 		{"どれかです", sla.ID, "", "later", "", "admin"},
-		{"未対応の行にありません", "00000000", "", "hold", "", "admin"},
+		{"読めなかった行にありません", "00000000", "", "hold", "", "admin"},
 		{"行がありません: rt-a09", sla.ID, "rt-a09", "hold", "", "admin"},
 		{"判定はありません", sla.ID, "", "none", "", ""},
 	} {
@@ -102,7 +102,7 @@ func TestJudge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(v.Message, "「手動で対応」を付けました（機器 1 台、5 行）。機器を指定した判定が 1 台に残っています") || v.Left != 7 {
+	if !strings.Contains(v.Message, "「追加コンフィグで書く」を付けました（機器 1 台、5 行）。機器を指定した判定が 1 台に残っています") || v.Left != 7 {
 		t.Errorf("after a judgment for all: %q, %d", v.Message, v.Left)
 	}
 	if len(v.Notes) != 2 || !strings.Contains(v.Notes[0], "パラメータブックがまだ無い") {
@@ -138,10 +138,10 @@ func TestJudge(t *testing.T) {
 	for _, l := range lv.Lines {
 		byNo[l.No] = l
 	}
-	if l := byNo[14]; l.Judged != "手動で対応" || l.Open || l.Group != sla.ID {
+	if l := byNo[14]; l.Judged != "追加コンフィグで書く" || l.Open || l.Group != sla.ID {
 		t.Errorf("line 14 = %+v", l)
 	}
-	if l := byNo[15]; l.Judged != "手動で対応（上の行に従う）" || l.Open || l.Group != sla.ID {
+	if l := byNo[15]; l.Judged != "追加コンフィグで書く（上の行に従う）" || l.Open || l.Group != sla.ID {
 		t.Errorf("line 15 = %+v", l)
 	}
 	if l := byNo[8]; l.Judged != "未判定" || !l.Open || l.Group != policy.ID {
@@ -156,13 +156,13 @@ func TestJudge(t *testing.T) {
 	if v, err = s.Judge("old", policy.ID, "", "not_needed", "sample reason", "admin"); err != nil {
 		t.Fatal(err)
 	}
-	if v.Left != 4 || len(v.Notes) != 2 || !strings.Contains(v.Notes[0], "M-402: rt-a01 に「手動で対応」の行が 5 行") {
+	if v.Left != 4 || len(v.Notes) != 2 || !strings.Contains(v.Notes[0], "M-402: rt-a01 に「追加コンフィグで書く」の行が 5 行") {
 		t.Errorf("after the import: %d, %q", v.Left, v.Notes)
 	}
 	if lv, err = s.Lines("old", "input/old/rt-a01.txt"); err != nil {
 		t.Fatal(err)
 	}
-	if l := lv.Lines[7]; l.No != 8 || l.Judged != "対応不要" || l.Open {
+	if l := lv.Lines[7]; l.No != 8 || l.Judged != "要らない" || l.Open {
 		t.Errorf("line 8 after its judgment = %+v", l)
 	}
 

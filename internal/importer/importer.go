@@ -287,7 +287,7 @@ func (x *run) markTree(nodes []*conftree.Node, state, ruleID, reason string) {
 // unknown marks a line and everything below it as not taken.
 func (x *run) unknown(n *conftree.Node, ruleID, reason string) {
 	x.mark(n, Unknown, ruleID, reason, nil)
-	x.markTree(n.Children, Unknown, "", "親の行が未対応")
+	x.markTree(n.Children, Unknown, "", "親の行が読めなかった")
 }
 
 // apply tries the rules on each node; the first rule that hits is used.

@@ -117,7 +117,7 @@ func cmdInit(args []string, out, errOut io.Writer) int {
 		}
 		fmt.Fprintf(out, "見本の案件: %s（%s）\n", dir, ops.SampleName)
 		fmt.Fprintf(out, "  架空の旧コンフィグ %d ファイルを input/old に置きました\n", n)
-		fmt.Fprintf(out, "  次に: configchief import --project %s\n", dir)
+		fmt.Fprintf(out, "  次に: ConfigChief.exe import --project %s\n", dir)
 		return 0
 	}
 	name := val["--name"]
@@ -160,7 +160,7 @@ func cmdInit(args []string, out, errOut io.Writer) int {
 		}
 	}
 	fmt.Fprintln(out, "  旧コンフィグを input/old に、手で書いた新コンフィグがあれば input/new に置きます（1 台 1 ファイル）")
-	fmt.Fprintf(out, "  次に: configchief import --project %s\n", dir)
+	fmt.Fprintf(out, "  次に: ConfigChief.exe import --project %s\n", dir)
 	return 0
 }
 
@@ -204,7 +204,7 @@ func cmdImport(args []string, out, errOut io.Writer) int {
 		if f.Err != "" {
 			fmt.Fprintf(out, "  %s: 取り込めません: %s\n", f.Path, f.Err)
 			if len(f.Same) > 1 {
-				fmt.Fprintf(out, "    選ぶには: configchief import --project %s --source %s --use <ファイル>\n", val["--project"], source)
+				fmt.Fprintf(out, "    選ぶには: ConfigChief.exe import --project %s --source %s --use <ファイル>\n", val["--project"], source)
 			}
 			continue
 		}
@@ -217,7 +217,7 @@ func cmdImport(args []string, out, errOut io.Writer) int {
 		if f.Chosen {
 			pack += "（人が選んだ）"
 		}
-		fmt.Fprintf(out, "  %s: %s %s %d 行（取り込み済み %d、無視 %d、未対応 %d）\n",
+		fmt.Fprintf(out, "  %s: %s %s %d 行（取り込み済み %d、無視 %d、読めなかった %d）\n",
 			f.Path, f.Result.Device, pack, n.Total, n.Taken, n.Ignored+n.Separators, n.Unknown)
 		for _, w := range f.Result.Warnings {
 			fmt.Fprintf(out, "    注意: %s\n", w)
@@ -228,17 +228,17 @@ func cmdImport(args []string, out, errOut io.Writer) int {
 	}
 	if n := src.Count().Unknown; n > 0 {
 		j := o.Judging
-		fmt.Fprintf(out, "未対応の行: %d 行（未判定 %d、保留 %d、手動で対応 %d、対応不要 %d）。レポートの「未対応の形」「未対応の行」に一覧があります\n",
+		fmt.Fprintf(out, "読めなかった行: %d 行（未判定 %d、保留 %d、追加コンフィグで書く %d、要らない %d）。レポートの「読めなかった行の形」「読めなかった行」に一覧があります\n",
 			n, j.Open, j.Hold, j.Manual, j.NotNeeded)
 		if j.Open+j.Hold > 0 {
-			fmt.Fprintln(out, "  判定は、画面の「未対応の行」か judge で付けます")
+			fmt.Fprintln(out, "  判定は、画面の「読めなかった行」か judge で付けます")
 		}
 	}
 	printNoExtra(out, o.Judging)
 	if o.New != nil {
 		for _, f := range o.New.Files {
 			if f.Err != "" {
-				fmt.Fprintf(out, "注意: %s は対応の案に使えません: %s\n", f.Path, f.Err)
+				fmt.Fprintf(out, "注意: %s は新旧対照表の案に使えません: %s\n", f.Path, f.Err)
 			}
 		}
 	}
@@ -246,9 +246,9 @@ func cmdImport(args []string, out, errOut io.Writer) int {
 		book := e.Proj.Config.Book
 		switch {
 		case s.Created:
-			fmt.Fprintf(out, "パラメータブック %s を作りました（機器対応 %d 行、IF 対応 %d 行）\n", book, s.DeviceRows, s.IfRows)
+			fmt.Fprintf(out, "パラメータブック %s を作りました（新旧対照表（機器） %d 行、新旧対照表（ポート） %d 行）\n", book, s.DeviceRows, s.IfRows)
 		case s.Changed():
-			fmt.Fprintf(out, "パラメータブック %s に足しました（機器対応 %d 行、IF 対応 %d 行）。控え: %s\n", book, s.DeviceRows, s.IfRows, o.Backup)
+			fmt.Fprintf(out, "パラメータブック %s に足しました（新旧対照表（機器） %d 行、新旧対照表（ポート） %d 行）。控え: %s\n", book, s.DeviceRows, s.IfRows, o.Backup)
 		default:
 			fmt.Fprintf(out, "パラメータブック %s は変えていません（足す行がありません）\n", book)
 		}
@@ -270,7 +270,7 @@ func cmdImport(args []string, out, errOut io.Writer) int {
 // was left out of the data.
 func printMapping(out io.Writer, e *ops.Env, a *convert.Applied, v *ops.Verdicts, all bool) {
 	if c := v.Count(); c.Errors+c.Warnings+c.Approved > 0 {
-		fmt.Fprintf(out, "対応の未決の指摘（M-406〜M-408）: 未承認 %d 件、承認済み %d 件（指紋はレポートの「対応の未決」「対応のメモ」にあります）\n", c.Errors+c.Warnings, c.Approved)
+		fmt.Fprintf(out, "新旧対照表で決まっていないところの指摘（M-406〜M-408）: 未承認 %d 件、承認済み %d 件（指紋はレポートの「新旧対照表で決まっていないところ」「新旧対照表のメモ」にあります）\n", c.Errors+c.Warnings, c.Approved)
 	}
 	if len(a.Unmapped) > 0 {
 		fmt.Fprintf(out, "新ホスト名が空の旧機器（書き換えの対象外）: %d 台（うち備考もない %d 台）\n", len(a.Unmapped), len(a.NoReason))
@@ -379,7 +379,7 @@ func cmdBook(args []string, out, errOut io.Writer) int {
 		fmt.Fprintf(out, "  %s: 足した %d 行、すでにあった %d 行\n", title, s.Added[name], s.Kept[name])
 	}
 	if s.DeviceRows > 0 || s.IfRows > 0 {
-		fmt.Fprintf(out, "  機器対応に %d 行、IF 対応に %d 行を足しました\n", s.DeviceRows, s.IfRows)
+		fmt.Fprintf(out, "  新旧対照表（機器）に %d 行、新旧対照表（ポート）に %d 行を足しました\n", s.DeviceRows, s.IfRows)
 	}
 	for _, p := range o.Problems {
 		fmt.Fprintf(out, "  ブックの注意: %s\n", p)
@@ -424,7 +424,7 @@ func cmdCompare(args []string, out, errOut io.Writer) int {
 			}
 		}
 		if n := s.Source.Count().Unknown; n > 0 {
-			fmt.Fprintf(out, "  %s に未対応の行が %d 行あります。その行の設定は、比べる対象に入っていません\n", sourceWord(s.Name), n)
+			fmt.Fprintf(out, "  %s に読めなかった行が %d 行あります。その行の設定は、比べる対象に入っていません\n", sourceWord(s.Name), n)
 		}
 	}
 	fmt.Fprintf(out, "  A にだけある行: %d\n  B にだけある行: %d\n  値が違うセル: %d\n  両方にある行: %d（うち値がすべて同じ %d）\n",
@@ -435,7 +435,7 @@ func cmdCompare(args []string, out, errOut io.Writer) int {
 	}
 	for _, s := range []*ops.Side{o.A, o.B} {
 		if a := s.Applied; a != nil && len(a.Unmapped)+len(a.Undecided)+len(a.Shared) > 0 {
-			fmt.Fprintf(out, "  対応の未決: 新ホスト名が空の旧機器 %d 台、新 IF 名が決まっていない旧 IF %d 個、同じ新 IF に当たっている組 %d（レポートの「対応のメモ」に一覧があります）\n",
+			fmt.Fprintf(out, "  新旧対照表で決まっていないところ: 新ホスト名が空の旧機器 %d 台、新 IF 名が決まっていない旧 IF %d 個、同じ新 IF に当たっている組 %d（レポートの「新旧対照表のメモ」に一覧があります）\n",
 				len(a.Unmapped), len(a.Undecided), len(a.Shared))
 		}
 		if s.Book != nil && len(s.Book.Problems)+len(s.Expand) > 0 {

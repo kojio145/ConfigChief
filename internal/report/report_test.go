@@ -12,8 +12,8 @@ func sample() *Doc {
 	return &Doc{
 		Title:  "取り込みの結果",
 		Facts:  []Pair{{"案件", "sample <case>"}},
-		Counts: []Pair{{"未対応", "1"}},
-		Notes:  []string{"未対応の行にある秘密の値は伏せられません"},
+		Counts: []Pair{{"読めなかった", "1"}},
+		Notes:  []string{"読めなかった行にある秘密の値は伏せられません"},
 		Sheets: []Sheet{
 			{
 				Name:   "行の一覧",
@@ -22,7 +22,7 @@ func sample() *Doc {
 				Rows: [][]string{
 					{"rt-a01", "1", "hostname rt-a01", "取り込み済み"},
 					{"rt-a01", "2", "!", "無視"},
-					{"rt-a01", "3", " sample <b>&\"x\"", "未対応"},
+					{"rt-a01", "3", " sample <b>&\"x\"", "読めなかった"},
 				},
 				Marks: []string{"", MarkIgnored, MarkUnknown},
 				Code:  []int{2},
@@ -39,7 +39,7 @@ func TestHTML(t *testing.T) {
 		"<td>sample &lt;case&gt;</td>",
 		"<a href=\"#s1\">行の一覧（3）</a>",
 		"<h2 id=\"s1\">行の一覧（3 件）</h2>",
-		"<tr class=\"unknown\"><td>rt-a01</td><td>3</td><td class=\"code\"> sample &lt;b&gt;&amp;&#34;x&#34;</td><td>未対応</td></tr>",
+		"<tr class=\"unknown\"><td>rt-a01</td><td>3</td><td class=\"code\"> sample &lt;b&gt;&amp;&#34;x&#34;</td><td>読めなかった</td></tr>",
 		"<tr class=\"ignored\">",
 		"<p class=\"none\">ありません</p>",
 	} {
@@ -85,7 +85,7 @@ func TestXLSX(t *testing.T) {
 	for _, r := range rows {
 		got = append(got, strings.Join(r, "="))
 	}
-	if want := "項目=内容|レポート=取り込みの結果|案件=sample <case>|未対応=1|注意=未対応の行にある秘密の値は伏せられません"; strings.Join(got, "|") != want {
+	if want := "項目=内容|レポート=取り込みの結果|案件=sample <case>|読めなかった=1|注意=読めなかった行にある秘密の値は伏せられません"; strings.Join(got, "|") != want {
 		t.Errorf("summary = %q", got)
 	}
 	if v, _ := f.GetCellValue("行の一覧", "C4"); v != " sample <b>&\"x\"" {

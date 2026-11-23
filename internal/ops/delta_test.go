@@ -235,7 +235,7 @@ func TestDeltaDevices(t *testing.T) {
 		[2]string{" description sample wan\n", " description old wan\n"})
 	nowFile(t, e, "input/old/ix-g01.txt", strings.ReplaceAll(texts["rt-g01"], "rt-g01", "ix-g01"))
 	nowFile(t, e, "input/old/sw-q11.txt", texts["sw-q11"])
-	appendRow(t, e, "機器対応", map[string]string{"旧ホスト名": "rt-old", "新ホスト名": "rt-g01"})
+	appendRow(t, e, "新旧対照表（機器）", map[string]string{"旧ホスト名": "rt-old", "新ホスト名": "rt-g01"})
 	o, err := e.Delta(DeltaOptions{Side: "old"}, at)
 	if err != nil {
 		t.Fatal(err)
@@ -254,9 +254,17 @@ func TestDeltaDevices(t *testing.T) {
 	if o.NotMade() != 1 {
 		t.Errorf("not made: %d", o.NotMade())
 	}
+	// Each device asked for alone gives that device only, wherever it is
+	// in the book (the devices after it are not taken in).
+	for _, d := range o.Devices {
+		one, err := e.Delta(DeltaOptions{Side: "old", Devices: []string{d.Name}}, at)
+		if err != nil || len(one.Devices) != 1 || one.Devices[0].Name != d.Name {
+			t.Errorf("only %s: %v %+v", d.Name, err, one)
+		}
+	}
 
 	// The book renames an interface of the device: no change.
-	appendRow(t, e, "IF 対応", map[string]string{"新ホスト名": "rt-g01", "旧 IF 名": "GigabitEthernet0/0", "新 IF 名": "GigabitEthernet0/3"})
+	appendRow(t, e, "新旧対照表（ポート）", map[string]string{"新ホスト名": "rt-g01", "旧 IF 名": "GigabitEthernet0/0", "新 IF 名": "GigabitEthernet0/3"})
 	if o, err = e.Delta(DeltaOptions{Side: "old"}, at); err != nil {
 		t.Fatal(err)
 	}

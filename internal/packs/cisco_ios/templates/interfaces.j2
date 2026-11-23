@@ -137,7 +137,7 @@ interface {{ i.name }}{{ ' type tunnel' if vt.tunnel else '' }}
 {% if i.vlan_id != '' and i.name is startingwith('Vlan') and i.name != 'Vlan' ~ i.vlan_id %}
 {{ fail(i.name ~ ' の「VLAN 番号（VLAN の IF）」' ~ i.vlan_id ~ ' が、IF 名の番号と違います（Cisco では、VLAN ' ~ i.vlan_id ~ ' の IF は Vlan' ~ i.vlan_id ~ ' です。IF 名か VLAN 番号を直してください）') }}
 {% elif i.vlan_id != '' and not i.name is startingwith('Vlan') %}
-{{ fail(i.name ~ ' に「VLAN 番号（VLAN の IF）」' ~ i.vlan_id ~ ' があります（Cisco では、VLAN ' ~ i.vlan_id ~ ' の IF は Vlan' ~ i.vlan_id ~ ' です。IF 対応で IF 名を Vlan' ~ i.vlan_id ~ ' にするか、VLAN 番号を空にしてください）') }}
+{{ fail(i.name ~ ' に「VLAN 番号（VLAN の IF）」' ~ i.vlan_id ~ ' があります（Cisco では、VLAN ' ~ i.vlan_id ~ ' の IF は Vlan' ~ i.vlan_id ~ ' です。新旧対照表（ポート）で IF 名を Vlan' ~ i.vlan_id ~ ' にするか、VLAN 番号を空にしてください）') }}
 {% endif %}
 {% for s in t.switchports %}
 {% if s.if_name == i.name %}

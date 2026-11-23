@@ -9,6 +9,7 @@ package main
 import (
 	"embed"
 	"os"
+	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -20,6 +21,20 @@ import (
 	"github.com/kojio145/configchief/internal/ui"
 )
 
+// mistyped tells that the first argument is a word that is neither a
+// command nor a folder (a typo like "imprt"): the usage is told and the
+// program ends with 2, not with a window a batch file would wait on.
+func mistyped(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	a := args[0]
+	if _, err := os.Stat(a); err == nil {
+		return false
+	}
+	return !strings.ContainsAny(a, `\/:.`)
+}
+
 // version is set by the build: -ldflags "-X main.version=1.2.3".
 var version = "0.0.0-dev"
 
@@ -29,7 +44,7 @@ var assets embed.FS
 func main() {
 	// A command: the answer goes to the terminal the program was started
 	// from, and the program ends with the exit code of the command.
-	if args := os.Args[1:]; cli.IsCommand(args) {
+	if args := os.Args[1:]; cli.IsCommand(args) || mistyped(args) {
 		out, errOut := terminal()
 		cli.Version = version
 		code := cli.Run(args, out, errOut)

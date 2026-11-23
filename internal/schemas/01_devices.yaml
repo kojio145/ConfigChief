@@ -5,7 +5,7 @@ key: [hostname]
 columns:
   - {name: hostname, title: {ja: ホスト名, en: Hostname}, type: string, required: true, note: {ja: "機器の名前。全シートの「機器」列の参照先", en: "The name of the device. The Device column of every sheet points here"}}
   - {name: vendor, title: {ja: メーカー, en: Vendor}, type: string, generate: false, required: true, note: {ja: "メーカーパックの ID。例 cisco_ios、nec_ix", en: "The id of the vendor pack, e.g. cisco_ios, nec_ix"}}
-  - {name: model, title: {ja: 機種, en: Model}, type: string, generate: false, note: {ja: "パックの機種定義の ID。空でも生成できるが、IF 対応の案とポートの検査が使えない", en: "The id of a model in the pack. May be empty"}}
+  - {name: model, title: {ja: 機種, en: Model}, type: string, generate: false, note: {ja: "パックの機種定義の ID。空でも生成できるが、新旧対照表（ポート）の案とポートの検査が使えない", en: "The id of a model in the pack. May be empty"}}
   - {name: os_version, title: {ja: OS 版, en: OS version}, type: string, generate: false}
   - {name: group, title: {ja: グループ, en: Group}, type: "list<string>", generate: false, note: {ja: "@グループ名 で行をまとめて当てるための名前。複数はカンマで区切る", en: "Names used as @group in the Device column. Separate with commas"}}
   - {name: site, title: {ja: 拠点, en: Site}, type: string, generate: false}

@@ -7,7 +7,7 @@
 {% set agg = i.name is startingwith('Bridge-Aggregation') %}
 {% set svi = i.name is startingwith('Vlan-interface') %}
 {% if not (port or agg or svi or i.name is startingwith('LoopBack') or i.name is startingwith('M-GigabitEthernet') or i.name is startingwith('NULL')) %}
-{{ fail('IF 名「' ~ i.name ~ '」は、このパックでは書けません（GigabitEthernet1/0/1・Ten-GigabitEthernet1/0/25・Bridge-Aggregation1・Vlan-interface10・LoopBack0・M-GigabitEthernet0/0/0 の形で書きます。別メーカーから書き換えたときは、IF 対応で名前を決めてください）') }}
+{{ fail('IF 名「' ~ i.name ~ '」は、このパックでは書けません（GigabitEthernet1/0/1・Ten-GigabitEthernet1/0/25・Bridge-Aggregation1・Vlan-interface10・LoopBack0・M-GigabitEthernet0/0/0 の形で書きます。別メーカーから書き換えたときは、新旧対照表（ポート）で名前を決めてください）') }}
 {% endif %}
 {% if '.' in i.name %}
 {{ fail('IF 名「' ~ i.name ~ '」: サブ IF は、このパックでは書けません') }}
@@ -15,10 +15,10 @@
 {% if svi %}
 {% set n = i.name | replace('Vlan-interface', '') %}
 {% if i.vlan_id != '' and i.vlan_id | string != n %}
-{{ fail(i.name ~ ' の「VLAN 番号（VLAN の IF）」' ~ i.vlan_id ~ ' が、IF 名の番号と違います（QX では、VLAN ' ~ i.vlan_id ~ ' の IF は Vlan-interface' ~ i.vlan_id ~ ' です。IF 対応で IF 名を直してください）') }}
+{{ fail(i.name ~ ' の「VLAN 番号（VLAN の IF）」' ~ i.vlan_id ~ ' が、IF 名の番号と違います（QX では、VLAN ' ~ i.vlan_id ~ ' の IF は Vlan-interface' ~ i.vlan_id ~ ' です。新旧対照表（ポート）で IF 名を直してください）') }}
 {% endif %}
 {% elif i.vlan_id != '' %}
-{{ fail(i.name ~ ' に「VLAN 番号（VLAN の IF）」' ~ i.vlan_id ~ ' があります（QX では、VLAN の IF は Vlan-interface' ~ i.vlan_id ~ ' です。IF 対応で IF 名を直してください）') }}
+{{ fail(i.name ~ ' に「VLAN 番号（VLAN の IF）」' ~ i.vlan_id ~ ' があります（QX では、VLAN の IF は Vlan-interface' ~ i.vlan_id ~ ' です。新旧対照表（ポート）で IF 名を直してください）') }}
 {% endif %}
 {% set has = namespace(sp=false, routed=false, lag=false) %}
 {% for s in t.switchports %}

@@ -22,7 +22,7 @@ import (
 // configurations is in exactly one of them.
 const (
 	RwAuto    = "auto"    // 自動で書き換えた
-	RwUnread  = "unread"  // 旧にあって取り込めなかった
+	RwUnread  = "unread"  // 読めなかった行
 	RwCannot  = "cannot"  // 取り込めたが新メーカーのパックが書けない
 	RwModel   = "model"   // 新機種が対応していない機能
 	RwChanged = "changed" // 旧と値を変えた
@@ -35,7 +35,7 @@ var RewriteKinds = []string{RwAuto, RwUnread, RwCannot, RwModel, RwChanged, RwUn
 
 var rewriteWords = map[string]string{
 	RwAuto:    "自動で書き換えた",
-	RwUnread:  "旧にあって取り込めなかった",
+	RwUnread:  "読めなかった行",
 	RwCannot:  "新メーカーのパックが書けない",
 	RwModel:   "新機種が対応していない",
 	RwChanged: "旧と値を変えた",
@@ -129,7 +129,7 @@ type rewriteInput struct {
 }
 
 // rewriteCase tells whether a case is one of renewal: input/old holds a file
-// and 機器対応 names a new host (spec 13.4).
+// and 新旧対照表（機器） names a new host (spec 13.4).
 func rewriteCase(e *Env, bk *book.Book) bool {
 	if bk == nil {
 		return false
@@ -156,7 +156,8 @@ func (e *Env) readRewrite(bk *book.Book, design *model.Dataset) (*rewriteInput, 
 	}
 	a := convert.Apply(e.Schema, src.Data, bk.Devices, bk.Ifs)
 	findings := mappingFindings(a)
-	findings = append(findings, e.diffFindings(compare.Datasets(e.Schema, a.Data, design), true)...)
+	asRead, _, _ := e.bookDataAs(bk, false)
+	findings = append(findings, e.diffFindings(compare.Datasets(e.Schema, a.Data, asRead), true)...)
 	mig, err := e.verdicts(findings, bk.Data)
 	if err != nil {
 		return nil, err
@@ -367,7 +368,7 @@ func (e *Env) rewriteOf(o *GenerateOutcome) *Rewrite {
 		ok := d.table + "\x00" + d.oldKey
 		switch {
 		case dropped[ok]:
-			return verdict{kind: RwIgnored, reason: "「IF 対応」で新 IF 名を - にした IF の行です（持っていきません）"}
+			return verdict{kind: RwIgnored, reason: "「新旧対照表（ポート）」で新 IF 名を - にした IF の行です（持っていきません）"}
 		case d.column != "" && cleared[ok+"\x00"+d.column]:
 			return verdict{kind: RwIgnored, reason: "新 IF 名を - にした IF を指していた値です（空にしました）"}
 		case clashed[ok]:
@@ -524,7 +525,7 @@ func (e *Env) rewriteOf(o *GenerateOutcome) *Rewrite {
 		}
 		if f.Result == nil {
 			dev.Device = f.Device
-			fo.notes = append(fo.notes, f.Path+" は取り込めませんでした（"+f.Err+"）。空行のほかの行を「旧にあって取り込めなかった」に入れています。")
+			fo.notes = append(fo.notes, f.Path+" は取り込めませんでした（"+f.Err+"）。空行のほかの行を「読めなかった行」に入れています。")
 			text, err := project.ReadText(e.Proj.Path(f.Path))
 			if err != nil {
 				fo.notes = append(fo.notes, f.Path+" を読めません: "+err.Error())
@@ -570,7 +571,7 @@ func (e *Env) rewriteOf(o *GenerateOutcome) *Rewrite {
 					}
 				}
 			case !carried:
-				line.Kind, line.Reason = RwIgnored, "「機器対応」で新ホスト名が空の機器です（書き換えの対象外）"
+				line.Kind, line.Reason = RwIgnored, "「新旧対照表（機器）」で新ホスト名が空の機器です（書き換えの対象外）"
 			default:
 				// The work tables of a pack (x_…) are a step on the way: the
 				// line points at the design data through them too.
@@ -706,7 +707,7 @@ func (e *Env) rewriteOf(o *GenerateOutcome) *Rewrite {
 		}
 	}
 	if e.mask() {
-		rw.Notes = append(rw.Notes, "秘密の列に入った値は伏せています。未対応の行にある秘密の値は、ツールが見分けられないため伏せられません。このレポートを人に渡す前に確かめてください。")
+		rw.Notes = append(rw.Notes, "秘密の列に入った値は伏せています。読めなかった行にある秘密の値は、ツールが見分けられないため伏せられません。このレポートを人に渡す前に確かめてください。")
 	}
 	return rw
 }
@@ -770,14 +771,14 @@ func (e *Env) rewriteTo(d destination, a *convert.Applied, applied map[string]*m
 // rewriteDoc builds the rewriting report (spec 13.4).
 func (e *Env) rewriteDoc(rw *Rewrite, now time.Time) *report.Doc {
 	d := &report.Doc{Title: "書き換えレポート（旧コンフィグ → 新コンフィグ）", Facts: e.facts(now)}
-	d.Facts = append(d.Facts, report.Pair{Label: "旧", Value: "input/old（「機器対応」「IF 対応」を当てた後）"},
+	d.Facts = append(d.Facts, report.Pair{Label: "旧", Value: "input/old（「新旧対照表（機器）」「新旧対照表（ポート）」を当てた後）"},
 		report.Pair{Label: "新", Value: "パラメータブックから生成したコンフィグ"})
 	d.Counts = append(d.Counts, report.Pair{Label: "旧コンフィグの全行", Value: num(rw.Total)})
 	for _, k := range RewriteKinds {
 		d.Counts = append(d.Counts, report.Pair{Label: RewriteWord(k), Value: num(rw.Counts[k])})
 	}
 	d.Counts = append(d.Counts,
-		report.Pair{Label: "うち未判定・保留の未対応の行", Value: num(rw.Unjudged)},
+		report.Pair{Label: "うち未判定・保留の読めなかった行", Value: num(rw.Unjudged)},
 		report.Pair{Label: "うち未承認の指摘がある行", Value: num(rw.Unapproved)},
 		report.Pair{Label: "新にだけある行", Value: num(len(rw.NewOnly))})
 	d.Notes = append(d.Notes, "旧コンフィグのすべての行を、上の区分のどれか 1 つに入れています（仕様書 10.4）。旧の行 → 設計データ → 新の行 を「行の一覧」で 1 行ずつ追えます。")

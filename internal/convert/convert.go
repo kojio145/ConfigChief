@@ -13,7 +13,7 @@ import (
 // configuration.
 const BasisSameName = "新コンフィグに同じ名前の IF があります"
 
-// Propose gives the rows for 機器対応 and IF 対応 (spec 10.2): one per old
+// Propose gives the rows for 新旧対照表（機器） and 新旧対照表（ポート） (spec 10.2): one per old
 // device, and one per interface of every old device whose new host name is
 // known. have is what the book holds already; rows for the same device or
 // interface may come back again and are left out when the book is written.
@@ -92,12 +92,12 @@ type Applied struct {
 	// are carried over).
 	Hosts map[string]string
 	// Unmapped lists the old devices that are not carried over: no row in
-	// 機器対応, or no new host name. NoReason are those of them without a
+	// 新旧対照表（機器）, or no new host name. NoReason are those of them without a
 	// note that tells why (M-407).
 	Unmapped []string
 	NoReason []string
 	// Undecided lists the interface names that stayed as they were: the new
-	// name is empty, or IF 対応 has no row for them (M-406).
+	// name is empty, or 新旧対照表（ポート） has no row for them (M-406).
 	Undecided []Note
 	// Dropped lists the rows left out because their interface is "-", and
 	// Cleared the cells emptied for the same reason.
@@ -115,7 +115,7 @@ type Applied struct {
 }
 
 // Apply rewrites the old design data for the new devices: host names by
-// 機器対応, the values of every interface column by IF 対応.
+// 新旧対照表（機器）, the values of every interface column by 新旧対照表（ポート）.
 func Apply(sc *schema.Set, old *model.Dataset, dev []book.DeviceMap, ifs []book.IfMap) *Applied {
 	return apply(sc, old, dev, ifs, false)
 }
@@ -123,7 +123,7 @@ func Apply(sc *schema.Set, old *model.Dataset, dev []book.DeviceMap, ifs []book.
 // ApplyList is Apply for what a customer's list says by the names of the old
 // devices (spec 6.5.2). A list need not hold a row for a device or for an
 // interface it speaks of: every host name of every table is looked up in
-// 機器対応, and every interface name without a row in IF 対応 is undecided.
+// 新旧対照表（機器）, and every interface name without a row in 新旧対照表（ポート） is undecided.
 // What the list says of the vendor and the model stays as it says it.
 func ApplyList(sc *schema.Set, list *model.Dataset, dev []book.DeviceMap, ifs []book.IfMap) *Applied {
 	return apply(sc, list, dev, ifs, true)
@@ -137,7 +137,7 @@ func apply(sc *schema.Set, old *model.Dataset, dev []book.DeviceMap, ifs []book.
 			devs[d.OldHost] = d
 		}
 	}
-	// new host name → old interface → the row of IF 対応
+	// new host name → old interface → the row of 新旧対照表（ポート）
 	maps := map[string]map[string]book.IfMap{}
 	users := map[string][]string{} // new host + new interface → old interfaces
 	for _, m := range ifs {

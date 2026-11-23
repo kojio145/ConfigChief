@@ -146,7 +146,7 @@ func printGenerate(out io.Writer, e *ops.Env, o *ops.GenerateOutcome, checkOnly 
 		}
 		fmt.Fprintf(out, "書き換え（旧コンフィグ %d 行）: %s\n", rw.Total, strings.Join(parts, "、"))
 		if rw.Unjudged+rw.Unapproved > 0 {
-			fmt.Fprintf(out, "  うち未判定・保留の未対応の行 %d、未承認の指摘がある行 %d\n", rw.Unjudged, rw.Unapproved)
+			fmt.Fprintf(out, "  うち未判定・保留の読めなかった行 %d、未承認の指摘がある行 %d\n", rw.Unjudged, rw.Unapproved)
 		}
 		fmt.Fprintf(out, "書き換えレポート: %s\n                  %s\n", o.RewriteReport.XLSX, o.RewriteReport.HTML)
 	}

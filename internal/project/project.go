@@ -77,7 +77,7 @@ checks:
   severity: {}             # 重大度の上書き（例: {V-208: warning}）
   placeholders: []         # 秘密の値の「仮の値」とみなす語（空 = ツールの既定）
 export:
-  keep_words: []           # 未対応行の持ち出し用レポートで、伏せずに残す語
+  keep_words: []           # 読めなかった行の持ち出し用レポートで、伏せずに残す語
 language: ja
 `
 

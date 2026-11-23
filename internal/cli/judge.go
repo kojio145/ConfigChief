@@ -80,7 +80,7 @@ func cmdJudge(args []string, out, errOut io.Writer) int {
 
 // printJudging lists the groups: the ones that are open, or all of them.
 func printJudging(out io.Writer, j *ops.Judging, all bool) {
-	fmt.Fprintf(out, "未対応の行（%s）: 未判定 %d 行、保留 %d 行、手動で対応 %d 行、対応不要 %d 行。かたまり %d 個\n",
+	fmt.Fprintf(out, "読めなかった行（%s）: 未判定 %d 行、保留 %d 行、追加コンフィグで書く %d 行、要らない %d 行。かたまり %d 個\n",
 		sourceWord(j.Source), j.Open, j.Hold, j.Manual, j.NotNeeded, len(j.Groups))
 	shown := 0
 	for _, g := range j.Groups {
@@ -101,7 +101,7 @@ func printJudging(out io.Writer, j *ops.Judging, all bool) {
 	}
 	switch {
 	case len(j.Groups) == 0:
-		fmt.Fprintln(out, "  未対応の行はありません")
+		fmt.Fprintln(out, "  読めなかった行はありません")
 	case shown == 0:
 		fmt.Fprintln(out, "  未判定・保留のかたまりはありません（--all ですべて出ます）")
 	case !all && shown < len(j.Groups):
@@ -122,10 +122,10 @@ func printNoExtra(out io.Writer, j *ops.Judging) {
 		if m.Host != m.Device {
 			who = fmt.Sprintf("%s（新ホスト名 %s）", m.Device, m.Host)
 		}
-		fmt.Fprintf(out, "M-402: %s に「手動で対応」の行が %d 行ありますが、extra に、この機器に当たる追加コンフィグがありません\n", who, m.Lines)
+		fmt.Fprintf(out, "M-402: %s に「追加コンフィグで書く」の行が %d 行ありますが、extra に、この機器に当たる追加コンフィグがありません\n", who, m.Lines)
 	}
 	if j.HostsUnknown {
-		fmt.Fprintln(out, "注意: パラメータブックがまだ無いので、「手動で対応」の機器に追加コンフィグがあるか（M-402）は見ていません")
+		fmt.Fprintln(out, "注意: パラメータブックがまだ無いので、「追加コンフィグで書く」の機器に追加コンフィグがあるか（M-402）は見ていません")
 	}
 	if j.BookErr != "" {
 		fmt.Fprintf(out, "注意: パラメータブックを読めないため、グループ向けの追加コンフィグは見ていません: %s\n", j.BookErr)

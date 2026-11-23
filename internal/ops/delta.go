@@ -89,7 +89,7 @@ func (o *DeltaOutcome) Made() int {
 
 // Why a line now that the generated configuration does not have stays.
 const (
-	keptUnknown  = "取り込めない行（未対応）なので消しません"
+	keptUnknown  = "取り込めない行（読めなかった）なので消しません"
 	keptIgnored  = "パックが無視する行なので消しません"
 	keptNoCell   = "取り込んだが、設計データのどのセルに入ったか分からないので消しません"
 	keptSame     = "ブックに同じ値があります（書き方が違うだけかもしれないので消しません）"
@@ -164,10 +164,13 @@ func (e *Env) Delta(opt DeltaOptions, now time.Time) (*DeltaOutcome, error) {
 			want[k] = true
 		}
 	}
-	o.Dir = "out/" + project.Stamp(now) + "/" + deltaDir
+	o.Dir = e.outDir(now) + "/" + deltaDir
+	// filtered is kept apart from want: want empties as the devices asked
+	// for are found, and the devices after the last of them are not asked.
+	filtered := len(want) > 0
 	for _, run := range gen.Devices {
 		key := listimport.DeviceKey(run.Host)
-		if len(want) > 0 {
+		if filtered {
 			if !want[key] {
 				continue
 			}
@@ -255,7 +258,7 @@ func (e *Env) deltaDevice(d *DeltaDevice, run DeviceRun, f *TreeFile, renamed bo
 		d.Why = fmt.Sprintf("今のコンフィグのメーカーパック（%s）と、生成するメーカーパック（%s）が違います。別のメーカー・OS へは全文で入れてください", f.Pack, run.Pack)
 		return
 	case renamed:
-		d.Why = "IF 対応で IF 名が変わる機器です（入れ替え）。差分は作らないので、全文で入れてください"
+		d.Why = "新旧対照表（ポート）で IF 名が変わる機器です（入れ替え）。差分は作らないので、全文で入れてください"
 		return
 	}
 	p := e.Packs[run.Pack]

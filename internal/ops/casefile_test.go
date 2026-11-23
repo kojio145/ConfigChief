@@ -29,7 +29,7 @@ func caseWithSecrets(t *testing.T) *Env {
 		t.Fatal(err)
 	}
 	// The book gets the rows of a device once it has its new name.
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-g01", "新ホスト名", "rt-g01")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-g01", "新ホスト名", "rt-g01")
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}

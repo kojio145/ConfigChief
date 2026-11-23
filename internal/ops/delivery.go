@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/kojio145/configchief/internal/book"
-	"github.com/kojio145/configchief/internal/project"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -130,13 +129,21 @@ func (e *Env) PlanDelivery() (*DeliveryPlan, error) {
 		p.Why = changed + "が、最後の生成（" + e.LastGeneration() + "）の後に変わりました。先にもう一度「生成とチェック」を押してください"
 		return p, nil
 	}
+	snap, name, _ := e.lastSnapshot()
+	// The newest output folder must be the one of the newest generation: a
+	// folder deleted on the outputs page, or a generation that stopped
+	// before its report, leaves an older folder that is not what was
+	// checked last.
+	if name == "" || Stamped(strings.TrimSuffix(name, ".json")) != Stamped(dir) {
+		p.Why = "最後の生成（" + e.LastGeneration() + "）の出力フォルダが見つかりません（消したか、途中で止まりました）。もう一度「生成とチェック」を押してください"
+		return p, nil
+	}
 	p.Generation, p.When = dir, Stamped(dir)
 	p.Configs = len(e.configFiles(dir))
 	if p.Configs == 0 {
 		p.Why = "最後の生成で、コンフィグを書いた機器がありません（値の誤りのある機器は書きません）。指摘を直して、もう一度「生成とチェック」を押してください"
 		return p, nil
 	}
-	snap, name, _ := e.lastSnapshot()
 	if snap != nil && snap.Counted {
 		p.Errors, p.Warnings, p.Known = snap.Errors, snap.Warnings, true
 	}
@@ -290,16 +297,23 @@ func (e *Env) MakeDelivery(opt DeliveryOptions, now time.Time) (*DeliveryOutcome
 	if unverified && !opt.AllowUnverified {
 		return nil, fmt.Errorf("未承認の指摘が残っています（エラー %d・警告 %d）。直すか承認してから作るか、残したまま作ることを選んでください", plan.Errors, plan.Warnings)
 	}
-	stamp := project.Stamp(now)
 	name := deliveryPrefix + fileSafe(e.Proj.Config.Name)
-	base := "out/" + stamp
+	base := e.outDir(now)
 	dir := base + "/" + name
 	if _, err := os.Stat(e.Proj.Path(dir)); err == nil {
 		return nil, fmt.Errorf("%s がもうあります。少し待ってから、もう一度作ってください", dir)
 	}
 	out := &DeliveryOutcome{Dir: dir, Unverified: unverified, Errors: plan.Errors, Warnings: plan.Warnings}
+	_, had := os.Stat(e.Proj.Path(base))
 	fail := func(err error) (*DeliveryOutcome, error) {
-		_ = os.RemoveAll(e.Proj.Path(dir))
+		// What this run wrote goes: the folder of the set, and the whole
+		// folder of the run when it was made for it (the table for the
+		// peers is written beside the set).
+		if os.IsNotExist(had) {
+			_ = os.RemoveAll(e.Proj.Path(base))
+		} else {
+			_ = os.RemoveAll(e.Proj.Path(dir))
+		}
 		return nil, err
 	}
 

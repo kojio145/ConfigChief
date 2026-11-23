@@ -22,7 +22,7 @@ type ShapePort struct {
 	Name, Role, Sub, VlanIf string
 }
 
-// Shapes finds the model a row of 機器対応 names (nil: not known).
+// Shapes finds the model a row of 新旧対照表（機器） names (nil: not known).
 type Shapes func(vendor, model string) *Shape
 
 // BasisShape is the basis written for a proposal from a model.

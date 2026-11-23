@@ -136,7 +136,7 @@ func TestNewBook(t *testing.T) {
 		if len(names) != len(sc.Tables)+3 {
 			t.Errorf("%s: %d sheets, want %d", lang, len(names), len(sc.Tables)+3)
 		}
-		if lang == "ja" && (names[0] != "機器" || names[1] != "インタフェース" || names[len(names)-3] != "機器対応" || names[len(names)-1] != "共通値") {
+		if lang == "ja" && (names[0] != "機器" || names[1] != "インタフェース" || names[len(names)-3] != "新旧対照表（機器）" || names[len(names)-1] != "共通値") {
 			t.Errorf("sheets = %v", names)
 		}
 		if lang == "en" && (names[0] != "Devices" || names[len(names)-2] != "Interface map") {
@@ -209,7 +209,7 @@ func TestUpdateKeepsWhatAPersonWrote(t *testing.T) {
 	// A person fills the mapping, changes a value, adds a column of their
 	// own and a sheet of notes, and deletes the MTU column.
 	edited := edit(t, first, func(f *excelize.File) {
-		f.SetCellStr("機器対応", "C2", "rt-b01")
+		f.SetCellStr("新旧対照表（機器）", "C2", "rt-b01")
 		f.SetCellStr("インタフェース", "D2", "to sample-core")
 		mtu, _ := excelize.ColumnNumberToName(indexOf(t, sc.Table("interfaces"), "mtu") + 1)
 		f.RemoveCol("インタフェース", mtu)
@@ -333,7 +333,7 @@ func TestReadWhatAPersonTyped(t *testing.T) {
 			},
 		},
 		{Name: "作業メモ", Header: []string{"sample"}, Rows: [][]string{{"x"}}},
-		{Name: "IF対応", Header: []string{"旧IF名", "新IF名", "新ホスト名"}, Rows: [][]string{{"GigabitEthernet0/0", "-", "rt-b01"}, {"GigabitEthernet0/1", "", ""}}},
+		{Name: "新旧対照表（ポート）", Header: []string{"旧IF名", "新IF名", "新ホスト名"}, Rows: [][]string{{"GigabitEthernet0/0", "-", "rt-b01"}, {"GigabitEthernet0/1", "", ""}}},
 		{Name: "インタフェース", Header: []string{"name"}, Rows: [][]string{{"x"}}},
 	}
 	var buf bytes.Buffer
@@ -373,7 +373,7 @@ func TestReadWhatAPersonTyped(t *testing.T) {
 		"シート「Interfaces」の A5: A2 の行とキーが同じです（rt-a01 / GigabitEthernet0/0）。この行は読みません",
 		"シート「Interfaces」の C6: 「maybe」は有効・無効として読めません",
 		"シート「Interfaces」の D6: 「192.0.2.300/30」は IPv4 の「アドレス/長さ」の形ではありません",
-		"シート「IF対応」の A3: 新ホスト名か旧 IF 名が空です。この行は使いません",
+		"シート「新旧対照表（ポート）」の A3: 新ホスト名か旧 IF 名が空です。この行は使いません",
 		"シート「インタフェース」: シート「Interfaces」と同じ表のシートです。このシートは読みません",
 	}
 	if !reflect.DeepEqual(got, want) {

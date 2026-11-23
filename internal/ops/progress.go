@@ -132,9 +132,9 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 			s.State = StepWait
 		}
 		add(s)
-		dev := Step{ID: "devices", Label: "機器対応", Page: "mapping", Act: "edit-devices", State: StepWait}
-		ifs := Step{ID: "ifs", Label: "IF 対応", Page: "mapping", Act: "edit-ifs", State: StepWait}
-		book := Step{ID: "book", Label: "ブックに書く", Page: "mapping", Act: "make-book", State: StepWait}
+		dev := Step{ID: "devices", Label: "新旧対照表（機器）", Page: "mapping", Act: "edit-devices", State: StepWait}
+		ifs := Step{ID: "ifs", Label: "新旧対照表（ポート）", Page: "mapping", Act: "edit-ifs", State: StepWait}
+		book := Step{ID: "book", Label: "パラメータブックに書く", Page: "mapping", Act: "make-book", State: StepWait}
 		if bk != nil {
 			empty, hosts := 0, map[string]bool{}
 			for _, d := range bk.Devices {
@@ -159,7 +159,7 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 			}
 			if empty > 0 {
 				dev.State, dev.Note = StepTodo, fmt.Sprintf("%d 台", empty)
-				dev.Text = fmt.Sprintf("「機器対応」の新ホスト名が %d 台空です。新ホスト名・新メーカー（分かれば新機種）を書いてください（持っていかない機器は、備考に理由を書きます）", empty)
+				dev.Text = fmt.Sprintf("「新旧対照表（機器）」の新ホスト名が %d 台空です。新ホスト名・新メーカー（分かれば新機種）を書いてください（持っていかない機器は、備考に理由を書きます）", empty)
 			} else {
 				dev.State = StepDone
 			}
@@ -168,10 +168,10 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 			case len(noIfs) > 0 && len(old) > 0:
 				sort.Strings(noIfs)
 				ifs.State, ifs.Note, ifs.Act = StepTodo, fmt.Sprintf("%d 台", len(noIfs)), "propose-ifs"
-				ifs.Text = fmt.Sprintf("新ホスト名を書いた %d 台（%s）に、IF 対応の行がありません。IF 対応の案を作ってください", len(noIfs), short(noIfs))
+				ifs.Text = fmt.Sprintf("新ホスト名を書いた %d 台（%s）に、新旧対照表（ポート）の行がありません。新旧対照表（ポート）の案を作ってください", len(noIfs), short(noIfs))
 			case undecided > 0:
 				ifs.State, ifs.Note = StepTodo, fmt.Sprintf("%d 行", undecided)
-				ifs.Text = fmt.Sprintf("「IF 対応」の新 IF 名が %d 行空です。新しい IF 名を書いてください（持っていかない IF は -）", undecided)
+				ifs.Text = fmt.Sprintf("「新旧対照表（ポート）」の新 IF 名が %d 行空です。新しい IF 名を書いてください（持っていかない IF は -）", undecided)
 			default:
 				ifs.State = StepDone
 			}
@@ -180,20 +180,20 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 			case t != nil && len(t.Rows) > 0:
 				book.State, bookDone = StepDone, true
 			case dev.State == StepDone && ifs.State == StepDone && len(old) > 0:
-				book.State, book.Text = StepTodo, "対応が決まりました。「対応を当ててパラメータブックに書く」を押してください"
+				book.State, book.Text = StepTodo, "新旧対照表が決まりました。「新しい名前に置き換えてパラメータブックに書く」を押してください"
 			}
 		}
 		add(dev)
 		add(ifs)
 		add(book)
-		j := Step{ID: "judge", Label: "未対応の行", Page: "judge", State: StepWait}
+		j := Step{ID: "judge", Label: "読めなかった行", Page: "judge", State: StepWait}
 		switch {
 		case len(old) == 0 || bk == nil:
 		case !open.Known:
 			j.State = StepCounting
 		case open.Lines > 0:
 			j.State, j.Note = StepTodo, fmt.Sprintf("%d 行", open.Lines)
-			j.Text = fmt.Sprintf("未判定・保留の未対応の行が %d 行あります。「手動で対応」「対応不要」を付けてください", open.Lines)
+			j.Text = fmt.Sprintf("未判定・保留の読めなかった行が %d 行あります。「追加コンフィグで書く」「要らない」を付けてください", open.Lines)
 		default:
 			j.State = StepDone
 		}
@@ -206,7 +206,7 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 			s.State, s.Text = StepTodo, "空のパラメータブックを作ってください（新規構築）"
 		}
 		add(s)
-		s = Step{ID: "first", Label: "1 台目", Page: "edit", State: StepWait}
+		s = Step{ID: "first", Label: "1 台目を書く", Page: "edit", State: StepWait}
 		if bk != nil {
 			if t := bk.Data.Tables["devices"]; t != nil && len(t.Rows) > 0 {
 				s.State, s.Note, bookDone = StepDone, fmt.Sprintf("%d 台", len(t.Rows)), true
@@ -234,7 +234,7 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 		}
 	}
 	add(gen)
-	fin := Step{ID: "findings", Label: "指摘", Page: "result", Act: "findings", State: StepWait}
+	fin := Step{ID: "findings", Label: "指摘を片付ける", Page: "result", Act: "findings", State: StepWait}
 	if fresh {
 		switch {
 		case snap == nil || !snap.Counted:
@@ -252,13 +252,13 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 	// its check is.
 	logs := Step{ID: "logs", Label: "検証機のログ", Page: "logs", Act: "logs-run", State: StepOptional}
 	if fresh {
-		logs.Text = "1 台分を検証機に流して、その端末ログを「ログ」の画面に置き、「調べる」を押してください（機器に弾かれた行が出ます）"
+		logs.Text = "1 台分を検証機に流して、その端末ログを「検証機のログ」の画面に置き、「調べる」を押してください（機器に弾かれた行が出ます）"
 		newest := e.newestIn("input/logs")
 		checked := e.newestReport("load_logs.xlsx")
 		switch {
 		case newest.IsZero():
 		case checked.IsZero() || newest.After(checked):
-			logs.State, logs.Text = StepTodo, "「ログ」の画面で、置いた端末ログを調べてください（機器に弾かれた行が出ます）"
+			logs.State, logs.Text = StepTodo, "「検証機のログ」の画面で、置いた端末ログを調べてください（機器に弾かれた行が出ます）"
 		default:
 			logs.State = StepDone
 		}
@@ -277,7 +277,7 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 	add(del)
 	ver := Step{ID: "verify", Label: "投入後の確認", Page: "logs", Act: "verify", State: StepOptional}
 	if del.State == StepDone {
-		ver.Text = "投入の後に、投入後の設定のログを「ログ」の画面に置き、「反映確認」で比べてください"
+		ver.Text = "投入の後に、投入後の設定のログを「検証機のログ」の画面に置き、「反映確認」で比べてください"
 		if at := e.newestReport("verify.xlsx"); !at.IsZero() && at.After(delivered) {
 			ver.State = StepDone
 		}
@@ -296,7 +296,7 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 			return p, nil
 		}
 		if s.State == StepCounting {
-			p.Next = &Next{"未対応の行を数えています…", "", ""}
+			p.Next = &Next{"読めなかった行を数えています…", "", ""}
 			return p, nil
 		}
 	}

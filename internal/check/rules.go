@@ -182,9 +182,9 @@ var rules = []Rule{
 
 	{ID: "G-601", Severity: Error, Title: "テンプレートの実行エラー", PerDevice: true},
 	{ID: "G-602", Severity: Error, Title: "設計データに値があるのに、生成に使われなかった", PerDevice: true},
-	{ID: "G-603", Severity: Error, Title: "語の対応がない", PerDevice: true},
+	{ID: "G-603", Severity: Error, Title: "新しいメーカーに同じ語がない", PerDevice: true},
 	{ID: "G-604", Severity: Error, Title: "往復の不一致（生成したコンフィグを取り込み直した結果が、設計データと違う）", PerDevice: true},
-	{ID: "G-605", Severity: Warning, Title: "生成したコンフィグに、取り込み直しで未対応になる行がある", PerDevice: true},
+	{ID: "G-605", Severity: Warning, Title: "生成したコンフィグに、取り込み直しで読めなかった行になる行がある", PerDevice: true},
 	{ID: "G-606", Severity: Error, Title: "生成先のメーカーで必要な値が空", PerDevice: true},
 	{ID: "G-607", Severity: Error, Title: "機種が対応していない機能を使っている", PerDevice: true},
 	{ID: "G-608", Severity: Error, Title: "追加コンフィグの実行エラー", PerDevice: true},
@@ -203,9 +203,9 @@ var migration = []Rule{
 	{ID: "M-403", Severity: Error, Title: "旧にあって新にない行"},
 	{ID: "M-404", Severity: Warning, Title: "新にあって旧にない行"},
 	{ID: "M-405", Severity: Warning, Title: "旧と新で値が違うセル"},
-	{ID: "M-406", Severity: Error, Title: "IF 対応が決まっていない旧 IF がある"},
-	{ID: "M-407", Severity: Error, Title: "機器対応が決まっていない旧機器がある"},
-	{ID: "M-408", Severity: Error, Title: "複数の旧 IF が、同じ新 IF に対応している"},
+	{ID: "M-406", Severity: Error, Title: "新旧対照表（ポート）が決まっていない旧 IF がある"},
+	{ID: "M-407", Severity: Error, Title: "新旧対照表（機器）が決まっていない旧機器がある"},
+	{ID: "M-408", Severity: Error, Title: "複数の旧 IF が、同じ新 IF に当たっている"},
 }
 
 // The checks of the customer's lists (appendix C 1.4). They come from the
@@ -225,7 +225,7 @@ var applied = []Rule{
 	{ID: "R-802", Severity: Warning, Title: "機器の設定にあるが、パラメータブックにない行"},
 	{ID: "R-803", Severity: Error, Title: "パラメータブックと機器の設定で値が違う"},
 	{ID: "R-804", Severity: Error, Title: "追加コンフィグの行が、機器の設定に見つからない"},
-	{ID: "R-805", Severity: Info, Title: "機器の設定に未対応の行があり、追加コンフィグにも当たらない"},
+	{ID: "R-805", Severity: Info, Title: "機器の設定に読めなかった行があり、追加コンフィグにも当たらない"},
 	{ID: "R-806", Severity: Error, Title: "ログのホスト名が、案件のどの機器にも当たらない・別の機器のものである"},
 	{ID: "R-807", Severity: Info, Title: "秘密の値は、機器側でハッシュ化されているため比べられなかった"},
 }
@@ -247,7 +247,7 @@ var loaded = []Rule{
 	{ID: "L-702", Severity: Warning, Title: "ログのコマンドの並びが、生成したコンフィグと合わない（別の版を流した疑い）"},
 	{ID: "L-703", Severity: Warning, Title: "ログに現れたコマンドが、生成したコンフィグより少ない（途中で切れた疑い）"},
 	{ID: "L-704", Severity: Info, Title: "機器の警告メッセージ"},
-	{ID: "L-705", Severity: Error, Title: "ログのプロンプトのホスト名と、流したコンフィグのホスト名・機器の対応が合わない（機器の取り違えの疑い）"},
+	{ID: "L-705", Severity: Error, Title: "ログのプロンプトのホスト名と、流したコンフィグのホスト名が合わない（機器の取り違えの疑い）"},
 }
 
 // Loaded tells whether the check is one of the logs of the work.

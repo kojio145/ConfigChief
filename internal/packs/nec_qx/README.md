@@ -4,7 +4,7 @@ NEC の QX シリーズ（L2/L3 スイッチ）のコンフィグ（`display cur
 
 - 版: 0.2.0
 - 取り込みも書き出しも、下の「対応一覧」の全部です
-- **書き出しは、ソフトウェアが「Version 7」を名乗る世代の形**です（下の資料が「Version 7.x.x 以降のソフトウェアに対応」と書いています）。**取り込みは、それより前の世代（販売終了の機種。設定の頭が `version 5.…`）の書き方も読みます**（下の「Version 7 より前の世代」）。読めない行は「未対応」として画面に出ます
+- **書き出しは、ソフトウェアが「Version 7」を名乗る世代の形**です（下の資料が「Version 7.x.x 以降のソフトウェアに対応」と書いています）。**取り込みは、それより前の世代（販売終了の機種。設定の頭が `version 5.…`）の書き方も読みます**（下の「Version 7 より前の世代」）。読めない行は「読めなかった」として画面に出ます
 - **実機の出力では確かめていません**。構文はすべて下の公開資料で確かめたものです。保存した設定に出る語の順番や、どの行が省かれるかは、資料の出力例で見た範囲にとどまります（下の「確かめていないこと」にまとめています）
 
 ## 参照した資料
@@ -78,7 +78,7 @@ NEC の QX シリーズ（L2/L3 スイッチ）のコンフィグ（`display cur
 |---|---|
 | `user-interface vty\|aux <番号> …` | `line vty`・`line aux` と同じ |
 | `local-user <名前>`（`class` なし）、`password cipher <値>`、`authorization-attribute level 0〜3` | `cipher` は「パスワードの形」が encrypted。level 3 は admin、0〜2 は数のまま |
-| `super password [level 3] simple\|cipher <値>` | 特権パスワード（level 1・2 の行は「未対応」）。`cipher` は encrypted |
+| `super password [level 3] simple\|cipher <値>` | 特権パスワード（level 1・2 の行は「読めなかった」）。`cipher` は encrypted |
 | `set authentication password cipher <値>` | 回線パスワードが `cipher <値>` |
 | `stp enable`（機器全体。`undo` も）、ポートの下の `stp edged-port enable\|disable` | `stp global enable`、`stp edged-port`（`disable` は値を入れません） |
 | `vrrp vrid <番号> timer advertise <秒>`、`… preempt-mode timer delay <秒>`、`… authentication-mode simple\|md5 [cipher] <鍵>` | **時間は秒**（Version 7 はセンチ秒）。`version` の行が無い文面は、Version 7 として読みます |
@@ -95,26 +95,26 @@ encrypted のユーザ・特権パスワード、`cipher` の回線パスワー�
 |---|---|
 | 文面の形 | 設定の部分ごとに `#` の行で区切られ、機器全体の 1 行の設定は 1 字下がっています（` sysname sw-a01`）。`#` の行で、開いている階層をすべて閉じて読みます（`pack.yaml` の `comment_closes`。別紙 B 2.2）。終わりの印は `return` |
 | IF 名 | `GigabitEthernet`・`Ethernet`・`Ten-GigabitEthernet`・`FortyGigE`・`M-GigabitEthernet`・`Bridge-Aggregation`・`Vlan-interface`・`LoopBack`・`Tunnel`・`NULL`。表示コマンドに出る短い名前 `GE`・`XGE`・`BAGG` も正式な名前に直します。捨てる経路の出力 IF `NULL0` は、表では `Null0` です。ここに無い名前の IF（`Route-Aggregation<番号>` など）も、IF の行として読みますが、種別は付きません（書き出しでは止まります。下の「コンフィグの書き出し」の「IF 名」） |
-| IF に当てた ACL（`packet-filter`） | **QX のパケットフィルタは、どの `rule` にも当たらない通信を通します**（コマンドマニュアルからの読み取りです。根拠と、機器で確かめてほしいことは、下の「確かめていないこと」）。表の決まりは「どの行にも当たらない通信は捨てる」なので、IF に当てているリストが「すべての通信」の行で終わっていなければ、取り込みが最後に「残りをすべて通す」行（最後の番号 + 5）を足します。IF のほかにも使っているリスト（遠隔ログイン・SNMP の接続元の制限）は、足す行でそちらの意味が変わるので足さず、`packet-filter` の行を「未対応」にします。**機器で既定を止める設定にしている場合**（この資料に無い行は「未対応」として出ます）は、足された行を消してください |
+| IF に当てた ACL（`packet-filter`） | **QX のパケットフィルタは、どの `rule` にも当たらない通信を通します**（コマンドマニュアルからの読み取りです。根拠と、機器で確かめてほしいことは、下の「確かめていないこと」）。表の決まりは「どの行にも当たらない通信は捨てる」なので、IF に当てているリストが「すべての通信」の行で終わっていなければ、取り込みが最後に「残りをすべて通す」行（最後の番号 + 5）を足します。IF のほかにも使っているリスト（遠隔ログイン・SNMP の接続元の制限）は、足す行でそちらの意味が変わるので足さず、`packet-filter` の行を「読めなかった」にします。**機器で既定を止める設定にしている場合**（この資料に無い行は「読めなかった」として出ます）は、足された行を消してください |
 | スイッチポートの行 | Ethernet のポートと `Bridge-Aggregation` の IF は、下に行が無くてもスイッチポートです。1 行ずつ行を作り、「モード」が無ければ access を入れます（`port link-type` の既定。`defaults.yaml`）。`port link-mode route` のポートはモード routed です |
 | トランク・hybrid の VLAN 1 | トランクは、何も書かなくても VLAN 1 を通します（`port trunk permit vlan` の既定）。hybrid のポートも同じで、`undo port hybrid vlan 1` が無ければ「タグなしで通す VLAN」に 1 を足します。`undo port trunk permit vlan 1` が無いトランクは、「許可 VLAN」に 1 を足します（並びの最後に付きます）。`undo …` だけで `permit` の行が無いトランクは none です |
 | 許可 VLAN の並び | `2 4 50 to 100` を `2,4,50-100` として持ちます。複数の行は足し合わせます |
 | LAG の束ね方 | 固定か LACP かは、LAG の IF（`Bridge-Aggregation<番号>`）の `link-aggregation mode dynamic` で決まります。メンバーの「束ね方」は、その行があれば active、無ければ on です |
-| スパニングツリー | `stp global enable` が無い機器は「スパニングツリーを使う」が無効です（既定。スイッチポートがある機器だけ行を作ります）。`stp mode pvst` は rapid_pvst として持ちます（QX の PVST は VLAN ごとに RSTP を動かします）。時間はセンチ秒を秒に直します（100 の倍数でない行は「未対応」） |
-| VRRP | `timer advertise`・`preempt-mode delay` はセンチ秒です。秒に直します（100 の倍数でない行は「未対応」）。回線監視は、`vrrp vrid … track <番号> priority reduced <数>` の形だけです（`switchover` は「未対応」） |
-| 遠隔ログイン | 「許可する方式」は、`telnet server enable`・`ssh server enable` のあるものから、`protocol inbound` が外したものを除いて決めます。`authentication-mode scheme` は local として持ちます（AAA の既定がローカルユーザであることを前提にしています。RADIUS などを使う設定は、その行が「未対応」として出ます）。`telnet server acl` と `ssh server acl` の番号が同じ（か、動いているサーバが片方だけ）なら「接続元の制限」、違えば「SSH だけの接続元の制限」「Telnet だけの接続元の制限」に入れます |
+| スパニングツリー | `stp global enable` が無い機器は「スパニングツリーを使う」が無効です（既定。スイッチポートがある機器だけ行を作ります）。`stp mode pvst` は rapid_pvst として持ちます（QX の PVST は VLAN ごとに RSTP を動かします）。時間はセンチ秒を秒に直します（100 の倍数でない行は「読めなかった」） |
+| VRRP | `timer advertise`・`preempt-mode delay` はセンチ秒です。秒に直します（100 の倍数でない行は「読めなかった」）。回線監視は、`vrrp vrid … track <番号> priority reduced <数>` の形だけです（`switchover` は「読めなかった」） |
+| 遠隔ログイン | 「許可する方式」は、`telnet server enable`・`ssh server enable` のあるものから、`protocol inbound` が外したものを除いて決めます。`authentication-mode scheme` は local として持ちます（AAA の既定がローカルユーザであることを前提にしています。RADIUS などを使う設定は、その行が「読めなかった」として出ます）。`telnet server acl` と `ssh server acl` の番号が同じ（か、動いているサーバが片方だけ）なら「接続元の制限」、違えば「SSH だけの接続元の制限」「Telnet だけの接続元の制限」に入れます |
 | ユーザの権限 | `network-admin` は admin、`network-operator` は operator、ほかのロールは名前のまま。ロールが複数あるユーザは、`network-admin` があれば admin、無ければ最初の 1 つです |
 | ACL の名前と番号 | 番号の ACL は番号を名前として持ちます（basic 2000〜2999 = standard、advanced 3000〜3999 = extended）。`rule` の番号を「順番」にそのまま入れます（0 から始まります） |
 | ACL のアドレス | `source`・`destination` が無い側は any。ワイルドカード `0` はホスト。ポートの名前（`www`・`dns` など、コマンドマニュアルの表の名前）は番号に直します。プロトコル 50・51 は esp・ah |
 | OSPF | エリアの下の `network <アドレス> <ワイルドカード>` に入る IF を、そのエリアの OSPF の IF として行にします（ほかのパックと同じ） |
 | DHCP の除外 | `dhcp server forbidden-ip` は、アドレスが入るプールの「除外範囲」に入れます |
 | パスワード・鍵 | 平文で入れた値を、機器はハッシュ（`hash`）や暗号化した形（`cipher`）で保存します。ユーザと特権パスワードの `hash` は、値を入れて「パスワードの形」を hashed にします。ほかの秘密の値は、機器が出したとおりに「種別 値」でセルに入れます（別紙 A 3.26）: `cipher <値>`（SNMP のコミュニティ・SNMPv3 のパスワード・VRRP と OSPF の鍵・NTP の鍵・BGP のパスワード）、`hash <値>`（回線のパスワード）。QX へはそのまま書き戻し、別メーカーへは引き継げません（チェック V-283 が知らせ、書き出しは止まります） |
-| ログの重要度 | `info-center source default logbuffer level` は機器の「ログに残す重要度」、`… loghost level` はログ転送先の全部の行の「重要度」、モジュールごとの `logbuffer level` は log_subsystems。コンソールなどほかの出力先と `deny` は「未対応」です |
-| SNMPv3 | ユーザの行に、グループの段・ビュー・グループの接続元の制限を写します（グループの行だけがあってユーザがいないものは「未対応」） |
-| NTP の認証 | 認証の有効化・鍵・信頼する鍵の 3 つがそろったサーバに、鍵を入れます。そろわない行は「未対応」です |
-| 時間帯 | 曜日は語（`Mon`・`working-day`・`off-day`・`daily` など）で読みます。数字の曜日、くり返しと日時の両方を持つ行は「未対応」です。時刻は `8:00` の形にそろえます |
-| 回線監視 | ping の NQA・その予定（`start-time now lifetime forever`）・`track` の 3 つで 1 行です。間隔はミリ秒を秒に直します（1000 の倍数でなければ「未対応」）。NQA の名前とタグは持ちません |
-| 経路制御の方針 | 1 つの項目の `if-match` は「すべてに合う」の意味です（コマンドマニュアル）。表の 1 つのセルに並べた名前は「どれかに合う」なので、同じ種類の `if-match` は 1 つ目だけを読み、2 つ目は「未対応」です。`apply preferred-value` は「付ける値: weight」に入れます |
+| ログの重要度 | `info-center source default logbuffer level` は機器の「ログに残す重要度」、`… loghost level` はログ転送先の全部の行の「重要度」、モジュールごとの `logbuffer level` は log_subsystems。コンソールなどほかの出力先と `deny` は「読めなかった」です |
+| SNMPv3 | ユーザの行に、グループの段・ビュー・グループの接続元の制限を写します（グループの行だけがあってユーザがいないものは「読めなかった」） |
+| NTP の認証 | 認証の有効化・鍵・信頼する鍵の 3 つがそろったサーバに、鍵を入れます。そろわない行は「読めなかった」です |
+| 時間帯 | 曜日は語（`Mon`・`working-day`・`off-day`・`daily` など）で読みます。数字の曜日、くり返しと日時の両方を持つ行は「読めなかった」です。時刻は `8:00` の形にそろえます |
+| 回線監視 | ping の NQA・その予定（`start-time now lifetime forever`）・`track` の 3 つで 1 行です。間隔はミリ秒を秒に直します（1000 の倍数でなければ「読めなかった」）。NQA の名前とタグは持ちません |
+| 経路制御の方針 | 1 つの項目の `if-match` は「すべてに合う」の意味です（コマンドマニュアル）。表の 1 つのセルに並べた名前は「どれかに合う」なので、同じ種類の `if-match` は 1 つ目だけを読み、2 つ目は「読めなかった」です。`apply preferred-value` は「付ける値: weight」に入れます |
 | ポリシールーティング | `policy-based-route` の項目は、経路制御の方針と同じ表に入ります（IF の「ポリシールーティング」・機器の「機器自身の通信のポリシールーティング」が名前で指します） |
 | BGP のネイバー | アドレスファミリの下の `peer <アドレス> enable` が無いネイバーと、`peer <アドレス> ignore` のあるネイバーは、「有効」を無効として読みます |
 | QoS | クラスに何をするか（`traffic behavior`）は、ポリシーの行に入れます（動作の名前は持ちません）。`car cir` は kbps を bps に直して「上限・捨てる」、`red …` は「超えたとき」。`service-dot1p` は CoS。`qos lr outbound cir` は「IF 全体を絞る速さ」に入れます |
@@ -171,9 +171,9 @@ encrypted のユーザ・特権パスワード、`cipher` の回線パスワー�
 |---|---|
 | `return` | 終わりの印 |
 
-## 読まない行（「未対応」として画面に出ます）
+## 読まない行（「読めなかった」として画面に出ます）
 
-上の「対応一覧」に無い行は、「未対応」として画面に出ます。資料で見て、読まないと決めた主な行は次のとおりです。
+上の「対応一覧」に無い行は、「読めなかった」として画面に出ます。資料で見て、読まないと決めた主な行は次のとおりです。
 
 | 行 | 理由 |
 |---|---|
@@ -225,7 +225,7 @@ encrypted のユーザ・特権パスワード、`cipher` の回線パスワー�
 | LAG | LAG の IF に、メンバーの束ね方が active なら `link-aggregation mode dynamic`。メンバーに `port link-aggregation group <番号>`。同じ LAG で on と active が混ざるとエラーです。LAG の IF の行が無ければ、置き換えで足します |
 | スパニングツリー | `stp global enable`（無効なら `undo stp global enable`）、`stp mode`、`stp bpdu-protection`、`stp priority`、`stp vlan <並び> priority`・`timer …`（秒をセンチ秒に）。優先度は 4096 の倍数（0〜61440）でなければエラーです |
 | IF 名 | 書けるのは `GigabitEthernet`・`Ethernet`・`Ten-GigabitEthernet`・`FortyGigE`・`M-GigabitEthernet`・`Bridge-Aggregation`・`Vlan-interface`・`LoopBack`・`NULL` で始まる名前です。ほかの名前（`Tunnel<番号>`・`Route-Aggregation<番号>`、別メーカーの IF 名）と、サブ IF（名前に `.` がある IF）はエラーです。QX から取り込んだデータでも、`Tunnel`・`Route-Aggregation` の IF があれば止まります（行を消すか、追加コンフィグに書きます） |
-| VLAN の IF | IF 名は `Vlan-interface<番号>`。「VLAN 番号（VLAN の IF）」が IF 名の番号と違う行、ほかの名前の IF にこの番号がある行はエラーです（別メーカーから書き換えたときに、IF 対応の名前の付け間違いに気づくため） |
+| VLAN の IF | IF 名は `Vlan-interface<番号>`。「VLAN 番号（VLAN の IF）」が IF 名の番号と違う行、ほかの名前の IF にこの番号がある行はエラーです（別メーカーから書き換えたときに、新旧対照表（ポート）の名前の付け間違いに気づくため） |
 | IF のアドレス | `ip address <アドレス> <マスク>`（セカンダリは `sub`）。L2 のポートにアドレスがあるとエラーです |
 | MSTP | `stp region-configuration` の下に、リージョン名・リビジョン・インスタンスの VLAN を書き、最後に `active region-configuration` を書きます |
 | 回線監視 | ping の行は `nqa entry track <番号>`（`type icmp-echo`）と `nqa schedule track <番号> start-time now lifetime forever`、`track <番号> nqa entry track <番号> reaction 1`。間隔と「断と判断する回数」が要ります。方法が route・list の行はエラーです |
@@ -273,7 +273,7 @@ encrypted のユーザ・特権パスワード、`cipher` の回線パスワー�
 | 「パスワードを暗号化して保存」、ログの時刻に足すもの・デバッグの時刻、機器内ログの大きさ（バイト）・いっぱいのとき、「NTP サーバとして動く」「転送のキャッシュ」 | 書きません（当たる行がありません）。ログの時刻の付け方 time は datetime |
 | 別メーカーの機器が暗号化した形の値（`7 <値>`・`secret <値>` など） | エラーです（平文を入れ直します） |
 
-書けないものはエラー（G-601）で止め、直し方を知らせます: モード dynamic_auto・dynamic_desirable、タグ方式 isl・negotiate、名前の ACL を遠隔ログインの「接続元の制限」に使う、HSRP、サブ IF、QoS のクラス default・local、ほかのメーカーの IF 名（IF 対応で名前を決めます）。
+書けないものはエラー（G-601）で止め、直し方を知らせます: モード dynamic_auto・dynamic_desirable、タグ方式 isl・negotiate、名前の ACL を遠隔ログインの「接続元の制限」に使う、HSRP、サブ IF、QoS のクラス default・local、ほかのメーカーの IF 名（新旧対照表（ポート）で名前を決めます）。
 
 QX のデータを Cisco・NEC IX で書くときの置き換えは、その 2 つのパックの `adapt.yaml` にあります（それぞれの README の、NEC QX のデータを書くときの節）。主なものは次のとおりです。
 
@@ -319,7 +319,7 @@ QX のデータを Cisco・NEC IX で書くときの置き換えは、その 2 �
 
 ## 機種の定義（`models.yaml`。別紙 B 6 章）
 
-「機器対応」の「新機種」に下の ID を書くと、IF 対応の新 IF 名の案を、機種のポートの並びから作ります（旧機器のポートと同じ名前のポートがあれば、その名前のまま。無ければ、空いているポートに名前の順に。止めてあるポートは `-`。VLAN の IF は `Vlan-interface<VLAN 番号>`、LAG の IF は `Bridge-Aggregation<番号>`、ループバックは `LoopBack<番号>`）。ID は製品の名前ではなく、ポートの並びを言う名前です（数字はポートの数）。
+「新旧対照表（機器）」の「新機種」に下の ID を書くと、新旧対照表（ポート）の新 IF 名の案を、機種のポートの並びから作ります（旧機器のポートと同じ名前のポートがあれば、その名前のまま。無ければ、空いているポートに名前の順に。止めてあるポートは `-`。VLAN の IF は `Vlan-interface<VLAN 番号>`、LAG の IF は `Bridge-Aggregation<番号>`、ループバックは `LoopBack<番号>`）。ID は製品の名前ではなく、ポートの並びを言う名前です（数字はポートの数）。
 
 | ID | ポート |
 |---|---|

@@ -228,6 +228,11 @@ func (e *Env) Approve(req ApproveRequest, now time.Time) (*Approved, error) {
 		if hits == 0 {
 			return nil, fmt.Errorf("その範囲に当たる指摘は、今の結果にありません")
 		}
+		for _, x := range all {
+			if x.Scope != nil && *x.Scope == *sc {
+				return nil, fmt.Errorf("同じ範囲の承認が、もうあります（%s）。変えるなら、その承認を取り消してから承認し直してください", x.ID)
+			}
+		}
 		a.Scope = sc
 	}
 	if err := e.Proj.SaveApprovals(append(all, a)); err != nil {

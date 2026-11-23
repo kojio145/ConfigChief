@@ -357,7 +357,7 @@ func (e *Env) verifyDoc(o *VerifyOutcome, now time.Time) *report.Doc {
 		{Label: "ブックにない行（R-802）", Value: num(len(o.Surplus))},
 		{Label: "値が違うセル（R-803）", Value: num(len(o.Cells))},
 		{Label: "見つからない追加コンフィグの行（R-804）", Value: num(len(o.Extras))},
-		{Label: "機器にだけある未対応の行（R-805）", Value: num(len(o.Unknown))},
+		{Label: "機器にだけある読めなかった行（R-805）", Value: num(len(o.Unknown))},
 		{Label: "未承認のエラー", Value: num(c.Errors)},
 		{Label: "未承認の警告", Value: num(c.Warnings)},
 		{Label: "承認済みの指摘", Value: num(c.Approved)},
@@ -371,7 +371,7 @@ func (e *Env) verifyDoc(o *VerifyOutcome, now time.Time) *report.Doc {
 	}
 
 	logs := report.Sheet{Name: "ログ", Lead: "input/logs のファイルと、それぞれをどう扱ったかです。",
-		Header: []string{"ファイル", "パック", "ホスト名", "設定の行", "未対応の行", "状態", "注意"}}
+		Header: []string{"ファイル", "パック", "ホスト名", "設定の行", "読めなかった行", "状態", "注意"}}
 	for _, l := range o.Logs {
 		state, mark := "比べました", ""
 		switch l.State {
@@ -439,7 +439,7 @@ func (e *Env) verifyDoc(o *VerifyOutcome, now time.Time) *report.Doc {
 		d.Sheets = append(d.Sheets, s)
 	}
 	lines("追加コンフィグ", "追加コンフィグに書いた行のうち、機器の設定に見つからない行です（R-804）。行番号は、生成したコンフィグの行です。", "書いた所", o.Extras)
-	lines("機器にだけある未対応の行", "機器の設定のうち、パックが読めず、追加コンフィグにも無い行です（R-805）。行番号は、ログの行です。", "ログ", o.Unknown)
+	lines("機器にだけある読めなかった行", "機器の設定のうち、パックが読めず、追加コンフィグにも無い行です（R-805）。行番号は、ログの行です。", "ログ", o.Unknown)
 
 	if len(o.Strays) > 0 {
 		s := report.Sheet{Name: "機器に当たらないログ", Lead: "ホスト名が案件の機器に当たらない・メーカーが違う、というログです（R-806）。", Header: append([]string{"機器", "内容"}, stateHeader...)}

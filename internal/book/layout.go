@@ -8,13 +8,13 @@ import (
 	"github.com/kojio145/configchief/internal/schema"
 )
 
-// DeviceMap is a row of the sheet 機器対応 (appendix A 6.1).
+// DeviceMap is a row of the sheet 新旧対照表（機器） (appendix A 6.1).
 type DeviceMap struct {
 	OldHost, OldVendor, NewHost, NewVendor, NewModel, NewOS, Note string
 	Row                                                           int // row of the sheet; 0 = not in the book
 }
 
-// IfMap is a row of the sheet IF 対応 (appendix A 6.2). NewIf "" = not
+// IfMap is a row of the sheet 新旧対照表（ポート） (appendix A 6.2). NewIf "" = not
 // decided yet, "-" = not carried over.
 type IfMap struct {
 	NewHost, OldIf, NewIf, Basis string
@@ -32,6 +32,9 @@ type mgmt struct {
 	id    string // the name in Book.Sheets
 	title schema.Text
 	cols  []mgmtCol
+	// old are the names the sheet had before (spec 14.14.1): a book made
+	// by an older version is read as it is.
+	old []string
 }
 
 type mgmtCol struct {
@@ -41,7 +44,7 @@ type mgmtCol struct {
 }
 
 var (
-	deviceSheet = &mgmt{"@devices", schema.Text{JA: "機器対応", EN: "Device map"}, []mgmtCol{
+	deviceSheet = &mgmt{"@devices", schema.Text{JA: "新旧対照表（機器）", EN: "Device map"}, []mgmtCol{
 		{"old_host", schema.Text{JA: "旧ホスト名", EN: "Old hostname"}, schema.Text{JA: "旧コンフィグのホスト名（取り込んだ値）", EN: "The hostname in the old configuration"}},
 		{"old_vendor", schema.Text{JA: "旧メーカー", EN: "Old vendor"}, schema.Text{JA: "取り込みに使ったメーカーパック（表示用）", EN: "The vendor pack that read the old configuration"}},
 		{"new_host", schema.Text{JA: "新ホスト名", EN: "New hostname"}, schema.Text{JA: "空のままなら、その旧機器は書き換えの対象外。理由を備考に書く", EN: "Empty = the old device is not carried over. Write the reason in Note"}},
@@ -49,19 +52,19 @@ var (
 		{"new_model", schema.Text{JA: "新機種", EN: "New model"}, schema.Text{}},
 		{"new_os", schema.Text{JA: "新 OS 版", EN: "New OS version"}, schema.Text{}},
 		{"note", schema.Text{JA: "備考", EN: "Note"}, schema.Text{}},
-	}}
-	ifSheet = &mgmt{"@ifs", schema.Text{JA: "IF 対応", EN: "Interface map"}, []mgmtCol{
+	}, []string{"機器対応"}}
+	ifSheet = &mgmt{"@ifs", schema.Text{JA: "新旧対照表（ポート）", EN: "Interface map"}, []mgmtCol{
 		{"new_host", schema.Text{JA: "新ホスト名", EN: "New hostname"}, schema.Text{}},
 		{"old_if", schema.Text{JA: "旧 IF 名", EN: "Old interface"}, schema.Text{}},
 		{"new_if", schema.Text{JA: "新 IF 名", EN: "New interface"}, schema.Text{JA: "空なら未決。- と書くと「新機器には持っていかない」", EN: "Empty = not decided. Write - for an interface that is not carried over"}},
 		{"basis", schema.Text{JA: "案の根拠", EN: "Basis"}, schema.Text{JA: "ツールが書く。人が直したら空にする", EN: "Written by the tool. Clear it when you change the name"}},
-	}}
+	}, []string{"IF 対応"}}
 	commonSheet = &mgmt{"@common", schema.Text{JA: "共通値", EN: "Common values"}, []mgmtCol{
 		{"scope", schema.Text{JA: "範囲", EN: "Scope"}, schema.Text{JA: "* か @グループ名", EN: "* or @group"}},
 		{"table", schema.Text{JA: "表", EN: "Table"}, schema.Text{JA: "表のシート名か内部名", EN: "The sheet name or the internal name of the table"}},
 		{"column", schema.Text{JA: "列", EN: "Column"}, schema.Text{JA: "列の表示名か内部名", EN: "The heading or the internal name of the column"}},
 		{"value", schema.Text{JA: "値", EN: "Value"}, schema.Text{JA: "行の値が空のときに使う値", EN: "The value used when the cell of a row is empty"}},
-	}}
+	}, nil}
 	mgmtSheets = []*mgmt{deviceSheet, ifSheet, commonSheet}
 )
 

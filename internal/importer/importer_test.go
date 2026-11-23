@@ -80,7 +80,7 @@ func TestStates(t *testing.T) {
 		{"shutdown", Taken, ""},
 		{"alias", Taken, ""},
 		{"mystery knob 5", Unknown, ""},
-		{"deeper mystery", Unknown, "親の行が未対応"},
+		{"deeper mystery", Unknown, "親の行が読めなかった"},
 		{"bad address 192.0.2.77", Unknown, "規則 if.bad"},
 		{"tunnel-profile PROF-SAMPLE-A", Taken, ""},
 		{"interface Gi0/3", Taken, ""},

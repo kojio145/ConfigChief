@@ -217,7 +217,7 @@ func (e *Env) TryList(r *listimport.Rule) (*ListTry, error) {
 func (e *Env) SaveMapping(rel string, r *listimport.Rule) (string, error) {
 	rule := *r
 	if faults := rule.Validate(e.Schema); len(faults) > 0 {
-		return "", fmt.Errorf("この列対応は保存できません:\n  %s", strings.Join(faults, "\n  "))
+		return "", fmt.Errorf("この列の割り当ては保存できません:\n  %s", strings.Join(faults, "\n  "))
 	}
 	if rel != "" {
 		// Only a mapping file of the case that is there is written over.
@@ -230,7 +230,7 @@ func (e *Env) SaveMapping(rel string, r *listimport.Rule) (string, error) {
 			ok = ok || (f.Path == rel && strings.HasSuffix(strings.ToLower(rel), ".yaml"))
 		}
 		if !ok {
-			return "", fmt.Errorf("%s は、この案件の列対応ファイルではありません", rel)
+			return "", fmt.Errorf("%s は、この案件の列の割り当てファイルではありません", rel)
 		}
 	} else {
 		name := strings.TrimSuffix(rule.File, path.Ext(rule.File))
@@ -258,7 +258,7 @@ func (e *Env) SaveMapping(rel string, r *listimport.Rule) (string, error) {
 	if err := os.MkdirAll(e.Proj.Path("mappings"), 0o755); err != nil {
 		return "", fmt.Errorf("mappings を作れません: %v", err)
 	}
-	head := "# 外部一覧の列対応（仕様書 6.5）。画面の「外部一覧」で保存したものです。\n"
+	head := "# 外部一覧の列の割り当て（仕様書 6.5）。画面の「外部一覧」で保存したものです。\n"
 	if err := os.WriteFile(e.Proj.Path(rel), append([]byte(head), data...), 0o644); err != nil {
 		return "", fmt.Errorf("%s を書けません: %v", rel, err)
 	}
@@ -279,7 +279,7 @@ func (e *Env) DeleteMapping(rel string, now time.Time) (string, error) {
 		ok = ok || f.Path == rel
 	}
 	if !ok {
-		return "", fmt.Errorf("%s は、この案件の列対応ファイルではありません", rel)
+		return "", fmt.Errorf("%s は、この案件の列の割り当てファイルではありません", rel)
 	}
 	ext := path.Ext(rel)
 	base := "state/backup/mappings_" + strings.TrimSuffix(path.Base(rel), ext) + "_" + project.Stamp(now)

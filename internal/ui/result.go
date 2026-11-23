@@ -150,7 +150,7 @@ func (s *Session) generate(checkOnly bool) (*ResultView, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.shown = o
+	s.shown, s.draft = o, false
 	s.wrote = written{dir: o.Dir, configs: !checkOnly, unverified: o.Unverified,
 		report: Files{o.Report.XLSX, o.Report.HTML}, changes: changesView(e, o, now),
 		rewrite: Files{o.RewriteReport.XLSX, o.RewriteReport.HTML}}
@@ -171,6 +171,9 @@ func (s *Session) Approve(key, scope, reason, by string) (*ResultView, error) {
 	defer s.mu.Unlock()
 	if s.env == nil || s.shown == nil {
 		return nil, errors.New("先に「生成とチェック」か「チェックだけ」を行ってください")
+	}
+	if s.draft {
+		return nil, errors.New("下書きでチェックした結果では承認できません。表の編集で保存してから「チェックだけ」を押し、その結果で承認してください")
 	}
 	var f *ops.Judged
 	for i := range s.shown.Items {

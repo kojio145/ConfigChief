@@ -196,7 +196,7 @@ func (s *Session) SampleCase(dir string) (*Home, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	said := fmt.Sprintf("見本の案件を作りました。架空の旧コンフィグ（Cisco の拠点ルータ %d 台）を input/old に置いてあります。上の「次にやること」に沿って進めてください。機器対応では、新メーカーに nec_ix、新機種に ix-2ge-8sw を書くと、IF 対応の案が入ります。", n)
+	said := fmt.Sprintf("見本の案件を作りました。架空の旧コンフィグ（Cisco の拠点ルータ %d 台）を input/old に置いてあります。上の「次にやること」に沿って進めてください。新旧対照表（機器）では、新メーカーに nec_ix、新機種に ix-2ge-8sw を書くと、新旧対照表（ポート）の案が入ります。", n)
 	return h, said, nil
 }
 
@@ -214,7 +214,10 @@ func (s *Session) DraftCheck() (*ResultView, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.shown = d.Outcome
+	if !s.draft {
+		s.kept = s.wrote
+	}
+	s.shown, s.draft = d.Outcome, true
 	s.wrote = written{changes: ChangesView{Counts: []Pair{}, Notes: []string{}, Tables: []Table{}}}
 	v := s.result(e, d.Outcome, now)
 	v.Title = "下書きでチェックした結果（まだ保存していません）"

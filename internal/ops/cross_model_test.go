@@ -20,9 +20,9 @@ func TestBuiltInSwitchByModel(t *testing.T) {
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-m01", "新ホスト名", "ix-m01")
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-m01", "新メーカー", "nec_ix")
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-m01", "新機種", "ix-2ge-8sw")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-m01", "新ホスト名", "ix-m01")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-m01", "新メーカー", "nec_ix")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-m01", "新機種", "ix-2ge-8sw")
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
@@ -37,11 +37,11 @@ func TestBuiltInSwitchByModel(t *testing.T) {
 		"Vlan1": "GigaEthernet2:1.0", "Vlan20": "GigaEthernet2:3.0", "Loopback0": "Loopback0.0",
 	}
 	if len(bk.Ifs) != len(want) {
-		t.Errorf("IF 対応 has %d rows, not %d", len(bk.Ifs), len(want))
+		t.Errorf("新旧対照表（ポート） has %d rows, not %d", len(bk.Ifs), len(want))
 	}
 	for _, m := range bk.Ifs {
 		if m.NewIf != want[m.OldIf] || m.Basis != convert.BasisShape("ix-2ge-8sw") {
-			t.Errorf("IF 対応: %s → %q (%s), not %q", m.OldIf, m.NewIf, m.Basis, want[m.OldIf])
+			t.Errorf("新旧対照表（ポート）: %s → %q (%s), not %q", m.OldIf, m.NewIf, m.Basis, want[m.OldIf])
 		}
 	}
 	b, err := e.MakeBook("old", false, at)
@@ -113,9 +113,9 @@ func proposals(t *testing.T, dir, file, oldHost, newHost, vendor, model string) 
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
-	setCell(t, e, "機器対応", "旧ホスト名", oldHost, "新ホスト名", newHost)
-	setCell(t, e, "機器対応", "旧ホスト名", oldHost, "新メーカー", vendor)
-	setCell(t, e, "機器対応", "旧ホスト名", oldHost, "新機種", model)
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", oldHost, "新ホスト名", newHost)
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", oldHost, "新メーカー", vendor)
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", oldHost, "新機種", model)
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}

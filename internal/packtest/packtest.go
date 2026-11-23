@@ -133,7 +133,7 @@ func compare(res *importer.Result, ex *expect) []string {
 		if reason == "" {
 			reason = "当たる規則がありません"
 		}
-		failf("%d 行目が「未対応」になりました: %s（%s）", l.Line, strings.TrimSpace(l.Text), reason)
+		failf("%d 行目が「読めなかった」になりました: %s（%s）", l.Line, strings.TrimSpace(l.Text), reason)
 	}
 	var missing []string
 	for u, n := range left {
@@ -143,7 +143,7 @@ func compare(res *importer.Result, ex *expect) []string {
 	}
 	sort.Strings(missing)
 	for _, u := range missing {
-		failf("「未対応」のはずの行が、そうなっていません: %s", u)
+		failf("「読めなかった」のはずの行が、そうなっていません: %s", u)
 	}
 
 	c := res.Count()
@@ -193,7 +193,7 @@ func Report(c Case) string {
 	n := c.Count
 	lines := n.Total - n.Separators
 	fmt.Fprintf(&sb, "試験 %s（機器 %s）\n", c.Name, c.Result.Device)
-	fmt.Fprintf(&sb, "  全 %d 行（うち区切り %d 行）: 取り込み済み %d・無視 %d・未対応 %d\n", n.Total, n.Separators, n.Taken, n.Ignored, n.Unknown)
+	fmt.Fprintf(&sb, "  全 %d 行（うち区切り %d 行）: 取り込み済み %d・無視 %d・読めなかった %d\n", n.Total, n.Separators, n.Taken, n.Ignored, n.Unknown)
 	if n.Outside > 0 {
 		fmt.Fprintf(&sb, "  区切りのうち、端末ログの設定の外: %d 行\n", n.Outside)
 	}
@@ -202,7 +202,7 @@ func Report(c Case) string {
 		fmt.Fprintf(&sb, "  区切りを含めた割合: %.1f%%\n", float64(n.Taken+n.Ignored+n.Separators)*100/float64(n.Total))
 	}
 	if n.Unknown > 0 {
-		sb.WriteString("  未対応の行:\n")
+		sb.WriteString("  読めなかった行:\n")
 		for _, l := range c.Result.Lines {
 			if l.State != importer.Unknown {
 				continue
@@ -236,7 +236,7 @@ func Report(c Case) string {
 
 // Lines writes every line with its state, for looking into a pack.
 func Lines(c Case) string {
-	mark := map[string]string{importer.Taken: "取込", importer.Ignored: "無視", importer.Unknown: "未対応"}
+	mark := map[string]string{importer.Taken: "取込", importer.Ignored: "無視", importer.Unknown: "読めなかった"}
 	var sb strings.Builder
 	for _, l := range c.Result.Lines {
 		state := mark[l.State]

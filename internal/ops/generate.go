@@ -285,7 +285,7 @@ func (e *Env) Generate(opt GenOptions, now time.Time) (*GenerateOutcome, error) 
 		return nil, err
 	}
 
-	out := &GenerateOutcome{Options: opt, Dir: "out/" + project.Stamp(now), Tally: check.NewTally(),
+	out := &GenerateOutcome{Options: opt, Dir: e.outDir(now), Tally: check.NewTally(),
 		Approvals: approvals, Hits: map[string]int{}, Refused: map[string]string{}, Disabled: map[string]bool{},
 		CaseRules: rules, hosts: hosts, data: ds}
 	out.Inputs = append(out.Inputs, InputFile{Path: e.Proj.Config.Book, SHA256: sha(raw)})

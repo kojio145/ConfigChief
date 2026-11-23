@@ -203,7 +203,7 @@ adapt:
     each: {v: "carried if p.mode == 'trunk' and ':port' in p.if_name and not blocked else []"}
     row: {table: interfaces, key: {name: "{{ at[0] }}:{{ at[1] }}.{{ v_n }}"}}
     set:
-      encap_vlan: "{{ v if not (taken and taken.name) else fail('トランクのポート ' ~ p.if_name ~ ' を VLAN グループ ' ~ at[1] ~ ' にして書きますが、IF ' ~ taken.name ~ ' が、すでにインタフェースの表にあります（IF 対応で、その IF を別のグループの番号にしてください）') }}"
+      encap_vlan: "{{ v if not (taken and taken.name) else fail('トランクのポート ' ~ p.if_name ~ ' を VLAN グループ ' ~ at[1] ~ ' にして書きますが、IF ' ~ taken.name ~ ' が、すでにインタフェースの表にあります（新旧対照表（ポート）で、その IF を別のグループの番号にしてください）') }}"
       bridge_group: "{{ v }}"
       enabled: true
     note: "トランクのポート {{ p.if_name }} の VLAN {{ v }} を、タグ付きのサブ IF {{ at[0] }}:{{ at[1] }}.{{ v_n }}（ブリッジグループ {{ v }}）として書きます"
@@ -247,7 +247,7 @@ adapt:
     when: "same and p.mode == 'access' and ':port' in p.if_name and p.access_vlan and p.access_vlan | int not in amap and not (own.name and not own.vlan_id) and at[1] | int == same | first"
     row: {table: interfaces, key: {name: "{{ at[0] }}:{{ at[1] }}.0"}}
     set:
-      vlan_id: "{{ p.access_vlan if not taken.name else fail('VLAN ' ~ p.access_vlan ~ ' のアクセスポートを VLAN グループ ' ~ at[1] ~ ' にまとめて書きますが、IF ' ~ taken.name ~ ' が、すでにインタフェースの表にあります（IF 対応で、その IF を別のグループの番号にしてください）') }}"
+      vlan_id: "{{ p.access_vlan if not taken.name else fail('VLAN ' ~ p.access_vlan ~ ' のアクセスポートを VLAN グループ ' ~ at[1] ~ ' にまとめて書きますが、IF ' ~ taken.name ~ ' が、すでにインタフェースの表にあります（新旧対照表（ポート）で、その IF を別のグループの番号にしてください）') }}"
       bridge_group: "{{ p.access_vlan }}"
       enabled: true
     note: "VLAN {{ p.access_vlan }} のアクセスポート（ポート {{ same | join('・') }}）を、VLAN グループ {{ at[1] }}（IF {{ at[0] }}:{{ at[1] }}.0）にまとめ、ブリッジグループ {{ p.access_vlan }} に入れて書きます"

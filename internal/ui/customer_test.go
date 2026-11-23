@@ -42,7 +42,7 @@ func TestCustomer(t *testing.T) {
 	if len(m.Mappings) != 0 || len(m.Files) != 1 || m.Files[0] != "sites.csv" || len(m.Tables) < 30 || m.Tables[0].Columns[0].Name != "hostname" || !m.Tables[0].Columns[0].Key {
 		t.Fatalf("mappings = %+v, files %v, %d tables", m.Mappings, m.Files, len(m.Tables))
 	}
-	if _, err := s.Customer(); err == nil || !strings.Contains(err.Error(), "列対応ファイル（.yaml）がありません") {
+	if _, err := s.Customer(); err == nil || !strings.Contains(err.Error(), "列の割り当てファイル（.yaml）がありません") {
 		t.Errorf("no mapping: %v", err)
 	}
 

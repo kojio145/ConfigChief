@@ -24,15 +24,15 @@ func (e *Env) customerDoc(o *CustomerOutcome, now time.Time) *report.Doc {
 		{Label: "注意", Value: num(len(o.Notes))},
 	}
 	d.Notes = append(d.Notes,
-		"外部一覧は、mappings/ の列対応ファイルのとおりに読んでいます。一覧が空の列と、列対応が行き先にしていない列は比べていません。",
+		"外部一覧は、mappings/ の列の割り当てファイルのとおりに読んでいます。一覧が空の列と、列の割り当てが行き先にしていない列は比べていません。",
 		"パラメータブックは、「機器」列の * と @グループ、「共通値」を機器ごとの行に広げ、空の列を機器のメーカーの既定値で埋めてから比べています。",
 		"違いは、資料のチェック（S-501〜S-504）の指摘です。一覧の値が正しければ、ブックに反映します（画面では行を選びます。コマンドラインでは、各行の「指紋」を customer --apply に渡します）。ブックの値が正しければ、理由を付けて承認します（approve）。")
 	if e.mask() {
 		d.Notes = append(d.Notes, "秘密の列の値は "+masked+" に伏せています。")
 	}
 
-	lists := report.Sheet{Name: "一覧", Lead: "列対応ファイルと、それが読んだ一覧です。",
-		Header: []string{"列対応", "ファイル", "シート", "機器名", "行", "読まなかった行（除外）", "作った行", "読めなかった値", "状態"}}
+	lists := report.Sheet{Name: "一覧", Lead: "列の割り当てファイルと、それが読んだ一覧です。",
+		Header: []string{"列の割り当て", "ファイル", "シート", "機器名", "行", "読まなかった行（除外）", "作った行", "読めなかった値", "状態"}}
 	for _, l := range o.Lists {
 		names := "新しい名前"
 		if l.Rule.Old() {
@@ -78,7 +78,7 @@ func (e *Env) customerDoc(o *CustomerOutcome, now time.Time) *report.Doc {
 			e.cellText(x.Table, x.Column, x.A), e.cellText(x.Table, x.Column, x.B), note, cellOrigin(x.A), cellOrigin(x.B)}, st...))
 		cells.Marks = append(cells.Marks, mark)
 	}
-	probs := report.Sheet{Name: "読めなかった値", Lead: "一覧の値のうち、設計データに入れられなかったものです（S-504）。一覧か列対応ファイルを直します。",
+	probs := report.Sheet{Name: "読めなかった値", Lead: "一覧の値のうち、設計データに入れられなかったものです（S-504）。一覧か列の割り当てファイルを直します。",
 		Header: append([]string{"ファイル", "シート", "セル", "機器", "内容"}, stateHeader...)}
 	for _, p := range o.Problems {
 		st, mark := stateCells(o.Verdicts, p.Finding)
@@ -114,7 +114,7 @@ func (e *Env) customerDoc(o *CustomerOutcome, now time.Time) *report.Doc {
 		notes.Rows = append(notes.Rows, []string{"お知らせ（S-505）", f.Evidence[0].Value + ": " + f.Message})
 	}
 	for _, p := range o.Unmapped {
-		notes.Rows = append(notes.Rows, []string{"お知らせ", p + " は、どの列対応ファイルにも当たらないので、読んでいません"})
+		notes.Rows = append(notes.Rows, []string{"お知らせ", p + " は、どの列の割り当てファイルにも当たらないので、読んでいません"})
 	}
 	for _, n := range o.BookNotes {
 		notes.Rows = append(notes.Rows, []string{"お知らせ", n})

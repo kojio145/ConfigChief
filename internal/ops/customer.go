@@ -98,7 +98,7 @@ func srcFinding(rule, device string, ref model.Ref, message string, evidence ...
 func (e *Env) mappings() ([]*listimport.Rule, error) {
 	rules, problems := listimport.Load(os.DirFS(e.Proj.Path("mappings")), "mappings", e.Schema)
 	if len(problems) > 0 {
-		return nil, fmt.Errorf("列対応ファイル（mappings/）に誤りがあります。直してから、もう一度実行してください:\n  %s", strings.Join(problems, "\n  "))
+		return nil, fmt.Errorf("列の割り当てファイル（mappings/）に誤りがあります。直してから、もう一度実行してください:\n  %s", strings.Join(problems, "\n  "))
 	}
 	return rules, nil
 }
@@ -164,7 +164,7 @@ func (e *Env) Customer(write bool, now time.Time) (*CustomerOutcome, error) {
 		return nil, err
 	}
 	if len(rules) == 0 {
-		return nil, fmt.Errorf("mappings/ に列対応ファイル（.yaml）がありません。画面の「外部一覧」か customer --draft で作ってください")
+		return nil, fmt.Errorf("mappings/ に列の割り当てファイル（.yaml）がありません。画面の「外部一覧」か customer --draft で作ってください")
 	}
 	inputs, err := e.Proj.Inputs("customer")
 	if err != nil {
@@ -269,18 +269,18 @@ func (e *Env) Customer(write bool, now time.Time) (*CustomerOutcome, error) {
 		} else {
 			a := convert.ApplyList(e.Schema, byOld, bk.Devices, bk.Ifs)
 			for _, h := range a.Unmapped {
-				note("一覧の機器 %s は、「機器対応」で新ホスト名が決まっていないので、比べていません", h)
+				note("一覧の機器 %s は、「新旧対照表（機器）」で新ホスト名が決まっていないので、比べていません", h)
 			}
 			type key struct{ dev, name string }
 			seen := map[key]bool{}
 			for _, n := range a.Undecided {
 				if k := (key{n.Device, n.Value}); !seen[k] {
 					seen[k] = true
-					note("一覧の機器 %s の IF %s は、「IF 対応」で新 IF 名が決まっていないので、今の名前のまま比べています", n.Device, n.Value)
+					note("一覧の機器 %s の IF %s は、「新旧対照表（ポート）」で新 IF 名が決まっていないので、今の名前のまま比べています", n.Device, n.Value)
 				}
 			}
 			for _, n := range a.Dropped {
-				note("一覧の機器 %s の IF %s は、「IF 対応」で持っていかない（-）ことになっているので、その行は比べていません", n.Device, n.Value)
+				note("一覧の機器 %s の IF %s は、「新旧対照表（ポート）」で持っていかない（-）ことになっているので、その行は比べていません", n.Device, n.Value)
 			}
 			for _, n := range a.Clashes {
 				note("一覧の機器 %s: 名前を直すと、先にある行とキーが同じになる行がありました（%s）。その行は比べていません", n.Device, e.tableTitle(n.Table))

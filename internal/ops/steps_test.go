@@ -116,7 +116,7 @@ func TestRunImportOld(t *testing.T) {
 	if o.New != nil {
 		t.Error("a new side without files in input/new")
 	}
-	// The interfaces wait for a new host name: IF 対応 is by new device.
+	// The interfaces wait for a new host name: 新旧対照表（ポート） is by new device.
 	if o.Book == nil || !o.Book.Created || o.Book.DeviceRows != 1 || o.Book.IfRows != 0 || o.Backup != "" {
 		t.Errorf("book = %+v, backup %q", o.Book, o.Backup)
 	}
@@ -159,7 +159,7 @@ func TestRunImportOld(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(f.GetSheetList(), ","); got != "まとめ,機器別,未対応の形,未対応の行,対応の未決,注意,行の一覧" {
+	if got := strings.Join(f.GetSheetList(), ","); got != "まとめ,機器別,読めなかった行の形,読めなかった行,新旧対照表で決まっていないところ,注意,行の一覧" {
 		t.Errorf("sheets = %s", got)
 	}
 	rows, _ := f.GetRows("行の一覧")
@@ -181,8 +181,8 @@ func TestRunImportOld(t *testing.T) {
 		t.Errorf("the second run changed the book: %+v, backup %q", o.Book, o.Backup)
 	}
 
-	// What a person writes into 機器対応 counts from then on.
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-a01", "新ホスト名", "rt-b01")
+	// What a person writes into 新旧対照表（機器） counts from then on.
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-a01", "新ホスト名", "rt-b01")
 	o, err = e.RunImport("old", "", at)
 	if err != nil {
 		t.Fatal(err)
@@ -258,11 +258,11 @@ func TestProposeAndCompare(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(bk.Ifs) == 0 {
-		t.Fatal("no rows in IF 対応")
+		t.Fatal("no rows in 新旧対照表（ポート）")
 	}
 	for _, m := range bk.Ifs {
 		if m.NewIf != m.OldIf || m.Basis != convert.BasisSameName {
-			t.Errorf("IF 対応: %+v", m)
+			t.Errorf("新旧対照表（ポート）: %+v", m)
 		}
 	}
 
@@ -290,7 +290,7 @@ func TestProposeAndCompare(t *testing.T) {
 	}
 
 	// An interface that is not carried over leaves the comparison.
-	setCell(t, e, "IF 対応", "旧 IF 名", "Loopback0", "新 IF 名", "-")
+	setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", "Loopback0", "新 IF 名", "-")
 	c, err = e.Compare("new", "old", at)
 	if err != nil {
 		t.Fatal(err)
@@ -307,7 +307,7 @@ func TestProposeAndCompare(t *testing.T) {
 	if !found || len(c.Result.OnlyB) != 0 {
 		t.Errorf("new and old after the edit: only A %d, only B %d", len(c.Result.OnlyA), len(c.Result.OnlyB))
 	}
-	if h := read(t, e, c.Report.HTML); !strings.Contains(h, "対応のメモ") || !strings.Contains(h, "新 IF 名が - の IF の行です") {
+	if h := read(t, e, c.Report.HTML); !strings.Contains(h, "新旧対照表のメモ") || !strings.Contains(h, "新 IF 名が - の IF の行です") {
 		t.Error("the report does not tell what the mapping left out")
 	}
 

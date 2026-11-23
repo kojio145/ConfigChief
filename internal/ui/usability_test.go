@@ -10,7 +10,7 @@ import (
 )
 
 // The way through a migration with less to do by hand (spec 14.10): files
-// dropped, one import, the proposals of IF 対応 after the save of 機器対応,
+// dropped, one import, the proposals of 新旧対照表（ポート） after the save of 新旧対照表（機器）,
 // the models to choose, the result after the case is opened again, and
 // findings approved together.
 func TestUsability(t *testing.T) {
@@ -37,7 +37,7 @@ func TestUsability(t *testing.T) {
 		t.Fatalf("next = %+v", n)
 	}
 
-	// 機器対応 offers the models of the packs.
+	// 新旧対照表（機器） offers the models of the packs.
 	v, err := s.EditSheet("@devices")
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestUsability(t *testing.T) {
 		t.Fatalf("the column of the model = %+v", model)
 	}
 
-	// The save of 機器対応 makes the rows of IF 対応 without a second import.
+	// The save of 新旧対照表（機器） makes the rows of 新旧対照表（ポート） without a second import.
 	row := v.Rows[0]
 	if _, err := s.EditDraft(book.DraftSheet{Sheet: "@devices", Changed: []book.DraftRow{{Row: row.Row,
 		Key: map[string]string{"old_host": "rt-c01"},
@@ -61,7 +61,7 @@ func TestUsability(t *testing.T) {
 		t.Fatal(err)
 	}
 	saved, err := s.EditSave(nil)
-	if err != nil || !saved.Saved || !strings.Contains(saved.Message, "IF 対応に") {
+	if err != nil || !saved.Saved || !strings.Contains(saved.Message, "新旧対照表（ポート）に") {
 		t.Fatalf("saved = %+v, %v", saved, err)
 	}
 	if said, err := s.ProposeIfs(); err != nil || !strings.Contains(said, "ありませんでした") {

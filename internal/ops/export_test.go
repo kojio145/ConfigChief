@@ -21,13 +21,13 @@ func exportCase(t *testing.T) *Env {
 		t.Fatal(err)
 	}
 	for _, h := range []string{"rt-s01", "rt-w01"} {
-		setCell(t, e, "機器対応", "旧ホスト名", h, "新ホスト名", h)
+		setCell(t, e, "新旧対照表（機器）", "旧ホスト名", h, "新ホスト名", h)
 	}
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"GigabitEthernet0/0", "GigabitEthernet0/1", "Loopback0", "Dialer1", "Tunnel1"} {
-		setCell(t, e, "IF 対応", "旧 IF 名", name, "新 IF 名", name)
+		setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", name, "新 IF 名", name)
 	}
 	// The second device has the two Ethernet ports as well: setCell writes the
 	// first row it finds, so the rest is filled here.
@@ -35,7 +35,7 @@ func exportCase(t *testing.T) *Env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows, _ := f.GetRows("IF 対応")
+	rows, _ := f.GetRows("新旧対照表（ポート）")
 	oldCol, newCol := -1, -1
 	for i, h := range rows[0] {
 		switch h {
@@ -48,7 +48,7 @@ func exportCase(t *testing.T) *Env {
 	for i, row := range rows[1:] {
 		if oldCol < len(row) && (newCol >= len(row) || row[newCol] == "") {
 			cell, _ := excelize.CoordinatesToCellName(newCol+1, i+2)
-			f.SetCellStr("IF 対応", cell, row[oldCol])
+			f.SetCellStr("新旧対照表（ポート）", cell, row[oldCol])
 		}
 	}
 	if err := f.Save(); err != nil {
@@ -202,12 +202,12 @@ func TestExportPeerIPsecCandidates(t *testing.T) {
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-p01", "新ホスト名", "rt-p01")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-p01", "新ホスト名", "rt-p01")
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"GigabitEthernet0/0", "GigabitEthernet0/1", "Tunnel1"} {
-		setCell(t, e, "IF 対応", "旧 IF 名", name, "新 IF 名", name)
+		setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", name, "新 IF 名", name)
 	}
 	if b, err := e.MakeBook("old", false, at); err != nil || len(b.Problems) != 0 {
 		t.Fatalf("the book: %v, %+v", err, b)

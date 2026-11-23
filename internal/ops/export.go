@@ -12,7 +12,6 @@ import (
 	"github.com/kojio145/configchief/internal/book"
 	"github.com/kojio145/configchief/internal/check"
 	"github.com/kojio145/configchief/internal/model"
-	"github.com/kojio145/configchief/internal/project"
 	"github.com/kojio145/configchief/internal/report"
 	"github.com/kojio145/configchief/internal/schema"
 )
@@ -78,7 +77,7 @@ func (e *Env) exportSheets(mask bool, now time.Time, revs []Revision, cur *Revis
 		return nil, err
 	}
 	if dir == "" {
-		dir = "out/" + project.Stamp(now) + "/sheets"
+		dir = e.outDir(now) + "/sheets"
 	}
 	out := &SheetsOutcome{Dir: dir, Masked: mask}
 	if len(problems) > 0 {
@@ -133,9 +132,9 @@ func (e *Env) exportSheets(mask bool, now time.Time, revs []Revision, cur *Revis
 
 func secretWord(mask bool) string {
 	if mask {
-		return "伏せた"
+		return "伏せて書いた"
 	}
-	return "書いた"
+	return "そのまま書いた"
 }
 
 // PeerOutcome is what one run of the table for the other side made.

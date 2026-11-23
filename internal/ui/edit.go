@@ -113,7 +113,7 @@ type EditSavedView struct {
 	Message   string          `json:"message"`
 	Draft     int             `json:"draft"` // the changes that are left in the draft
 	// Redo are the new host names whose new model was changed: their
-	// proposals of IF 対応 can be made again (spec 14.11.4).
+	// proposals of 新旧対照表（ポート） can be made again (spec 14.11.4).
 	Redo []string `json:"redo"`
 }
 
@@ -173,12 +173,12 @@ func (s *Session) EditSave(choice map[string]string) (*EditSavedView, error) {
 	if sum.Skipped > 0 {
 		v.Message += fmt.Sprintf("\n式の入ったセル %d 個は書き換えていません", sum.Skipped)
 	}
-	// 機器対応 was changed: the proposals of IF 対応 follow without a second
+	// 新旧対照表（機器） was changed: the proposals of 新旧対照表（ポート） follow without a second
 	// import (spec 14.10.2).
 	if o.Devices {
 		if old, _ := e.Proj.Inputs("old"); len(old) > 0 {
 			if p, err := e.ProposeIfs(s.now()); err != nil {
-				v.Message += "\nIF 対応の案は作れませんでした: " + err.Error()
+				v.Message += "\n新旧対照表（ポート）の案は作れませんでした: " + err.Error()
 			} else if p.Added+p.Filled > 0 {
 				v.Message += "\n" + p.Said()
 			}
@@ -186,19 +186,19 @@ func (s *Session) EditSave(choice map[string]string) (*EditSavedView, error) {
 	}
 	if len(o.Models) > 0 {
 		v.Redo = o.Models
-		v.Message += fmt.Sprintf("\n新機種を変えた機器（%s）の IF 対応には、前の案が残っています。「対応」の画面の「案を作り直す」で作り直せます", strings.Join(o.Models, "、"))
+		v.Message += fmt.Sprintf("\n新機種を変えた機器（%s）の 新旧対照表（ポート）には、前の案が残っています。「新旧対照表」の画面の「案を作り直す」で作り直せます", strings.Join(o.Models, "、"))
 	}
 	return v, nil
 }
 
-// RedoIfsView is the proposals of IF 対応 made again (spec 14.11.4).
+// RedoIfsView is the proposals of 新旧対照表（ポート） made again (spec 14.11.4).
 type RedoIfsView struct {
 	Message string       `json:"message"`
 	Rows    []ops.IfRedo `json:"rows"`
 	Written bool         `json:"written"`
 }
 
-// RedoIfs makes the proposals of IF 対応 again for the new host names: with
+// RedoIfs makes the proposals of 新旧対照表（ポート） again for the new host names: with
 // write false it tells what would change and writes nothing.
 func (s *Session) RedoIfs(hosts []string, write bool) (*RedoIfsView, error) {
 	s.mu.Lock()
@@ -220,7 +220,7 @@ func (s *Session) RedoIfs(hosts []string, write bool) (*RedoIfsView, error) {
 	return &RedoIfsView{Message: r.Said(), Rows: r.Rows, Written: r.Backup != ""}, nil
 }
 
-// ProposeIfs makes the proposals of IF 対応 again from input/old (spec
+// ProposeIfs makes the proposals of 新旧対照表（ポート） again from input/old (spec
 // 14.10.2).
 func (s *Session) ProposeIfs() (string, error) {
 	s.mu.Lock()

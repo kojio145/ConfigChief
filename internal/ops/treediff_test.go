@@ -206,7 +206,7 @@ func TestTreeDiffRenamed(t *testing.T) {
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-s01", "新ホスト名", "rt-n01")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-s01", "新ホスト名", "rt-n01")
 	if err := os.WriteFile(e.Proj.Path("input/new/n.txt"), []byte(strings.Replace(old, "hostname rt-s01\n", "hostname rt-n01\n", 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}

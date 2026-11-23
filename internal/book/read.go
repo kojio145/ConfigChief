@@ -96,6 +96,9 @@ func fromSheets(src *sheet.Book, file string, sc *schema.Set, layout bool) *Book
 	for _, m := range mgmtSheets {
 		others[foldName(m.title.JA)] = m
 		others[foldName(m.title.EN)] = m
+		for _, o := range m.old {
+			others[foldName(o)] = m
+		}
 	}
 
 	for i := range src.Sheets {
@@ -105,7 +108,7 @@ func fromSheets(src *sheet.Book, file string, sc *schema.Set, layout bool) *Book
 		case others[name] != nil:
 			m := others[name]
 			if b.Sheets[m.id] != nil {
-				b.problemf(s.Name, "", "シート「%s」と同じ内容のシートです。このシートは読みません", b.Sheets[m.id].Name)
+				b.problemf(s.Name, "", "シート「%s」と同じ内容のシートです（前の版の名前と今の名前の両方があるなど）。このシートの行は使いません。要る行は「%s」に移して、このシートを消してください", b.Sheets[m.id].Name, b.Sheets[m.id].Name)
 				continue
 			}
 			b.readMgmt(s, m)

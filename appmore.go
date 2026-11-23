@@ -248,13 +248,13 @@ func (a *App) PickFiles(title string) (r0 []string, err error) {
 	return runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{Title: title})
 }
 
-// ProposeIfs makes the proposals of IF 対応 again (spec 14.10.2).
+// ProposeIfs makes the proposals of 新旧対照表（ポート） again (spec 14.10.2).
 func (a *App) ProposeIfs() (r0 string, err error) {
 	defer a.guard("ProposeIfs", &err)
 	return a.s.ProposeIfs()
 }
 
-// RedoIfs makes the proposals of IF 対応 again for the new host names
+// RedoIfs makes the proposals of 新旧対照表（ポート） again for the new host names
 // (spec 14.11.4); write false only tells what would change.
 func (a *App) RedoIfs(hosts []string, write bool) (r0 *ui.RedoIfsView, err error) {
 	defer a.guard("RedoIfs", &err)

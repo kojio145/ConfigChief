@@ -110,7 +110,12 @@ func (e *Env) DropOutputs(dirs []string, now time.Time) (int, error) {
 		known[d] = true
 	}
 	n := 0
+	done := map[string]bool{}
 	for _, d := range dirs {
+		if done[d] {
+			continue
+		}
+		done[d] = true
 		if !known[d] {
 			return n, fmt.Errorf("%s は out の下の出力のフォルダではありません", d)
 		}

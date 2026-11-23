@@ -14,7 +14,6 @@ import (
 	"github.com/kojio145/configchief/internal/convert"
 	"github.com/kojio145/configchief/internal/importer"
 	"github.com/kojio145/configchief/internal/model"
-	"github.com/kojio145/configchief/internal/project"
 	"github.com/kojio145/configchief/internal/render"
 	"github.com/kojio145/configchief/internal/report"
 )
@@ -71,7 +70,7 @@ func (e *Env) saveBook(now time.Time, data []byte) (backup string, err error) {
 
 // writeReport puts a report under out/<time>/reports in both forms.
 func (e *Env) writeReport(now time.Time, name string, d *report.Doc) (Files, error) {
-	dir := "out/" + project.Stamp(now) + "/reports"
+	dir := e.outDir(now) + "/reports"
 	if err := os.MkdirAll(e.Proj.Path(dir), 0o755); err != nil {
 		return Files{}, fmt.Errorf("%s を作れません: %v", dir, err)
 	}
@@ -161,7 +160,7 @@ func (o *ImportOutcome) Findings() int {
 
 // RunImport imports input/<source> and writes the report of it (spec 8, 13.4).
 // For the old side it also makes the parameter book if there is none and adds
-// the proposals to 機器対応 and IF 対応; rows that are there stay (spec 10.2).
+// the proposals to 新旧対照表（機器） and 新旧対照表（ポート）; rows that are there stay (spec 10.2).
 func (e *Env) RunImport(source, choose string, now time.Time) (*ImportOutcome, error) {
 	if source == "logs" {
 		return nil, fmt.Errorf("logs の取り込みは、まだありません（old か new）")
@@ -216,12 +215,12 @@ func (e *Env) RunImport(source, choose string, now time.Time) (*ImportOutcome, e
 		return nil, err
 	}
 	c := src.Count()
-	e.Proj.Log(now, "import %s: %d ファイル、%d 行（取り込み済み %d、無視 %d、未対応 %d、うち未判定・保留 %d）、レポート %s",
+	e.Proj.Log(now, "import %s: %d ファイル、%d 行（取り込み済み %d、無視 %d、読めなかった %d、うち未判定・保留 %d）、レポート %s",
 		source, len(src.Files), c.Total, c.Taken, c.Ignored+c.Separators, c.Unknown, out.Judging.Open+out.Judging.Hold, out.Report.XLSX)
 	return out, nil
 }
 
-// fillIfs gives the rows of IF 対応 with the proposals put into the rows
+// fillIfs gives the rows of 新旧対照表（ポート） with the proposals put into the rows
 // whose new interface name is empty, as book.Update does with IfFill.
 func fillIfs(have, prop []book.IfMap) []book.IfMap {
 	by := map[string]book.IfMap{}
@@ -243,13 +242,13 @@ func fillIfs(have, prop []book.IfMap) []book.IfMap {
 
 // IfProposal is what ProposeIfs did.
 type IfProposal struct {
-	Added    int            // rows added to IF 対応
-	Filled   int            // rows of IF 対応 whose empty new name was filled
+	Added    int            // rows added to 新旧対照表（ポート）
+	Filled   int            // rows of 新旧対照表（ポート） whose empty new name was filled
 	Backup   string         // the copy of the book taken first ("" = nothing was written)
 	Problems []book.Problem // what Read said about the book
 }
 
-// ProposeIfs makes the proposals of IF 対応 again from input/old, without
+// ProposeIfs makes the proposals of 新旧対照表（ポート） again from input/old, without
 // the report of an import (spec 10.2, 14.10.2): the rows the book lacks are
 // added, and the empty new names are filled. Nothing else changes.
 func (e *Env) ProposeIfs(now time.Time) (*IfProposal, error) {
@@ -283,16 +282,16 @@ func (e *Env) ProposeIfs(now time.Time) (*IfProposal, error) {
 	if out.Backup, err = e.saveBook(now, next); err != nil {
 		return nil, err
 	}
-	e.Proj.Log(now, "IF 対応の案: %d 行を足し、%d 行の新 IF 名を埋めました（控え %s）", out.Added, out.Filled, out.Backup)
+	e.Proj.Log(now, "新旧対照表（ポート）の案: %d 行を足し、%d 行の新 IF 名を埋めました（控え %s）", out.Added, out.Filled, out.Backup)
 	return out, nil
 }
 
 // Said tells what ProposeIfs did, in a sentence.
 func (p *IfProposal) Said() string {
 	if p.Added == 0 && p.Filled == 0 {
-		return "IF 対応に足す行・埋める新 IF 名はありませんでした（新ホスト名の書かれた機器の IF は、すべて行があり、案の出せる空の新 IF 名もありません）"
+		return "新旧対照表（ポート）に足す行・埋める新 IF 名はありませんでした（新ホスト名の書かれた機器の IF は、すべて行があり、案の出せる空の新 IF 名もありません）"
 	}
-	return fmt.Sprintf("IF 対応に %d 行を足し、%d 行の新 IF 名を案で埋めました（控え %s）", p.Added, p.Filled, p.Backup)
+	return fmt.Sprintf("新旧対照表（ポート）に %d 行を足し、%d 行の新 IF 名を案で埋めました（控え %s）", p.Added, p.Filled, p.Backup)
 }
 
 // BookOutcome is what MakeBook did.
@@ -402,6 +401,14 @@ type Side struct {
 // to the devices, and the empty columns filled with the defaults of the pack
 // of each device. That is what an imported configuration holds.
 func (e *Env) bookData(bk *book.Book) (*model.Dataset, []book.Problem, []string) {
+	return e.bookDataAs(bk, true)
+}
+
+// bookDataAs is bookData; adapt false leaves out the rewriting into the way
+// the vendor of the device writes a value (appendix B 5.7). The book is
+// compared with the old side that way: the old values are those of the
+// design, not of the new vendor (a VLAN is not its group of the new switch).
+func (e *Env) bookDataAs(bk *book.Book, adapt bool) (*model.Dataset, []book.Problem, []string) {
 	ds, problems := bk.Expand(e.Schema)
 	out := model.NewDataset(ds.Source)
 	var notes []string
@@ -418,7 +425,9 @@ func (e *Env) bookData(bk *book.Book) (*model.Dataset, []book.Problem, []string)
 		if p := e.Packs[vendor]; p != nil {
 			// The same rewriting as the generation does (appendix B 5.7), so
 			// that the book and a configuration made from it compare equal.
-			importer.Adapt(p, e.Schema, dd, h)
+			if adapt {
+				importer.Adapt(p, e.Schema, dd, h)
+			}
 			for _, w := range importer.FillDefaults(p, e.Schema, dd, h, false) {
 				notes = append(notes, fmt.Sprintf("機器 %s: パック %s の既定値: %s", h, vendor, w))
 			}
@@ -533,7 +542,11 @@ func (e *Env) Compare(a, b string, now time.Time) (*CompareOutcome, error) {
 			if s.Book == nil {
 				return nil, fmt.Errorf("%s がありません", e.Proj.Config.Book)
 			}
-			s.Data, s.Expand, s.Notes = e.bookData(s.Book)
+			if a == "old" || b == "old" {
+				s.Data, s.Expand, s.Notes = e.bookDataAs(s.Book, false)
+			} else {
+				s.Data, s.Expand, s.Notes = e.bookData(s.Book)
+			}
 		default:
 			return nil, fmt.Errorf("データ源「%s」は比べられません（old、new、book）", name)
 		}
@@ -569,7 +582,7 @@ func (e *Env) Compare(a, b string, now time.Time) (*CompareOutcome, error) {
 	return out, nil
 }
 
-// shapes finds the model a row of 機器対応 names in the pack of its vendor
+// shapes finds the model a row of 新旧対照表（機器） names in the pack of its vendor
 // (appendix B 6.3).
 func (e *Env) shapes(vendor, name string) *convert.Shape {
 	m := e.Packs[vendor].Model(name)

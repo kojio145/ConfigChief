@@ -79,12 +79,12 @@ func TestAddInputs(t *testing.T) {
 	}
 }
 
-// The proposals of IF 対応 are made without a second import, and fill the
+// The proposals of 新旧対照表（ポート） are made without a second import, and fill the
 // empty new names only (spec 10.2, 14.10.2).
 func TestProposeIfs(t *testing.T) {
 	e := migCase(t)
-	setCell(t, e, "IF 対応", "旧 IF 名", "Loopback0", "新 IF 名", "")
-	setCell(t, e, "IF 対応", "旧 IF 名", "GigabitEthernet0/0", "新 IF 名", "-")
+	setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", "Loopback0", "新 IF 名", "")
+	setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", "GigabitEthernet0/0", "新 IF 名", "-")
 	p, err := e.ProposeIfs(at)
 	if err != nil {
 		t.Fatal(err)
@@ -136,8 +136,8 @@ func TestNextStep(t *testing.T) {
 		t.Fatal(err)
 	}
 	step("edit-devices")
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-a01", "新ホスト名", "rt-a01")
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-a01", "新メーカー", "cisco_ios")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-a01", "新ホスト名", "rt-a01")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-a01", "新メーカー", "cisco_ios")
 	step("propose-ifs")
 	if _, err := e.ProposeIfs(at); err != nil {
 		t.Fatal(err)
@@ -145,7 +145,7 @@ func TestNextStep(t *testing.T) {
 	step("edit-ifs")
 	_, bk, _ := e.readBook()
 	for _, m := range bk.Ifs {
-		setCell(t, e, "IF 対応", "旧 IF 名", m.OldIf, "新 IF 名", m.OldIf)
+		setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", m.OldIf, "新 IF 名", m.OldIf)
 	}
 	step("make-book")
 	if _, err := e.MakeBook("old", false, at); err != nil {
@@ -226,10 +226,10 @@ func TestLastOutput(t *testing.T) {
 // a person wrote (spec 14.11.4).
 func TestRedoIfs(t *testing.T) {
 	e := migCase(t)
-	setCell(t, e, "IF 対応", "旧 IF 名", "Loopback0", "新 IF 名", "Loopback9")
-	setCell(t, e, "IF 対応", "旧 IF 名", "Loopback0", "案の根拠", "前の機種の案")
-	setCell(t, e, "IF 対応", "旧 IF 名", "GigabitEthernet0/0", "新 IF 名", "GigabitEthernet0/9")
-	setCell(t, e, "IF 対応", "旧 IF 名", "GigabitEthernet0/0", "案の根拠", "")
+	setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", "Loopback0", "新 IF 名", "Loopback9")
+	setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", "Loopback0", "案の根拠", "前の機種の案")
+	setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", "GigabitEthernet0/0", "新 IF 名", "GigabitEthernet0/9")
+	setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", "GigabitEthernet0/0", "案の根拠", "")
 	_, bk, err := e.readBook()
 	if err != nil {
 		t.Fatal(err)

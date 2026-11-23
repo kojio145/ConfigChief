@@ -17,8 +17,8 @@ func TestQXChecks(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, d := range [][2]string{{"sw-q21", "nec_qx"}, {"sw-c21", "cisco_ios"}} {
-		setCell(t, e, "機器対応", "旧ホスト名", d[0], "新ホスト名", d[0])
-		setCell(t, e, "機器対応", "旧ホスト名", d[0], "新メーカー", d[1])
+		setCell(t, e, "新旧対照表（機器）", "旧ホスト名", d[0], "新ホスト名", d[0])
+		setCell(t, e, "新旧対照表（機器）", "旧ホスト名", d[0], "新メーカー", d[1])
 	}
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
@@ -26,7 +26,7 @@ func TestQXChecks(t *testing.T) {
 	// The interfaces keep their names.
 	for _, n := range []string{"Bridge-Aggregation1", "GigabitEthernet1/0/1", "GigabitEthernet1/0/21", "GigabitEthernet1/0/22", "GigabitEthernet1/0/24",
 		"Port-channel1", "GigabitEthernet1/0/45", "GigabitEthernet1/0/48"} {
-		setCell(t, e, "IF 対応", "旧 IF 名", n, "新 IF 名", n)
+		setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", n, "新 IF 名", n)
 	}
 	b, err := e.MakeBook("old", false, at)
 	if err != nil {

@@ -152,7 +152,7 @@ var types = map[string]bool{
 }
 
 // The sheets of the book that are not tables (appendix A 6).
-var reserved = []string{"機器対応", "IF 対応", "共通値", "Device map", "Interface map", "Common values"}
+var reserved = []string{"新旧対照表（機器）", "新旧対照表（ポート）", "共通値", "機器対応", "IF 対応", "Device map", "Interface map", "Common values"}
 
 var (
 	reName = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)

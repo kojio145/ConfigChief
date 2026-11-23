@@ -79,7 +79,7 @@ func (s *Session) SaveExtra(name, text string, from *ExtraFrom) (*ExtraSavedView
 	}
 	j, err := e.Review(from.Source)
 	if err != nil {
-		v.Notes = append(v.Notes, "未対応の行に判定を付けられませんでした: "+err.Error())
+		v.Notes = append(v.Notes, "読めなかった行に判定を付けられませんでした: "+err.Error())
 		return v, nil
 	}
 	for _, g := range j.Groups {
@@ -91,17 +91,17 @@ func (s *Session) SaveExtra(name, text string, from *ExtraFrom) (*ExtraSavedView
 				continue
 			}
 			if by == "" {
-				v.Notes = append(v.Notes, "判定した人の名前が無いので、未対応の行に判定を付けていません（未対応の行の画面で付けてください）")
+				v.Notes = append(v.Notes, "判定した人の名前が無いので、読めなかった行に判定を付けていません（読めなかった行の画面で付けてください）")
 				return v, nil
 			}
 			o, err := e.JudgeLines(ops.JudgeRequest{Source: from.Source, Group: from.Group, Devices: from.Device,
 				Verdict: project.VerdictManual, Reason: "追加コンフィグ extra/" + name + " に書いた", By: by}, now)
 			if err != nil {
-				v.Notes = append(v.Notes, "未対応の行に判定を付けられませんでした: "+err.Error())
+				v.Notes = append(v.Notes, "読めなかった行に判定を付けられませんでした: "+err.Error())
 				return v, nil
 			}
 			s.judged(from.Source, o.Judging)
-			v.Message += fmt.Sprintf("。%s のかたまり %s に「手動で対応」を付けました", from.Device, from.Group)
+			v.Message += fmt.Sprintf("。%s のかたまり %s に「追加コンフィグで書く」を付けました", from.Device, from.Group)
 		}
 	}
 	return v, nil

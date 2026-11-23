@@ -418,7 +418,7 @@ func (e *Env) Fill(opt FillOptions, now time.Time) (*FillOutcome, error) {
 		return nil, fmt.Errorf("ひな形「%s」の対象の機器がありません（変数ルールの一覧に機器の行が無いか、ブックに機器がありません）", tp.Name)
 	}
 	mask := e.mask()
-	o.Dir = "out/" + project.Stamp(now) + "/" + fillDir + "/" + safeName(tp.Name)
+	o.Dir = e.outDir(now) + "/" + fillDir + "/" + safeName(tp.Name)
 	for _, dv := range devices {
 		d := &FillDevice{Name: dv.Name, Values: e.fillValues(b, src, dv.Key, mask)}
 		o.Devices = append(o.Devices, d)

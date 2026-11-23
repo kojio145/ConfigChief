@@ -12,7 +12,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://kojio145.github.io/ConfigChief/">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"ConfigChief","operatingSystem":"Windows 10, Windows 11","applicationCategory":"DeveloperApplication","softwareVersion":"1.4.0","license":"https://opensource.org/licenses/MIT","url":"https://kojio145.github.io/ConfigChief/","downloadUrl":"https://github.com/kojio145/ConfigChief/releases/latest","description":"Network device configurations to a vendor-neutral Excel workbook and back (Cisco IOS / NEC IX / NEC QX).","offers":{"@type":"Offer","price":"0","priceCurrency":"JPY"}}
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"ConfigChief","operatingSystem":"Windows 10, Windows 11","applicationCategory":"DeveloperApplication","softwareVersion":"1.5.0","license":"https://opensource.org/licenses/MIT","url":"https://kojio145.github.io/ConfigChief/","downloadUrl":"https://github.com/kojio145/ConfigChief/releases/latest","description":"Network device configurations to a vendor-neutral Excel workbook and back (Cisco IOS / NEC IX / NEC QX).","offers":{"@type":"Offer","price":"0","priceCurrency":"JPY"}}
 </script>
 <style>
   :root { --ground:#f6f8fb; --panel:#fff; --panel-2:#eef2f7; --ink:#1b2430; --ink-soft:#4c5a6b; --ink-faint:#7a889a; --line:#dde4ec; --accent:#2563eb; --accent-soft:#e5edff; }
@@ -54,22 +54,22 @@
     <a class="btn" href="manual.html">使い方</a>
     <a class="btn" href="https://github.com/kojio145/ConfigChief">ソースコード（GitHub）</a>
   </div>
-  <p class="note">v1.4.0。Windows 10 / 11（x64）。署名の無い exe のため、初めて起動するときに SmartScreen の警告が出ることがあります（「詳細情報」から「実行」）。MIT ライセンス・商用利用可。<b>実機では確かめていません</b>（同梱のパックはメーカーの公開コマンドリファレンスから作りました）。生成したコンフィグは、必ず検証機で確かめてから使ってください。</p>
+  <p class="note">v1.5.0。Windows 10 / 11（x64）。署名の無い exe のため、初めて起動するときに SmartScreen の警告が出ることがあります（「詳細情報」から「実行」）。MIT ライセンス・商用利用可。<b>実機では確かめていません</b>（同梱のパックはメーカーの公開コマンドリファレンスから作りました）。生成したコンフィグは、必ず検証機で確かめてから使ってください。</p>
 
   <figure class="shot">
     <img src="img/result-findings.png" width="1264" height="781" alt="ConfigChief の結果の画面: Cisco の拠点ルータを NEC IX に書き換え、書けない値を指摘として一覧にしている" loading="eager">
     <figcaption>結果: Cisco の拠点ルータを NEC IX に書き換えたところ。新しいメーカーで書けない値は、黙って落とさず指摘として出ます（値はすべて架空の見本）</figcaption>
   </figure>
   <figure class="shot">
-    <img src="img/import-lines.png" width="1264" height="781" alt="ConfigChief の取り込みの画面: コンフィグの各行が、取り込み済み・無視・未対応のどれになったかが分かる" loading="lazy">
-    <figcaption>取り込み: 行ごとに、どの規則でどの表のどの列に入ったかが分かります。読めなかった行は「未対応」として必ず一覧に出ます</figcaption>
+    <img src="img/import-lines.png" width="1264" height="781" alt="ConfigChief の取り込みの画面: コンフィグの各行が、取り込み済み・無視・読めなかったのどれになったかが分かる" loading="lazy">
+    <figcaption>取り込み: 行ごとに、どの規則でどの表のどの列に入ったかが分かります。読めなかった行は、必ず「読めなかった行」として一覧に出ます</figcaption>
   </figure>
 
   <h2>できること</h2>
   <div class="grid">
-    <div class="card"><b>コンフィグ → 表</b>旧機器のコンフィグ（端末ログのままでも可）を読み、行ごとに「取り込み済み・無視・未対応」を色で出します。</div>
+    <div class="card"><b>コンフィグ → 表</b>旧機器のコンフィグ（端末ログのままでも可）を読み、行ごとに「取り込み済み・無視・読めなかった」を色で出します。</div>
     <div class="card"><b>表 → 全台のコンフィグ</b>表を直してボタン 1 つで、全台のコンフィグとチェック結果表を出します。表は Excel でも、画面の表でも直せます。2 回目からは前回からの変更一覧も。</div>
-    <div class="card"><b>別メーカーへの書き換え</b>同じ表から Cisco IOS / NEC IX / NEC QX のコンフィグを出せます。新しい機種のポートから IF 対応の案も作ります。書けない値・置き換えて書いた設定は、必ず直し方付きの指摘として出します。</div>
+    <div class="card"><b>別メーカーへの書き換え</b>同じ表から Cisco IOS / NEC IX / NEC QX のコンフィグを出せます。新しい機種のポートから、新旧対照表（ポート）の案も作ります。書けない値・置き換えて書いた設定は、必ず直し方付きの指摘として出します。</div>
     <div class="card"><b>チェック</b>値の誤り、2 台の間の食い違い（IPsec・BGP・OSPF・VRRP・トンネル・VLAN・LAG）、旧との違いを調べます。指摘は理由を付けて承認できます。</div>
     <div class="card"><b>自己点検</b>生成したコンフィグを読み直し、元の表と同じになることを毎回確かめます。</div>
     <div class="card"><b>検証と投入の後</b>検証機の投入ログから弾かれた行を探し、投入後の設定とパラメータブックの違いを出します。</div>
@@ -81,7 +81,7 @@
   </div>
 
   <h2>対応している設定</h2>
-  <p>同梱のパックは Cisco IOS / IOS-XE（ルータ・内蔵スイッチ付きの小型ルータ・Catalyst 系のスイッチ）、NEC UNIVERGE IX、NEC QX シリーズ。機器の基本・インタフェース・VLAN・スイッチポート・LAG・スパニングツリー・スタティック経路・VRF・OSPF・BGP・VRRP / HSRP・経路制御の方針（ルートマップ）・ACL・プレフィックスリスト・NAT・回線監視・PPPoE・DHCP・IPsec（IKEv1・IKEv2）・GRE・EtherIP・L2TP・QoS・IPv6 に対応しています。対応していない設定は「未対応」として一覧に出し、追加コンフィグで運べます。</p>
+  <p>同梱のパックは Cisco IOS / IOS-XE（ルータ・内蔵スイッチ付きの小型ルータ・Catalyst 系のスイッチ）、NEC UNIVERGE IX、NEC QX シリーズ。機器の基本・インタフェース・VLAN・スイッチポート・LAG・スパニングツリー・スタティック経路・VRF・OSPF・BGP・VRRP / HSRP・経路制御の方針（ルートマップ）・ACL・プレフィックスリスト・NAT・回線監視・PPPoE・DHCP・IPsec（IKEv1・IKEv2）・GRE・EtherIP・L2TP・QoS・IPv6 に対応しています。対応していない設定は「読めなかった行」として一覧に出し、追加コンフィグで運べます。</p>
 
   <h2>こんな場面に</h2>
   <ul>

@@ -271,7 +271,7 @@ bridge irb enable
 {% set what = s.if_name ~ ' のスイッチポート' %}
 {% set at = s.if_name | split(':port') %}
 {% if at | length != 2 or not at[1] is digits %}
-{{ fail(what ~ ': NEC IX のスイッチポートは、内蔵スイッチのポートだけです。IF 名を「<デバイス名>:port<番号>」の形（例 GigaEthernet2:port1）にしてください（IF 対応で決めます）') }}
+{{ fail(what ~ ': NEC IX のスイッチポートは、内蔵スイッチのポートだけです。IF 名を「<デバイス名>:port<番号>」の形（例 GigaEthernet2:port1）にしてください（新旧対照表（ポート）で決めます）') }}
 {% elif s.mode == 'trunk' %}
 {{ fail(what ~ ': トランクのポートは、このままでは書けません。VLAN の IF の新 IF 名を BVI（例 BVI0）にすると、パックがタグ付きのサブ IF とブリッジに置き換えて書きます（ポート VLAN の IF「<デバイス名>:<グループ>.0」にした VLAN は、トランクに通せません）') }}
 {% elif s.mode not in ['access', 'routed'] %}
@@ -455,7 +455,7 @@ interface {{ i.name }}
 {{ fail(i.name ~ ' に VLAN のタグは書けません（サブインタフェース「ポート名.1」以降に書きます）') }}
 {% endif %}
 {% if i.encap_native == true %}
-{{ fail(i.name ~ ' の「タグなしの VLAN」は書けません（NEC IX では、タグなしの通信は基本 IF「ポート名.0」が受けます。IF 対応で、このサブ IF の新 IF 名を「ポート名.0」にしてください）') }}
+{{ fail(i.name ~ ' の「タグなしの VLAN」は書けません（NEC IX では、タグなしの通信は基本 IF「ポート名.0」が受けます。新旧対照表（ポート）で、このサブ IF の新 IF 名を「ポート名.0」にしてください）') }}
 {% endif %}
 {% if i.encap_tpid and not (i.encap_tpid | length in [3, 4]) %}
 {{ fail(i.name ~ ' のタグの種別（TPID）「' ~ i.encap_tpid ~ '」は書けません（16 進数で 5dd〜ffff です）') }}

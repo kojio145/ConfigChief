@@ -21,8 +21,8 @@ const VerdictNone = "none"
 var verdictWords = map[string]string{
 	"":                       notJudged,
 	project.VerdictHold:      "保留",
-	project.VerdictManual:    "手動で対応",
-	project.VerdictNotNeeded: "対応不要",
+	project.VerdictManual:    "追加コンフィグで書く",
+	project.VerdictNotNeeded: "要らない",
 }
 
 // The order the verdicts are told in: what is open first.
@@ -238,7 +238,7 @@ func (j *Judging) Group(id string) (*LineGroup, error) {
 	}
 	switch len(hit) {
 	case 0:
-		return nil, fmt.Errorf("ID が %s のかたまりは、%sの未対応の行にありません", id, sourceLabel(j.Source))
+		return nil, fmt.Errorf("ID が %s のかたまりは、%sの読めなかった行にありません", id, sourceLabel(j.Source))
 	case 1:
 		return hit[0], nil
 	}
@@ -499,10 +499,10 @@ func (e *Env) JudgeLines(req JudgeRequest, now time.Time) (*JudgeOutcome, error)
 	case project.VerdictManual, project.VerdictHold, VerdictNone:
 	case project.VerdictNotNeeded:
 		if req.Reason == "" {
-			return nil, fmt.Errorf("「対応不要」には理由を書いてください")
+			return nil, fmt.Errorf("「要らない」には理由を書いてください")
 		}
 	default:
-		return nil, fmt.Errorf("判定は manual（手動で対応）・not_needed（対応不要）・hold（保留）・none（取り消し）のどれかです（「%s」）", req.Verdict)
+		return nil, fmt.Errorf("判定は manual（追加コンフィグで書く）・not_needed（要らない）・hold（保留）・none（取り消し）のどれかです（「%s」）", req.Verdict)
 	}
 	if req.By == "" && req.Verdict != VerdictNone {
 		return nil, fmt.Errorf("判定した人の名前を書いてください")

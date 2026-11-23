@@ -139,14 +139,14 @@ func TestJudgeLines(t *testing.T) {
 
 	// For every device. There is no book yet, so the new host names are not known.
 	o := judgeLines(t, e, JudgeRequest{Group: sla.ID, Verdict: "manual", By: " admin "})
-	if o.Devices != 2 || o.Lines != 7 || o.Own != 0 || o.Group == nil || o.Group.VerdictText() != "手動で対応" || o.Group.ByText() != "admin" {
+	if o.Devices != 2 || o.Lines != 7 || o.Own != 0 || o.Group == nil || o.Group.VerdictText() != "追加コンフィグで書く" || o.Group.ByText() != "admin" {
 		t.Errorf("for every device = %+v, group %+v", o, o.Group)
 	}
 	j := o.Judging
 	if j.Manual != 7 || j.Open != 5 || !j.HostsUnknown || len(j.NoExtra) != 0 || j.Findings() != 5 {
 		t.Errorf("after the judgment: manual %d, open %d, hosts unknown %v, no extra %v", j.Manual, j.Open, j.HostsUnknown, j.NoExtra)
 	}
-	if v, _ := j.Line("input/old/rt-a02.txt", 10); v.Word() != "手動で対応（上の行に従う）" || v.By != "admin" {
+	if v, _ := j.Line("input/old/rt-a02.txt", 10); v.Word() != "追加コンフィグで書く（上の行に従う）" || v.By != "admin" {
 		t.Errorf("a line below = %+v", v)
 	}
 	text := read(t, e, "state/judgments.yaml")
@@ -157,13 +157,13 @@ func TestJudgeLines(t *testing.T) {
 	}
 	// The log tells the group by its ID: the shape stays out (spec 6.7).
 	log := read(t, e, "state/log.txt")
-	if !strings.Contains(log, "judge: old "+sla.ID+" 手動で対応（全台、機器 2 台、7 行、判定した人 admin）") || strings.Contains(log, "ip sla") {
+	if !strings.Contains(log, "judge: old "+sla.ID+" 追加コンフィグで書く（全台、機器 2 台、7 行、判定した人 admin）") || strings.Contains(log, "ip sla") {
 		t.Errorf("log = %q", log)
 	}
 
 	// A device of its own comes before the judgment for every device.
 	o = judgeLines(t, e, JudgeRequest{Group: sla.ID, Verdict: "hold", By: "operator", Devices: "rt-a02"})
-	if o.Devices != 1 || o.Lines != 2 || o.Group.VerdictText() != "保留 1 台、手動で対応 1 台" || o.Group.ByText() != differs {
+	if o.Devices != 1 || o.Lines != 2 || o.Group.VerdictText() != "保留 1 台、追加コンフィグで書く 1 台" || o.Group.ByText() != differs {
 		t.Errorf("for a device = %+v, %q", o, o.Group.VerdictText())
 	}
 	if d := o.Group.Device("rt-a02"); !d.Own || d.Verdict != project.VerdictHold || o.Judging.Hold != 2 || o.Judging.Manual != 5 {
@@ -214,7 +214,7 @@ func TestJudgeNoExtra(t *testing.T) {
 	if j := o.Judging; j == nil || j.HostsUnknown || len(j.NoExtra) != 0 || j.Manual != 7 || j.Open != 5 {
 		t.Fatalf("judging of the import = %+v", o.Judging)
 	}
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-a01", "新ホスト名", "rt-b01")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-a01", "新ホスト名", "rt-b01")
 	j := review(t, e, "old")
 	if want := []NoExtra{{Device: "rt-a01", Host: "rt-b01", Lines: 5}}; !reflect.DeepEqual(j.NoExtra, want) || j.Findings() != 6 {
 		t.Errorf("no extra = %+v, findings %d", j.NoExtra, j.Findings())
@@ -225,8 +225,8 @@ func TestJudgeNoExtra(t *testing.T) {
 	}
 	h := read(t, e, o.Report.HTML)
 	for _, want := range []string{
-		"未対応の形", sla.ID, "ip sla &lt;n&gt;", "interface GigabitEthernet&lt;n&gt;",
-		"手動で対応（上の行に従う）", "うち未判定（M-401）", "うち手動で対応",
+		"読めなかった行の形", sla.ID, "ip sla &lt;n&gt;", "interface GigabitEthernet&lt;n&gt;",
+		"追加コンフィグで書く（上の行に従う）", "うち未判定（M-401）", "うち追加コンフィグで書く",
 		"M-402: rt-a01（新ホスト名 rt-b01）", "rt-b01.j2",
 	} {
 		if !strings.Contains(h, want) {

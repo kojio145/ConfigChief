@@ -38,7 +38,7 @@ func cmdCustomer(args []string, out, errOut io.Writer) int {
 			fmt.Fprintln(errOut, err)
 			return 2
 		}
-		fmt.Fprintf(out, "列対応ファイルの下書きを作りました: %s\n見出しの行と行き先を確かめて直してから、customer を実行してください\n", path)
+		fmt.Fprintf(out, "列の割り当てファイルの下書きを作りました: %s\n見出しの行と行き先を確かめて直してから、customer を実行してください\n", path)
 		return 0
 	case val["--apply"] != "" || val["--apply-rule"] != "":
 		req := ops.ReflectRequest{Rule: val["--apply-rule"], Devices: val["--devices"]}
@@ -82,7 +82,7 @@ func cmdCustomer(args []string, out, errOut io.Writer) int {
 		}
 	}
 	for _, p := range o.Unmapped {
-		fmt.Fprintf(out, "  お知らせ: %s は、どの列対応ファイルにも当たらないので、読んでいません\n", p)
+		fmt.Fprintf(out, "  お知らせ: %s は、どの列の割り当てファイルにも当たらないので、読んでいません\n", p)
 	}
 	for _, f := range o.Changed {
 		fmt.Fprintf(out, "  お知らせ（S-505）: %s: %s\n", f.Evidence[0].Value, f.Message)

@@ -116,7 +116,7 @@ func TestCustomer(t *testing.T) {
 		t.Errorf("count = %+v, findings %d", c, o.Findings())
 	}
 	h := read(t, e, o.Report.HTML)
-	for _, want := range []string{"外部一覧とパラメータブックの比較", "rt-a09", "192.0.2.129/25", "sites_v1.csv の「CSV」E3", "S-503", "memo.txt は、どの列対応ファイルにも当たらない"} {
+	for _, want := range []string{"外部一覧とパラメータブックの比較", "rt-a09", "192.0.2.129/25", "sites_v1.csv の「CSV」E3", "S-503", "memo.txt は、どの列の割り当てファイルにも当たらない"} {
 		if !strings.Contains(h, want) {
 			t.Errorf("the report lacks %q", want)
 		}
@@ -240,8 +240,8 @@ func TestCustomerOldNames(t *testing.T) {
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-a01", "新ホスト名", "rt-n01")
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-a01", "新メーカー", "cisco_ios")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-a01", "新ホスト名", "rt-n01")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-a01", "新メーカー", "cisco_ios")
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestCustomerOldNames(t *testing.T) {
 		if to == "GigabitEthernet0/1" {
 			to = "GigabitEthernet0/0/1"
 		}
-		setCell(t, e, "IF 対応", "旧 IF 名", m.OldIf, "新 IF 名", to)
+		setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", m.OldIf, "新 IF 名", to)
 	}
 	if _, err := e.MakeBook("old", false, at); err != nil {
 		t.Fatal(err)
@@ -282,14 +282,14 @@ rows:
 		t.Errorf("cells %+v, only list %+v", o.Cells, o.OnlyList)
 	}
 	notes := strings.Join(o.Notes, "\n")
-	if len(o.Notes) != 2 || !strings.Contains(notes, "機器 rt-z01 は、「機器対応」で新ホスト名が決まっていない") || !strings.Contains(notes, "IF GigabitEthernet0/9 は、「IF 対応」で新 IF 名が決まっていない") {
+	if len(o.Notes) != 2 || !strings.Contains(notes, "機器 rt-z01 は、「新旧対照表（機器）」で新ホスト名が決まっていない") || !strings.Contains(notes, "IF GigabitEthernet0/9 は、「新旧対照表（ポート）」で新 IF 名が決まっていない") {
 		t.Errorf("notes:\n%s", notes)
 	}
 }
 
 func TestCustomerFaults(t *testing.T) {
 	e := newCase(t, nil)
-	if _, err := e.Customer(false, at); err == nil || !strings.Contains(err.Error(), "列対応ファイル（.yaml）がありません") {
+	if _, err := e.Customer(false, at); err == nil || !strings.Contains(err.Error(), "列の割り当てファイル（.yaml）がありません") {
 		t.Errorf("no mapping: %v", err)
 	}
 	put(t, e, "mappings/a.yaml", "version: 1\nfile: a.csv\nheader_row: 1\nrows:\n  - table: devices\n    columns: [{to: site, column: 拠点}]\n")

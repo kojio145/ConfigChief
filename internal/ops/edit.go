@@ -258,11 +258,11 @@ type EditSaved struct {
 	Conflicts []book.Conflict
 	Summary   *book.EditSummary // nil = nothing was written
 	Backup    string
-	// Devices tells that the draft had changes in 機器対応: the proposals of
-	// IF 対応 are made again after it (spec 14.10.2).
+	// Devices tells that the draft had changes in 新旧対照表（機器）: the proposals of
+	// 新旧対照表（ポート） are made again after it (spec 14.10.2).
 	Devices bool
 	// Models are the new host names whose new model was changed and whose
-	// rows of IF 対応 hold proposals: the page offers to make them again
+	// rows of 新旧対照表（ポート） hold proposals: the page offers to make them again
 	// (spec 14.11.4).
 	Models []string
 }
@@ -482,7 +482,7 @@ func (e *Env) modelChoices() ([]string, map[string]string) {
 	return ids, notes
 }
 
-// clearBasis empties the basis of the rows of IF 対応 whose new interface
+// clearBasis empties the basis of the rows of 新旧対照表（ポート） whose new interface
 // name was changed in the draft, unless the basis was changed too: the name
 // is a person's then, and a proposal made again leaves it (spec 14.11.4).
 func clearBasis(d *book.Draft, bk *book.Book) {
@@ -511,7 +511,7 @@ func clearBasis(d *book.Draft, bk *book.Book) {
 }
 
 // modelsChanged gives the new host names whose new model was changed in the
-// draft and whose rows of IF 対応 hold a proposal of the tool.
+// draft and whose rows of 新旧対照表（ポート） hold a proposal of the tool.
 func modelsChanged(d *book.Draft, bk *book.Book) []string {
 	part := d.Of("@devices")
 	if part == nil || bk == nil {

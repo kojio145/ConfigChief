@@ -105,13 +105,13 @@ func crossSites(t *testing.T, dir string, ways []site) {
 					}
 				}
 			}
-			setCell(t, e, "機器対応", "旧ホスト名", w.oldHost, "新ホスト名", w.newHost)
-			setCell(t, e, "機器対応", "旧ホスト名", w.oldHost, "新メーカー", w.pack)
+			setCell(t, e, "新旧対照表（機器）", "旧ホスト名", w.oldHost, "新ホスト名", w.newHost)
+			setCell(t, e, "新旧対照表（機器）", "旧ホスト名", w.oldHost, "新メーカー", w.pack)
 			if _, err := e.RunImport("old", "", at); err != nil {
 				t.Fatal(err)
 			}
 			for old, name := range w.ifs {
-				setCell(t, e, "IF 対応", "旧 IF 名", old, "新 IF 名", name)
+				setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", old, "新 IF 名", name)
 			}
 			b, err := e.MakeBook("old", false, at)
 			if err != nil {

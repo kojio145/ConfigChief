@@ -174,7 +174,7 @@ func (e *Env) collectSecrets(mask *secretSet) (left []string) {
 				continue
 			}
 			if n := f.Result.Count().Unknown; n > 0 {
-				left = append(left, fmt.Sprintf("%s（未対応の行 %d 行。その中の秘密の値は伏せられません）", f.Path, n))
+				left = append(left, fmt.Sprintf("%s（読めなかった行 %d 行。その中の秘密の値は伏せられません）", f.Path, n))
 			}
 			addSecrets(mask, e, f.Result.Data)
 		}

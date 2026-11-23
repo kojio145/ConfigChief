@@ -12,7 +12,7 @@ This is a spare-time project — responses are on an irregular schedule.
 
 Do NOT paste real configurations. Mask host names, addresses, user names, passwords, keys and site names.
 実際のコンフィグを貼らないでください。ホスト名・アドレス・ユーザー名・パスワード・鍵・拠点名は伏せてください。
-未対応の行は、`export --what unhandled` の「形」のレポート（中身を見てから）が使えます。
+読めなかった行は、`export --what unhandled` の「形」のレポート（中身を見てから）が使えます。
 -->
 
 **ConfigChief version / バージョン**

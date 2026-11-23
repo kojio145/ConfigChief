@@ -25,7 +25,7 @@ const masked = "***"
 var stateWords = map[string]string{
 	importer.Taken:   "取り込み済み",
 	importer.Ignored: "無視",
-	importer.Unknown: "未対応",
+	importer.Unknown: "読めなかった",
 }
 
 const notJudged = "未判定"
@@ -166,7 +166,7 @@ func originText(origins []model.Origin) string {
 				parts = append(parts, s)
 			}
 		case o.Kind == "book":
-			if s := "ブックの「機器対応」"; !seen[s] {
+			if s := "ブックの「新旧対照表（機器）」"; !seen[s] {
 				seen[s] = true
 				parts = append(parts, s)
 			}
@@ -361,9 +361,9 @@ func (e *Env) importDoc(o *ImportOutcome, now time.Time) *report.Doc {
 	if c.Outside > 0 {
 		d.Counts = append(d.Counts, report.Pair{Label: "無視（端末ログの設定の外の行）", Value: num(c.Outside)})
 	}
-	label := "未対応（旧にあって取り込めなかった行）"
+	label := "読めなかった行"
 	if !old {
-		label = "未対応（取り込めなかった行）"
+		label = "読めなかった行（新コンフィグ）"
 	}
 	d.Counts = append(d.Counts, report.Pair{Label: label, Value: num(c.Unknown)})
 	jd := o.Judging
@@ -373,9 +373,9 @@ func (e *Env) importDoc(o *ImportOutcome, now time.Time) *report.Doc {
 	d.Counts = append(d.Counts,
 		report.Pair{Label: "うち未判定（M-401）", Value: num(jd.Open)},
 		report.Pair{Label: "うち保留（M-401）", Value: num(jd.Hold)},
-		report.Pair{Label: "うち手動で対応", Value: num(jd.Manual)},
-		report.Pair{Label: "うち対応不要", Value: num(jd.NotNeeded)},
-		report.Pair{Label: "「手動で対応」があるのに追加コンフィグが当たらない機器（M-402）", Value: num(len(jd.NoExtra))},
+		report.Pair{Label: "うち追加コンフィグで書く", Value: num(jd.Manual)},
+		report.Pair{Label: "うち要らない", Value: num(jd.NotNeeded)},
+		report.Pair{Label: "「追加コンフィグで書く」があるのに追加コンフィグが当たらない機器（M-402）", Value: num(len(jd.NoExtra))},
 	)
 	if a := o.Applied; a != nil {
 		d.Counts = append(d.Counts,
@@ -383,23 +383,23 @@ func (e *Env) importDoc(o *ImportOutcome, now time.Time) *report.Doc {
 			report.Pair{Label: "うち備考もない機器（M-407）", Value: num(len(a.NoReason))},
 			report.Pair{Label: "新 IF 名が決まっていない旧 IF（M-406）", Value: num(len(a.Undecided))},
 			report.Pair{Label: "複数の旧 IF が当たっている新 IF（M-408）", Value: num(len(a.Shared))},
-			report.Pair{Label: "対応の未決のうち、未承認の指摘", Value: num(o.Mig.Open())},
-			report.Pair{Label: "対応の未決のうち、承認済みの指摘", Value: num(o.Mig.Count().Approved)},
+			report.Pair{Label: "新旧対照表で決まっていないところのうち、未承認の指摘", Value: num(o.Mig.Open())},
+			report.Pair{Label: "新旧対照表で決まっていないところのうち、承認済みの指摘", Value: num(o.Mig.Count().Approved)},
 		)
-		d.Notes = append(d.Notes, "書き換えの区分のうち、取り込みで数えられるのは「旧にあって取り込めなかった」（未対応の行）だけです。旧の行 → 設計データ → 新の行 のつながりと残りの区分は、生成とチェックのたびに書き換えレポート（reports/rewrite.xlsx）に出ます。")
+		d.Notes = append(d.Notes, "書き換えの区分のうち、取り込みで数えられるのは「読めなかった行」だけです。旧の行 → 設計データ → 新の行 のつながりと残りの区分は、生成とチェックのたびに書き換えレポート（reports/rewrite.xlsx）に出ます。")
 	}
 	if e.mask() {
-		d.Notes = append(d.Notes, "秘密の列に入った値は "+masked+" に伏せています。未対応の行にある秘密の値は、ツールが見分けられないため伏せられません。このレポートを人に渡す前に確かめてください。")
+		d.Notes = append(d.Notes, "秘密の列に入った値は "+masked+" に伏せています。読めなかった行にある秘密の値は、ツールが見分けられないため伏せられません。このレポートを人に渡す前に確かめてください。")
 	}
 	if jd.HostsUnknown {
-		d.Notes = append(d.Notes, "「手動で対応」と判定した行がありますが、パラメータブックがまだ無いので、新ホスト名が分かりません。追加コンフィグがあるか（M-402）は見ていません。")
+		d.Notes = append(d.Notes, "「追加コンフィグで書く」と判定した行がありますが、パラメータブックがまだ無いので、新ホスト名が分かりません。追加コンフィグがあるか（M-402）は見ていません。")
 	}
 	if jd.BookErr != "" {
 		d.Notes = append(d.Notes, "パラメータブックを読めないため、グループ向けの追加コンフィグ（@グループ名.j2）は見ていません: "+jd.BookErr)
 	}
 
 	// By device.
-	devs := report.Sheet{Name: "機器別", Header: []string{"ファイル", "機器", "パック", "パックの決め方", "全行", "取り込み済み", "無視", "コメント・空行", "未対応", "未判定・保留", "取り込めた割合", "注意"}}
+	devs := report.Sheet{Name: "機器別", Header: []string{"ファイル", "機器", "パック", "パックの決め方", "全行", "取り込み済み", "無視", "コメント・空行", "読めなかった", "未判定・保留", "取り込めた割合", "注意"}}
 	if old {
 		devs.Header = append(devs.Header, "新ホスト名")
 	}
@@ -452,8 +452,8 @@ func (e *Env) importDoc(o *ImportOutcome, now time.Time) *report.Doc {
 
 	// The groups of unhandled lines, what is open first.
 	shapes := report.Sheet{
-		Name:   "未対応の形",
-		Lead:   "未対応の行を、値を伏せた形でまとめたものです。判定は、いちばん上の未対応の行に付けます。その下の行は「下の行数」に数えます。",
+		Name:   "読めなかった行の形",
+		Lead:   "読めなかった行を、値を伏せた形でまとめたものです。判定は、いちばん上の読めなかった行に付けます。その下の行は「下の行数」に数えます。",
 		Header: []string{"ID", "パック", "親の行", "形", "台数", "行数", "下の行数", "判定", "判定の理由", "判定した人", "例"},
 		Code:   []int{2, 3},
 	}
@@ -474,8 +474,8 @@ func (e *Env) importDoc(o *ImportOutcome, now time.Time) *report.Doc {
 
 	// The lines.
 	unknown := report.Sheet{
-		Name:   "未対応の行",
-		Lead:   "どの規則にも当たらなかった行です。親が未対応なら、その子もすべて未対応になります。",
+		Name:   "読めなかった行",
+		Lead:   "どの規則にも当たらなかった行です。親が読めなかった行なら、その子もすべて読めなかった行になります。",
 		Header: []string{"機器", "ファイル", "行番号", "文面", "判定", "判定の理由", "かたまり", "理由"},
 		Code:   []int{3},
 	}
@@ -491,7 +491,7 @@ func (e *Env) importDoc(o *ImportOutcome, now time.Time) *report.Doc {
 		if m.Host != m.Device {
 			who = fmt.Sprintf("%s（新ホスト名 %s）", m.Device, m.Host)
 		}
-		notes.Rows = append(notes.Rows, []string{"", m.Device, fmt.Sprintf("M-402: %s に「手動で対応」と判定した行が %d 行ありますが、extra に、この機器に当たる追加コンフィグ（_all.j2・@グループ名.j2・%s.j2）がありません", who, m.Lines, m.Host)})
+		notes.Rows = append(notes.Rows, []string{"", m.Device, fmt.Sprintf("M-402: %s に「追加コンフィグで書く」と判定した行が %d 行ありますが、extra に、この機器に当たる追加コンフィグ（_all.j2・@グループ名.j2・%s.j2）がありません", who, m.Lines, m.Host)})
 	}
 	for _, j := range jd.Stale {
 		path := ""
@@ -544,7 +544,7 @@ func (e *Env) importDoc(o *ImportOutcome, now time.Time) *report.Doc {
 	if o.New != nil {
 		for _, f := range o.New.Files {
 			if f.Err != "" {
-				notes.Rows = append(notes.Rows, []string{f.Path, "", "対応の案を作るために読もうとしましたが、取り込めませんでした: " + f.Err})
+				notes.Rows = append(notes.Rows, []string{f.Path, "", "新旧対照表の案を作るために読もうとしましたが、取り込めませんでした: " + f.Err})
 			}
 		}
 	}
@@ -577,13 +577,13 @@ func uniq(list []string) []string {
 // approvals put on.
 func (e *Env) mappingSheet(a *convert.Applied, v *Verdicts, all bool) report.Sheet {
 	s := report.Sheet{
-		Name:   "対応の未決",
-		Lead:   "パラメータブックの「機器対応」「IF 対応」で、まだ決まっていないところです。直すか、理由を付けて承認します（画面では行を押します。コマンドラインでは、指紋を approve に渡します）。",
+		Name:   "新旧対照表で決まっていないところ",
+		Lead:   "パラメータブックの「新旧対照表（機器）」「新旧対照表（ポート）」で、まだ決まっていないところです。直すか、理由を付けて承認します（画面では行を押します。コマンドラインでは、指紋を approve に渡します）。",
 		Header: []string{"チェック", "旧機器", "表", "行", "列", "対象", "内容", "状態", "承認", "指紋", "直し方"},
 	}
 	if all {
-		s.Name = "対応のメモ"
-		s.Lead = "「機器対応」「IF 対応」を当てたときに、決まっていなかったところと、書かなかった行です。"
+		s.Name = "新旧対照表のメモ"
+		s.Lead = "「新旧対照表（機器）」「新旧対照表（ポート）」を当てたときに、決まっていなかったところと、書かなかった行です。"
 	}
 	add := func(mark, check, dev, table, row, col, target, text string) {
 		s.Rows = append(s.Rows, []string{check, dev, table, row, col, target, text, "", "", "", ""})
@@ -670,7 +670,7 @@ func (e *Env) compareDoc(o *CompareOutcome, now time.Time) *report.Doc {
 	for _, s := range []*Side{o.A, o.B} {
 		switch s.Name {
 		case "old":
-			d.Notes = append(d.Notes, "旧コンフィグの機器名と IF 名は、パラメータブックの「機器対応」「IF 対応」を当ててから比べています。新ホスト名が空の旧機器の行は、比べる対象に入っていません。")
+			d.Notes = append(d.Notes, "旧コンフィグの機器名と IF 名は、パラメータブックの「新旧対照表（機器）」「新旧対照表（ポート）」を当ててから比べています。新ホスト名が空の旧機器の行は、比べる対象に入っていません。")
 		case "book":
 			d.Notes = append(d.Notes, "パラメータブックは、「機器」列の * と @グループ、「共通値」を機器ごとの行に広げ、空の列を機器のメーカーの既定値で埋めてから比べています（取り込んだコンフィグと同じ条件）。")
 		}
@@ -748,7 +748,7 @@ func (e *Env) compareDoc(o *CompareOutcome, now time.Time) *report.Doc {
 				if f.Err != "" {
 					notes.Rows = append(notes.Rows, []string{f.Path, "", "取り込めませんでした: " + f.Err})
 				} else if n := f.Result.Count().Unknown; n > 0 {
-					notes.Rows = append(notes.Rows, []string{f.Path, f.Result.Device, fmt.Sprintf("未対応の行が %d 行あります。その行の設定は、比べる対象に入っていません", n)})
+					notes.Rows = append(notes.Rows, []string{f.Path, f.Result.Device, fmt.Sprintf("読めなかった行が %d 行あります。その行の設定は、比べる対象に入っていません", n)})
 				}
 			}
 		}
@@ -774,7 +774,7 @@ func (e *Env) compareDoc(o *CompareOutcome, now time.Time) *report.Doc {
 func sideText(s *Side) string {
 	switch s.Name {
 	case "old":
-		return "旧コンフィグ（input/old。対応を当てた後）"
+		return "旧コンフィグ（input/old。新しい名前に置き換えた後）"
 	case "new":
 		return "新コンフィグ（input/new）"
 	}

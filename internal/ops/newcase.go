@@ -73,7 +73,7 @@ var CaseParts = []struct {
 	{PartChecks, "チェックの設定（project.yaml の checks）", true},
 	{PartExtra, "追加コンフィグの全機器・グループの分（extra の _all.j2・@グループ名.j2）", true},
 	{PartExtraHosts, "追加コンフィグの機器ごとの分（extra の ホスト名.j2）", false},
-	{PartMappings, "外部一覧の列対応（mappings）", true},
+	{PartMappings, "外部一覧の列の割り当て（mappings）", true},
 	{PartFill, "ひな形と変数ルール（fill・vars）", true},
 	{PartPacks, "案件のパック（packs）", true},
 	{PartKeepWords, "持ち出し用レポートで残す語（project.yaml の export.keep_words）", true},
@@ -117,6 +117,10 @@ func CopyCaseSettings(from, to string, parts []string) (*CaseCopied, error) {
 				return err
 			}
 			if d.IsDir() {
+				// A hidden folder (.git and the like) is not a setting.
+				if path != root && strings.HasPrefix(d.Name(), ".") {
+					return filepath.SkipDir
+				}
 				return nil
 			}
 			name := d.Name()

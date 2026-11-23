@@ -103,8 +103,8 @@ func TestCase(t *testing.T) {
 	wants(t, "import", out,
 		"取り込み（旧コンフィグ）: 1 ファイル",
 		"input/old/rt-a01.txt: rt-a01 cisco_ios ",
-		"未対応の行: ",
-		"パラメータブック parameters.xlsx を作りました（機器対応 1 行、",
+		"読めなかった行: ",
+		"パラメータブック parameters.xlsx を作りました（新旧対照表（機器） 1 行、",
 		"レポート: "+reports+"import_old.xlsx",
 		reports+"import_old.html",
 	)
@@ -152,7 +152,7 @@ func TestCase(t *testing.T) {
 		"A にだけある行: 0",
 		"B にだけある行: 0",
 		"値が違うセル: 1",
-		"旧コンフィグ に未対応の行が ",
+		"旧コンフィグ に読めなかった行が ",
 		reports+"compare_old_new.xlsx",
 	)
 	code, out, _ = do("compare", "--project", dir, "--a", "book", "--b", "new")

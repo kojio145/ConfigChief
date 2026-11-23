@@ -47,6 +47,10 @@ type Session struct {
 	mig     *ops.Verdicts                 // the findings of a migration the screen showed last (nil = none)
 	tree    *ops.TreeOutcome              // the comparison of every device the screen showed last (nil = none)
 	wrote   written                       // what the last generation or check wrote
+	// draft tells that shown is a check over the draft of the table (spec
+	// 14.12.3): nothing is approved on it. kept is what wrote was before.
+	draft bool
+	kept  written
 	stop    atomic.Bool
 	zoom    int // the zoom of the page in per cent (0 = 100; spec 14.8.6)
 	opens   openCache // the count of the unhandled lines (spec 14.12.1)
@@ -280,7 +284,7 @@ func (s *Session) open(dir string) (*Home, error) {
 func (s *Session) forget() {
 	s.imports = map[string]*ops.ImportOutcome{}
 	s.mig, s.tree = nil, nil
-	s.shown, s.wrote = nil, written{}
+	s.shown, s.wrote, s.draft, s.kept = nil, written{}, false, written{}
 }
 
 func (s *Session) use(e *ops.Env) {

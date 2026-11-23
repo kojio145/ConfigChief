@@ -105,7 +105,7 @@ IOS 15 M&T と IOS-XE のルータで共通のものです。右の列は、章�
 | 時刻の付け方 | `service timestamps log\|debug uptime`、`service timestamps log\|debug datetime [msec] [localtime] [show-timezone] [year]` | devices の「ログの時刻の付け方」「ログの時刻に足すもの」「デバッグの時刻の付け方」「デバッグの時刻に足すもの」 |
 | パスワードの暗号化 | `service password-encryption`、`no service password-encryption` | devices の「パスワードを暗号化して保存」 |
 | 機器内のログ | `logging buffered [<バイト>] [<重要度>]`、`no logging buffered` | devices の「機器内にログを溜める」「機器内ログの大きさ」「ログに残す重要度」 |
-| コンソール | `line con 0` の下の `exec-timeout <分> [<秒>]`（ほかの行は「未対応」のままです） | devices の「コンソールの無操作切断（分）」「（秒の端数）」 |
+| コンソール | `line con 0` の下の `exec-timeout <分> [<秒>]`（ほかの行は「読めなかった」のままです） | devices の「コンソールの無操作切断（分）」「（秒の端数）」 |
 | バナー | `banner motd`、`banner login`、`banner exec` | devices の「バナー（接続したとき）」「バナー」「バナー（ログインの後）」 |
 | DNS サーバの VRF | `ip name-server vrf <VRF> <アドレス> …` | devices の「DNS サーバ」「DNS サーバの VRF」 |
 | ユーザ | `username <名前> [privilege <数>] secret <種類> <値>`、`… secret <平文>` | users |
@@ -222,18 +222,18 @@ IOS 15 M&T と IOS-XE のルータで共通のものです。右の列は、章�
 ### 全般
 
 - **古い書き方と新しい書き方の両方を読みます。** `ip domain name` と `ip domain-name`、`vrf definition` と `ip vrf`、`vrf forwarding` と `ip vrf forwarding`、`logging host <アドレス>` と `logging <アドレス>` などです。OS の違いではなく出た時期の違いで、1 台に両方が残ることがあります
-- **マスクとワイルドカードは、長さの形に直して入れます。** とびとびのワイルドカード（長さに直せないもの）の行は「未対応」になります
+- **マスクとワイルドカードは、長さの形に直して入れます。** とびとびのワイルドカード（長さに直せないもの）の行は「読めなかった」になります
 - **全体に 1 行だけ書く設定**（`ntp source`、`logging facility`、`logging trap`、`logging source-interface`、`snmp-server trap-source`）は、それぞれのサーバの行に同じ値を入れます
 
 ### 機器の基本
 
 - **`password` で書いたユーザは「元に戻せる形で持つ」が有効になります。** `secret` はハッシュで保存され、PPP の CHAP の相手として使えないため、`password` で書いたユーザは `password` のまま書き出します。LNS がある機器の、権限の無いこの形のユーザは「L2TP 接続ユーザ」に入ります（下の「L2TP」）
 - **暗号化した形の秘密は、`7 <値>` のままセルに入ります**（別紙 A 3.26。「形」の列を持つユーザだけは、値だけを入れて形を encrypted にします）。平文に空白は入らないので、空白のある値は暗号化した形と分かります。チェック V-283 が、どのセルがその形かを知らせます
-- **DNS サーバは、全部が同じ VRF（か、全部が VRF なし）です。** 先に読んだ行と VRF が違う `ip name-server` の行は「未対応」になります
+- **DNS サーバは、全部が同じ VRF（か、全部が VRF なし）です。** 先に読んだ行と VRF が違う `ip name-server` の行は「読めなかった」になります
 
 ### 経路・VRF・OSPF・BGP
 
-- **OSPF を動かすインタフェース。** `network` の行にアドレスが入るインタフェースと、`ip ospf <番号> area` を書いたインタフェースを、ospf_interfaces の行にします。どのインタフェースにも当たらない `network` の行は「未対応」に戻ります
+- **OSPF を動かすインタフェース。** `network` の行にアドレスが入るインタフェースと、`ip ospf <番号> area` を書いたインタフェースを、ospf_interfaces の行にします。どのインタフェースにも当たらない `network` の行は「読めなかった」に戻ります
 - **`route-target both`** は、取り込むルートターゲットと付けるルートターゲットの両方に入れます
 - **BGP の `redistribute ospf <番号>`** は、番号を「OSPF のプロセス番号」の列に入れます
 - **ルートマップのコミュニティの条件。** `match community <リスト>` が指すリストが、permit の 1 行だけの標準のリスト（「この値をすべて持つ経路」）のときは、その値を方針の行（route_policies の match_community 列）に入れ、**リストはコミュニティのリストの表から外します**（別紙 A 3.19。設計データは、コミュニティをじかの値で持ちます）。2 行以上のリスト、deny の行、正規表現のリストは、リストのまま残して、方針の行には名前（match_community_list 列）が入ります。`exact` は `exact-match` と書いた形も読みます
@@ -257,21 +257,21 @@ IOS 15 M&T と IOS-XE のルータで共通のものです。右の列は、章�
 ### IPsec
 
 - **IPsec のトンネル IF 型。** トンネルが指すプロファイル、プロファイルが指すトランスフォームセット、相手のアドレスが同じ鍵、番号がいちばん小さい IKE のポリシーをつないで 1 行にします。2〜4 番目の IKE のポリシーと、プロファイル・クリプトマップに並べた 2〜4 番目のトランスフォームセットは、「IPsec 追加の提案」（ipsec_proposals）の行になります（下の「候補を並べた設定」）。行の名前はトンネル IF の名前です。自分側（トンネルの送信元）は tunnels の行にあり、ipsec_tunnels の「自分側 IF」には入れません
-- **IPsec のクリプトマップ型。** インタフェースが使っているマップの 1 項目を、ipsec_tunnels の 1 行にします。機器には項目ごとの名前が無いため、行の名前は `<マップ名>/<番号>` です。`match address` が指す拡張アクセスリストの `permit` の行が、ipsec_selectors の行になります（`ip`、または `udp`・`tcp` で、ポートは片側に 1 つまでの `eq <番号>`。`any` は 0.0.0.0/0）。**ipsec_selectors に写した行は、アクセスリストの表（acl_entries）から外します。行が残らなければ、リスト（acls）も外します**（フィルタ・NAT・`line vty`・SNMP も使っているリストは、そのまま残します）。**リストに、対象通信の行にできない行（`deny`、範囲や名前で書いたポート、`icmp` など）が 1 行でもあると、そのマップの項目は行にせず、関係する行が「未対応」に戻ります**（一部だけを読むと、守る範囲の違う設定になるため。注記 `remark` の行は数えません）。どのインタフェースも使っていないマップは「未対応」に戻ります
-- **IPsec の IKE 版 2。** IPsec プロファイル（かクリプトマップの項目）が指す IKEv2 プロファイルから、相手の見分け方（相手の ID）・自分の ID・有効時間・相手監視を読みます。鍵は、プロファイルが指すキーリングの中の、相手のアドレス（か名前）が同じ `peer` から読みます（無ければ、`address 0.0.0.0` の `peer`）。`pre-shared-key local` は「事前共有鍵」、`remote` は「相手を確かめる鍵」に入ります（1 行だけの鍵は、両方に同じ鍵です）。IKE の提案は、`match` の行が無い最初のポリシーの、最初のプロポーザルです。**ポリシーが 1 つも無ければ、IKE の暗号・ハッシュ・DH グループは空**（機器が持つ候補に任せる。別紙 A 3.20）になります。`match identity remote address` が相手アドレスと同じなら、相手の ID は空（アドレスで確かめる）です。両方向とも `pre-share` のプロファイルだけを読み、証明書・EAP のプロファイルを指す行は「未対応」に戻ります
-- **ISAKMP プロファイル（IKE 版 1）。** クリプトマップの項目が `set isakmp-profile` でプロファイルを指すとき、鍵はそのプロファイルのキーリングから、相手の ID は `match identity`（最初の 1 行）から、自分の ID は `self-identity` から読みます。`self-identity fqdn` は値を持たない行なので、機器の表の「ホスト名.ドメイン名」を自分の ID に入れます（`ip domain name` が無ければ「未対応」に戻ります）。プロファイルの `keepalive <秒> retry <秒>` は、機器全体の `crypto isakmp keepalive` より先に使います
+- **IPsec のクリプトマップ型。** インタフェースが使っているマップの 1 項目を、ipsec_tunnels の 1 行にします。機器には項目ごとの名前が無いため、行の名前は `<マップ名>/<番号>` です。`match address` が指す拡張アクセスリストの `permit` の行が、ipsec_selectors の行になります（`ip`、または `udp`・`tcp` で、ポートは片側に 1 つまでの `eq <番号>`。`any` は 0.0.0.0/0）。**ipsec_selectors に写した行は、アクセスリストの表（acl_entries）から外します。行が残らなければ、リスト（acls）も外します**（フィルタ・NAT・`line vty`・SNMP も使っているリストは、そのまま残します）。**リストに、対象通信の行にできない行（`deny`、範囲や名前で書いたポート、`icmp` など）が 1 行でもあると、そのマップの項目は行にせず、関係する行が「読めなかった」に戻ります**（一部だけを読むと、守る範囲の違う設定になるため。注記 `remark` の行は数えません）。どのインタフェースも使っていないマップは「読めなかった」に戻ります
+- **IPsec の IKE 版 2。** IPsec プロファイル（かクリプトマップの項目）が指す IKEv2 プロファイルから、相手の見分け方（相手の ID）・自分の ID・有効時間・相手監視を読みます。鍵は、プロファイルが指すキーリングの中の、相手のアドレス（か名前）が同じ `peer` から読みます（無ければ、`address 0.0.0.0` の `peer`）。`pre-shared-key local` は「事前共有鍵」、`remote` は「相手を確かめる鍵」に入ります（1 行だけの鍵は、両方に同じ鍵です）。IKE の提案は、`match` の行が無い最初のポリシーの、最初のプロポーザルです。**ポリシーが 1 つも無ければ、IKE の暗号・ハッシュ・DH グループは空**（機器が持つ候補に任せる。別紙 A 3.20）になります。`match identity remote address` が相手アドレスと同じなら、相手の ID は空（アドレスで確かめる）です。両方向とも `pre-share` のプロファイルだけを読み、証明書・EAP のプロファイルを指す行は「読めなかった」に戻ります
+- **ISAKMP プロファイル（IKE 版 1）。** クリプトマップの項目が `set isakmp-profile` でプロファイルを指すとき、鍵はそのプロファイルのキーリングから、相手の ID は `match identity`（最初の 1 行）から、自分の ID は `self-identity` から読みます。`self-identity fqdn` は値を持たない行なので、機器の表の「ホスト名.ドメイン名」を自分の ID に入れます（`ip domain name` が無ければ「読めなかった」に戻ります）。プロファイルの `keepalive <秒> retry <秒>` は、機器全体の `crypto isakmp keepalive` より先に使います
 - **動的なクリプトマップ。** `ipsec-isakmp dynamic <名前>` の項目は、動的なマップの最初の項目の中身（トランスフォームセット・PFS・有効時間・アクセスリスト）を持つ、相手が `any` の行になります。鍵は `address 0.0.0.0` の鍵です。アクセスリストは無くてもかまいません（相手が言ってきた範囲を受け入れる行）
 - **相手を名前で書いた行。** `set peer <名前>` は、相手アドレスの列に名前のまま入れます。鍵は `crypto isakmp key … hostname <名前>`（IKE 版 2 はキーリングの `hostname <名前>`）から読みます
 - **相手を複数並べたクリプトマップ。** 2 行目以降の `set peer` は、1 行目の相手につながらないときに順につなぐ相手として、「予備の相手」（peer_backup）に並べます。読むのは、IKE の版 1 で ISAKMP プロファイルを使わない項目の、**鍵が 1 行目の相手と同じ**相手だけです（表は 1 行に鍵を 1 つ持ちます）
 - **相手監視（IKE 版 1）。** `crypto isakmp keepalive` の 2 つ目の数は「再送間隔（秒）」です（回数ではありません。回数の列は NEC IX の書き方のためのものです）。`periodic` は「送り方」に入り、語が無ければ機器の既定の on_demand を入れます
-- **候補を並べた設定（別紙 A 3.20）。** 組み合わせを並べる書き方は、2 番目以降が「IPsec 追加の提案」（ipsec_proposals）の行になります（順番は 20・30… と振ります）: `set transform-set A B C …` の 2 番目以降（段 ipsec。6 つまで）、`crypto isakmp policy` の 2 番目以降（番号の小さい順。段 ike。**IKE の版 1 の全部の行**に同じ行が入ります。ポリシーは機器全体のものだからです）、最初の IKEv2 ポリシーの 2 つ目以降の `proposal`（段 ike。**版 2 の全部の行**に入ります）。1 つの提案に値を並べる書き方（IKEv2 のプロポーザルの `encryption aes-cbc-256 aes-cbc-128` など）は、1 つ目の値が IPsec の行、2 つ目以降がその行の「IKE 暗号（追加）」などの列に入ります。**値を並べたプロポーザルを、ポリシーの 2 つ目以降に置いた形は読みません**（そのプロポーザルの行と、ポリシーの `proposal` の行が「未対応」に残ります）。2 番目以降のトランスフォームセットの `mode` は読みません（その行は「未対応」）
+- **候補を並べた設定（別紙 A 3.20）。** 組み合わせを並べる書き方は、2 番目以降が「IPsec 追加の提案」（ipsec_proposals）の行になります（順番は 20・30… と振ります）: `set transform-set A B C …` の 2 番目以降（段 ipsec。6 つまで）、`crypto isakmp policy` の 2 番目以降（番号の小さい順。段 ike。**IKE の版 1 の全部の行**に同じ行が入ります。ポリシーは機器全体のものだからです）、最初の IKEv2 ポリシーの 2 つ目以降の `proposal`（段 ike。**版 2 の全部の行**に入ります）。1 つの提案に値を並べる書き方（IKEv2 のプロポーザルの `encryption aes-cbc-256 aes-cbc-128` など）は、1 つ目の値が IPsec の行、2 つ目以降がその行の「IKE 暗号（追加）」などの列に入ります。**値を並べたプロポーザルを、ポリシーの 2 つ目以降に置いた形は読みません**（そのプロポーザルの行と、ポリシーの `proposal` の行が「読めなかった」に残ります）。2 番目以降のトランスフォームセットの `mode` は読みません（その行は「読めなかった」）
 - **トランスフォームセットの `mode`。** `mode tunnel`・`mode transport` を「IPsec のモード」に入れます。行が無ければ空（tunnel と同じ意味）です
-- **トランスフォームセットの GCM と SHA-2。** `esp-gcm` は aes128gcm、`esp-gcm 256` は aes256gcm です（GCM は ESP ハッシュを並べられません。並べた行は「未対応」）。`esp-sha256-hmac`・`esp-sha384-hmac`・`esp-sha512-hmac` は ESP ハッシュの sha256・sha384・sha512 です
+- **トランスフォームセットの GCM と SHA-2。** `esp-gcm` は aes128gcm、`esp-gcm 256` は aes256gcm です（GCM は ESP ハッシュを並べられません。並べた行は「読めなかった」）。`esp-sha256-hmac`・`esp-sha384-hmac`・`esp-sha512-hmac` は ESP ハッシュの sha256・sha384・sha512 です
 - **トンネル IF が相手に伝える範囲。** トンネル IF の `tunnel protection ipsec policy ipv4 <リスト>` は、「any any」の代わりに相手へ伝える範囲です。リストの行を、そのトンネルの IPsec の行の対象通信（ipsec_selectors）に入れ、リストはアクセスリストの表から外します（クリプトマップ型と同じ決まり）
-- **IKE 版 1 の自分の ID。** ISAKMP プロファイルを使わない行は、機器全体の `crypto isakmp identity hostname` があれば、自分の ID を「ホスト名.ドメイン名」（`fqdn:…`）として読みます（`ip domain name` が無ければ「未対応」に戻ります）。`address`（機器の既定）は空のままです。プロファイルの `self-identity address` は、その行が送り出す IF（クリプトマップを当てた IF・トンネルの送信元）のアドレスを `address:<アドレス>` として入れます
+- **IKE 版 1 の自分の ID。** ISAKMP プロファイルを使わない行は、機器全体の `crypto isakmp identity hostname` があれば、自分の ID を「ホスト名.ドメイン名」（`fqdn:…`）として読みます（`ip domain name` が無ければ「読めなかった」に戻ります）。`address`（機器の既定）は空のままです。プロファイルの `self-identity address` は、その行が送り出す IF（クリプトマップを当てた IF・トンネルの送信元）のアドレスを `address:<アドレス>` として入れます
 - **トンネル IF 型の行の ISAKMP プロファイル・IKEv2 プロファイル。** IPsec プロファイルの下の `set isakmp-profile`・`set ikev2-profile` と、`tunnel protection ipsec profile <名前> isakmp-profile｜ikev2-profile <名前>` の後ろの指定の、どちらも読みます（同じ意味として扱います）
 - **NAT 越え。** 機器は、途中に NAT を見つけると自分で UDP に包みます（`crypto ipsec nat-transparency` の既定）。そこで、**IPsec の行の「NAT 越え」は、行が無ければ既定値の true** です。`no crypto ipsec nat-transparency udp-encaps` があれば、全部の行が false になります
-- **仮想テンプレートは、相手 any の 1 行です。** 機器がつないできた相手ごとに作る IF（Virtual-Access）は、表に持ちません。IKE 版 1 は、`virtual-template <数>` を持つ ISAKMP プロファイルと、そのキーリング（か機器全体）の「どの相手でも」の鍵（`address 0.0.0.0 0.0.0.0`）をつなぎます。版 2 は、`virtual-template <数>` を持つ IKEv2 プロファイルです。アドレスごとの鍵しか無いひな形は、行にしません（「未対応」に残ります）
+- **仮想テンプレートは、相手 any の 1 行です。** 機器がつないできた相手ごとに作る IF（Virtual-Access）は、表に持ちません。IKE 版 1 は、`virtual-template <数>` を持つ ISAKMP プロファイルと、そのキーリング（か機器全体）の「どの相手でも」の鍵（`address 0.0.0.0 0.0.0.0`）をつなぎます。版 2 は、`virtual-template <数>` を持つ IKEv2 プロファイルです。アドレスごとの鍵しか無いひな形は、行にしません（「読めなかった」に残ります）
 - **外側の VRF は、鍵と相手の見分け方がそろっているときだけ読みます。** トンネルの `tunnel vrf` と、キーリングの `vrf`（版 1）・IKEv2 プロファイルの `match fvrf`（版 2。`any` はどの VRF でも）が同じでなければ、行にしません（機器でもつながらない組み合わせです）。機器全体の `crypto isakmp key` は VRF なしの相手の鍵なので、外側の VRF がある行の鍵にはしません
 - **IKEv2 ポリシーは、行の外側の VRF に当たるものを使います**: `match fvrf <その VRF>` のポリシー、無ければ `match fvrf any` のポリシー。VRF なしの行は、`match fvrf` の無い最初のポリシー、無ければ `any` のポリシー
 - **`ivrf` が外側と同じ・`vrf` が外側と同じなら、「内側の VRF」は空**（空 = 外側と同じ）です
@@ -280,13 +280,13 @@ IOS 15 M&T と IOS-XE のルータで共通のものです。右の列は、章�
 
 ### PPPoE
 
-- **PPPoE。** プールの番号が同じ物理インタフェースと Dialer を 1 行にします。行の名前は Dialer の名前です（Cisco の PPPoE に名前はありません）。CHAP と PAP の両方の行があるときは、接続 ID とパスワードが同じときだけ読みます（違えば、関係する行が「未対応」に戻ります）
-- **`dialer-group` と `dialer-list` は番号でつながります。** 番号は表に持たず、書き出しでは PPPoE の行の順に 1、2、3 … と振ります。`dialer-group` があるのに同じ番号の `dialer-list` が読めないときは、その PPPoE の行を作りません（関係する行が「未対応」に戻ります）
+- **PPPoE。** プールの番号が同じ物理インタフェースと Dialer を 1 行にします。行の名前は Dialer の名前です（Cisco の PPPoE に名前はありません）。CHAP と PAP の両方の行があるときは、接続 ID とパスワードが同じときだけ読みます（違えば、関係する行が「読めなかった」に戻ります）
+- **`dialer-group` と `dialer-list` は番号でつながります。** 番号は表に持たず、書き出しでは PPPoE の行の順に 1、2、3 … と振ります。`dialer-group` があるのに同じ番号の `dialer-list` が読めないときは、その PPPoE の行を作りません（関係する行が「読めなかった」に戻ります）
 - **`ppp authentication` の `callin` の有無。** `callin` 付きは「認証方式」だけ、無しは「相手も認証する」も有効にします。同じ Dialer に両方の行があるときは、行を作りません
 
 ### QoS
 
-- **QoS の二段のポリシー。** 親のポリシーが `class class-default` だけで、その下が `shape average` と子の `service-policy` だけのときは、親を「IF 全体を絞る速さ」として適用の行（qos_bindings）に畳みます。適用の行のポリシー名は子の名前になり、親のポリシーの行は表から外します（親の行は「取り込み済み」のままです）。それ以外の二段の形（親にほかのクラスや動作があるもの、入力の向き）は、`service-policy` の行が「未対応」に戻ります
+- **QoS の二段のポリシー。** 親のポリシーが `class class-default` だけで、その下が `shape average` と子の `service-policy` だけのときは、親を「IF 全体を絞る速さ」として適用の行（qos_bindings）に畳みます。適用の行のポリシー名は子の名前になり、親のポリシーの行は表から外します（親の行は「取り込み済み」のままです）。それ以外の二段の形（親にほかのクラスや動作があるもの、入力の向き）は、`service-policy` の行が「読めなかった」に戻ります
 - **QoS の MQC より前の形。** 機器に名前が無いものは、パックが名前を付けます。`rate-limit` はポリシー `rl-<IF の短い名前>-in|out`（`/` と `.` は `-` にします。例 `rl-Gi0-1-in`）（ACL 付きの行はクラス `rl-acl<番号>`、無い行は `default`）、`priority-list <n>` はクラスとポリシー `pq<n>`（条件の行ごとにキュー）、`queue-list <n>` はポリシー `cq<n>` とキューごとのクラス `cq<n>-<キュー>`、`tcp <ポート>`・`udp <ポート>` はリスト `pq<n>-tcp<ポート>` などです（送信元か宛先のどちらかがそのポートの通信に合う 2 行）。`default` の行は順番 9990 の条件（すべての通信）にします。`priority-list` に `default` の行が無いときは、機器の既定（normal）の条件を足します
 - **カスタムキューの帯域。** キューの `byte-count`（無ければ 1500）を、使っているキューの合計で割った割合（% の整数。切り捨て、1 より小さければ 1）を帯域の % にします。機器はバイト数で順に送るので、**動きは近いものの同じではありません**。どのキューにも当たらない通信の行き先は、`default` の行が無ければ書かれていません（機器の既定はキュー 1 ですが、足していません）
 - **`traffic-shape rate` の単位**は bps とビットとして読みます（コマンドリファレンスの該当の章が取れず、設定ガイドの手順から読みました。下の「確かめていないこと」）
@@ -294,9 +294,9 @@ IOS 15 M&T と IOS-XE のルータで共通のものです。右の列は、章�
 
 ### L2TP
 
-- **L2 延伸（L2TPv3）は、つながった先まで読めたときだけ表に入ります。** `xconnect` → `pseudowire-class` → `l2tp-class` を名前でたどります。`encapsulation l2tpv3`・`ip local interface`・`protocol` の行がそろっていないクラス、`authentication` と `password` の片方しか無いクラス、`manual` なのに `protocol none` でないクラスは行を作らず、関係する行がすべて「未対応」に戻ります。1 つの `pseudowire-class` を複数の IF が使うと、同じ設定の行が IF の数だけできます（設定名が同じ行になります）
+- **L2 延伸（L2TPv3）は、つながった先まで読めたときだけ表に入ります。** `xconnect` → `pseudowire-class` → `l2tp-class` を名前でたどります。`encapsulation l2tpv3`・`ip local interface`・`protocol` の行がそろっていないクラス、`authentication` と `password` の片方しか無いクラス、`manual` なのに `protocol none` でないクラスは行を作らず、関係する行がすべて「読めなかった」に戻ります。1 つの `pseudowire-class` を複数の IF が使うと、同じ設定の行が IF の数だけできます（設定名が同じ行になります）
 - **`l2tp-class` の名前と `ip local pool` の名前は、表に持ちません。** 書き出しでは、クラスに `pseudowire-class` と同じ名前、プールに `l2tp-<L2TP の名前>` を付けます
-- **VPDN のグループは、LNS（`accept-dialin`）か LAC（`request-dialin`）のどちらかです。** 両方を持つグループ、`protocol l2tp` の無いグループ、`vpdn enable` の無い機器のグループは行を作りません。`accept-dialin`・`request-dialin` の下の行は、機器の出力どおり、グループの行より 1 段深い字下げで読みます（資料の設定例には字下げが 1 段のものがあり、その形は「未対応」になります）
+- **VPDN のグループは、LNS（`accept-dialin`）か LAC（`request-dialin`）のどちらかです。** 両方を持つグループ、`protocol l2tp` の無いグループ、`vpdn enable` の無い機器のグループは行を作りません。`accept-dialin`・`request-dialin` の下の行は、機器の出力どおり、グループの行より 1 段深い字下げで読みます（資料の設定例には字下げが 1 段のものがあり、その形は「読めなかった」になります）
 - **LNS がある機器の、`password` で書いた権限なしのユーザは、L2TP の利用者として読みます**（ユーザの表ではなく「L2TP 接続ユーザ」に入ります。別紙 A 3.21）。CHAP にはパスワードそのものが要り、`secret`（ハッシュ）では確かめられないためです。トンネルの認証のために相手の名前で作ったユーザも、ここに入ります。LNS が 2 つ以上ある機器では、名前の順で最初の LNS に入れます。`secret` で書いたユーザと、権限（`privilege`）を持つユーザは、ユーザの表です
 - **「トンネルの認証」は、`no l2tp tunnel authentication` が無ければ有効です**（機器の既定）。有効で `l2tp tunnel password` が無いグループは、「自分の名前（無ければホスト名）のユーザのパスワードを使う」の意味で、パスワードの列は空になります
 - **PPPoE を受けるポートは、機器に LAC がちょうど 1 つあるときだけ読みます**（Cisco は、PPPoE のグループと VPDN のグループを結び付けません）。グループの名前は表に持たず、書き出しでは L2TP の名前にします
@@ -372,9 +372,9 @@ IPv6 の行で捨てる語は、下の「IPv6」の節の「読み方の決ま�
 - `!` で始まる行は区切りとして数えます
 - IPv6 の行（`address-family ipv6` の下の `neighbor <アドレス> activate` など）は、下の「IPv6」の節の「読み方の決まり」にあります
 
-## 読まない行（「未対応」として画面に出ます）
+## 読まない行（「読めなかった」として画面に出ます）
 
-当たる規則が無い行は、黙って落とさず、「未対応」の一覧に出ます。分野ごとの、読まない書き方とその理由です。VLAN とスイッチ、IPv6、ルートマップ・BGP・OSPF のそのほかの行は、それぞれの節の「読まない行」にあります。
+当たる規則が無い行は、黙って落とさず、「読めなかった」の一覧に出ます。分野ごとの、読まない書き方とその理由です。VLAN とスイッチ、IPv6、ルートマップ・BGP・OSPF のそのほかの行は、それぞれの節の「読まない行」にあります。
 
 ### 機器の基本
 
@@ -422,9 +422,9 @@ IPv6 の行で捨てる語は、下の「IPv6」の節の「読み方の決ま�
 
 ### IPsec
 
-- 相手を複数並べたクリプトマップのうち、**2 行目以降の `set peer … default`**、**ISAKMP プロファイル・IKE 版 2 の項目の 2 行目以降の `set peer`**、**鍵が 1 行目の相手と違う相手**: 相手ごとの鍵・ID を持つ列がありません（1 行は、鍵 1 つ・ID 1 組です。プロファイルを使う項目は、相手ごとに `match identity` と鍵が要り、1 行に写せません）。その `set peer` の行と、その相手の鍵の行が「未対応」に残ります。IKE 版 1 で ID の無い項目の、同じ鍵の相手は「予備の相手」として読みます（1 行目の `default` は「つなぎ直しは最初の相手から」）
-- **仮想テンプレートのうち**、IKEv2 プロファイルの `virtual-template <数> mode auto`（トンネルの種類を機器が選ぶ形）、相手ごとに鍵の違うキーリング（アドレスごとの鍵）で 1 つのひな形を使う形、`match identity group`（Easy VPN）: 行は「相手 any・鍵 1 つ」で、相手ごとの値を持てません。ISAKMP プロファイルの `vrf` をひな形と組にした形は、`vrf` の行だけが「未対応」に残ります（トンネル IF 型の内側は、ひな形の `vrf forwarding` で持ちます）
-- **VRF のうち**、IKEv2 ポリシーの `match address local`（そのポリシーが当たる IKE 版 2 の行は、行にしません。「未対応」に戻ります）、IKEv2 プロファイルの `ivrf global` を VRF の中の IF のクリプトマップで使う形（「内側は VRF なし」を表す語がありません。行にしません）、GRE など IPsec でないトンネルの `tunnel vrf`（トンネルの表に外側の VRF の列がありません。IPsec の行の列です）
+- 相手を複数並べたクリプトマップのうち、**2 行目以降の `set peer … default`**、**ISAKMP プロファイル・IKE 版 2 の項目の 2 行目以降の `set peer`**、**鍵が 1 行目の相手と違う相手**: 相手ごとの鍵・ID を持つ列がありません（1 行は、鍵 1 つ・ID 1 組です。プロファイルを使う項目は、相手ごとに `match identity` と鍵が要り、1 行に写せません）。その `set peer` の行と、その相手の鍵の行が「読めなかった」に残ります。IKE 版 1 で ID の無い項目の、同じ鍵の相手は「予備の相手」として読みます（1 行目の `default` は「つなぎ直しは最初の相手から」）
+- **仮想テンプレートのうち**、IKEv2 プロファイルの `virtual-template <数> mode auto`（トンネルの種類を機器が選ぶ形）、相手ごとに鍵の違うキーリング（アドレスごとの鍵）で 1 つのひな形を使う形、`match identity group`（Easy VPN）: 行は「相手 any・鍵 1 つ」で、相手ごとの値を持てません。ISAKMP プロファイルの `vrf` をひな形と組にした形は、`vrf` の行だけが「読めなかった」に残ります（トンネル IF 型の内側は、ひな形の `vrf forwarding` で持ちます）
+- **VRF のうち**、IKEv2 ポリシーの `match address local`（そのポリシーが当たる IKE 版 2 の行は、行にしません。「読めなかった」に戻ります）、IKEv2 プロファイルの `ivrf global` を VRF の中の IF のクリプトマップで使う形（「内側は VRF なし」を表す語がありません。行にしません）、GRE など IPsec でないトンネルの `tunnel vrf`（トンネルの表に外側の VRF の列がありません。IPsec の行の列です）
 - **証明書・EAP**（`authentication … rsa-sig`・`eap`、`pki trustpoint`、`crypto isakmp policy` の `authentication` が `pre-share` でないもの、`crypto isakmp identity dn`）: 表にしません。認証に使う証明書は、機器の中で鍵を作り、認証局に登録して入れるもので（`crypto pki …` の手順と、機器の外の認証局）、コンフィグの行を表に写しても、別の機器では動きません。EAP は、利用者の確かめを外のサーバ（AAA）に任せる設定で、同じく機器の外に及びます。このパックが扱う認証は、事前共有鍵だけです
 - **IPv6 の相手・ID・対象通信**（`tunnel mode ipsec ipv6`、`crypto isakmp key … address ipv6 …`、キーリングの `pre-shared-key ipv6 …`、`match identity address ipv6 …`、`tunnel protection ipsec policy ipv6`、`crypto map ipv6 …`）: 読まず、書きません。表は相手・対象通信を IPv4 で持ちます。そのうえ、公開資料の書き方がそろいません: `crypto isakmp key` は、構文の行が `{address <アドレス> | ipv6 <アドレス>/<長さ>}`、例が `address ipv6 <アドレス>/<長さ>` です。キーリングの IPv6 の例は `key` の無いまま印刷されています。IKEv2 のキーリング・プロファイルの「ipv6-address prefix」は、区切りが空白か `/` かを決められる例がありません。確かめられた形（IKE 版 1 の機器全体の鍵とトンネル IF）だけでは、NEC IX との往復を作れませんでした
 - **マルチポイント GRE と NHRP（DMVPN）**（`tunnel mode gre multipoint`、`ip nhrp …`、`tunnel protection ipsec profile <名前> shared`）: 表にしません。NEC IX にも似た機能（ダイナミック VPN: `tunnel mode mgre ipsec-ikev2`、`nhrp nhs`、`nhrp local`）がありますが、メーカーの機能説明書に「IX と WA のみ接続可能です。それ以外の装置とは接続できません」とあり、Cisco の DMVPN とはつながりません。設定の考え方も違います（NEC IX は IKEv2 だけ・ハブに NHRP の設定が要らない・LAN 側の IF を `nhrp local` で指す。Cisco は NHRP の網番号・認証・対応づけを両側に書く）。片方を読んでもう片方へ書く決まりを作れないので、どちらのパックも読みません（表にするなら: トンネルの種類に `mgre` を足し、NHRP の表を「トンネル IF・役割（hub／spoke）・ハブのトンネル内アドレス・ハブの外側アドレス・保持時間・網番号・認証の文字列・ショートカットを使う」で持つ案。同じメーカーどうしの移し替えにしか使えません）
@@ -439,7 +439,7 @@ IPv6 の行で捨てる語は、下の「IPv6」の節の「読み方の決ま�
 
 - `match protocol <名前>` の後ろに語が続く形、`random-detect dscp <値> <しきい値> …` などのしきい値の行、ミリ秒でバーストを書く `shape … percent`・`police cir percent` の形、`pir percent`、`set-dscp-transmit`・`set-prec-transmit` 以外の印を付ける動作、`match ip rtp`・`match packet length`・`match discard-class`
 - インタフェースの下の `qos pre-classify`（トンネルで、アドレスやポートで見分けるときに要る行です。入れる列が無く、書き出しもしません。要るときは追加コンフィグに書いてください）
-- 二段のポリシーのうち、「読み方の決まり」の「QoS の二段のポリシー」の形でないもの（`service-policy` の行が「未対応」に戻ります）
+- 二段のポリシーのうち、「読み方の決まり」の「QoS の二段のポリシー」の形でないもの（`service-policy` の行が「読めなかった」に戻ります）
 
 ### L2TP
 
@@ -468,7 +468,7 @@ IPv6 の行で捨てる語は、下の「IPv6」の節の「読み方の決ま�
 |---|---|
 | ハッシュ化された秘密（特権パスワード・ユーザ） | ハッシュの始まりで種別の番号を決めます。`$1$` → `5`、`$8$` → `8`、`$9$`・`$14$` → `9`。それ以外の始まりはエラーにします（別メーカーのハッシュは引き継げません） |
 | 平文の秘密 | `secret 0 <値>` と書きます。形が空のセルは平文として扱います。「元に戻せる形で持つ」が有効なユーザは `password 0 <値>`（形が encrypted なら `password 7 <値>`）と書きます（PPP の CHAP の相手のユーザ。`secret` では通りません） |
-| ユーザの権限 | `admin` は `privilege 15`、数はそのまま。`operator` に当たる数は決めていないので、語の対応がないエラー（G-603）になります。数で書いてください |
+| ユーザの権限 | `admin` は `privilege 15`、数はそのまま。`operator` に当たる数は決めていないので、新しいメーカーに同じ語がないエラー（G-603）になります。数で書いてください |
 | 時刻帯 | 「名前 +時[:分]」の形（`JST +9` → `clock timezone JST 9 0`）。名前のない形はエラーにします |
 | バナー | 「バナー（接続したとき）」は `banner motd`、「バナー」は `banner login`、「バナー（ログインの後）」は `banner exec` で書きます。区切りの文字は `#` `@` `%` `~` `\|` のうち文面に無い最初のものを使います |
 | リモート接続 | `line vty 0 4` に書きます。5 番以降の線は追加コンフィグに書いてください。認証 `aaa` は書けません（エラー）。認証 `password` にはログインのパスワードが要ります |
@@ -489,7 +489,7 @@ IPv6 の行で捨てる語は、下の「IPv6」の節の「読み方の決ま�
 | 項目 | 書き方 |
 |---|---|
 | インタフェース | 有効な IF には `no shutdown`、無効な IF には `shutdown` を必ず書きます。アドレスの無い IF に `no ip address` は書きません。VRF は `vrf forwarding` の形で、アドレスより前に書きます |
-| トンネル | トンネル IF の下に `tunnel source`・`tunnel destination`・`tunnel key`（種類が gre のときだけ）・`keepalive <間隔> <回数>`（2 つは組）。種類が gre なら `tunnel mode` の行は書きません（機器の既定）。ipip は `tunnel mode ipip`、ipsec は `tunnel mode ipsec ipv4` と `tunnel protection ipsec profile <名前>`（IPsec の表に、そのトンネル IF の行が要ります。送信元と宛先は ipsec でも必須です）。l2tpv3 は語の対応がないエラー（G-603） |
+| トンネル | トンネル IF の下に `tunnel source`・`tunnel destination`・`tunnel key`（種類が gre のときだけ）・`keepalive <間隔> <回数>`（2 つは組）。種類が gre なら `tunnel mode` の行は書きません（機器の既定）。ipip は `tunnel mode ipip`、ipsec は `tunnel mode ipsec ipv4` と `tunnel protection ipsec profile <名前>`（IPsec の表に、そのトンネル IF の行が要ります。送信元と宛先は ipsec でも必須です）。l2tpv3 は新しいメーカーに同じ語がないエラー（G-603） |
 | PPPoE | 論理 IF は `Dialer1`〜`Dialer255`。その番号をプールの番号に使います（表に番号の列がありません）。物理 IF の下に `pppoe enable group global` と `pppoe-client dial-pool-number <番号> [service-name <名前>]`、Dialer の下に `encapsulation ppp`・`dialer pool <番号>`・認証の行を書きます。物理 IF と論理 IF は、どちらもインタフェースの表に行が要ります。同じ物理 IF・同じ論理 IF を 2 つの行で使うと止まります |
 | PPPoE の認証 | 認証方式があれば `ppp authentication <方式> callin`（chap_pap は `chap pap`）。「相手も認証する」が有効なら、`callin` を付けません。chap は `ppp chap hostname`・`ppp chap password`、pap は `ppp pap sent-username … password …`、chap_pap と空は両方を書きます。パスワードは平文で、種別の番号を付けません |
 | PPPoE のアドレス・MTU | 論理 IF のインタフェースの行に書きます（アドレス `negotiated` → `ip address negotiated`、MTU → `mtu`、IP MTU → `ip mtu`、MSS → `ip tcp adjust-mss`） |
@@ -588,7 +588,7 @@ IPv6 の行で捨てる語は、下の「IPv6」の節の「読み方の決ま�
 | IPsec で書けない列 | IKE のモード・相手監視の再送回数・自分側アドレス、トンネル IF 型の行の自分側 IF、版 1 の行の PRF・相手を確かめる鍵・「NAT 越えを必ず使う」（値があれば G-602）。「この IKE の相手だけに使う」は、書かずに知らせます（G-614。Cisco に当たる行がありません）。IKE 版 1 のハッシュ sha512 は、語を資料で確かめていないのでエラー（G-603）になります |
 | 「いつもつないでおく」 | Cisco に書く行がありません。トンネル IF 型の「有効」と、クリプトマップ型の「無効」は、機器の動きそのものなので、何も書かず、何も知らせません。トンネル IF 型の「無効」は、書かずに G-614 で知らせます。クリプトマップ型の「有効」は G-602 です |
 
-- 相手 any のトンネル IF 型: `crypto keyring KR-Virtual-Template<数>`（`pre-shared-key address 0.0.0.0 0.0.0.0 key <鍵>`）、`crypto isakmp profile ISAKMP-Virtual-Template<数>`（`keyring`・`match identity address 0.0.0.0`（相手の ID があればその行）・`virtual-template <数>`）、`interface Virtual-Template<数> type tunnel`（`ip unnumbered`・`tunnel mode ipsec ipv4`・`tunnel protection ipsec profile`。「送信元」があれば `tunnel source`）。版 2 は IKEv2 プロファイルに `virtual-template <数>`。**「トンネル IF」が `Virtual-Template<数>` でない相手 any の行は止まります**（NEC IX から書き換えるときは、IF 対応で `Tunnel0.0` → `Virtual-Template1` のように対にします）
+- 相手 any のトンネル IF 型: `crypto keyring KR-Virtual-Template<数>`（`pre-shared-key address 0.0.0.0 0.0.0.0 key <鍵>`）、`crypto isakmp profile ISAKMP-Virtual-Template<数>`（`keyring`・`match identity address 0.0.0.0`（相手の ID があればその行）・`virtual-template <数>`）、`interface Virtual-Template<数> type tunnel`（`ip unnumbered`・`tunnel mode ipsec ipv4`・`tunnel protection ipsec profile`。「送信元」があれば `tunnel source`）。版 2 は IKEv2 プロファイルに `virtual-template <数>`。**「トンネル IF」が `Virtual-Template<数>` でない相手 any の行は止まります**（NEC IX から書き換えるときは、新旧対照表（ポート）で `Tunnel0.0` → `Virtual-Template1` のように対にします）
 - 相手が名前のトンネル IF 型: `tunnel destination <名前>`。トンネルの「宛先（名前）」が空なら、IPsec の相手の名前を書きます（知らせません）。版 2 は相手の ID が要ります
 - 外側の VRF: トンネル IF に `tunnel vrf`。版 1 は `crypto keyring … vrf <VRF>` と ISAKMP プロファイル（`match identity address <相手> 255.255.255.255 <VRF>`）を行ごとに書きます（ID の無い行でも）。版 2 は、IKEv2 プロファイルに `match fvrf <VRF>`、機器に 1 つの IKEv2 ポリシーに `match fvrf any`（版 2 の行に外側の VRF が 1 つでもあるとき）。**外側の VRF がある版 2 の行で IKE の暗号・ハッシュ・DH グループが空なら止まります**（ポリシーにはプロポーザルが要り、ポリシーが無ければ VRF なしの相手にしか当たらないため）。方式 policy の行の「外側の VRF」が自分側 IF の VRF と違えば止まります
 - 内側の VRF（方式 policy）: ISAKMP プロファイルの `vrf <VRF>`、IKEv2 プロファイルの `ivrf <VRF>`
@@ -654,7 +654,7 @@ IPv6 の行で捨てる語は、下の「IPv6」の節の「読み方の決ま�
 | PortFast | `edge` の語を付けずに書きます（`spanning-tree portfast`・`… portfast trunk`・`… portfast default`・`… portfast bpduguard default`）。Catalyst 系の IOS XE 17.12 の設定ガイドと、ルータのスイッチモジュールの設定ガイドがこの形です。`edge` 付きで保存する機種があること（下の「確かめていないこと」）は、取り込みで両方を読むことで吸収します |
 | 許可 VLAN | 1 行にまとめて `switchport trunk allowed vlan 10,20,30-40` と書きます（`add` の続きの行には分けません）。`all`・`none` は、それだけを書きます（番号と一緒ならエラー） |
 | それだけの `switchport` | スイッチポートの行に何も値が無いときだけ書きます |
-| VLAN の IF | IF 名は `Vlan<番号>` です。「VLAN 番号（VLAN の IF）」が IF 名の番号と違う行、`Vlan` で始まらない IF にこの番号がある行は、エラーにして直し方を知らせます（別メーカーから書き換えたときに、IF 対応の名前の付け間違いに気づくため） |
+| VLAN の IF | IF 名は `Vlan<番号>` です。「VLAN 番号（VLAN の IF）」が IF 名の番号と違う行、`Vlan` で始まらない IF にこの番号がある行は、エラーにして直し方を知らせます（別メーカーから書き換えたときに、新旧対照表（ポート）の名前の付け間違いに気づくため） |
 | ブリッジ | 「ブリッジと L3 の併用」が有効なら `bridge irb`、BVI ごとに `bridge <番号> route ip` を書きます。BVI の「ブリッジグループ」は、BVI の番号と同じでなければエラーです（Cisco では、グループ n の L3 の口は BVIn）。グループの番号は 1〜255 です |
 | 「無効」が書けない列 | 行が無いのと同じ意味になる「無効」は、エラーにします（セルを空にしてください）: 「アクセスポートをすぐ転送にする」「エッジポートの BPDU ガード」「拡張システム ID」「モードの自動交渉を止める」「ポートセキュリティ」「覚えた MAC を設定に残す」「ブリッジと L3 の併用」、ループガードの既定・BackboneFast・UplinkFast・VTP プルーニング・DHCP スヌーピング・保護ポート・信頼ポート・VLAN の shutdown など。有効・無効のどちらも書けるのは、CDP・LLDP・BPDU フィルタ（ポート）・DHCP スヌーピングの option 82 です |
 | LAG | `channel-group <番号> mode <束ね方>`。束ね方が空なら `channel-group <番号>` だけを書きます |
@@ -727,7 +727,7 @@ NEC QX のパック（`nec_qx`）から来るデータ（別紙 A 3.4・3.22・3
 
 ### 機種の定義（`models.yaml`。別紙 B 6 章）
 
-「機器対応」の「新機種」に下の ID を書くと、IF 対応の新 IF 名の案を、機種のポートの並びから作ります（内蔵スイッチのポートはスイッチのポートへ、L3 のポートは WAN のポートへ。VLAN の IF は `Vlan<番号>`、サブ IF は `<親>.<VLAN 番号>`、PPPoE の論理 IF は `Dialer<番号>`）。ID は製品の名前ではなく、ポートの並びを言う名前です（数字はポートの数）。
+「新旧対照表（機器）」の「新機種」に下の ID を書くと、新旧対照表（ポート）の新 IF 名の案を、機種のポートの並びから作ります（内蔵スイッチのポートはスイッチのポートへ、L3 のポートは WAN のポートへ。VLAN の IF は `Vlan<番号>`、サブ IF は `<親>.<VLAN 番号>`、PPPoE の論理 IF は `Dialer<番号>`）。ID は製品の名前ではなく、ポートの並びを言う名前です（数字はポートの数）。
 
 | ID | ポート | 根拠 |
 |---|---|---|
@@ -769,7 +769,7 @@ GE のスイッチ 8 ポートに `GigabitEthernet8` の WAN を持つ形は、�
 - `ipv6 local pool` の名前は表に持ちません（書き出しでは `PD-<DHCPv6 サーバの名前>` と付けます）
 - OSPFv3 の認証の鍵の `7 <値>`（機器が暗号化して保存した形）は、その形のまま入れます。`0 <鍵>` は鍵そのものです
 
-### 読まない行（「未対応」として画面に出ます）
+### 読まない行（「読めなかった」として画面に出ます）
 
 | 行 | 理由 |
 |---|---|
@@ -844,9 +844,9 @@ GE のスイッチ 8 ポートに `GigabitEthernet8` の WAN を持つ形は、�
 
 ### 読み方の決まり
 
-- **ピアグループは、表に持ちません。** グループの設定を、メンバーの行のうち自分で値を持たない列に入れます（グループを使わずにネイバーごとに書いた設定と同じ意味です）。書き出しは、いつもネイバーごとの行です（取り込んだ元のグループの名前は引き継ぎません）。メンバーが 1 つも無いグループの行は「未対応」のままです。IPv6 のアドレスのメンバー（`neighbor <IPv6 アドレス> peer-group <名前>`）は読みません
-- **`mask` の無い `network <アドレス>`** は、アドレスのクラスの長さで入れます（先頭の数が 1〜126 なら /8、128〜191 なら /16、192〜223 なら /24）。Cisco の技術資料（Document ID 19345）に「クラスの境目（255.0.0.0・255.255.0.0・255.255.255.0）のネットワークは mask を書かなくてよい」「クラス B のネットワークは、mask の無い `network <アドレス>` だけで /16 として BGP の表に入る」（資料の例）とあります。コマンドリファレンスの `network (BGP and multiprotocol BGP)` の項は、`mask` を省けることだけを示しています。そのクラスのネットワークのアドレスでない行（`network 192.0.2.64`）は「未対応」です。**書き出しは、いつも `mask` を付けます**
-- **`set comm-list <リスト> delete`** は、リストが「permit の、1 行に 1 つのコミュニティを書いた標準のリスト」のときだけ読みます（コマンドリファレンスが、この命令に使えるリストの形として示しているものです）。リストの中身を方針の行の「外すコミュニティ」に入れ、リストはコミュニティのリストの表から外します。ほかの形のリスト（正規表現・deny・1 行に 2 つ以上）を指す行は「未対応」です
+- **ピアグループは、表に持ちません。** グループの設定を、メンバーの行のうち自分で値を持たない列に入れます（グループを使わずにネイバーごとに書いた設定と同じ意味です）。書き出しは、いつもネイバーごとの行です（取り込んだ元のグループの名前は引き継ぎません）。メンバーが 1 つも無いグループの行は「読めなかった」のままです。IPv6 のアドレスのメンバー（`neighbor <IPv6 アドレス> peer-group <名前>`）は読みません
+- **`mask` の無い `network <アドレス>`** は、アドレスのクラスの長さで入れます（先頭の数が 1〜126 なら /8、128〜191 なら /16、192〜223 なら /24）。Cisco の技術資料（Document ID 19345）に「クラスの境目（255.0.0.0・255.255.0.0・255.255.255.0）のネットワークは mask を書かなくてよい」「クラス B のネットワークは、mask の無い `network <アドレス>` だけで /16 として BGP の表に入る」（資料の例）とあります。コマンドリファレンスの `network (BGP and multiprotocol BGP)` の項は、`mask` を省けることだけを示しています。そのクラスのネットワークのアドレスでない行（`network 192.0.2.64`）は「読めなかった」です。**書き出しは、いつも `mask` を付けます**
+- **`set comm-list <リスト> delete`** は、リストが「permit の、1 行に 1 つのコミュニティを書いた標準のリスト」のときだけ読みます（コマンドリファレンスが、この命令に使えるリストの形として示しているものです）。リストの中身を方針の行の「外すコミュニティ」に入れ、リストはコミュニティのリストの表から外します。ほかの形のリスト（正規表現・deny・1 行に 2 つ以上）を指す行は「読めなかった」です
 - **`continue`** の番号を省いた形は、`next`（次の行）として入れます
 - **`password 7 <値>`** は、「7 <値>」のままセルに入れます（別紙 A 3.26）
 - **`send-community both`** は「コミュニティを送る」と「拡張コミュニティを送る」の両方、`extended` は後者だけが有効です
@@ -860,7 +860,7 @@ GE のスイッチ 8 ポートに `GigabitEthernet8` の WAN を持つ形は、�
 - ネイバーの「受信フィルタ」（プレフィックスリスト）と「受信フィルタ（ACL）」は、同じ向きにどちらか 1 つです（両方あれば止まります）
 - OSPF の「経路表に入れる経路の絞り込み」は、3 つの列のどれか 1 つです
 
-### 読まない行（「未対応」として画面に出ます）
+### 読まない行（「読めなかった」として画面に出ます）
 
 | 行 | 理由 |
 |---|---|
@@ -879,13 +879,13 @@ GE のスイッチ 8 ポートに `GigabitEthernet8` の WAN を持つ形は、�
 
 ### 公開資料で確かめられず、読まないもの
 
-公開資料で書き方か意味を確かめられなかったもの、設計データの形に入らないものです。どれも「未対応」として画面に出ます（黙って落としません）。
+公開資料で書き方か意味を確かめられなかったもの、設計データの形に入らないものです。どれも「読めなかった」として画面に出ます（黙って落としません）。
 
 | 書き方 | 探した資料と、読まない理由 |
 |---|---|
 | VRF の中の IPv6（`ipv6 route vrf …` 以外の、`address-family ipv6 vrf …` の BGP、VRF の OSPFv3） | NEC IX は「IPv6 はルーティング機能を含めて VRF 未対応」です（NEC IX の機能説明書 2.17）。BGP の IPv6 の表は VRF を持たない形で、VRF の中の IPv6 の BGP・OSPFv3 は表にしていません（VRF の中の IPv6 のスタティック経路は読み書きします） |
 | ND プロキシ | IPv6 Command Reference の章「ipv6 mo to ipv6 ospf da」（`ipv6 nd …`）にあるのは `ipv6 nd dad-proxy`・`ipv6 nd na glean` などで、NEC IX の `ipv6 nd proxy <LAN 側 IF>`（WAN 側で LAN の端末の代わりに答える）に当たる行は見つかりませんでした。書けないままです（G-601） |
-| MAP-E（`nat64 map-e domain <番号>` と、その下の `border-relay-address`・`basic-mapping-rule`・`default-mapping-rule` など） | Cisco の MAP-E は、規則（IPv6 のプレフィックス・IPv4 のプレフィックス・ポートの決め方）を手で書く形です。公開資料の 2 つの版（IP Addressing Configuration Guide, IOS XE 17.x の「Mapping of Address and Port Using Encapsulation」と、IP Addressing: NAT Configuration Guide, 15M&T の同じ名前の章）は、境界の装置の書き方（`border-relay-address` と `default-mapping-rule`）、IF での有効にし方（`nat64 enable` とトンネル IF）、行の置き場所（モードの名前）が食い違っていて、往復できる形を決められませんでした。NEC IX の MAP-E は「事業者を選ぶと、規則を自動でもらう」形だけで（CRM 12 章の `tunnel mode map-e jpix\|ocn\|ocn-fixed`）、規則を手で書く行がありません。Cisco の規則を NEC IX へ書くと、規則の値が使われず事業者の規則で動くので、置き換えもしません。表にせず、未対応行のままです |
+| MAP-E（`nat64 map-e domain <番号>` と、その下の `border-relay-address`・`basic-mapping-rule`・`default-mapping-rule` など） | Cisco の MAP-E は、規則（IPv6 のプレフィックス・IPv4 のプレフィックス・ポートの決め方）を手で書く形です。公開資料の 2 つの版（IP Addressing Configuration Guide, IOS XE 17.x の「Mapping of Address and Port Using Encapsulation」と、IP Addressing: NAT Configuration Guide, 15M&T の同じ名前の章）は、境界の装置の書き方（`border-relay-address` と `default-mapping-rule`）、IF での有効にし方（`nat64 enable` とトンネル IF）、行の置き場所（モードの名前）が食い違っていて、往復できる形を決められませんでした。NEC IX の MAP-E は「事業者を選ぶと、規則を自動でもらう」形だけで（CRM 12 章の `tunnel mode map-e jpix\|ocn\|ocn-fixed`）、規則を手で書く行がありません。Cisco の規則を NEC IX へ書くと、規則の値が使われず事業者の規則で動くので、置き換えもしません。表にせず、読めなかった行のままです |
 | ポートの名前のうち番号を確かめられなかったもの、`eq` に複数のポート、同じ名前の `ip nat pool` の複数行 | 上の「ACL・NAT・経路・回線監視・DHCP の残り」の節の「読まない行」のとおりです。`eq <ポート> <ポート>` を 1 行ずつに分ける置き換えは、行の番号を振り直すことになる（10・20 の間に入れられない）ので作っていません |
 
 ### 確かめていないこと
@@ -911,7 +911,7 @@ GE のスイッチ 8 ポートに `GigabitEthernet8` の WAN を持つ形は、�
 
 - RIP（IPv4）は、`network` に含まれるアドレスを持つ IF ごとに、RIP インタフェースの行を作ります。`network` の行そのものは表に持ちません
 - キーチェーンの名前は表に持ちません（書き出しでは `RIP-<IF の短い名前>` と付けます）
-- RIPng は、IF が最初に指したプロセスの名前の設定だけを読みます（ほかの名前の行は「未対応」）。書き出しでは `ripng` という名前で書きます
+- RIPng は、IF が最初に指したプロセスの名前の設定だけを読みます（ほかの名前の行は「読めなかった」）。書き出しでは `ripng` という名前で書きます
 - RIPng の `timers` の 4 つ目（無効になってから消すまで）は、「無効とみなすまで」を足した値（最後の更新から消すまで）にして入れます
 
 ### 書き出し
@@ -920,7 +920,7 @@ GE のスイッチ 8 ポートに `GigabitEthernet8` の WAN を持つ形は、�
 - **書けないもの（理由を付けて止めます。G-601）**: 「受けない」、RIPng の「送らない」、RIP（IPv4）の poisoned_reverse と IF ごとのデフォルト経路の広告、RIPng のプロセスの行のデフォルト経路の広告・既定の「送らない」・再配布のメトリックの既定、IF ごとに違う RIPng のスプリットホライズン
 - **書かない列（値があれば G-602）**: RIP（IPv4）の IF の「メトリックに足す値」（`offset-list` は ACL を使う形です）、再配布の「タグ」
 
-### 読まない行（「未対応」として画面に出ます）
+### 読まない行（「読めなかった」として画面に出ます）
 
 | 行 | 理由 |
 |---|---|
@@ -943,7 +943,7 @@ GE のスイッチ 8 ポートに `GigabitEthernet8` の WAN を持つ形は、�
 
 ### 機器の基本
 
-- `service timestamps` の語が、running-config でこの順（`msec` → `localtime` → `show-timezone` → `year`）に出ること（構文の行の順です）。別の順に出る機器の行は「未対応」になります
+- `service timestamps` の語が、running-config でこの順（`msec` → `localtime` → `show-timezone` → `year`）に出ること（構文の行の順です）。別の順に出る機器の行は「読めなかった」になります
 
 ### インタフェース・トンネル・PPPoE
 

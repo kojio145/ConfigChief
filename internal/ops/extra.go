@@ -275,7 +275,7 @@ type ExtraDraft struct {
 }
 
 // DraftExtra gives the extra configuration of the device (the new host
-// name of 機器対応, or the host name itself) with the lines of the group
+// name of 新旧対照表（機器）, or the host name itself) with the lines of the group
 // added at its end. It writes nothing.
 func (e *Env) DraftExtra(source, group, device string) (*ExtraDraft, error) {
 	if source == "" {
@@ -296,7 +296,7 @@ func (e *Env) DraftExtra(source, group, device string) (*ExtraDraft, error) {
 		}
 	}
 	if g == nil {
-		return nil, fmt.Errorf("未対応の行のかたまり %s がありません（取り込み直したときは、画面を読み直してください）", group)
+		return nil, fmt.Errorf("読めなかった行のかたまり %s がありません（取り込み直したときは、画面を読み直してください）", group)
 	}
 	var gd *GroupDevice
 	for _, d := range g.Devices {
@@ -343,7 +343,7 @@ func (e *Env) DraftExtra(source, group, device string) (*ExtraDraft, error) {
 	var b strings.Builder
 	n := 0
 	for _, hd := range gd.Heads {
-		note := fmt.Sprintf("{# %s %s の未対応の行（%s %d 行目〜）", map[string]string{"old": "旧", "new": "新"}[source], device, f.Path, hd.Line)
+		note := fmt.Sprintf("{# %s %s の読めなかった行（%s %d 行目〜）", map[string]string{"old": "旧", "new": "新"}[source], device, f.Path, hd.Line)
 		if oldVendor != newVendor && newVendor != "" {
 			note += "。新しいメーカーの書き方に直してください"
 		}

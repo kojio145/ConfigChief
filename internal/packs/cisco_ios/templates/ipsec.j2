@@ -254,7 +254,7 @@
 {% set n = namespace(seen=false, same=0) %}
 {% set isvt = (tif is startingwith('Virtual-Template')) and ((tif | replace('Virtual-Template', '')) is digits) %}
 {% if isany and not isvt %}
-{{ fail(what ~ ' は相手アドレスが any ですが、トンネル IF「' ~ tif ~ '」が仮想テンプレートではありません（Cisco は、相手の決まっていないトンネル IF 型を、相手ごとに IF を作るひな形で書きます。「トンネル IF」を Virtual-Template1 のようにしてください。別メーカーから書き換えるときは、IF 対応でトンネル IF を Virtual-Template<数> と対にします）') }}
+{{ fail(what ~ ' は相手アドレスが any ですが、トンネル IF「' ~ tif ~ '」が仮想テンプレートではありません（Cisco は、相手の決まっていないトンネル IF 型を、相手ごとに IF を作るひな形で書きます。「トンネル IF」を Virtual-Template1 のようにしてください。別メーカーから書き換えるときは、新旧対照表（ポート）でトンネル IF を Virtual-Template<数> と対にします）') }}
 {% elif isvt and not isany %}
 {{ fail(what ~ ' のトンネル IF ' ~ tif ~ ' は仮想テンプレートですが、相手アドレスが any ではありません（仮想テンプレートは、相手の決まっていない行に使います。相手が決まっているなら Tunnel<数> にしてください）') }}
 {% endif %}

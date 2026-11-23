@@ -79,6 +79,7 @@ func (s *Session) LastResult() (*ResultView, error) {
 		ch.Report = Files{dir + "/reports/changes.xlsx", dir + "/reports/changes.html"}
 	}
 	s.shown = o
+	s.draft = false
 	s.wrote = written{dir: dir, configs: configs, unverified: unverified,
 		report: Files{o.Report.XLSX, o.Report.HTML}, changes: ch,
 		rewrite: Files{o.RewriteReport.XLSX, o.RewriteReport.HTML}}
@@ -121,6 +122,9 @@ func (s *Session) ApproveMany(keys []string, reason, by string) (*ResultView, er
 	defer s.mu.Unlock()
 	if s.env == nil || s.shown == nil {
 		return nil, errors.New("先に「生成とチェック」か「チェックだけ」を行ってください")
+	}
+	if s.draft {
+		return nil, errors.New("下書きでチェックした結果では承認できません。表の編集で保存してから「チェックだけ」を押し、その結果で承認してください")
 	}
 	if strings.TrimSpace(reason) == "" || strings.TrimSpace(by) == "" {
 		return nil, errors.New("理由と承認者を書いてください")

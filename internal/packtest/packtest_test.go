@@ -28,7 +28,7 @@ func TestMiniPasses(t *testing.T) {
 		t.Errorf("failures:\n%s", Report(cases[0]))
 	}
 	rep := Report(cases[0])
-	for _, want := range []string{"未対応 9", "合格", "mystery knob 5"} {
+	for _, want := range []string{"読めなかった 9", "合格", "mystery knob 5"} {
 		if !strings.Contains(rep, want) {
 			t.Errorf("the report does not have %q:\n%s", want, rep)
 		}
@@ -72,7 +72,7 @@ ignored_min: 99
 	for _, want := range []string{
 		"interfaces の 1 件目", // no defaults.yaml here, so enabled stays empty
 		"vrfs の 1 件目: 表に行がありません",
-		"「未対応」になりました: deeper mystery", // unknown but not listed
+		"「読めなかった」になりました: deeper mystery", // unknown but not listed
 		"そうなっていません: a line that is not in the sample",
 		"下限の 99 行",
 	} {

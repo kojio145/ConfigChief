@@ -26,7 +26,7 @@ func TestCustomer(t *testing.T) {
 	if code != 2 {
 		t.Fatalf("customer without a mapping = %d", code)
 	}
-	wants(t, "the error", errOut, "列対応ファイル（.yaml）がありません")
+	wants(t, "the error", errOut, "列の割り当てファイル（.yaml）がありません")
 
 	put(t, filepath.Join(dir, "input", "customer", "sites.csv"), "ホスト名,拠点,VLAN10\nrt-a01,site-a,192.0.2.129/25\nrt-a09,site-z,\n")
 	code, out, errOut := do("customer", "--project", dir, "--draft", "sites.csv")

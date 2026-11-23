@@ -9,7 +9,7 @@ import (
 	"github.com/kojio145/configchief/internal/convert"
 )
 
-// IfRedo is one row of IF 対応 whose proposal is made again (spec 14.11.4):
+// IfRedo is one row of 新旧対照表（ポート） whose proposal is made again (spec 14.11.4):
 // what the row holds and what goes in.
 type IfRedo struct {
 	NewHost  string `json:"newHost"`
@@ -27,7 +27,7 @@ type IfRedone struct {
 	Backup string   `json:"backup"` // "" = nothing was written
 }
 
-// RedoIfs makes the proposals of IF 対応 again for the devices of the new
+// RedoIfs makes the proposals of 新旧対照表（ポート） again for the devices of the new
 // host names (spec 14.11.4). The rows that hold a proposal of the tool (a
 // basis) and the rows whose new name is empty get the proposal of now; a
 // row without a proposal now is emptied. A name a person wrote (no basis)
@@ -95,7 +95,7 @@ func (e *Env) RedoIfs(hosts []string, write bool, now time.Time) (*IfRedone, err
 	if out.Backup, err = e.saveBook(now, next); err != nil {
 		return nil, err
 	}
-	e.Proj.Log(now, "IF 対応の案を作り直しました: %d 行（機器 %d 台、人が書いた %d 行はそのまま。控え %s）", len(set), len(hosts), out.Kept, out.Backup)
+	e.Proj.Log(now, "新旧対照表（ポート）の案を作り直しました: %d 行（機器 %d 台、人が書いた %d 行はそのまま。控え %s）", len(set), len(hosts), out.Kept, out.Backup)
 	return out, nil
 }
 
@@ -111,5 +111,5 @@ func (r *IfRedone) Said() string {
 	if r.Backup == "" {
 		return fmt.Sprintf("%d 行が変わります%s", len(r.Rows), kept)
 	}
-	return fmt.Sprintf("IF 対応の %d 行の案を作り直しました（控え %s）%s", len(r.Rows), r.Backup, kept)
+	return fmt.Sprintf("新旧対照表（ポート）の %d 行の案を作り直しました（控え %s）%s", len(r.Rows), r.Backup, kept)
 }

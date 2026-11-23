@@ -204,7 +204,7 @@ func TestImport(t *testing.T) {
 			t.Errorf("%s: %d marks for %d rows", tb.Name, len(tb.Marks), len(tb.Rows))
 		}
 	}
-	if strings.Join(names, ",") != "未対応の形,未対応の行,対応の未決,注意" {
+	if strings.Join(names, ",") != "読めなかった行の形,読めなかった行,新旧対照表で決まっていないところ,注意" {
 		t.Errorf("lists = %v", names)
 	}
 	if len(v.Messages) != 1 || !strings.Contains(v.Messages[0], "parameters.xlsx を作りました") {

@@ -32,7 +32,7 @@ type RewriteDevice struct {
 // devices and the lines, narrowed to a device and a kind.
 type RewriteView struct {
 	// Has is false when the case is not one of renewal (no file in
-	// input/old, or no new host name in 機器対応): the tab is not shown.
+	// input/old, or no new host name in 新旧対照表（機器）): the tab is not shown.
 	Has    bool   `json:"has"`
 	Report Files  `json:"report"` // the files in the output folder (empty = none written)
 	Device string `json:"device"` // the filter: the old host name ("" = every device)
@@ -86,7 +86,7 @@ func (s *Session) Rewrite(device, kind string) (*RewriteView, error) {
 	for _, k := range v.Kinds {
 		v.Counts = append(v.Counts, Pair{k.Word, fmt.Sprint(k.Count)})
 	}
-	v.Counts = append(v.Counts, Pair{"うち未判定・保留の未対応の行", fmt.Sprint(rw.Unjudged)},
+	v.Counts = append(v.Counts, Pair{"うち未判定・保留の読めなかった行", fmt.Sprint(rw.Unjudged)},
 		Pair{"うち未承認の指摘がある行", fmt.Sprint(rw.Unapproved)})
 	known, newHost := device == "", ""
 	for _, d := range rw.Devices {

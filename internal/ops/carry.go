@@ -124,14 +124,14 @@ func (e *Env) CarryOut(source string, now time.Time) (*CarryOutcome, error) {
 		return nil, err
 	}
 	o.Report = files
-	e.Proj.Log(now, "未対応行の持ち出し用レポート: %s、形 %d、伏せた語 %d 種類", source, len(o.Shapes), len(o.Hidden))
+	e.Proj.Log(now, "読めなかった行の持ち出し用レポート: %s、形 %d、伏せた語 %d 種類", source, len(o.Shapes), len(o.Hidden))
 	return o, nil
 }
 
 // carryDoc makes the report. Nothing of the case goes into it but the
 // shapes: not its name, no device, no file.
 func (e *Env) carryDoc(o *CarryOutcome, now time.Time) *report.Doc {
-	d := &report.Doc{Title: "未対応の行（持ち出し用）"}
+	d := &report.Doc{Title: "読めなかった行（持ち出し用）"}
 	d.Facts = append(d.Facts, report.Pair{Label: "作った日", Value: now.Format("2006-01-02")})
 	if e.Version != "" {
 		d.Facts = append(d.Facts, report.Pair{Label: "ツール", Value: "ConfigChief " + e.Version})
@@ -147,13 +147,13 @@ func (e *Env) carryDoc(o *CarryOutcome, now time.Time) *report.Doc {
 	}
 	d.Counts = []report.Pair{
 		{Label: "形", Value: num(len(o.Shapes))},
-		{Label: "未対応の行", Value: num(lines)},
+		{Label: "読めなかった行", Value: num(lines)},
 	}
 	d.Notes = append(d.Notes,
 		"メーカーパックが読めなかった行を、値と名前を伏せた形にまとめたものです。案件の名前・機器の名前・ファイルの名前は入れていません。",
 		"伏せ方: 数字・アドレス・引用符の中は記号（<n>・<ip> など）。秘密が続く語の後ろは "+judge.MarkSecret+"、人が書く文が続く語の後ろは "+judge.MarkText+"。そのほかの語は、パックが知っている語だけを残し、残りは "+judge.MarkName+"。",
 		"伏せ方は機械的です。名前や秘密が、コマンドの語と同じ綴りなら残ります。人に渡す前に、すべての行を目で確かめてください。")
-	sh := report.Sheet{Name: "形", Lead: "行数は、いちばん上の未対応の行の数です（その下の行は数えていません）。",
+	sh := report.Sheet{Name: "形", Lead: "行数は、いちばん上の読めなかった行の数です（その下の行は数えていません）。",
 		Header: []string{"パック", "親の行", "行の形", "台数", "行数"}, Code: []int{1, 2}}
 	for _, s := range o.Shapes {
 		sh.Rows = append(sh.Rows, []string{s.Pack, strings.Join(s.Path, " > "), s.Shape, num(s.Devices), num(s.Lines)})

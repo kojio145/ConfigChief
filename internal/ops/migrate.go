@@ -211,11 +211,11 @@ func (e *Env) diffFindings(r *compare.Result, oldIsA bool) []check.Finding {
 // The findings of the mapping (M-406 to M-408). The device of M-406, of
 // M-407 and of a row that was left out is the old host name.
 func noReasonFinding(host string) check.Finding {
-	return migFinding("M-407", host, model.Ref{}, "新ホスト名が空で、備考もありません。「機器対応」に新ホスト名か、対象外にする理由（備考）を書いてください")
+	return migFinding("M-407", host, model.Ref{}, "新ホスト名が空で、備考もありません。「新旧対照表（機器）」に新ホスト名か、対象外にする理由（備考）を書いてください")
 }
 
 func undecidedFinding(n convert.Note) check.Finding {
-	return migFinding("M-406", n.Device, model.Ref{}, "新 IF 名が決まっていません（旧の名前のままです）。「IF 対応」に新 IF 名を書いてください。持っていかない IF は - と書きます",
+	return migFinding("M-406", n.Device, model.Ref{}, "新 IF 名が決まっていません（旧の名前のままです）。「新旧対照表（ポート）」に新 IF 名を書いてください。持っていかない IF は - と書きます",
 		model.KV{Name: "旧 IF", Value: n.Value})
 }
 
@@ -264,7 +264,7 @@ func (e *Env) Migration() (*Verdicts, error) {
 	}
 	a := convert.Apply(e.Schema, src.Data, bk.Devices, bk.Ifs)
 	findings := mappingFindings(a)
-	design, _, _ := e.bookData(bk)
+	design, _, _ := e.bookDataAs(bk, false)
 	findings = append(findings, e.diffFindings(compare.Datasets(e.Schema, a.Data, design), true)...)
 	nw, err := e.newSide()
 	if err != nil {

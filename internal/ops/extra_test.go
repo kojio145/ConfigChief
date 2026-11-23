@@ -21,7 +21,7 @@ func TestDraftExtra(t *testing.T) {
 	if d.Name != "rt-a01.j2" || d.Lines != 2 {
 		t.Fatalf("draft = %+v", d)
 	}
-	for _, want := range []string{"{# 旧 rt-a01 の未対応の行（input/old/rt-a01.txt", "interface GigabitEthernet0/0\n no mop enabled\n", "interface GigabitEthernet0/1\n no mop enabled\n", "上の行の名前"} {
+	for _, want := range []string{"{# 旧 rt-a01 の読めなかった行（input/old/rt-a01.txt", "interface GigabitEthernet0/0\n no mop enabled\n", "interface GigabitEthernet0/1\n no mop enabled\n", "上の行の名前"} {
 		if !strings.Contains(d.Text, want) {
 			t.Errorf("the draft lacks %q:\n%s", want, d.Text)
 		}

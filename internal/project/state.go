@@ -234,7 +234,7 @@ func (p *Project) Judgments() ([]Judgment, error) {
 		case j.Verdict != VerdictManual && j.Verdict != VerdictNotNeeded && j.Verdict != VerdictHold:
 			return nil, fmt.Errorf("%s: verdict は manual・not_needed・hold のどれかです（「%s」）", where, j.Verdict)
 		case j.Verdict == VerdictNotNeeded && j.Reason == "":
-			return nil, fmt.Errorf("%s: not_needed（対応不要）には reason が要ります", where)
+			return nil, fmt.Errorf("%s: not_needed（要らない）には reason が要ります", where)
 		case j.By == "":
 			return nil, fmt.Errorf("%s: by が要ります", where)
 		}

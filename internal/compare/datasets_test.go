@@ -219,3 +219,24 @@ func TestDatasetsLeavesOutWhatNoConfigurationTells(t *testing.T) {
 		t.Errorf("the peer columns were compared: %+v", res.Cells)
 	}
 }
+
+// TestDatasetsDefaultAndNothing: a default filled in on one side and
+// nothing on the other is no difference; two defaults that differ are.
+func TestDatasetsDefaultAndNothing(t *testing.T) {
+	sc, err := schemas.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := model.NewDataset("old"), model.NewDataset("book")
+	put(a, "interfaces", k("device", "rt-a01", "name", "Loopback0"), "description", "sample")
+	put(b, "interfaces", k("device", "rt-a01", "name", "Loopback0"), "description", "sample")
+	def := model.Origin{Kind: "default"}
+	b.Tables["interfaces"].Rows[0].Set("type", "loopback", def)
+	if r := Datasets(sc, a, b); len(r.Cells) != 0 {
+		t.Errorf("default and nothing: %+v", r.Cells)
+	}
+	a.Tables["interfaces"].Rows[0].Set("type", "physical", def)
+	if r := Datasets(sc, a, b); len(r.Cells) != 1 {
+		t.Errorf("two defaults that differ: %+v", r.Cells)
+	}
+}

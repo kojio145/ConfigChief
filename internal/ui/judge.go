@@ -55,7 +55,7 @@ type JudgeGroup struct {
 }
 
 // JudgeView is the unhandled lines of a side with their judgments (spec 14.2
-// 未対応の行).
+// 読めなかった行).
 type JudgeView struct {
 	Source  string       `json:"source"`
 	Title   string       `json:"title"`
@@ -133,14 +133,14 @@ func (s *Session) judged(source string, j *ops.Judging) {
 
 func (s *Session) judgeView(j *ops.Judging, done string) *JudgeView {
 	v := &JudgeView{
-		Source: j.Source, Title: "未対応の行（" + sourceWord(j.Source) + "）", Message: done,
+		Source: j.Source, Title: "読めなかった行（" + sourceWord(j.Source) + "）", Message: done,
 		Notes: []string{}, Groups: []JudgeGroup{}, Left: j.Open + j.Hold, By: s.name,
 	}
 	v.Counts = []Pair{
 		{"未判定", fmt.Sprint(j.Open) + " 行"},
 		{"保留", fmt.Sprint(j.Hold) + " 行"},
-		{"手動で対応", fmt.Sprint(j.Manual) + " 行"},
-		{"対応不要", fmt.Sprint(j.NotNeeded) + " 行"},
+		{"追加コンフィグで書く", fmt.Sprint(j.Manual) + " 行"},
+		{"要らない", fmt.Sprint(j.NotNeeded) + " 行"},
 		{"かたまり", fmt.Sprint(len(j.Groups)) + " 個"},
 	}
 	for _, m := range j.NoExtra {
@@ -148,10 +148,10 @@ func (s *Session) judgeView(j *ops.Judging, done string) *JudgeView {
 		if m.Host != m.Device {
 			who = fmt.Sprintf("%s（新ホスト名 %s）", m.Device, m.Host)
 		}
-		v.Notes = append(v.Notes, fmt.Sprintf("M-402: %s に「手動で対応」の行が %d 行ありますが、extra に、この機器に当たる追加コンフィグ（_all.j2・@グループ名.j2・%s.j2）がありません", who, m.Lines, m.Host))
+		v.Notes = append(v.Notes, fmt.Sprintf("M-402: %s に「追加コンフィグで書く」の行が %d 行ありますが、extra に、この機器に当たる追加コンフィグ（_all.j2・@グループ名.j2・%s.j2）がありません", who, m.Lines, m.Host))
 	}
 	if j.HostsUnknown {
-		v.Notes = append(v.Notes, "パラメータブックがまだ無いので、「手動で対応」の機器に追加コンフィグがあるか（M-402）は見ていません")
+		v.Notes = append(v.Notes, "パラメータブックがまだ無いので、「追加コンフィグで書く」の機器に追加コンフィグがあるか（M-402）は見ていません")
 	}
 	if j.BookErr != "" {
 		v.Notes = append(v.Notes, "パラメータブックを読めないため、グループ向けの追加コンフィグは見ていません: "+j.BookErr)

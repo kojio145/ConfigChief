@@ -21,8 +21,8 @@ func crossCase(t *testing.T) *Env {
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-c01", "新ホスト名", "ix-c01")
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-c01", "新メーカー", "nec_ix")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-c01", "新ホスト名", "ix-c01")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-c01", "新メーカー", "nec_ix")
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func crossCase(t *testing.T) *Env {
 		"GigabitEthernet0/3":    "GigaEthernet2.0",
 		"Loopback0":             "Loopback0.0",
 	} {
-		setCell(t, e, "IF 対応", "旧 IF 名", old, "新 IF 名", name)
+		setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", old, "新 IF 名", name)
 	}
 	if _, err := e.MakeBook("old", false, at); err != nil {
 		t.Fatal(err)

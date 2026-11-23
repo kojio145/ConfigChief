@@ -33,14 +33,14 @@ func migrated(t *testing.T) *Env {
 	if _, err := e.RunImport("old", "", at); err != nil {
 		t.Fatal(err)
 	}
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-a01", "新ホスト名", "rt-a01")
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-a01", "新メーカー", "cisco_ios")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-a01", "新ホスト名", "rt-a01")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-a01", "新メーカー", "cisco_ios")
 	if _, err := e.ProposeIfs(at); err != nil {
 		t.Fatal(err)
 	}
 	_, bk, _ := e.readBook()
 	for _, m := range bk.Ifs {
-		setCell(t, e, "IF 対応", "旧 IF 名", m.OldIf, "新 IF 名", m.OldIf)
+		setCell(t, e, "新旧対照表（ポート）", "旧 IF 名", m.OldIf, "新 IF 名", m.OldIf)
 	}
 	if _, err := e.MakeBook("old", false, at); err != nil {
 		t.Fatal(err)
@@ -121,7 +121,7 @@ func TestProgressSteps(t *testing.T) {
 
 	// The book changed after the generation: generate again.
 	later()
-	setCell(t, e, "機器対応", "旧ホスト名", "rt-a01", "備考", "sample note")
+	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-a01", "備考", "sample note")
 	if p, _ = e.Progress(OpenCount{Known: true}); stepOf(t, p, "generate").State != StepTodo || !strings.Contains(p.Next.Text, "パラメータブック") {
 		t.Fatalf("the book changed: %+v", p.Next)
 	}
@@ -390,5 +390,54 @@ func TestDraftCheck(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(e.Proj.Path("out")); len(entries) != 0 {
 		t.Errorf("the check over the draft wrote %d outputs", len(entries))
+	}
+}
+
+// TestDeliveryNeedsTheNewestGeneration: the whole set is not made from an
+// older output when the folder of the newest generation is gone.
+func TestDeliveryNeedsTheNewestGeneration(t *testing.T) {
+	e := migrated(t)
+	later()
+	if _, err := e.Generate(GenOptions{}, at); err != nil {
+		t.Fatal(err)
+	}
+	later()
+	second := at.Add(time.Hour)
+	o, err := e.Generate(GenOptions{}, second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, err := e.PlanDelivery(); err != nil || !p.Ready {
+		t.Fatalf("plan: %v, %+v", err, p)
+	}
+	if err := os.RemoveAll(e.Proj.Path(o.Dir)); err != nil {
+		t.Fatal(err)
+	}
+	p, err := e.PlanDelivery()
+	if err != nil || p.Ready || !strings.Contains(p.Why, "出力フォルダが見つかりません") {
+		t.Fatalf("plan without the newest folder: %v, %+v", err, p)
+	}
+}
+
+// TestRunsInOneSecond: two runs within the same second write into two
+// folders; one run keeps its folder.
+func TestRunsInOneSecond(t *testing.T) {
+	e := migrated(t)
+	first, err := e.Generate(GenOptions{}, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := e.Generate(GenOptions{}, at.Add(300*time.Millisecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Dir == second.Dir || second.Dir != first.Dir+"_2" {
+		t.Fatalf("folders: %s, %s", first.Dir, second.Dir)
+	}
+	if e.outDir(at) != first.Dir {
+		t.Errorf("the first run moved: %s", e.outDir(at))
+	}
+	if _, err := os.Stat(e.Proj.Path(second.Dir + "/reports/check_results.xlsx")); err != nil {
+		t.Errorf("the report of the second run is not in its folder: %v", err)
 	}
 }

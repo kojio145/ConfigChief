@@ -15,8 +15,8 @@ import (
 // Change is what a step wants to put into the book.
 type Change struct {
 	Data    *model.Dataset // rows for the sheets of the tables (nil = none)
-	Devices []DeviceMap    // rows for 機器対応
-	Ifs     []IfMap        // rows for IF 対応
+	Devices []DeviceMap    // rows for 新旧対照表（機器）
+	Ifs     []IfMap        // rows for 新旧対照表（ポート）
 	// Replace empties the sheets of the tables before Data goes in. The
 	// other sheets are never emptied.
 	Replace bool
@@ -24,12 +24,12 @@ type Change struct {
 	// the tool changes what a person wrote, and only when asked to (spec
 	// 6.5.4).
 	Cells []CellSet
-	// IfFill are proposals for rows of IF 対応 that are in the book: the new
+	// IfFill are proposals for rows of 新旧対照表（ポート） that are in the book: the new
 	// interface name and the basis go into a row of the same new host name
 	// and old interface whose new interface name is empty (spec 10.2). A
 	// name a person wrote, and "-", stay.
 	IfFill []IfMap
-	// IfSet are new names for rows of IF 対応 that are in the book, put in
+	// IfSet are new names for rows of 新旧対照表（ポート） that are in the book, put in
 	// whatever the row holds: the new interface name and the basis go into
 	// the row of the same new host name and old interface, and an empty one
 	// empties the cell (spec 14.11.4: the proposals made again).
@@ -49,12 +49,12 @@ type Summary struct {
 	Created    bool           // the book was made
 	Added      map[string]int // table → rows added
 	Kept       map[string]int // table → rows that were in the book already (not changed)
-	DeviceRows int            // rows added to 機器対応
-	IfRows     int            // rows added to IF 対応
+	DeviceRows int            // rows added to 新旧対照表（機器）
+	IfRows     int            // rows added to 新旧対照表（ポート）
 	Sheets     int            // sheets made in a book that was there
 	Cells      int            // cells of rows of the book that were changed
-	IfFilled   int            // rows of IF 対応 whose empty new interface name was filled
-	IfSet      int            // rows of IF 対応 whose new interface name was put anew
+	IfFilled   int            // rows of 新旧対照表（ポート） whose empty new interface name was filled
+	IfSet      int            // rows of 新旧対照表（ポート） whose new interface name was put anew
 	Replaced   bool           // the sheets of the tables were emptied first
 	Problems   []Problem      // what Read said about the book as it was
 }
@@ -269,7 +269,7 @@ func Update(old []byte, file string, sc *schema.Set, lang string, ch Change) ([]
 		for _, p := range ch.IfSet {
 			m, ok := at[ifKey(p)]
 			if !ok {
-				return nil, nil, fmt.Errorf("%s の IF 対応に、%s の %s の行がありません", file, p.NewHost, p.OldIf)
+				return nil, nil, fmt.Errorf("%s の 新旧対照表（ポート）に、%s の %s の行がありません", file, p.NewHost, p.OldIf)
 			}
 			for _, cv := range []struct{ name, v string }{{"new_if", p.NewIf}, {"basis", p.Basis}} {
 				c := ifSheet.cols[ifSheet.col(cv.name)]
@@ -435,8 +435,8 @@ func sheetRow(r *model.Row) int {
 	return -1
 }
 
-// ifKey names a row of IF 対応: its new host name and old interface.
+// ifKey names a row of 新旧対照表（ポート）: its new host name and old interface.
 func ifKey(m IfMap) string { return m.Key() }
 
-// Key names a row of IF 対応 by its new host name and old interface.
+// Key names a row of 新旧対照表（ポート） by its new host name and old interface.
 func (m IfMap) Key() string { return m.NewHost + "\x00" + m.OldIf }
