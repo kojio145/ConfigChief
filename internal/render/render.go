@@ -827,6 +827,19 @@ func (o *Output) cover(line int, with func(secret string) string) string {
 	return text
 }
 
+// Unused tells whether no template read a cell that holds a value (the
+// cells G-602 tells about). key is the key text of the row as the
+// templates saw it.
+func (o *Output) Unused(table, key, column string) bool {
+	return o.unused[table+"\x00"+key][column]
+}
+
+// UnusedRow tells whether a row has a cell with a value that no template
+// read.
+func (o *Output) UnusedRow(table, key string) bool {
+	return len(o.unused[table+"\x00"+key]) > 0
+}
+
 // Masked stands for a secret value in a line that is shown.
 const Masked = "＊＊＊"
 

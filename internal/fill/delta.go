@@ -17,6 +17,12 @@ type Item struct {
 	Path []string // the lines of the blocks it stands in (without indentation)
 	Text string   // the line (without indentation); for a removal the line as it is now
 	Cmd  string   // for a removal: the line that removes it
+	// Why tells why a line was kept; for a line replaced, the line that
+	// replaces it (MakeDeltaBy).
+	Why string
+	// Line is the line of the configuration now (1-based; 0 for an added
+	// line).
+	Line int
 }
 
 // Delta is the change of one device.
@@ -29,14 +35,36 @@ type Delta struct {
 	// Kept are lines of a block the template writes that the template does
 	// not have, left as they are (no {{#sync}} over them).
 	Kept []Item
+	// Replaced are lines now that an added line writes over (MakeDeltaBy).
+	Replaced []Item
 }
 
 // Empty tells that nothing differs.
 func (d *Delta) Empty() bool { return len(d.Commands) == 0 }
 
+// What becomes of a line now that the target does not have (MakeDeltaBy).
+const (
+	Keep    = iota // left as it is (Kept)
+	Remove         // removed
+	Replace        // an added line writes over it (Replaced)
+	Enter          // the line stays, and the lines below it are decided one by one
+)
+
+// Judge decides about a line now that the target does not have. added are
+// the lines of the target at the same level that the configuration now does
+// not have. It gives what becomes of the line, why (for Keep and Enter) and,
+// for Replace, the added line that writes over it.
+type Judge func(now *conftree.Node, added []*conftree.Node) (what int, why string, by *conftree.Node)
+
 // MakeDelta compares a filled template with a configuration now, both read
 // with the pack's syntax.
 func MakeDelta(out *Output, current string, p *pack.Pack) (*Delta, error) {
+	return MakeDeltaBy(out, current, p, nil)
+}
+
+// MakeDeltaBy is MakeDelta with the lines to remove decided by judge instead
+// of the {{#sync}} marks (spec 9.8); judge nil = the marks.
+func MakeDeltaBy(out *Output, current string, p *pack.Pack, judge Judge) (*Delta, error) {
 	if p.Change == nil {
 		return nil, fmt.Errorf("メーカーパック %s には、変更の投入の書き方（change）がありません", p.ID)
 	}
@@ -52,7 +80,7 @@ func MakeDelta(out *Output, current string, p *pack.Pack) (*Delta, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := &differ{p: p, ch: p.Change, out: out, delta: &Delta{}, syncAll: map[*conftree.Node]bool{}, prefixes: map[*conftree.Node][]string{}}
+	d := &differ{p: p, ch: p.Change, out: out, delta: &Delta{}, syncAll: map[*conftree.Node]bool{}, prefixes: map[*conftree.Node][]string{}, judge: judge}
 	// Which lines of the template stand in which {{#sync}}.
 	byLine := map[int]*conftree.Node{}
 	conftree.Walk(tt.Root, func(n *conftree.Node, _ []*conftree.Node) {
@@ -96,6 +124,7 @@ type differ struct {
 	delta    *Delta
 	syncAll  map[*conftree.Node]bool
 	prefixes map[*conftree.Node][]string
+	judge    Judge
 }
 
 func lead(s string) int { return width(s[:len(s)-len(strings.TrimLeft(s, " \t"))]) }
@@ -138,12 +167,14 @@ func (d *differ) walk(t, c *conftree.Node, synced bool, path []string) []string 
 		}
 		return nil
 	}
+	var added []*conftree.Node
 	for _, tc := range kids(t) {
 		cc := pair(tc)
 		text := strings.TrimSpace(tc.Text)
 		if cc == nil {
 			out = append(out, d.subtree(tc)...)
 			d.delta.Added = append(d.delta.Added, Item{Path: path, Text: text})
+			added = append(added, tc)
 			continue
 		}
 		if tc.Block != "" {
@@ -163,6 +194,35 @@ func (d *differ) walk(t, c *conftree.Node, synced bool, path []string) []string 
 			continue
 		}
 		text := strings.TrimSpace(cc.Text)
+		if d.judge != nil {
+			what, why, by := d.judge(cc, added)
+			switch what {
+			case Remove:
+				cmd := d.remove(cc)
+				removed = append(removed, cmd)
+				d.delta.Removed = append(d.delta.Removed, Item{Path: path, Text: text, Cmd: strings.TrimSpace(cmd), Line: cc.Line})
+			case Replace:
+				w := ""
+				if by != nil {
+					w = strings.TrimSpace(by.Text)
+				}
+				d.delta.Replaced = append(d.delta.Replaced, Item{Path: path, Text: text, Why: w, Line: cc.Line})
+			case Enter:
+				d.delta.Kept = append(d.delta.Kept, Item{Path: path, Text: text, Why: why, Line: cc.Line})
+				if cc.Block != "" {
+					continue
+				}
+				sub := d.walk(&conftree.Node{}, cc, false, append(path[:len(path):len(path)], text))
+				if len(sub) > 0 {
+					removed = append(removed, cc.Text)
+					removed = append(removed, sub...)
+					removed = append(removed, d.exit(cc, sub[0]))
+				}
+			default:
+				d.delta.Kept = append(d.delta.Kept, Item{Path: path, Text: text, Why: why, Line: cc.Line})
+			}
+			continue
+		}
 		if (synced && t.Line > 0) || hasWords(text, words) {
 			cmd := d.remove(cc)
 			removed = append(removed, cmd)

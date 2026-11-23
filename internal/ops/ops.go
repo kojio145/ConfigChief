@@ -41,6 +41,9 @@ type Env struct {
 	// screen is set on the copy of the environment that makes the texts of
 	// the screens: they mask the secrets whatever the case says (spec 14).
 	screen bool
+	// draftBook, when set, is read in the place of the book: the book with
+	// the draft of the table put in (spec 14.12.3). Nothing writes it.
+	draftBook []byte
 }
 
 // Open opens a case folder and loads the table definitions and the packs:

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>ConfigChief を使うための申請用の説明 - ConfigChief</title>
+<style>
+  :root { --ground:#f6f8fb; --panel:#fff; --panel-2:#eef2f7; --ink:#1b2430; --ink-soft:#4c5a6b; --line:#dde4ec; --accent:#2563eb; }
+  @media (prefers-color-scheme: dark) { :root { --ground:#0f141b; --panel:#171e28; --panel-2:#1f2835; --ink:#e6ebf2; --ink-soft:#aab6c5; --line:#2a3542; --accent:#6ea0ff; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink); font-family:"Segoe UI","Hiragino Sans","Noto Sans JP",system-ui,sans-serif; line-height:1.7; }
+  main { max-width:960px; margin:0 auto; padding:32px 20px 64px; }
+  nav { font-size:.9rem; margin-bottom:24px; } nav a { margin-right:14px; }
+  h1 { font-size:1.9rem; margin:0 0 16px; } h2 { font-size:1.3rem; margin:36px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line); } h3 { font-size:1.1rem; margin:24px 0 8px; }
+  a { color:var(--accent); }
+  code { background:var(--panel-2); padding:1px 5px; border-radius:4px; font-size:.92em; }
+  pre { background:var(--panel-2); padding:12px 14px; border-radius:8px; overflow-x:auto; line-height:1.5; } pre code { background:none; padding:0; }
+  table { border-collapse:collapse; margin:12px 0; display:block; overflow-x:auto; } th, td { border:1px solid var(--line); padding:5px 9px; vertical-align:top; } th { background:var(--panel-2); text-align:left; }
+  blockquote { margin:12px 0; padding:8px 16px; border-left:4px solid #e0a800; background:var(--panel); }
+  img { max-width:100%; height:auto; border:1px solid var(--line); border-radius:8px; }
+  footer { margin-top:48px; color:var(--ink-soft); font-size:.85rem; border-top:1px solid var(--line); padding-top:16px; }
+</style>
+</head>
+<body>
+<main>
+<nav><a href="index.html">ConfigChief</a><a href="manual.html">使い方</a><a href="tables.html">シートと列</a><a href="checks.html">チェック</a><a href="pack-guide.html">パックの書き方</a><a href="https://github.com/kojio145/ConfigChief">GitHub</a></nav>
+<h1>ConfigChief を使うための申請用の説明</h1>
+<p>ソフトウェアの利用申請に使う 1 枚の説明です。ConfigChief は個人が作って MIT ライセンスで公開しているツールです。版ごとに変わる値（版・SHA-256・ウイルス検査の結果）はここに書きません。<a href="https://github.com/kojio145/ConfigChief/releases">リリースのページ</a>で確かめてください。</p>
+<p>ほかのページ: <a href="manual.html">使い方</a> ・ <a href="tables.html">シートと列の一覧</a> ・ <a href="checks.html">チェックの一覧</a></p>
+<h2>何をするツールか</h2>
+<p>ネットワーク機器（Cisco IOS / IOS-XE、NEC UNIVERGE IX、NEC QX シリーズ）のコンフィグ（テキスト）を読んで、メーカーによらない表（Excel のパラメータブック）にします。その表から、コンフィグ・チェック結果表・納品用のパラメータシートを作ります。機器には接続しません。ファイルを読んで、ファイルを書くだけのツールです。</p>
+<h2>動かし方</h2>
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>形</td><td>exe 1 つ（<code>ConfigChief.exe</code>）。インストーラはありません。置いてダブルクリックで動きます</td></tr>
+<tr><td>要るもの</td><td>WebView2 ランタイム（Windows 11 には初めから入っています）</td></tr>
+<tr><td>インストール</td><td>しません。スタートメニュー・サービス・常駐・自動起動の登録はありません</td></tr>
+<tr><td>レジストリ</td><td>書きません。読むのは、最新版の確認のときのプロキシの設定だけです</td></tr>
+<tr><td>管理者の権限</td><td>要りません</td></tr>
+<tr><td>消し方</td><td>exe と、下の「書き込む場所」の <code>%APPDATA%\ConfigChief</code> フォルダを消すだけです</td></tr>
+</table>
+<h2>書き込む場所</h2>
+<ul>
+<li>利用者が作った<b>案件フォルダ</b>の中（パラメータブック・作ったコンフィグ・レポート・操作の記録）</li>
+<li><code>%APPDATA%\ConfigChief</code>（最近使った案件の一覧・画面の拡大率・窓の位置と大きさ・内部エラーの記録 <code>error.log</code>・画面の作業フォルダ）</li>
+</ul>
+<p>ほかの場所には書きません。<code>error.log</code> に、コンフィグや表の値は入りません。</p>
+<h2>通信</h2>
+<ul>
+<li><b>ふだんは一切通信しません。</b> 起動したとき、案件を開いたとき、作業中にも通信しません。待ち受けのポートも開きません</li>
+<li>例外は、画面の「バージョン情報」で、利用者が次のボタンを押したときだけです:<ul><li>「最新版を確認する」: GitHub の公開リリースの情報（<code>https://api.github.com/repos/kojio145/ConfigChief/releases</code>）を読みます</li><li>「最新版をダウンロード」: 確認の窓で許可したときだけ、GitHub のリリースから <code>ConfigChief.exe</code> を取り、リリースに登録された SHA-256 と照合して、exe と同じフォルダ（書けなければ「ダウンロード」フォルダ）に保存します</li></ul></li>
+<li>送るのは、GitHub への問い合わせ（宛先と ConfigChief の版）だけです。<b>案件の中身・コンフィグ・表の値・利用者の名前は送りません</b></li>
+<li>プロキシは、環境変数 <code>HTTPS_PROXY</code> か、Windows の設定に手動で入れたものを使います</li>
+<li>「使い方」「GitHub」などのリンクは、決まった宛先を既定のブラウザで開くだけです（ConfigChief は読みに行きません）</li>
+<li>通信するコードはこの 2 つのボタンの所だけにあり、そのことはソースコードの試験で毎回確かめています</li>
+</ul>
+<h2>確かめ方</h2>
+<ul>
+<li>exe には電子署名がありません。初めて起動するとき、Microsoft Defender SmartScreen の警告が出ることがあります（「詳細情報」→「実行」で起動できます）</li>
+<li>取った exe は、リリースのページの SHA-256 と比べて確かめられます。PowerShell で <code>Get-FileHash ConfigChief.exe</code> と打ちます</li>
+<li>公開のたびに、exe を VirusTotal で検査しています。結果はリリースのページか作者に確かめてください。署名の無い exe は、機械学習の検出で誤検知が出ることがあります</li>
+<li>ソースコードはすべて公開しています（<a href="https://github.com/kojio145/ConfigChief">GitHub</a>）。同じソースからは同じ exe ができます（公開側の自動ビルドで、Release の exe と SHA-256 が一致することを確かめています）</li>
+</ul>
+<h2>ライセンス</h2>
+<ul>
+<li>ConfigChief: MIT ライセンス</li>
+<li>使っている部品: MIT・BSD・Apache-2.0・ISC のライセンスのものだけです（GPL・LGPL の部品は使っていません）。一覧と全文は、リリースに付けた <code>THIRD-PARTY-NOTICES.md</code> にあります</li>
+</ul>
+<h2>秘密の値の扱い</h2>
+<ul>
+<li>パスワード・事前共有鍵などは、利用者が置いたコンフィグとパラメータブックに入っている値を、利用者の案件フォルダの中で扱います。ツールが外に出すことはありません</li>
+<li>画面とチェック結果表では、秘密の値を伏せて出します（生成したコンフィグには書きます）</li>
+<li>案件を人に渡すための書き出しは、パスワードで暗号化（AES-256-GCM）できます。秘密の値を外して書き出すこともできます</li>
+</ul>
+<h2>問い合わせ</h2>
+<p><a href="https://github.com/kojio145/ConfigChief/issues">GitHub の Issues</a> で受け付けます。現場の値（ホスト名・アドレス・コンフィグ）は書かないでください。</p>
+<footer>ConfigChief (MIT License) by KJO. このページは docs/ の Markdown から作っています。</footer>
+</main>
+</body>
+</html>

@@ -285,13 +285,19 @@ interface {{ i.name }}
       subif:    &#34;{parent}.{vlan}&#34;
       pppoe:    &#34;Dialer{i}&#34;
       vlan:     &#34;Vlan{vlan}&#34;
-      lag:      &#34;Port-channel{n}&#34;</code></pre>
+      lag:      &#34;Port-channel{n}&#34;
+    other_names: []                # ほかに、この機種にあってよい IF の名前の形（チェック V-111）
+    unsupported:                   # この機種に無い機能（チェック G-607）。資料で確かめたものだけ
+      - {name: 内蔵スイッチ, table: switchports, when: &#34;row.mode != &#39;routed&#39;&#34;}</code></pre>
 <ul>
 <li><code>ports</code>: <code>name</code> は 1 つのポート、<code>range</code> は終わりの <code>[a-b]</code> を番号に広げた並び。<code>role</code> は <code>wan</code>・<code>lan</code>・<code>switch</code>（内蔵スイッチのポート）</li>
 <li>ポートの指定 <code>sub</code>: サブ IF の親としての名前（NEC IX の <code>GigaEthernet0.0</code> のサブ IF は <code>GigaEthernet0.1</code> なので <code>sub: GigaEthernet0</code>）。<code>vlan_if</code>: 内蔵スイッチのポートで、そのポートがいちばん若いアクセスポートである VLAN の IF の名前（<code>range</code> では <code>{p}</code> がポートの番号。NEC IX の <code>&#34;GigaEthernet2:{p}.0&#34;</code>）</li>
 <li><code>logical</code> の印: <code>{n}</code>（旧 IF 名の番号）、<code>{parent}</code>（親のポートの新しい名前）、<code>{vlan}</code>（VLAN の番号）、<code>{i}</code>（1 から、まだ使っていない番号）、<code>{j}</code>（0 から、まだ使っていない番号）。印の値が決まらないときは、案を出しません</li>
 <li>テンプレートからは <code>model.id</code>・<code>model.family</code>・<code>model.ports</code>・<code>model.limits.名前</code> で読めます。機種が空か定義に無い機器では、どれも空です。機種が分かるときだけ確かめる書き方にします（<code>{% if model.ports %}</code>）</li>
-<li>ID の重なり、空の <code>ports</code>、<code>range</code> の形、知らない <code>role</code>・<code>logical</code> の名前は、パックの検査で誤りになります</li>
+<li>機器の「機種」がこの ID の機器では、インタフェースの表の IF 名を確かめます（チェック V-111）。当たってよいのは、<code>ports</code> のポートと <code>vlan_if</code>、<code>logical</code> と <code>other_names</code> の名前の形、<code>pack.yaml</code> の <code>interfaces.types</code> で種類が physical でない IF（ループバック・トンネル・VLAN の IF など）、それらのサブ IF です。ほかに、その機種だけの名前（内蔵スイッチの基本 IF など）があれば <code>other_names</code> に書きます（印は <code>{n}</code> = 数字の並び、<code>{parent}</code> = ポートの <code>sub</code> か名前）</li>
+<li><code>unsupported</code>: その機種に無い機能。<code>name</code>（指摘に出す名前）・<code>table</code>（設計データの表）・<code>when</code>（行ごとの式。<code>row.列名</code> で値を読む。無ければすべての行）。生成のとき、当たる行があればエラー（G-607）にします。書いていない機種では G-607 は「未実施」です。資料で「無い」と確かめた機能だけを書きます（使える設定を止めないため）</li>
+<li>機種が空か、定義に無い機器は、情報（V-114）を出すだけです。定義の ID に似た打ち間違い（英字と数字だけで 2 字以内の違い）は警告（V-116）にします</li>
+<li>ID の重なり、空の <code>ports</code>、<code>range</code> の形、知らない <code>role</code>・<code>logical</code> の名前、<code>other_names</code> の知らない印、<code>unsupported</code> の空の <code>name</code>・<code>table</code> は、パックの検査で誤りになります。<code>unsupported</code> の知らない表と読めない <code>when</code> は、パックの試験（<code>ConfigChief pack test &lt;フォルダ&gt;</code>）で誤りになります</li>
 <li>同梱のパックの機種は、それぞれの README の「機種の定義」の節にあります。案件フォルダのパックに <code>models.yaml</code> を置けば、機種を足せます</li>
 </ul>
 <p>案の作り方:</p>

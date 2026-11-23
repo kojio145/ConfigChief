@@ -500,3 +500,28 @@ td.pickbox, th.pickbox { width: 28px; text-align: center; }
 .checks-set { max-height: 420px; overflow: auto; }
 .checks-set tr.marked td { background: var(--warn-bg); }
 .redo-hosts { flex-wrap: wrap; }
+
+/* M13 (spec 14.12): long texts keep a width, menus of buttons, the steps of a case */
+td.wide { min-width: 16em; }
+details.menu { position: relative; display: inline-block; }
+details.menu > summary { list-style: none; cursor: pointer; border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; background: #fff; user-select: none; }
+details.menu > summary::-webkit-details-marker { display: none; }
+details.menu[open] > summary { background: #e8f1fc; border-color: #bcd5f3; }
+details.menu .menu-items { position: absolute; left: 0; top: calc(100% + 4px); z-index: 30; display: flex; flex-direction: column; gap: 4px; min-width: 12em; background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); }
+details.menu .menu-items button { text-align: left; }
+.steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.steps button.step { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: #fff; min-width: 7em; text-align: left; }
+.steps .step .st { font-size: 11px; color: var(--dim); }
+.steps .step.done { background: #eef7ee; border-color: #b9dcb9; }
+.steps .step.done .st { color: #2e7d32; }
+.steps .step.todo { background: var(--warn-bg); border-color: #ecd58a; }
+.steps .step.todo .st { color: #8a5a00; font-weight: bold; }
+.steps .step.next { outline: 2px solid var(--accent); }
+.steps .step.optional, .steps .step.wait, .steps .step.counting { color: var(--dim); }
+.others > summary { cursor: pointer; margin: 12px 0 6px; font-weight: bold; color: var(--dim); }
+.outputs td.kinds { min-width: 14em; }
+/* More items in the menu (M13): it scrolls instead of running into the version */
+#nav { overflow-y: auto; }
+#nav .nav-group { flex: none; }
+#nav .nav-group button { padding: 7px 10px; }
+.wide-input { min-width: 28em; }

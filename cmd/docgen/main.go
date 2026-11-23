@@ -42,7 +42,7 @@ func Pages() (map[string]string, error) {
 	pages := map[string]string{"tables.md": tables(sc), "checks.md": checks()}
 	// The pages of the site, from the Markdown of docs/ (html.go). The two
 	// lists are made above; the others are written by hand.
-	for _, name := range []string{"manual.md", "pack-guide.md", "tables.md", "checks.md"} {
+	for _, name := range []string{"manual.md", "pack-guide.md", "tables.md", "checks.md", "approval.md"} {
 		md, ok := pages[name]
 		if !ok {
 			data, err := os.ReadFile(filepath.Join(docsDir, name))

@@ -24,6 +24,26 @@ type DeliverOptions struct {
 	Project string // project.name
 	Mask    bool   // write *** for the secret values
 	Lang    string
+	// Revisions is the history of the versions ({{#rows revisions}}) and
+	// Revision the version made now ({{ revision.version }}; nil = none).
+	// Spec 13.7.
+	Revisions []Revision
+	Revision  *Revision
+}
+
+// Revision is one version of the history (spec 13.7).
+type Revision struct {
+	Version, Date, By, Summary string
+}
+
+// revisionTable tells the name {{#rows}} takes for the history.
+func revisionTable(name string) bool { return name == "revisions" || name == "改版履歴" }
+
+func (r *Revision) vars() map[string]any {
+	if r == nil {
+		return map[string]any{"version": "", "date": "", "by": "", "summary": ""}
+	}
+	return map[string]any{"version": r.Version, "date": r.Date, "by": r.By, "summary": r.Summary}
 }
 
 // Delivered is one file of delivery sheets.
@@ -57,6 +77,8 @@ type deliver struct {
 	secret bool
 	// missing collects the names an expression asked for in vain.
 	missing []string
+	// revRow is the version of the history at hand in {{#rows revisions}}.
+	revRow map[string]any
 }
 
 // shown is a row as an expression sees it: every cell as the book shows it.
@@ -199,8 +221,11 @@ func (d *deliver) table(name string) *schema.Table {
 // d.missing or were told by the engine.
 func (d *deliver) text(src, host string, t *schema.Table, row *model.Row) (string, bool) {
 	d.secret, d.missing = false, nil
-	vars := map[string]any{"project": map[string]any{"name": d.opt.Project}}
+	vars := map[string]any{"project": map[string]any{"name": d.opt.Project}, "revision": d.opt.Revision.vars()}
 	dev := host
+	if d.revRow != nil {
+		vars["row"] = d.revRow
+	}
 	if row != nil {
 		vars["row"] = shown{d, t, row}
 		if col := t.DeviceColumn(); col != "" && dev == "" {
@@ -356,9 +381,14 @@ func (d *deliver) fill(f *excelize.File, sheet, host string) {
 		line := i + 1 + shift
 		marks := 0
 		var t *schema.Table
+		history := false
 		for _, c := range cells {
 			if m := rowsMark.FindAllStringSubmatch(c, -1); len(m) > 0 {
 				marks += len(m)
+				if revisionTable(m[0][1]) {
+					history = true
+					continue
+				}
 				t = d.table(m[0][1])
 				if t == nil {
 					d.problems = append(d.problems, fmt.Sprintf("シート「%s」の %d 行目: {{#rows %s}} の表がありません", sheet, line, m[0][1]))
@@ -375,6 +405,33 @@ func (d *deliver) fill(f *excelize.File, sheet, host string) {
 			continue
 		case marks > 1:
 			d.problems = append(d.problems, fmt.Sprintf("シート「%s」の %d 行目: {{#rows}} が 2 つ以上あります（1 つの行に 1 つです）", sheet, line))
+			continue
+		case history:
+			// The history of the versions (spec 13.7).
+			n := len(d.opt.Revisions)
+			if n == 0 {
+				if err := f.RemoveRow(sheet, line); err != nil {
+					d.problems = append(d.problems, fmt.Sprintf("シート「%s」の %d 行目: %v", sheet, line, err))
+				}
+				shift--
+				continue
+			}
+			for k := 1; k < n; k++ {
+				if err := f.DuplicateRow(sheet, line); err != nil {
+					d.problems = append(d.problems, fmt.Sprintf("シート「%s」の %d 行目を増やせません: %v", sheet, line, err))
+					break
+				}
+			}
+			for k := range d.opt.Revisions {
+				d.revRow = d.opt.Revisions[k].vars()
+				for c, src := range cells {
+					if rowsMark.MatchString(src) || strings.Contains(src, "{{") {
+						put(at(c, line+k), rowsMark.ReplaceAllString(src, ""), nil, nil)
+					}
+				}
+			}
+			d.revRow = nil
+			shift += n - 1
 			continue
 		case t == nil:
 			continue

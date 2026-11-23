@@ -31,6 +31,11 @@ type Sheet struct {
 	Rows   [][]string
 	Marks  []string // one per row ("" = none); may be shorter than Rows
 	Code   []int    // the columns that hold configuration text
+	// HTMLRows, if not nil, are the rows the HTML form shows (a list too
+	// long for a browser); HTMLNote tells the reader so. The xlsx form has
+	// every row.
+	HTMLRows []int
+	HTMLNote string
 }
 
 // Doc is a report: a title, the numbers at the top and the lists.
@@ -129,6 +134,9 @@ func (d *Doc) HTML() string {
 		if s.Lead != "" {
 			sb.WriteString("<p>" + esc(s.Lead) + "</p>\n")
 		}
+		if s.HTMLRows != nil && s.HTMLNote != "" {
+			sb.WriteString("<p class=\"note\">" + esc(s.HTMLNote) + "</p>\n")
+		}
 		if len(s.Rows) == 0 {
 			sb.WriteString("<p class=\"none\">ありません</p>\n")
 			continue
@@ -142,7 +150,15 @@ func (d *Doc) HTML() string {
 			sb.WriteString("<th>" + esc(h) + "</th>")
 		}
 		sb.WriteString("</tr>\n")
-		for ri, row := range s.Rows {
+		order := s.HTMLRows
+		if order == nil {
+			order = make([]int, len(s.Rows))
+			for ri := range order {
+				order[ri] = ri
+			}
+		}
+		for _, ri := range order {
+			row := s.Rows[ri]
 			if ri < len(s.Marks) && s.Marks[ri] != "" {
 				sb.WriteString("<tr class=\"" + esc(s.Marks[ri]) + "\">")
 			} else {

@@ -120,6 +120,8 @@ func (a *App) OpenWeb(which string) {
 		runtime.BrowserOpenURL(a.ctx, update.RepoPage)
 	case which == "manual":
 		runtime.BrowserOpenURL(a.ctx, update.ManualPage)
+	case which == "approval":
+		runtime.BrowserOpenURL(a.ctx, update.ApprovalPage)
 	case which == "release":
 		runtime.BrowserOpenURL(a.ctx, update.ReleasePage)
 	case strings.HasPrefix(which, "notes:"):

@@ -34,6 +34,7 @@
     logs: newLogs(),
     exp: { mask: "show", view: null },
     nb: { from: "", to: "", said: [] },
+    dlt: { side: "old", devices: [], view: null, run: null, sel: "" },
     edit: { list: null, want: null, msg: "", prefs: {}, find: { open: false, replace: false, q: "", r: "", cs: false, whole: false, scope: "sheet", onlySel: false, range: null, said: "", all: 0, focus: false } }, // as newEdit() makes it
     filters: {},
     srch: newSrch(),
@@ -373,6 +374,14 @@
   // tip is the ⓘ that shows a longer explanation when the mouse is on it.
   const tip = (text) => h("span", { class: "tip", tabindex: "0", "data-tip": text }, "ⓘ");
 
+  // menu is a button that opens a short list of buttons; a click on one of
+  // them closes it (spec 14.12.5).
+  function menu(label, id, items) {
+    const d = h("details", { class: "menu", id }, h("summary", null, label + " ▾"), h("div", { class: "menu-items" }, items));
+    d.addEventListener("click", (e) => { if (e.target.closest("button")) d.open = false; });
+    return d;
+  }
+
   const ZOOMS = [70, 80, 90, 100, 110, 120, 130, 140, 150];
 
   function applyZoom(z) {
@@ -416,11 +425,20 @@
     st.recent = s.recent;
     st.readOnly = s.readOnly || "";
     if (s.zoom) applyZoom(s.zoom);
+    // The name of the case in the title of the window (spec 14.12.5).
+    try {
+      api().SetTitle(s.case ? s.case.name : "").catch(() => {});
+    } catch (e) {
+      // no window to tell
+    }
   }
 
   // forgetViews drops what was drawn for the case that was open before.
   function forgetViews() {
     st.next = null; // the next step, the files told and the pointer are of that case
+    st.steps = null;
+    st.outs = null;
+    st.dlt = { side: "old", devices: [], view: null, run: null, sel: "" };
     st.nextFor = null;
     st.added = null;
     st.hint = "";
@@ -464,11 +482,19 @@
   function goTo(page) {
     // The pointer of the next step stays only on the screen it points into.
     if (st.hint && !(st.next && page === st.next.page)) st.hint = "";
+    // What the home told once goes when the home is left (spec 14.12.2).
+    if (st.page === "home" && page !== "home") {
+      st.nb.said = [];
+      st.exp.sampleMsg = "";
+      st.exp.done = null;
+      st.exp.plan = null;
+    }
     if (page === "edit") {
       openEdit(null);
       return;
     }
     if (page === "home") {
+      st.nb.devices = null;
       run("案件を読んでいます", async () => {
         st.home = await api().Home();
         st.page = "home";
@@ -501,6 +527,14 @@
       loadSearch();
       return;
     }
+    if (page === "outputs") {
+      loadOutputs();
+      return;
+    }
+    if (page === "delta" && !st.dlt.view) {
+      loadDelta();
+      return;
+    }
     render();
   }
 
@@ -524,12 +558,14 @@
         item("customer", "外部一覧", true)),
       group("作る・確かめる",
         item("fill", "ひな形から作る", true),
+        item("delta", "差分の投入", true),
         item("result", "結果", true),
         item("logs", "ログ", true),
         item("compare", "比較", false),
         item("search", "検索", true)),
       group("管理",
         item("cases", "案件", false),
+        item("outputs", "出力", true),
         item("about", "バージョン情報", false)),
       button("版 " + st.version, () => go("about"), { class: "nav-foot", title: "バージョン情報を開く" }),
     ]);
@@ -548,7 +584,7 @@
     if (st.error) {
       main.appendChild(h("div", { class: "box error" }, button("閉じる", () => { st.error = ""; render(); }, { class: "link close" }), st.error));
     }
-    const pages = { cases: casesPage, home: homePage, import: importPage, judge: judgePage, extra: extraPage, mapping: mappingPage, edit: editPage, customer: customerPage, fill: fillPage, result: resultPage, logs: logsPage, search: searchPage, compare: comparePage, about: aboutPage };
+    const pages = { cases: casesPage, home: homePage, import: importPage, judge: judgePage, extra: extraPage, mapping: mappingPage, edit: editPage, customer: customerPage, fill: fillPage, result: resultPage, logs: logsPage, search: searchPage, compare: comparePage, about: aboutPage, outputs: outputsPage, delta: deltaPage };
     afterDraw = [];
     add(main, [pages[st.page]()]);
     main.scrollTop = same ? top : 0;
@@ -580,6 +616,22 @@
     if (!t.rows.length) return h("div", { class: "table-wrap" }, h("div", { class: "empty" }, "ありません"));
     const code = new Set(t.code || []);
     const whole = new Set(t.whole || []); // the columns that are not broken into lines
+    // The columns empty in every row are not drawn, and a column of long
+    // texts keeps a width it is read in (spec 14.12.4).
+    const cellText = (x) => (x == null ? "" : String(x));
+    const empty = new Set(), wide = new Set();
+    t.header.forEach((_, c) => {
+      let longest = 0, any = false;
+      for (const row of t.rows) {
+        const x = cellText(row[c]);
+        if (x !== "") any = true;
+        if (x.length > longest) longest = x.length;
+        if (any && longest > 24) break;
+      }
+      if (!any && !fs.showEmpty) empty.add(c);
+      if (longest > 24) wide.add(c);
+    });
+    const cols = t.header.map((_, c) => c).filter((c) => !empty.has(c));
     const body = h("tbody");
     const note = h("span", { class: "dim small" });
     const more = button("さらに表示", () => { fs.shown += ROWS; fill(); });
@@ -621,7 +673,7 @@
           td.addEventListener("click", (e) => { e.stopPropagation(); if (!box.disabled) { box.checked = !box.checked; ck.set(i, box.checked); ck.changed(); } });
           tr.appendChild(td);
         }
-        t.rows[i].forEach((cell, c) => tr.appendChild(h("td", { class: cls(code.has(c) && "code", whole.has(c) && "whole") || null }, cell)));
+        for (const c of cols) tr.appendChild(h("td", { class: cls(code.has(c) && "code", whole.has(c) && "whole", wide.has(c) && "wide") || null }, t.rows[i][c]));
         if (opts.onPick) tr.addEventListener("click", () => opts.onPick(i, tr));
         body.appendChild(tr);
       }
@@ -641,7 +693,8 @@
     fill();
     // The headings sort (ascending, descending, as given) and their right
     // edges are dragged to widen a column; a double click puts it back.
-    const heads = t.header.map((x, c) => {
+    const heads = cols.map((c) => {
+      const x = t.header[c];
       const mark = fs.sort.ci === c ? (fs.sort.dir > 0 ? " ▲" : " ▼") : "";
       const th = h("th", { class: "sortable", title: "押すと並べ替えます（昇順 → 降順 → 元の順）" }, x, h("span", { class: "sort-mark" }, mark));
       if (fs.widths[c]) th.style.width = th.style.minWidth = th.style.maxWidth = fs.widths[c] + "px";
@@ -650,7 +703,7 @@
         if (fs.sort.ci !== c) fs.sort = { ci: c, dir: 1 };
         else if (fs.sort.dir > 0) fs.sort.dir = -1;
         else fs.sort = { ci: -1, dir: 1 };
-        heads.forEach((th2, c2) => { th2.querySelector(".sort-mark").textContent = fs.sort.ci === c2 ? (fs.sort.dir > 0 ? " ▲" : " ▼") : ""; });
+        heads.forEach((th2, k) => { th2.querySelector(".sort-mark").textContent = fs.sort.ci === cols[k] ? (fs.sort.dir > 0 ? " ▲" : " ▼") : ""; });
         fill();
       });
       const rz = h("span", { class: "rz", title: "ドラッグで幅を変えます（ダブルクリックで元に戻す）" });
@@ -676,9 +729,11 @@
       th.appendChild(rz);
       return th;
     });
+    const emptyNote = fs.showEmpty ? button("空の列を隠す", () => { fs.showEmpty = false; render(); }, { class: "link small" })
+      : empty.size ? button(`空の列 ${empty.size} 個を隠しています（出す）`, () => { fs.showEmpty = true; render(); }, { class: "link small", title: [...empty].map((c) => t.header[c]).join("、") }) : null;
     return h("div", null,
       t.lead ? h("p", { class: "dim" }, t.lead) : null,
-      h("div", { class: "row" }, filter, note, more),
+      h("div", { class: "row" }, filter, note, more, emptyNote),
       h("div", { class: "table-wrap" }, h("table", { class: "listed" }, h("thead", null, h("tr", null, allBox ? h("th", { class: "pickbox" }, allBox) : null, heads)), body)));
   }
 
@@ -698,9 +753,49 @@
       render();
     };
     const create = () => run("案件を作っています", async () => {
-      await opened(await api().Create(c.dir, c.name, c.kind));
+      if (c.from) {
+        const parts = (st.caseParts || []).filter((p) => (c.parts && p.id in c.parts ? c.parts[p.id] : p.default)).map((p) => p.id);
+        const made = await api().CreateFrom(c.dir, c.name, c.kind, c.from, parts);
+        await opened(made.home);
+        st.caseNote = made.said;
+      } else {
+        await opened(await api().Create(c.dir, c.name, c.kind));
+      }
       st.create = { dir: "", name: "", kind: "migration" };
     });
+    // The settings of a case before (spec 14.12.8).
+    if (!st.caseParts) {
+      st.caseParts = [];
+      api().CaseParts().then((list) => { st.caseParts = list || []; if (st.page === "cases") render(); }).catch(() => {});
+    }
+    const pickFrom = async () => {
+      try {
+        const dir = await api().PickFolder("設定を写す元の案件フォルダ");
+        if (dir) c.from = dir;
+      } catch (e) {
+        st.error = errText(e);
+      }
+      render();
+    };
+    const fromChoices = [["", "写さない（空の案件）"]].concat(st.recent.filter((r) => !r.missing).map((r) => [r.dir, `${r.name || "（名前なし）"}（${r.dir}）`]));
+    if (c.from && !fromChoices.some((x) => x[0] === c.from)) fromChoices.push([c.from, c.from]);
+    // The sample case (spec 14.12.7).
+    const sample = async () => {
+      let dir = "";
+      try {
+        dir = await api().PickFolder("見本の案件を作るフォルダ（空のフォルダを選ぶか、新しく作ります）");
+      } catch (e) {
+        st.error = errText(e);
+        render();
+        return;
+      }
+      if (!dir) return;
+      run("見本の案件を作っています", async () => {
+        const made = await api().SampleCase(dir);
+        await opened(made.home);
+        st.caseNote = made.said;
+      });
+    };
     const open = (dir) => run("案件を開いています", async () => opened(await api().Open(dir)));
     const openPicked = async () => {
       let dir = "";
@@ -735,7 +830,17 @@
         h("div", { class: "row" }, h("span", null, "案件名"), h("input", { type: "text", value: c.name, placeholder: "空ならフォルダの名前", oninput: (e) => { c.name = e.target.value; } })),
         h("div", { class: "row" }, h("span", null, "種類"),
           seg([["migration", "更改（旧コンフィグから作る）"], ["new", "新規"]], c.kind, (k) => { c.kind = k; render(); })),
+        h("div", { class: "row" }, h("span", null, "設定を写す元の案件"),
+          Object.assign(select(fromChoices, c.from || "", (x) => { c.from = x; render(); }), { id: "create-from" }),
+          button("フォルダを選ぶ", pickFrom),
+          tip("前の案件の、納品用シートのひな形・案件のルール・チェックの設定・追加コンフィグ・列対応・ひな形と変数ルール・パックを、新しい案件に写します。コンフィグ・パラメータブック・出力は写しません。元の案件は変えません。")),
+        c.from ? h("div", { class: "row create-parts" }, (st.caseParts || []).map((p) => h("label", null,
+          h("input", { type: "checkbox", "data-part": p.id, checked: c.parts && p.id in c.parts ? c.parts[p.id] : p.default, onchange: (e) => { c.parts = c.parts || {}; c.parts[p.id] = e.target.checked; } }), " " + p.word))) : null,
         h("div", { class: "row" }, button("作る", create, { class: "primary", disabled: !c.dir }))),
+      h("div", { class: "card" },
+        h("h2", null, "見本の案件"),
+        h("p", null, "初めて使うときや、人に使い方を見せるときに。架空の旧コンフィグ（Cisco の拠点ルータ 2 台）を置いた更改の案件を作ります。ホームの「次にやること」に沿って、取り込みから納品物まで一通り試せます。現場のデータは使いません。"),
+        h("div", { class: "row" }, button("見本の案件を作る", sample, { id: "sample-case" }))),
       casePart(),
       st.cas ? checksPart() : null,
     ];
@@ -909,81 +1014,167 @@
         button("フォルダを開く", () => show("input/" + source)),
         button("取り込みへ", () => toImport(source), { class: n ? "primary" : null, disabled: !n, id: "to-import-" + source })));
 
+    // The cards in the order of the work of the case; what a case may not
+    // need is folded under そのほか (spec 14.12.2).
+    const migration = m.case.kind !== "新規";
+    const bookCard = h("div", { class: "card" },
+      h("h2", null, `パラメータブック（${m.case.book}）`),
+      h("p", null, m.hasBook ? `あります（最後に書かれた時刻: ${m.bookTime}）。値は、画面の表（「表で編集」）でも、Excel でも直せます。` : migration ? "まだありません。旧コンフィグを取り込むと作られます。" : "まだありません。「空のブックを作る」で作ります。"),
+      h("div", { class: "row" },
+        button("表で編集", () => openEdit(null), { disabled: !m.hasBook, id: "edit-book" }),
+        button("Excel で開く", () => show(m.case.book), { disabled: !m.hasBook }),
+        button("対応を見る", () => go("mapping")),
+        m.hasBook ? null : button("空のブックを作る（新規構築）", newBook, { id: "new-book", class: migration ? null : "primary" })),
+      m.hasBook ? h("div", { class: "row", id: "clone-row" },
+        h("span", null, "機器の複製: "),
+        h("input", { type: "text", id: "clone-from", value: nb.from, list: "clone-devices", placeholder: "元のホスト名（一覧から選べます）", oninput: (e) => { nb.from = e.target.value; } }),
+        h("datalist", { id: "clone-devices" }, (nb.devices || []).map((d) => h("option", { value: d }))),
+        h("span", null, " → "),
+        h("input", { type: "text", id: "clone-to", value: nb.to, placeholder: "新しいホスト名（カンマで区切って複数）", oninput: (e) => { nb.to = e.target.value; } }),
+        button("複製する", cloneDevice, { id: "clone-go" })) : null,
+      nb.said.length ? h("div", { id: "newbuild-result" }, nb.said.map((x) => h("p", null, x))) : null);
+    if (m.hasBook && !nb.devices && !nb.loading) {
+      nb.loading = true;
+      api().BookDevices().then((list) => { nb.devices = list || []; nb.loading = false; if (st.page === "home" && !busy) render(); }).catch(() => { nb.devices = []; nb.loading = false; });
+    }
+    const genCard = h("div", { class: "card" },
+      h("h2", null, "生成とチェック"),
+      h("p", null, "パラメータブックを読んでチェックし、全台のコンフィグ・チェック結果表・変更一覧（2 回目から）を出力フォルダに書きます。値の誤りがある機器のコンフィグは書きません。"),
+      h("p", { class: "dim" }, !m.hasBook ? "パラメータブックがまだありません。" : m.lastGen ? `最後の生成: ${m.lastGen}` : "まだ生成していません。"),
+      h("div", { class: "row" },
+        button("生成とチェック", () => generate(false), { class: "primary", disabled: !m.hasBook, id: "generate" }),
+        button("チェックだけ", () => generate(true), { disabled: !m.hasBook }),
+        m.lastGen || st.res.view ? button("結果を見る", () => go("result")) : null,
+        button("差分の投入へ", () => go("delta"), { disabled: !m.hasBook, title: "今のコンフィグとの差から、変えるコマンドだけの投入を作ります（設定変更の案件）" })));
+    const deliverCard = h("div", { class: "card" },
+      h("h2", null, "納品物"),
+      h("p", null, "「納品一式を作る」で、いちばん新しい生成のコンフィグ・チェック結果表と、パラメータブックから作る納品用パラメータシート・相手に渡すパラメータ表を、1 つのフォルダ（と zip）にまとめます。シートや表だけを出すこともできます（チェックはしません）。"),
+      h("div", { class: "row" },
+        h("span", null, "秘密の値（シート・表）: "),
+        select([["show", "そのまま書く"], ["mask", "*** に伏せる"]], exp.mask, (v) => { exp.mask = v; })),
+      h("div", { class: "row" },
+        button("納品一式を作る", openDelivery, { class: "primary", disabled: !m.hasBook, id: "make-delivery" }),
+        button("納品用パラメータシートを出す", () => doExport("sheet"), { disabled: !m.hasBook }),
+        button("相手に渡すパラメータ表を出す", () => doExport("peer"), { disabled: !m.hasBook }),
+        button("ひな形のフォルダを開く", () => show("templates"))),
+      deliveryPart(),
+      h("div", { class: "row" },
+        h("span", null, "ひな形の見本: "),
+        select([["sheets", "1 ブックで機器ごとのシート"], ["files", "機器ごとに 1 ファイル"], ["list", "全台を 1 枚の一覧"]], exp.sample || "sheets", (v) => { exp.sample = v; }),
+        button("ひな形の見本を作る", () => run("ひな形の見本を作っています", async () => {
+          const rel = await api().MakeSample(exp.sample || "sheets");
+          exp.sampleMsg = `${rel} を作りました。templates フォルダのひな形は、すべて使います（ひな形 1 つにつき、納品用シートが 1 つ出ます）。見本を直して使うか、要らなければ消してください。書き方は使い方の「納品用パラメータシートのひな形」にあります。`;
+          exp.sampleFile = rel;
+        }), { id: "make-sample" }),
+        tip("見出し・罫線・色の付いたひな形を templates フォルダに作ります。機器の基本・インタフェース・スタティック経路の欄があり、そのまま「納品用パラメータシートを出す」で出せます。自社の書式に合わせて直して使います。改版履歴の欄は {{#rows revisions}} で書けます（使い方の「改版履歴」）")),
+      exp.sampleMsg ? h("div", { class: "box info", id: "sample-msg" }, exp.sampleMsg,
+        h("div", { class: "row" }, button("見本を開く", () => show(exp.sampleFile)), button("ひな形のフォルダを開く", () => show("templates")))) : null,
+      exp.view ? h("div", { id: "export-result" },
+        h("p", null, exp.view.summary),
+        boxes("warn", exp.view.notes),
+        boxes("warn", exp.view.problems),
+        h("div", { class: "row" },
+          exp.view.files.map((f) => button(f.slice(f.lastIndexOf("/") + 1), () => show(f))),
+          exp.view.dir ? button("フォルダを開く", () => show(exp.view.dir)) : null)) : null);
+    const compareCard = h("div", { class: "card" },
+      h("h2", null, "比較"),
+      h("p", null, "旧コンフィグ・新コンフィグ・パラメータブックのうち 2 つを、設計データとして比べます。"),
+      h("div", { class: "row" }, button("比較へ", () => go("compare"))));
+    const reportCard = h("div", { class: "card" },
+      h("h2", null, "レポート"),
+      h("p", null, m.lastOut ? `いちばん新しい出力: ${m.lastOut}` : "まだ出力はありません。"),
+      h("div", { class: "row" },
+        button("出力フォルダを開く", () => show(m.lastOut), { disabled: !m.lastOut }),
+        button("出力の一覧", () => go("outputs"))));
+    const packCard = h("div", { class: "card" },
+      h("h2", null, "使えるベンダーパック"),
+      h("p", null, m.packs.length ? m.packs.map((p) => `${p.id} ${p.version}`).join("、") : "ありません。"));
+    const main = migration ? [input("old", m.old), bookCard, genCard, deliverCard] : [bookCard, genCard, deliverCard];
+    const others = migration ? [input("new", m.new), compareCard, reportCard, packCard] : [input("old", m.old), input("new", m.new), compareCard, reportCard, packCard];
+    const fold = h("details", { class: "others", id: "home-others", open: othersOpen() }, h("summary", null, "そのほか（" + (migration ? "新コンフィグ・比較・レポート・パック" : "旧コンフィグ・新コンフィグ・比較・レポート・パック") + "）"), others);
+    fold.addEventListener("toggle", () => othersOpen(fold.open));
+
     return [
       h("h1", null, m.case.name),
       h("p", null, `種類: ${m.case.kind}`),
+      stepsBox(),
       nextBox(),
       h("div", { class: "row" }, h("span", { class: "path" }, m.case.dir), button("案件フォルダを開く", () => show(""))),
       m.shared ? h("div", { class: "box warn", id: "shared-note" }, m.shared) : null,
       st.caseNote ? h("div", { class: "box info" }, button("閉じる", () => { st.caseNote = ""; render(); }, { class: "link close" }), st.caseNote) : null,
       boxes("warn", m.problems),
       draftNote(),
-      input("old", m.old),
-      h("div", { class: "card" },
-        h("h2", null, `パラメータブック（${m.case.book}）`),
-        h("p", null, m.hasBook ? `あります（最後に書かれた時刻: ${m.bookTime}）。値は、画面の表（「表で編集」）でも、Excel でも直せます。` : "まだありません。旧コンフィグを取り込むと作られます。"),
-        h("div", { class: "row" },
-          button("表で編集", () => openEdit(null), { disabled: !m.hasBook, id: "edit-book" }),
-          button("Excel で開く", () => show(m.case.book), { disabled: !m.hasBook }),
-          button("対応を見る", () => go("mapping")),
-          m.hasBook ? null : button("空のブックを作る（新規構築）", newBook, { id: "new-book" })),
-        m.hasBook ? h("div", { class: "row", id: "clone-row" },
-          h("span", null, "機器の複製: "),
-          h("input", { type: "text", id: "clone-from", value: nb.from, placeholder: "元のホスト名", oninput: (e) => { nb.from = e.target.value; } }),
-          h("span", null, " → "),
-          h("input", { type: "text", id: "clone-to", value: nb.to, placeholder: "新しいホスト名（カンマで区切って複数）", oninput: (e) => { nb.to = e.target.value; } }),
-          button("複製する", cloneDevice, { id: "clone-go" })) : null,
-        nb.said.length ? h("div", { id: "newbuild-result" }, nb.said.map((x) => h("p", null, x))) : null),
-      input("new", m.new),
-      h("div", { class: "card" },
-        h("h2", null, "比較"),
-        h("p", null, "旧コンフィグ・新コンフィグ・パラメータブックのうち 2 つを、設計データとして比べます。"),
-        h("div", { class: "row" }, button("比較へ", () => go("compare")))),
-      h("div", { class: "card" },
-        h("h2", null, "生成とチェック"),
-        h("p", null, "パラメータブックを読んでチェックし、全台のコンフィグ・チェック結果表・変更一覧（2 回目から）を出力フォルダに書きます。値の誤りがある機器のコンフィグは書きません。"),
-        h("p", { class: "dim" }, !m.hasBook ? "パラメータブックがまだありません。" : m.lastGen ? `最後の生成: ${m.lastGen}` : "まだ生成していません。"),
-        h("div", { class: "row" },
-          button("生成とチェック", () => generate(false), { class: "primary", disabled: !m.hasBook, id: "generate" }),
-          button("チェックだけ", () => generate(true), { disabled: !m.hasBook }),
-          m.lastGen || st.res.view ? button("結果を見る", () => go("result")) : null)),
-      h("div", { class: "card" },
-        h("h2", null, "納品物"),
-        h("p", null, "パラメータブックの値を、納品用パラメータシート（templates フォルダのひな形に流し込みます。ひな形が無ければ標準の形）と、相手に渡すパラメータ表（管理外の相手と合わせる値）に書き出します。チェックはしません。"),
-        h("div", { class: "row" },
-          h("span", null, "秘密の値: "),
-          select([["show", "そのまま書く"], ["mask", "*** に伏せる"]], exp.mask, (v) => { exp.mask = v; })),
-        h("div", { class: "row" },
-          button("納品用パラメータシートを出す", () => doExport("sheet"), { disabled: !m.hasBook }),
-          button("相手に渡すパラメータ表を出す", () => doExport("peer"), { disabled: !m.hasBook }),
-          button("ひな形のフォルダを開く", () => show("templates"))),
-        h("div", { class: "row" },
-          h("span", null, "ひな形の見本: "),
-          select([["sheets", "1 ブックで機器ごとのシート"], ["files", "機器ごとに 1 ファイル"], ["list", "全台を 1 枚の一覧"]], exp.sample || "sheets", (v) => { exp.sample = v; }),
-          button("ひな形の見本を作る", () => run("ひな形の見本を作っています", async () => {
-            const rel = await api().MakeSample(exp.sample || "sheets");
-            exp.sampleMsg = `${rel} を作りました。templates フォルダのひな形は、すべて使います（ひな形 1 つにつき、納品用シートが 1 つ出ます）。見本を直して使うか、要らなければ消してください。書き方は使い方の「納品用パラメータシートのひな形」にあります。`;
-            exp.sampleFile = rel;
-          }), { id: "make-sample" }),
-          tip("見出し・罫線・色の付いたひな形を templates フォルダに作ります。機器の基本・インタフェース・スタティック経路の欄があり、そのまま「納品用パラメータシートを出す」で出せます。自社の書式に合わせて直して使います")),
-        exp.sampleMsg ? h("div", { class: "box info", id: "sample-msg" }, exp.sampleMsg,
-          h("div", { class: "row" }, button("見本を開く", () => show(exp.sampleFile)), button("ひな形のフォルダを開く", () => show("templates")))) : null,
-        exp.view ? h("div", { id: "export-result" },
-          h("p", null, exp.view.summary),
-          boxes("warn", exp.view.notes),
-          boxes("warn", exp.view.problems),
-          h("div", { class: "row" },
-            exp.view.files.map((f) => button(f.slice(f.lastIndexOf("/") + 1), () => show(f))),
-            exp.view.dir ? button("フォルダを開く", () => show(exp.view.dir)) : null)) : null),
-      h("div", { class: "card" },
-        h("h2", null, "レポート"),
-        h("p", null, m.lastOut ? `いちばん新しい出力: ${m.lastOut}` : "まだ出力はありません。"),
-        h("div", { class: "row" }, button("出力フォルダを開く", () => show(m.lastOut), { disabled: !m.lastOut }))),
-      h("div", { class: "card" },
-        h("h2", null, "使えるベンダーパック"),
-        h("p", null, m.packs.length ? m.packs.map((p) => `${p.id} ${p.version}`).join("、") : "ありません。")),
+      main,
+      fold,
       h("div", { class: "row" }, button("案件を閉じる", close)),
     ];
+  }
+
+  // othersOpen tells (or keeps, given a value) whether そのほか of the home
+  // is open: a choice of this PC (spec 14.12.2).
+  function othersOpen(v) {
+    try {
+      if (v === undefined) return localStorage.getItem("cc.home.others") === "1";
+      localStorage.setItem("cc.home.others", v ? "1" : "0");
+    } catch (e) {
+      // the choice is not kept
+    }
+    return !!v;
+  }
+
+  // ---- 納品一式 (spec 13.6, 13.7) ----
+
+  function openDelivery() {
+    const exp = st.exp;
+    run("納品一式の準備をしています", async () => {
+      const p = await api().DeliveryPlan();
+      exp.plan = p;
+      exp.done = null;
+      exp.rev = { on: p.revisions.length > 0, version: p.nextVersion, summary: p.summary, by: p.by || "" };
+      st.jump = "delivery";
+    });
+  }
+
+  function deliveryPart() {
+    const exp = st.exp;
+    const p = exp.plan;
+    if (exp.done) {
+      const d = exp.done;
+      return h("div", { class: "box info", id: "delivery-done" }, button("閉じる", () => { exp.done = null; render(); }, { class: "link close" }), d.summary,
+        d.notes.length ? "\n" + d.notes.join("\n") : "",
+        h("div", { class: "row" }, button("フォルダを開く", () => show(d.dir), { class: "primary" }), button("zip のある場所を開く", () => show(d.dir.slice(0, d.dir.lastIndexOf("/"))))));
+    }
+    if (!p) return null;
+    if (!p.ready) {
+      return h("div", { class: "box warn", id: "delivery" }, button("閉じる", () => { exp.plan = null; render(); }, { class: "link close" }), "納品一式は作れません: " + p.why);
+    }
+    const r = exp.rev;
+    const left = p.known ? p.errors + p.warnings : 0;
+    const make = async () => {
+      if (left > 0 && !(await ask("未承認の指摘が残っています", `未承認の指摘が ${left} 件あります（エラー ${p.errors}・警告 ${p.warnings}）。それでも納品一式を作りますか？\n作ると、UNVERIFIED.txt を入れます。`, "それでも作る"))) return;
+      if (r.on && !r.version.trim()) { st.error = "改版履歴に残すときは、版を書いてください"; render(); return; }
+      run("納品一式を作っています", async () => {
+        exp.done = await api().MakeDelivery(exp.mask === "mask", left > 0, r.on ? r.version.trim() : "", r.on ? r.summary : "", r.on ? r.by : "");
+        exp.plan = null;
+        st.home = await api().Home();
+        st.jump = "delivery-done";
+      });
+    };
+    return h("div", { class: "card", id: "delivery" },
+      h("h3", null, "納品一式を作る"),
+      h("p", null, `もとにする生成: ${p.when}（コンフィグ ${p.configs} 台）。` + (p.known ? (left ? `未承認の指摘が ${left} 件あります（エラー ${p.errors}・警告 ${p.warnings}）。` : "未承認の指摘はありません。") : "")),
+      h("div", { class: "row" },
+        h("label", null, h("input", { type: "checkbox", id: "rev-on", checked: r.on, onchange: (e) => { r.on = e.target.checked; render(); } }), " 改版履歴に残す"),
+        tip("改版履歴（版・日付・変更内容・作った人）を state/revisions.yaml に残し、納品用シートのひな形に {{#rows revisions}} や {{ revision.version }} を書いたときに出します。使わない案件では外したままにします。")),
+      r.on ? [
+        h("div", { class: "row" }, h("span", null, "版"), h("input", { type: "text", id: "rev-version", value: r.version, oninput: (e) => { r.version = e.target.value; } }),
+          h("span", null, "作った人"), h("input", { type: "text", id: "rev-by", value: r.by, oninput: (e) => { r.by = e.target.value; } })),
+        h("div", { class: "row" }, h("span", null, "変更内容"), h("input", { type: "text", id: "rev-summary", class: "wide-input", value: r.summary, oninput: (e) => { r.summary = e.target.value; } })),
+        p.revisions.length ? h("p", { class: "dim small" }, "これまでの版: " + p.revisions.map((x) => `${x.version}（${x.date}）`).join("、")) : null,
+      ] : null,
+      h("div", { class: "row" },
+        button("作る", make, { class: "primary", id: "delivery-go" }),
+        button("やめる", () => { exp.plan = null; render(); })));
   }
 
   // ---- 取り込み ----
@@ -1597,19 +1788,63 @@
           rows: rv.rows.map((r) => [r.newHost, r.oldIf, r.was || "（空）", r.wasBasis, r.now || "（空）", r.basis]) }, { id: "redo/rows" }) : null) : null);
   }
 
-  // loadNext asks what to do next for the home screen (spec 14.10.4). The
-  // home is drawn first; the answer comes after it.
+  // loadNext asks for the steps of the case and the next thing to do (spec
+  // 14.10.4, 14.12.1). The home is drawn first; the answer comes after it,
+  // at once without counting the unhandled lines, then with them.
   async function loadNext() {
     if (!st.cas) return;
     st.nextFor = st.home;
-    let n = null;
-    try {
-      n = await api().Next();
-    } catch (e) {
-      n = null;
-    }
-    st.next = n;
+    const ask = async (quick) => {
+      try {
+        return await api().Steps(quick);
+      } catch (e) {
+        return null;
+      }
+    };
+    let p = await ask(true);
+    st.steps = p;
+    st.next = p ? p.next : null;
     if (st.page === "home" && !busy) render();
+    if (p && p.steps.some((x) => x.state === "counting")) {
+      p = await ask(false);
+      st.steps = p;
+      st.next = p ? p.next : null;
+      if (st.page === "home" && !busy) render();
+    }
+  }
+
+  // goStep goes to the screen of a step, and points at its button.
+  function goStep(page, act) {
+    st.hint = act;
+    if (page === "import") st.imp.source = "old";
+    if (page === "logs") st.logs.tab = act === "verify" ? "verify" : "load";
+    if (act === "verify") st.hint = "logs-run";
+    if (page === "result" && act === "findings") {
+      st.res.tab = "findings";
+      st.res.state = "todo";
+      st.res.want = "findings";
+      st.hint = "";
+    }
+    if (page === "home") { render(); return; }
+    go(page);
+  }
+
+  const STEP_WORDS = { done: "済み", todo: "要対応", wait: "まだ", optional: "任意", counting: "数えています…" };
+
+  // stepsBox is the row of the steps of the case (spec 14.12.1).
+  function stepsBox() {
+    const p = st.steps;
+    if (!p || !p.steps || !p.steps.length) return null;
+    const next = p.next || {};
+    let marked = false;
+    return h("div", { class: "steps", id: "steps" }, p.steps.map((x, i) => {
+      const isNext = !marked && next.page && x.page === next.page && x.act === next.act && (x.state === "todo" || x.state === "optional");
+      if (isNext) marked = true;
+      return h("button", { type: "button", onclick: () => goStep(x.page, x.act),
+        class: cls("step", x.state, isNext && "next"), "data-step": x.id, title: x.text || x.label },
+      h("span", null, `${i + 1}. ${x.label}`),
+      h("span", { class: "st" }, x.state === "todo" && x.note ? x.note : STEP_WORDS[x.state] || ""));
+    }));
   }
 
   // nextBox is the one thing to do next, at the top of the home.
@@ -1620,16 +1855,10 @@
     }
     const n = st.next;
     if (!n) return null;
-    const goNext = () => {
-      st.hint = n.act;
-      if (n.page === "import") st.imp.source = "old";
-      if (n.page === "home") { render(); return; }
-      go(n.page);
-    };
     return h("div", { class: "next", id: "next" },
       h("b", null, "次にやること"),
       h("span", null, n.text),
-      n.page === "home" && !n.act ? null : button(n.page === "home" ? "そこへ" : "移る", goNext, { class: "primary", id: "next-go" }));
+      !n.page || (n.page === "home" && !n.act) ? null : button(n.page === "home" ? "そこへ" : "移る", () => goStep(n.page, n.act), { class: "primary", id: "next-go" }));
   }
 
   function makeBook(from, replace) {
@@ -1759,6 +1988,8 @@
       ["approvals", `承認（${v.approvals.length}）`],
       ["changes", "変更"],
     ];
+    if (v.rewrite) tabs.splice(1, 0, ["rewrite", "書き換え"]);
+    if (rs.tab === "rewrite" && !v.rewrite) rs.tab = "devices";
     const out = [
       h("h1", null, "結果"),
       h("h2", null, v.title),
@@ -1767,9 +1998,12 @@
       draftNote(),
       counts(v.counts),
       boxes("warn", v.notes),
-      h("div", { class: "row" },
+      v.draft ? h("div", { class: "row", id: "draft-result" },
+        button("表の編集へ戻る", () => openEdit(null), { class: "primary" }),
+        h("span", { class: "dim small" }, "直したら、表の編集の「保存してチェック」で保存して、チェックし直します。")) : h("div", { class: "row" },
         button("チェック結果表を Excel で開く", () => show(v.report.xlsx)),
         button("チェック結果表をブラウザで開く", () => show(v.report.html)),
+        v.rewriteReport && v.rewriteReport.xlsx ? button("書き換えレポートを Excel で開く", () => show(v.rewriteReport.xlsx)) : null,
         v.changes.has ? button("変更一覧を Excel で開く", () => show(v.changes.report.xlsx)) : null,
         v.changes.has ? button("変更一覧をブラウザで開く", () => show(v.changes.report.html)) : null,
         button("出力フォルダを開く", () => show(v.dir)),
@@ -1779,7 +2013,7 @@
       h("p", { class: "dim small" }, "画面では、秘密の列の値をいつも伏せて出します。書き出したコンフィグのファイルには、値がそのまま入っています。"),
       h("div", { class: "row", id: "tabs" }, seg(tabs, rs.tab, (x) => { rs.tab = x; render(); })),
     ];
-    const draw = { devices: resultDevices, findings: resultFindings, checks: () => tableView(v.checks, { id: "result/checks" }), approvals: resultApprovals, changes: resultChanges };
+    const draw = { devices: resultDevices, findings: resultFindings, checks: () => tableView(v.checks, { id: "result/checks" }), approvals: resultApprovals, changes: resultChanges, rewrite: resultRewrite };
     out.push(draw[rs.tab](v));
     return out;
   }
@@ -1791,7 +2025,8 @@
       const r = await api().LastResult();
       if (r) {
         showResult(r);
-        st.res.tab = "devices";
+        st.res.tab = st.res.want || "devices";
+        st.res.want = "";
       }
     }, true, "台");
   }
@@ -1857,6 +2092,34 @@
       tableView(t, { id: `result/devices/${rs.onlyBad}`, onPick: pick }));
   }
 
+  // resultRewrite is the tab 書き換え: every line of the old configurations
+  // with where it went (spec 10.4, 13.4).
+  function resultRewrite(v) {
+    const rs = st.res;
+    const rw = rs.rw || (rs.rw = { device: "", kind: "", view: null, loading: false, for: null });
+    const load = () => {
+      rw.loading = true;
+      rw.for = v;
+      api().Rewrite(rw.device, rw.kind).then((x) => { rw.view = x; rw.loading = false; if (st.page === "result" && !busy) render(); })
+        .catch((e) => { rw.loading = false; st.error = errText(e); render(); });
+    };
+    if (rw.for !== v && !rw.loading) load();
+    const x = rw.view;
+    if (!x || rw.for !== v) return h("p", { class: "dim" }, "書き換えレポートを読んでいます…");
+    if (!x.has) return h("p", { class: "dim" }, "この案件には書き換えレポートがありません（旧コンフィグがあり、「機器対応」に新ホスト名を書いた更改の案件で出ます）。");
+    const pick = (field) => (val) => { rw[field] = val; load(); };
+    return h("div", null,
+      h("p", { class: "dim small" }, "旧コンフィグのすべての行を、どれか 1 つの区分に入れ、旧の行 → 行き先（パラメータブックの表と列）→ 新の行を並べます。読み合わせと入れ忘れの確認に使います。「自動で書き換えた」「無視」以外の行を見てください。"),
+      h("div", { class: "row" },
+        x.kinds.map((k) => button(`${k.word}（${k.count}）`, () => pick("kind")(rw.kind === k.id ? "" : k.id), { class: rw.kind === k.id ? "on" : null })),
+        select([["", "すべての旧機器"]].concat(x.devices.map((d) => [d.device, d.device + (d.mark ? "（見る行あり）" : "")])), rw.device, pick("device")),
+        x.report && x.report.xlsx ? button("書き換えレポートを Excel で開く", () => show(x.report.xlsx)) : null),
+      boxes("info", x.notes),
+      x.cut ? h("div", { class: "box warn" }, `${x.matched} 行のうち、先頭の 5,000 行を出しています。区分か機器で絞り込んでください。`) : null,
+      tableView(x.table, { id: `result/rewrite/${rw.device}/${rw.kind}` }),
+      x.newOnly && x.newOnly.rows.length ? h("details", null, h("summary", null, `新にだけある行（${x.newOnly.rows.length}）`), tableView(x.newOnly, { id: "result/rewrite/new" })) : null);
+  }
+
   function resultFindings(v) {
     const rs = st.res;
     const list = v.findings.filter((f) => {
@@ -1889,14 +2152,14 @@
     detail(list[sel]);
     // Findings picked to approve together (spec 14.10.8): only those a
     // person can approve.
-    const can = (i) => list[i].state === "open";
+    const can = (i) => !v.draft && list[i].state === "open";
     for (const k of Object.keys(rs.many)) if (!v.findings.some((f) => f.key === k && f.state === "open")) delete rs.many[k];
     const bar = h("div", { class: "row", id: "many-bar" });
     const drawBar = () => {
       const n = Object.keys(rs.many).length;
       bar.textContent = "";
       if (!n) {
-        add(bar, [h("span", { class: "dim small" }, "左の箱で指摘を選ぶと、同じ理由でまとめて承認できます（エラーも。承認は 1 件ずつ残ります）。")]);
+        add(bar, [h("span", { class: "dim small" }, v.draft ? "下書きでチェックした結果では、承認はできません。" : "左の箱で指摘を選ぶと、同じ理由でまとめて承認できます（エラーも。承認は 1 件ずつ残ります）。")]);
         return;
       }
       const ok = button(`選んだ ${n} 件を承認する`, approveMany, { class: "primary", id: "many-go" });
@@ -1956,7 +2219,7 @@
       h("dt", null, "重大度と状態"), h("dd", null, h("span", { class: "tag sev-" + f.severity }, f.word), " ", f.stateWord),
       h("dt", null, "機器"), h("dd", null, f.device || "（案件全体）"),
       place ? [h("dt", null, "場所"), h("dd", null, place)] : null,
-      f.at ? [h("dt", null, "パラメータブックのセル"), h("dd", { class: "code" }, f.at, " ", button("このセルを表で開く", () => openEditAt(f.at), { class: "link open-cell" }))] : null,
+      f.at ? [h("dt", null, "パラメータブックのセル"), h("dd", { class: "code" }, f.at, " ", (o.rs ? null : rs.view && rs.view.draft && rs.view.moved) ? null : button("このセルを表で開く", () => { st.edit.from = f.device; openEditAt(f.at); }, { class: "link open-cell" }))] : null,
       h("dt", null, "内容"), h("dd", null, f.message),
       f.fix ? [h("dt", null, "直し方"), h("dd", null, f.fix)] : null,
       f.evidence.length ? [h("dt", null, "根拠"), f.evidence.map((p) => h("dd", { class: "code" }, `${p.label}: ${p.value}`))] : null,
@@ -1971,8 +2234,11 @@
     } else if (f.state === "fix") {
       out.push(h("div", { class: "box warn" }, "この指摘は承認できません。パラメータブックの値（またはテンプレート・追加コンフィグ）を、画面の表か Excel で直して、もう一度チェックしてください。"),
         h("div", { class: "row" },
-          f.at ? button("このセルを表で開く", () => openEditAt(f.at)) : button("パラメータブックを表で編集", () => openEdit(null)),
+          f.at && !(rs.view && rs.view.draft && rs.view.moved) ? button("このセルを表で開く", () => { st.edit.from = f.device; openEditAt(f.at); }) : button("パラメータブックを表で編集", () => openEdit(null)),
           button("パラメータブックを Excel で開く", () => show(st.cas.book))));
+    } else if (f.state === "open" && !o.rs && rs.view && rs.view.draft) {
+      out.push(h("div", { class: "box info" }, "下書きでチェックした結果です。承認は、表の編集で「保存してチェック」をした後の結果で行います。"),
+        h("div", { class: "row" }, button("表の編集へ戻る", () => openEdit(null))));
     } else if (f.state === "open") {
       const what = [f.rule, f.table && `表「${f.table}」`, o.migration && f.column && `列「${f.column}」`].filter(Boolean).join("・");
       const scopes = [["", "この指摘だけ"]];
@@ -2602,6 +2868,7 @@
         h("label", null, "ひな形", select(v.templates.map((t) => [t.name, t.name]), rn.template, (x) => { rn.template = x; })),
         h("label", null, "作るもの", select([["", "全文（新規コンフィグ・変更コマンド）"], ["old", "今との差から投入（今 = 旧コンフィグ input/old）"], ["new", "今との差から投入（今 = 新コンフィグ input/new）"], ["logs", "今との差から投入（今 = 投入後のログ input/logs）"]], rn.diff, (x) => { rn.diff = x; render(); })),
         h("label", null, "機器", h("input", { type: "text", value: rn.devices, placeholder: "空 = 全部。例: rt-a01, rt-a02", oninput: (e) => { rn.devices = e.target.value; }, id: "fill-devices" }))),
+      fillDevicePicker(rn),
       rn.diff ? h("p", { class: "dim small" }, "ひな形を「あるべき姿」として、機器ごとの今のコンフィグとの差から投入を作ります。足す行は全部、消す行（no …）は {{#sync}} の印の所だけです。保存のコマンドは付けません。") : null,
       h("div", { class: "row" }, button("作る", go, { class: "primary", id: "fill-run" })),
     ];
@@ -2624,6 +2891,9 @@
       out.push(h("h3", { id: "fill-one" }, `${d.name}: ${RES[d.result]}`),
         d.why ? h("div", { class: "box error" }, d.why) : null,
         d.values.length ? h("p", { class: "dim small" }, d.values.join("　")) : null,
+        d.text ? h("div", { class: "row" },
+          button(rv.diff ? "この機器の投入を全部コピー" : "この機器の文面を全部コピー", () => api().ClipboardSet(d.text.split(/\r?\n/).join("\r\n"))
+            .then(() => toast(`${d.name} の${rv.diff ? "投入" : "文面"}をコピーしました`)).catch((e) => toast(errText(e), "err")), { class: "primary", id: "fill-copy" })) : null,
         d.text ? h("pre", { class: "fill-out" }, d.text) : null);
       if (rv.diff) {
         const list = (title, items, mark) => (items.length ? [h("h4", null, `${title}（${items.length}）`), h("pre", { class: "fill-out" }, items.map((x) => mark + " " + x).join("\n"))] : null);
@@ -2631,6 +2901,31 @@
       }
     }
     return out;
+  }
+
+  // fillDevicePicker lets the devices be picked from a list: those of the
+  // book and those of the last run (spec 14.12.5). The picks go into the
+  // field of the devices.
+  function fillDevicePicker(rn) {
+    const nb = st.nb;
+    if (!nb.devices && !nb.loading && st.home && st.home.hasBook) {
+      nb.loading = true;
+      api().BookDevices().then((list) => { nb.devices = list || []; nb.loading = false; if (st.page === "fill" && !busy) render(); }).catch(() => { nb.devices = []; nb.loading = false; });
+    }
+    const names = [...new Set([].concat(nb.devices || [], rn.view ? rn.view.devices.map((d) => d.name) : []))];
+    if (!names.length) return null;
+    const chosen = new Set(rn.devices.split(/[,、\s]+/).map((x) => x.trim()).filter(Boolean));
+    const set = (name, on) => {
+      if (on) chosen.add(name);
+      else chosen.delete(name);
+      rn.devices = names.filter((x) => chosen.has(x)).concat([...chosen].filter((x) => !names.includes(x))).join(", ");
+      render();
+    };
+    return h("details", { class: "fill-pick", id: "fill-pick", open: rn.pickOpen || null, ontoggle: (e) => { rn.pickOpen = e.target.open; } },
+      h("summary", null, `機器を一覧から選ぶ（${names.length} 台。何も選ばなければ全部）`),
+      h("div", { class: "row" },
+        names.map((x) => h("label", null, h("input", { type: "checkbox", checked: chosen.has(x), onchange: (e) => set(x, e.target.checked) }), " " + x)),
+        button("選ぶのをやめる", () => { rn.devices = ""; render(); }, { class: "link", disabled: !chosen.size })));
   }
 
   // ---- ログ ----
@@ -3843,32 +4138,69 @@
     const n = st.edit.list ? st.edit.list.draft : gCounts().all;
     if (!n) {
       gSay("保存する変更はありません");
-      return;
+      return "none";
     }
-    if (!(await ask("パラメータブックに保存", `表の編集の下書き（${n} 件。すべてのシートの分）を、パラメータブック ${st.cas.book} に書きます。書く前に、今のブックの控えを state/backup に取ります。Excel でブックを開いているときは、先に閉じてください。`, "保存する"))) return;
+    if (!(await ask("パラメータブックに保存", `表の編集の下書き（${n} 件。すべてのシートの分）を、パラメータブック ${st.cas.book} に書きます。書く前に、今のブックの控えを state/backup に取ります。Excel でブックを開いているときは、先に閉じてください。`, "保存する"))) return "";
     const choice = {};
     const id = G.id;
     st.edit.msg = "";
     for (;;) {
       let res = null;
       await run("パラメータブックに書いています", async () => { res = await api().EditSave(choice); });
-      if (!res) return; // what went wrong is shown; the draft stays
+      if (!res) return ""; // what went wrong is shown; the draft stays
       const open = res.conflicts.filter((c) => !(c.id in choice));
       if (!res.saved && open.length) {
         const picked = await gResolve(open);
-        if (!picked) return;
+        if (!picked) return "";
         Object.assign(choice, picked);
         continue;
       }
+      let done = "";
       await run("パラメータブックを読み直しています", async () => {
         st.edit.msg = res.message;
         st.edit.redo = res.redo && res.redo.length ? res.redo : null;
         st.edit.list = await api().EditSheets();
         if (st.home) st.home = await api().Home();
         await gLoad(id);
+        done = "saved";
       });
-      return;
+      return done;
     }
+  }
+
+  // gSaveCheck saves the draft and runs "check only" at once, then shows
+  // the findings left (spec 14.12.3).
+  async function gSaveCheck() {
+    if (!G || G.busy) return;
+    const from = st.edit.from || "";
+    const saved = await gSave();
+    if (!saved) return;
+    const rs = st.res;
+    await run("チェックしています", async () => {
+      showResult(await api().Check());
+      rs.tab = "findings";
+      rs.state = "todo";
+      rs.sev = "";
+      rs.device = from && rs.view.devices.some((d) => d.host === from) ? from : "";
+      G = null;
+      st.page = "result";
+    }, true, "台");
+  }
+
+  // gDraftCheck checks the book with the draft put in, without writing it
+  // (spec 14.12.3).
+  async function gDraftCheck() {
+    if (!G || G.busy) return;
+    await gLeave();
+    const rs = st.res;
+    await run("下書きでチェックしています", async () => {
+      showResult(await api().DraftCheck());
+      rs.tab = "findings";
+      rs.state = "todo";
+      rs.device = "";
+      G = null;
+      st.page = "result";
+    }, true, "台");
   }
 
   // gResolve asks which side stays for each change that meets one made in
@@ -6048,24 +6380,31 @@
         G.v.device >= 0 ? Object.assign(select(devOpts, G.dev, (d) => { G.dev = d; refilter(); }), { id: "g-dev" }) : null,
         filter,
         button("保存（パラメータブックに書く）", gSave, { class: "primary", id: "g-save", title: "Ctrl+S" }),
+        button("保存してチェック", gSaveCheck, { id: "g-save-check", title: "保存して、続けて「チェックだけ」を行い、結果の指摘を出します" }),
         button("表の編集を終える", gClose, { id: "g-close" })),
+      // The tools used most stay in sight; the rest are in three menus
+      // (spec 14.12.5).
       h("div", { class: "row g-tools" },
         tool("元に戻す", () => gUndo(false), { id: "g-undo", title: "Ctrl+Z" }),
         tool("やり直す", () => gUndo(true), { id: "g-redo", title: "Ctrl+Y" }),
-        tool("上に行を入れる", () => gInsertAt(false), { id: "g-ins-above", title: "Ctrl+Shift++。選んだ行の数だけ、空の行を上に入れます。保存すると、シートのその位置に入ります" }),
-        tool("下に行を入れる", () => gInsertAt(true), { id: "g-ins-below", title: "選んだ行の数だけ、空の行を下に入れます" }),
-        tool("行を複製", gDuplicateRows, { id: "g-dup", title: "選んだ行の写しを、すぐ下の新しい行に作ります" }),
-        tool("上へ", () => gMoveRows(-1), { id: "g-up", title: "Alt+↑。選んだ行を 1 行上へ動かします。保存すると、シートの行が動きます" }),
-        tool("下へ", () => gMoveRows(1), { id: "g-down", title: "Alt+↓。選んだ行を 1 行下へ動かします" }),
-        tool("行を削除", gDeleteRows, { id: "g-del", title: "Ctrl+－。パラメータブックの行は、保存するまで消えません" }),
-        tool("新しい行へ", gToEnd, { id: "g-end", title: "表の下の空の行へ移ります。打つか貼ると、新しい行になります（保存すると、シートの末尾に入ります）" }),
         button("検索と置換", () => gFindOpen(true), { id: "g-find", title: "Ctrl+F（検索）・Ctrl+H（置換）" }),
-        button("列の表示", gColsDialog, { id: "g-cols", title: "表に出す列を選びます（空の列をまとめて隠せます）" }),
-        button("列を足す", gAddCol, { id: "g-addcol", title: "定義に無い列（自由列）を足します" }),
-        tool(G.show ? "秘密の値を隠す" : "秘密の値を見せる", () => { gCommitEdit(); G.show = !G.show; gRedrawAll(); }, { id: "g-show", hidden: !G.cols.some((c) => c.secret) }),
-        button("下書きを捨てる", gDiscard, { id: "g-discard" }),
-        button("読み直す", gReload, { id: "g-reload", title: "Excel で直して保存した後に押すと、今のパラメータブックを読み直します（下書きは残ります）" }),
-        button("Excel で開く", () => show(st.cas.book))),
+        menu("行", "g-menu-rows", [
+          tool("上に行を入れる", () => gInsertAt(false), { id: "g-ins-above", title: "Ctrl+Shift++。選んだ行の数だけ、空の行を上に入れます。保存すると、シートのその位置に入ります" }),
+          tool("下に行を入れる", () => gInsertAt(true), { id: "g-ins-below", title: "選んだ行の数だけ、空の行を下に入れます" }),
+          tool("行を複製", gDuplicateRows, { id: "g-dup", title: "選んだ行の写しを、すぐ下の新しい行に作ります" }),
+          tool("上へ", () => gMoveRows(-1), { id: "g-up", title: "Alt+↑。選んだ行を 1 行上へ動かします。保存すると、シートの行が動きます" }),
+          tool("下へ", () => gMoveRows(1), { id: "g-down", title: "Alt+↓。選んだ行を 1 行下へ動かします" }),
+          tool("行を削除", gDeleteRows, { id: "g-del", title: "Ctrl+－。パラメータブックの行は、保存するまで消えません" }),
+          tool("新しい行へ", gToEnd, { id: "g-end", title: "表の下の空の行へ移ります。打つか貼ると、新しい行になります（保存すると、シートの末尾に入ります）" })]),
+        menu("列", "g-menu-cols", [
+          button("列の表示", gColsDialog, { id: "g-cols", title: "表に出す列を選びます（空の列をまとめて隠せます）" }),
+          button("列を足す", gAddCol, { id: "g-addcol", title: "定義に無い列（自由列）を足します" })]),
+        menu("下書き", "g-menu-draft", [
+          button("下書きでチェック", gDraftCheck, { id: "g-draft-check", title: "パラメータブックを書かずに、下書きを当てた内容でチェックします" }),
+          button("下書きを捨てる", gDiscard, { id: "g-discard" }),
+          button("読み直す", gReload, { id: "g-reload", title: "Excel で直して保存した後に押すと、今のパラメータブックを読み直します（下書きは残ります）" }),
+          button("Excel で開く", () => show(st.cas.book))]),
+        tool(G.show ? "秘密の値を隠す" : "秘密の値を見せる", () => { gCommitEdit(); G.show = !G.show; gRedrawAll(); }, { id: "g-show", hidden: !G.cols.some((c) => c.secret) })),
       h("div", { class: "g-findbar", id: "g-findbar", hidden: true }),
       G.v.missing ? h("div", { class: "box info", id: "g-missing" }, `シート「${G.v.name}」は、まだパラメータブックにありません。下の表に行を足して「保存」を押すと、ブックにこのシートを作ってから行を書きます（何も足さなければ、シートは作りません）。`) : null,
       h("div", { class: "row" },
@@ -6136,6 +6475,129 @@
       else wrap.focus({ preventScroll: true });
       F.focus = false;
     });
+    return out;
+  }
+
+  // ---- 差分の投入 (spec 9.8, 14.7.1) ----
+
+  function loadDelta() {
+    run("差分の投入の準備をしています", async () => {
+      const v = await api().Delta();
+      const d = st.dlt;
+      d.view = v;
+      if (!v.sides.some((x) => x.side === d.side && x.files > 0)) {
+        const first = v.sides.find((x) => x.files > 0);
+        d.side = first ? first.side : "old";
+      }
+      st.page = "delta";
+    });
+  }
+
+  function deltaPage() {
+    const d = st.dlt;
+    const v = d.view;
+    const out = [
+      h("h1", null, "差分の投入"),
+      h("p", { class: "dim" }, "パラメータブックから生成したコンフィグと、機器の今のコンフィグ（旧コンフィグ・新コンフィグ・投入後のログ）を比べて、変えるコマンドだけの投入を作ります。設定変更の案件で「変更分だけ入れる」ときに使います（全文を入れるときは「生成とチェック」のコンフィグを使います）。 ",
+        tip("消すのは、ブックで消した・変えた設定のうち、ツールが表に取り込める行だけです。取り込めない行（未対応の行）や、パックが書けない値の行は消さずに「残る行」に出します。値を変えた行は、新しい行で上書きされる前提で古い行を消しません（「置き換わる行」）。今のコンフィグのメーカーが違う機器と、IF 名が変わる機器は作りません。設定モードへの出入りは付けますが、保存のコマンドは付けません。")),
+    ];
+    if (!v) {
+      out.push(h("div", { class: "row" }, button("始める", loadDelta, { class: "primary" })));
+      return out;
+    }
+    const sides = v.sides.map((x) => [x.side, `今 = ${x.title}（${x.files} ファイル）`]);
+    const chosen = new Set(d.devices);
+    const go = () => run("差分の投入を作っています", async () => {
+      d.run = await api().DeltaRun(d.side, [...chosen]);
+      d.sel = "";
+    }, true, "台");
+    out.push(
+      h("div", { class: "row" },
+        h("span", null, "今のコンフィグ"),
+        Object.assign(select(sides, d.side, (x) => { d.side = x; }), { id: "delta-side" }),
+        button("作る", go, { class: "primary", id: "delta-run", disabled: !v.sides.some((x) => x.files > 0) }),
+        button("読み直す", loadDelta)),
+      v.devices.length ? h("details", { class: "fill-pick", open: d.pickOpen || null, ontoggle: (e) => { d.pickOpen = e.target.open; } },
+        h("summary", null, chosen.size ? `機器: ${chosen.size} 台を選んでいます` : `機器: 全部（${v.devices.length} 台。一覧から選べます）`),
+        h("div", { class: "row" },
+          v.devices.map((x) => h("label", null, h("input", { type: "checkbox", checked: chosen.has(x), onchange: (e) => {
+            if (e.target.checked) chosen.add(x); else chosen.delete(x);
+            d.devices = v.devices.filter((y) => chosen.has(y));
+            render();
+          } }), " " + x)),
+          button("選ぶのをやめる", () => { d.devices = []; render(); }, { class: "link", disabled: !chosen.size }))) : null);
+    const r = d.run;
+    if (!r) return out;
+    out.push(
+      h("h2", null, `結果: 作った ${r.made}・変更なし ${r.unchanged}・作らなかった ${r.notMade}`),
+      boxes("warn", r.notes),
+      h("div", { class: "row" },
+        r.dir ? button("出力のフォルダを開く", () => show(r.dir)) : null,
+        r.reportXlsx ? button("報告書を Excel で開く", () => show(r.reportXlsx)) : null,
+        r.report ? button("報告書をブラウザで開く", () => show(r.report)) : null),
+      tableView(r.table, { id: "delta/run", onPick: (i) => { d.sel = r.devices[i].name; st.jump = "delta-one"; render(); }, selected: r.devices.findIndex((x) => x.name === d.sel) }));
+    const one = r.devices.find((x) => x.name === d.sel);
+    if (one) {
+      const list = (title, items, mark) => (items.length ? [h("h4", null, `${title}（${items.length}）`), h("pre", { class: "fill-out" }, items.map((x) => mark + " " + x).join("\n"))] : null);
+      out.push(h("h3", { id: "delta-one" }, `${one.name}: ${one.word}`),
+        one.why ? h("div", { class: "box warn" }, one.why) : null,
+        one.now ? h("p", { class: "dim small" }, `今のコンフィグ: ${one.now}` + (one.file ? `　投入: ${one.file}` : "")) : null,
+        one.text ? h("div", { class: "row" },
+          button("この機器の投入を全部コピー", () => api().ClipboardSet(one.text.split(/\r?\n/).join("\r\n"))
+            .then(() => toast(`${one.name} の投入をコピーしました`)).catch((e) => toast(errText(e), "err")), { class: "primary", id: "delta-copy" })) : null,
+        one.text ? h("pre", { class: "fill-out" }, one.text) : null,
+        list("足す行", one.added, "+"), list("消す行", one.removed, "-"), list("置き換わる行（新しい行で上書きされるので消さない）", one.replaced, "~"), list("残る行（消していない）", one.kept, "="));
+    }
+    return out;
+  }
+
+  // ---- 出力 (spec 14.12.6) ----
+
+  function loadOutputs() {
+    run("出力の一覧を読んでいます", async () => {
+      st.outs = { list: await api().Outputs(), picked: {} };
+      st.page = "outputs";
+    });
+  }
+
+  function outputsPage() {
+    const o = st.outs;
+    const out = [
+      h("h1", null, "出力"),
+      h("p", { class: "dim" }, "out フォルダの、実行 1 回ごとのフォルダです。押すとフォルダを開きます。出力は、同じ入力からいつでも作り直せます。要らないものは選んで消せます（消したものは戻せません）。"),
+    ];
+    if (!o) return out;
+    const size = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+    const picked = o.list.filter((x) => o.picked[x.dir]);
+    const drop = async () => {
+      const kept = picked.filter((x) => x.keep);
+      const text = `選んだ ${picked.length} 個の出力のフォルダを消します（${size(picked.reduce((a, x) => a + x.size, 0))}）。消したものは戻せません。` +
+        (kept.length ? `\nいちばん新しい生成か納品一式のフォルダが ${kept.length} 個入っています。` : "");
+      if (!(await ask("出力を消しますか", text, "消す"))) return;
+      run("出力を消しています", async () => {
+        o.list = await api().DropOutputs(picked.map((x) => x.dir));
+        o.picked = {};
+        toast(`${picked.length} 個の出力を消しました`);
+      });
+    };
+    const total = o.list.reduce((a, x) => a + x.size, 0);
+    out.push(
+      h("div", { class: "row" },
+        h("span", null, `${o.list.length} 個（${size(total)}）`),
+        button("古いものを選ぶ", () => { o.picked = {}; for (const x of o.list) if (!x.keep) o.picked[x.dir] = true; render(); }, { title: "いちばん新しい生成と納品一式のフォルダのほかを、すべて選びます", disabled: !o.list.some((x) => !x.keep) }),
+        button("選ぶのをやめる", () => { o.picked = {}; render(); }, { class: "link", disabled: !picked.length }),
+        button(picked.length ? `選んだ ${picked.length} 個を消す` : "選んだものを消す", drop, { disabled: !picked.length, id: "outputs-drop" }),
+        button("読み直す", loadOutputs),
+        button("out フォルダを開く", () => show("out"))),
+      o.list.length ? h("div", { class: "table-wrap outputs" }, h("table", { class: "listed" },
+        h("thead", null, h("tr", null, h("th", null, ""), h("th", null, "日時"), h("th", null, "何をした出力か"), h("th", null, "ファイル"), h("th", null, "大きさ"), h("th", null, ""))),
+        h("tbody", null, o.list.map((x) => h("tr", { class: o.picked[x.dir] ? "sel" : null },
+          h("td", { class: "pickbox" }, h("input", { type: "checkbox", checked: !!o.picked[x.dir], "data-dir": x.dir, onchange: (e) => { if (e.target.checked) o.picked[x.dir] = true; else delete o.picked[x.dir]; render(); } })),
+          h("td", null, x.when),
+          h("td", { class: "kinds" }, x.kinds.join("・"), x.keep ? h("span", { class: "dim small" }, "（いちばん新しい）") : null),
+          h("td", null, String(x.files)),
+          h("td", null, size(x.size)),
+          h("td", null, button("開く", () => show(x.dir), { class: "link" }))))))) : h("p", { class: "dim" }, "出力はまだありません。"));
     return out;
   }
 
@@ -6370,7 +6832,8 @@
         h("p", null, "作者: KJO", h("br"), "MIT License © 2026 KJO"),
         h("div", { class: "row" },
           button("GitHub", () => api().OpenWeb("github"), { class: "link" }),
-          button("使い方", () => api().OpenWeb("manual"), { class: "link" }))),
+          button("使い方", () => api().OpenWeb("manual"), { class: "link" }),
+          button("申請用の説明", () => api().OpenWeb("approval"), { class: "link", title: "使う許可の申請に使う 1 枚の説明（通信・書き込む場所・インストールしないこと）" }))),
     ];
     return out;
   }

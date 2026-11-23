@@ -37,6 +37,10 @@ type GenOptions struct {
 	CheckOnly bool
 	// Dry writes nothing at all.
 	Dry bool
+	// Rewrite reads the old side for the rewriting report also when
+	// nothing is written (a screen that shows it after an approval). A run
+	// that writes reads it whenever the case is one of renewal (spec 13.4).
+	Rewrite bool
 }
 
 // DeviceRun is what the generation did for one device.
@@ -92,9 +96,15 @@ type GenerateOutcome struct {
 	Unverified string
 	Report     Files
 	Changes    *Changes
+	// RewriteReport is the rewriting report (spec 13.4); empty when the
+	// case is not one of renewal or nothing was written.
+	RewriteReport Files
 
-	hosts []string
-	data  *model.Dataset
+	hosts   []string
+	data    *model.Dataset
+	rewrite *rewriteInput
+	shownRw *Rewrite // the rewriting report for a screen, made once
+	written *Rewrite // the rewriting report that was written
 }
 
 // Count is the findings by what is left to do about them.
@@ -239,7 +249,6 @@ func (e *Env) projectVars() map[string]any {
 var genRules = []string{"G-601", "G-602", "G-603", "G-604", "G-605", "G-606", "G-607", "G-608", "G-609", "G-610", "G-611", "G-612", "G-613", "G-614"}
 
 const (
-	noModels    = "どのメーカーパックにも、機種の定義（models.yaml）がまだありません"
 	notWhole    = "テンプレートが失敗して文面がそろっていないため、行っていません"
 	notThisTime = "今回は、ほかの機器だけを対象にしました（--device）"
 )
@@ -292,6 +301,7 @@ func (e *Env) Generate(opt GenOptions, now time.Time) (*GenerateOutcome, error) 
 		Schema: e.Schema, Data: ds, Book: bk.Data,
 		HasPack:      func(id string) bool { return e.Packs[id] != nil },
 		Reads:        e.packReads,
+		Models:       e.packModels,
 		Placeholders: e.Proj.Config.Checks.Placeholders,
 	}
 	findings := check.Values(in, tally)
@@ -301,6 +311,19 @@ func (e *Env) Generate(opt GenOptions, now time.Time) (*GenerateOutcome, error) 
 	findings = append(findings, check.Cross(in, tally)...)
 	findings = append(findings, e.bookFindings(bk, ds, expandProblems, out)...)
 
+	// The old side of the rewriting report is read while the devices are
+	// generated: it reads the files and the book, and writes nothing.
+	var rewriteDone chan struct{}
+	var rewriteIn *rewriteInput
+	var rewriteErr error
+	if (!opt.Dry || opt.Rewrite) && rewriteCase(e, bk) {
+		rewriteDone = make(chan struct{})
+		go func() {
+			defer close(rewriteDone)
+			rewriteIn, rewriteErr = e.readRewrite(bk, in.Filled)
+		}()
+	}
+
 	blocked := map[string][]string{}
 	for _, f := range findings {
 		if check.Blocks(f.RuleID) && f.Device != "" && !has(blocked[f.Device], f.RuleID) {
@@ -309,7 +332,6 @@ func (e *Env) Generate(opt GenOptions, now time.Time) (*GenerateOutcome, error) 
 	}
 
 	// The configurations (spec 9.1 steps 3 to 5).
-	tally.Skip("G-607", "", noModels)
 	names := map[string]string{} // file name in small letters → the device that has it
 	devRows := map[string]*model.Row{}
 	for _, r := range ds.Tables["devices"].Rows {
@@ -389,6 +411,7 @@ func (e *Env) Generate(opt GenOptions, now time.Time) (*GenerateOutcome, error) 
 				}
 			}
 			tally.Look("V-113", h, explicitCells(e, o.Data))
+			fs = append(fs, check.ModelFunctions(in, h, tally)...)
 
 			name, err := e.fileName(p.Engine(), devRows[h])
 			if err == nil {
@@ -443,9 +466,29 @@ func (e *Env) Generate(opt GenOptions, now time.Time) (*GenerateOutcome, error) 
 	findings = append(findings, cases.rows(ds, blocked, devRows)...)
 
 	e.judge(out, findings)
+	if rewriteDone != nil {
+		<-rewriteDone
+		if out.rewrite = rewriteIn; rewriteErr != nil {
+			// The report is for reading the work through; the generation goes on.
+			out.Notes = append(out.Notes, "書き換えレポートを作れませんでした: "+rewriteErr.Error())
+		}
+	}
 	if opt.Dry {
 		return out, nil
 	}
+	// The rewriting report is written while the rest is: it only reads the
+	// outcome.
+	rewriteWrote := make(chan error, 1)
+	go func() { rewriteWrote <- e.writeRewrite(out, now) }()
+	waitRewrite := func() error {
+		if rewriteWrote == nil {
+			return nil
+		}
+		err := <-rewriteWrote
+		rewriteWrote = nil
+		return err
+	}
+	defer waitRewrite() // a step that fails below still waits for it
 	if !opt.CheckOnly {
 		if err := e.writeConfigs(out, now); err != nil {
 			return nil, err
@@ -463,6 +506,9 @@ func (e *Env) Generate(opt GenOptions, now time.Time) (*GenerateOutcome, error) 
 			return nil, err
 		}
 	}
+	if err := waitRewrite(); err != nil {
+		return nil, err
+	}
 	c := out.Count()
 	what := "generate"
 	if opt.CheckOnly {
@@ -475,6 +521,31 @@ func (e *Env) Generate(opt GenOptions, now time.Time) (*GenerateOutcome, error) 
 	e.Proj.Log(now, "%s: %d 台（書き出し %d、失敗 %d、値の誤りで生成せず %d）、未承認のエラー %d、警告 %d、承認済み %d、レポート %s",
 		what, len(out.Devices)-n[GenSkipped], n[GenWritten], n[GenFailed], n[GenBlocked], c.Errors, c.Warnings, c.Approved, out.Report.XLSX)
 	return out, nil
+}
+
+// packModels gives what a pack knows of its models, for the checks of the
+// model (appendix C 1.1); nil if there is no such pack.
+func (e *Env) packModels(id string) *check.PackModels {
+	p := e.Packs[id]
+	if p == nil {
+		return nil
+	}
+	pm := &check.PackModels{
+		Fits: func(m, name string) bool { return p.FitsModel(p.Model(m), name) },
+		Unsupported: func(m string) []check.Unsupported {
+			var out []check.Unsupported
+			if md := p.Model(m); md != nil {
+				for _, u := range md.Unsupported {
+					out = append(out, check.Unsupported{Name: u.Name, Table: u.Table, When: u.When})
+				}
+			}
+			return out
+		},
+	}
+	for _, m := range p.Models {
+		pm.IDs = append(pm.IDs, m.ID)
+	}
+	return pm
 }
 
 // packReads tells whether a pack has a rule that fills a table.

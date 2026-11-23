@@ -318,6 +318,69 @@ func (e *Env) SaveEdits(choice map[string]string, now time.Time) (*EditSaved, er
 	return out, e.Proj.RemoveDraft()
 }
 
+// DraftChecked is what DraftCheck did.
+type DraftChecked struct {
+	Outcome *GenerateOutcome
+	// Moved: the draft adds, moves or takes rows away, so the rows of the
+	// findings are those the book will have once it is saved, not those of
+	// the book now.
+	Moved bool
+	Draft int // the changes of the draft
+}
+
+// DraftCheck runs "check only" over the book with the draft put in. The
+// book is not written: the book with the draft is read in its place (spec
+// 14.12.3). Where the draft meets a change made in Excel, the draft wins.
+func (e *Env) DraftCheck(now time.Time) (*DraftChecked, error) {
+	d, err := e.draft()
+	if err != nil {
+		return nil, err
+	}
+	if d.Count() == 0 {
+		return nil, fmt.Errorf("表の編集の下書きがありません。保存済みのパラメータブックは「チェックだけ」で確かめます")
+	}
+	old, _, err := e.bookBytes()
+	if err != nil {
+		return nil, err
+	}
+	if old == nil {
+		return nil, fmt.Errorf("パラメータブック %s がありません", e.Proj.Config.Book)
+	}
+	_, bk, err := e.readBook()
+	if err != nil {
+		return nil, err
+	}
+	clearBasis(d, bk)
+	choice := map[string]string{}
+	next, sum, conflicts, err := book.Apply(old, e.Proj.Config.Book, e.Schema, e.lang(), d, choice)
+	if err != nil {
+		return nil, err
+	}
+	if next == nil {
+		for _, c := range conflicts {
+			if c.Kind == "sheet" {
+				choice[c.ID] = "theirs"
+			} else {
+				choice[c.ID] = "mine"
+			}
+		}
+		if next, sum, _, err = book.Apply(old, e.Proj.Config.Book, e.Schema, e.lang(), d, choice); err != nil {
+			return nil, err
+		}
+		if next == nil {
+			return nil, fmt.Errorf("下書きをブックに当てられません")
+		}
+	}
+	x := *e
+	x.draftBook = next
+	o, err := x.Generate(GenOptions{CheckOnly: true, Dry: true}, now)
+	if err != nil {
+		return nil, err
+	}
+	moved := sum.Added+sum.Deleted+sum.Cleared+sum.Sheets+sum.Moved+sum.Shifted+sum.Columns > 0
+	return &DraftChecked{Outcome: o, Moved: moved, Draft: d.Count()}, nil
+}
+
 // CheckValues tells what is wrong with each value for a column of a sheet
 // ("" = nothing): the check of the type that reading the book does.
 func (e *Env) CheckValues(sheet, column string, values []string) []string {

@@ -188,8 +188,15 @@ func TestCrossVendor(t *testing.T) {
 	}
 	// What is left is told as written in another way (appendix A 3.26): the
 	// level of the syslog destinations became the level of the device's log,
-	// and the source interface is written as its address.
-	if o.Devices[0].State != GenWritten || len(o.Items) != 1 || o.Items[0].RuleID != "G-614" || !strings.Contains(o.Items[0].Message, "ログに残す重要度") || o.Unverified == "" {
+	// and the source interface is written as its address. Besides it, only
+	// that the device has no model (V-114, information).
+	var items []Judged
+	for _, f := range o.Items {
+		if f.RuleID != "V-114" {
+			items = append(items, f)
+		}
+	}
+	if o.Devices[0].State != GenWritten || len(items) != 1 || items[0].RuleID != "G-614" || !strings.Contains(items[0].Message, "ログに残す重要度") || o.Unverified == "" || len(items) == len(o.Items) {
 		t.Errorf("after the cells were emptied: %+v, %d findings, mark %q", o.Devices[0], len(o.Items), o.Unverified)
 		for _, f := range o.Items {
 			t.Logf("  %s %s: %s", f.RuleID, f.Severity, f.Message)

@@ -3,13 +3,21 @@ package cli
 import (
 	"fmt"
 	"io"
+
+	"github.com/kojio145/configchief/internal/ops"
 )
 
 // cmdExport writes the delivery sheets or the table of values for the other
 // side (spec 13.2, 13.5, 15).
 func cmdExport(args []string, out, errOut io.Writer) int {
-	pos, val, _, err := options(args, []string{"--project", "--what", "--secrets", "--source"}, nil)
+	pos, val, on, err := options(args, []string{"--project", "--what", "--secrets", "--source", "--revision", "--summary", "--by"}, []string{"--allow-unverified"})
 	what, secrets := val["--what"], val["--secrets"]
+	if err == nil && len(pos) == 0 && what == "delivery" && val["--source"] == "" && (secrets == "" || secrets == "show" || secrets == "mask") {
+		return exportDelivery(val, on["--allow-unverified"], secrets == "mask", out, errOut)
+	}
+	if val["--revision"] != "" || val["--summary"] != "" || val["--by"] != "" || on["--allow-unverified"] {
+		what = "" // they go with "delivery" alone
+	}
 	if err == nil && len(pos) == 0 && what == "unhandled" && secrets == "" {
 		return exportUnhandled(val["--project"], val["--source"], out, errOut)
 	}
@@ -115,5 +123,44 @@ func exportUnhandled(dir, source string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "コマンドの語が伏せられていたら、project.yaml の export.keep_words に足して、出し直してください")
 	}
 	fmt.Fprintln(out, "人に渡す前に、レポートのすべての行を目で確かめてください")
+	return 0
+}
+
+// exportDelivery makes the whole set of the deliverables (spec 13.6, 13.7).
+// Findings not approved stop it unless --allow-unverified (exit code 1).
+func exportDelivery(val map[string]string, allow, mask bool, out, errOut io.Writer) int {
+	e, ok := openCase(val["--project"], out, errOut)
+	if !ok {
+		return 2
+	}
+	plan, err := e.PlanDelivery()
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 2
+	}
+	if !plan.Ready {
+		fmt.Fprintln(errOut, plan.Why)
+		return 2
+	}
+	if plan.Known && plan.Errors+plan.Warnings > 0 && !allow {
+		fmt.Fprintf(out, "未承認の指摘が残っています（エラー %d・警告 %d）。納品一式は作っていません。直すか承認するか、--allow-unverified を付けてください\n", plan.Errors, plan.Warnings)
+		return 1
+	}
+	o, err := e.MakeDelivery(ops.DeliveryOptions{Mask: mask, AllowUnverified: allow, Version: val["--revision"], Summary: val["--summary"], By: val["--by"]}, now())
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 2
+	}
+	for _, n := range o.Notes {
+		fmt.Fprintf(out, "注意: %s\n", n)
+	}
+	fmt.Fprintf(out, "納品一式: %s（コンフィグ %d 台・ファイル %d 個）\n  zip: %s\n", o.Dir, o.Configs, len(o.Files), o.Zip)
+	if o.Revision != nil {
+		fmt.Fprintf(out, "  改版履歴: 版 %s（%s）\n", o.Revision.Version, o.Revision.Summary)
+	}
+	if o.Unverified {
+		fmt.Fprintf(out, "未承認の指摘が残ったまま作りました（エラー %d・警告 %d）\n", o.Errors, o.Warnings)
+		return 1
+	}
 	return 0
 }

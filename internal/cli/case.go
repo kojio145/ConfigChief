@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -94,8 +95,8 @@ func sourceWord(name string) string {
 }
 
 func cmdInit(args []string, out, errOut io.Writer) int {
-	pos, val, _, err := options(args, []string{"--name", "--kind"}, nil)
-	if err != nil || len(pos) != 1 {
+	pos, val, on, err := options(args, []string{"--name", "--kind", "--from"}, []string{"--sample"})
+	if err != nil || len(pos) != 1 || (on["--sample"] && len(val) > 0) {
 		if err != nil {
 			fmt.Fprintln(errOut, err)
 		}
@@ -103,10 +104,33 @@ func cmdInit(args []string, out, errOut io.Writer) int {
 		return 2
 	}
 	dir := pos[0]
+	if on["--sample"] {
+		// The sample case (spec 14.12.7).
+		if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
+			fmt.Fprintf(errOut, "%s は空のフォルダではありません。見本の案件は、空のフォルダか、まだ無いフォルダに作ります\n", dir)
+			return 2
+		}
+		n, err := ops.MakeSampleCase(dir)
+		if err != nil {
+			fmt.Fprintln(errOut, err)
+			return 2
+		}
+		fmt.Fprintf(out, "見本の案件: %s（%s）\n", dir, ops.SampleName)
+		fmt.Fprintf(out, "  架空の旧コンフィグ %d ファイルを input/old に置きました\n", n)
+		fmt.Fprintf(out, "  次に: configchief import --project %s\n", dir)
+		return 0
+	}
 	name := val["--name"]
 	if name == "" {
 		if abs, err := filepath.Abs(dir); err == nil {
 			name = filepath.Base(abs)
+		}
+	}
+	from := val["--from"]
+	if from != "" {
+		if _, err := project.Open(from); err != nil {
+			fmt.Fprintf(errOut, "設定を写す元の案件を開けません: %v\n", err)
+			return 2
 		}
 	}
 	p, err := project.Init(dir, name, val["--kind"])
@@ -115,6 +139,26 @@ func cmdInit(args []string, out, errOut io.Writer) int {
 		return 2
 	}
 	fmt.Fprintf(out, "案件フォルダ: %s（案件名 %s）\n", p.Dir, p.Config.Name)
+	if from != "" {
+		// The settings of a case before (spec 14.12.8): all but the extra
+		// configurations of single devices.
+		var parts []string
+		for _, x := range ops.CaseParts {
+			if x.Default {
+				parts = append(parts, x.ID)
+			}
+		}
+		c, err := ops.CopyCaseSettings(from, dir, parts)
+		if err != nil {
+			fmt.Fprintf(errOut, "設定を写す途中で止まりました: %v\n", err)
+			return 2
+		}
+		if len(c.Parts) == 0 {
+			fmt.Fprintf(out, "  元の案件 %s に、写す設定はありませんでした\n", from)
+		} else {
+			fmt.Fprintf(out, "  元の案件 %s から写しました（ファイル %d 個）: %s\n", from, c.Files, strings.Join(c.Parts, "、"))
+		}
+	}
 	fmt.Fprintln(out, "  旧コンフィグを input/old に、手で書いた新コンフィグがあれば input/new に置きます（1 台 1 ファイル）")
 	fmt.Fprintf(out, "  次に: configchief import --project %s\n", dir)
 	return 0

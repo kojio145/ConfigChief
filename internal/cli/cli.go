@@ -43,13 +43,15 @@ func IsCommand(args []string) bool {
 const usage = `usage:
   ConfigChief.exe [<案件フォルダ>]          (画面を開く)
   ConfigChief.exe version
-  ConfigChief.exe init    <dir> [--name <案件名>] [--kind migration|new]
+  ConfigChief.exe init    <dir> [--name <案件名>] [--kind migration|new] [--from <設定を写す元の案件フォルダ>]
+  ConfigChief.exe init    <dir> --sample
   ConfigChief.exe import  --project <dir> [--source old|new] [--pack <ID>] [--use <ファイル>]
   ConfigChief.exe book    --project <dir> [--from old|new] [--replace]
   ConfigChief.exe book    --project <dir> --new
   ConfigChief.exe clone   --project <dir> --from <ホスト名> --to <ホスト名>[,<ホスト名>…]
   ConfigChief.exe compare --project <dir> --a old|new|book --b old|new|book
   ConfigChief.exe generate --project <dir> [--device <hostname>]
+  ConfigChief.exe generate --project <dir> --delta old|new|logs [--device <機器>[,<機器>...]]
   ConfigChief.exe check   --project <dir>
   ConfigChief.exe approve --project <dir> --finding <指紋> --reason <理由> --by <名前>
   ConfigChief.exe approve --project <dir> --rule <ID> --devices <*|@グループ|ホスト名,...> [--table <表>] [--column <列>] --reason <理由> --by <名前>
@@ -67,6 +69,7 @@ const usage = `usage:
   ConfigChief.exe case import <ファイル> --to <親フォルダ> [--password-env <環境変数名>]
   ConfigChief.exe export  --project <dir> --what sheet|peer [--secrets show|mask]
   ConfigChief.exe export  --project <dir> --what unhandled [--source old|new]
+  ConfigChief.exe export  --project <dir> --what delivery [--secrets show|mask] [--allow-unverified] [--revision <版> [--summary <変更内容>] [--by <名前>]]
   ConfigChief.exe logs    --project <dir>
   ConfigChief.exe verify  --project <dir>
   ConfigChief.exe sites   --project <dir> [--source book|old|new|logs]
@@ -90,7 +93,7 @@ func Run(args []string, out, errOut io.Writer) (code int) {
 		held.Release()
 		held = nil
 	}()
-	writing = len(args) > 0 && (writes[args[0]] || (args[0] == "import" && hasArg(args, "--use")))
+	writing = len(args) > 0 && (writes[args[0]] || (args[0] == "import" && hasArg(args, "--use")) || (args[0] == "export" && hasArg(args, "--revision")))
 	switch {
 	case len(args) == 1 && (args[0] == "version" || args[0] == "--version"):
 		fmt.Fprintln(out, "ConfigChief "+Version)

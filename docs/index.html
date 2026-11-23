@@ -12,7 +12,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://kojio145.github.io/ConfigChief/">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"ConfigChief","operatingSystem":"Windows 10, Windows 11","applicationCategory":"DeveloperApplication","softwareVersion":"1.3.2","license":"https://opensource.org/licenses/MIT","url":"https://kojio145.github.io/ConfigChief/","downloadUrl":"https://github.com/kojio145/ConfigChief/releases/latest","description":"Network device configurations to a vendor-neutral Excel workbook and back (Cisco IOS / NEC IX / NEC QX).","offers":{"@type":"Offer","price":"0","priceCurrency":"JPY"}}
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"ConfigChief","operatingSystem":"Windows 10, Windows 11","applicationCategory":"DeveloperApplication","softwareVersion":"1.4.0","license":"https://opensource.org/licenses/MIT","url":"https://kojio145.github.io/ConfigChief/","downloadUrl":"https://github.com/kojio145/ConfigChief/releases/latest","description":"Network device configurations to a vendor-neutral Excel workbook and back (Cisco IOS / NEC IX / NEC QX).","offers":{"@type":"Offer","price":"0","priceCurrency":"JPY"}}
 </script>
 <style>
   :root { --ground:#f6f8fb; --panel:#fff; --panel-2:#eef2f7; --ink:#1b2430; --ink-soft:#4c5a6b; --ink-faint:#7a889a; --line:#dde4ec; --accent:#2563eb; --accent-soft:#e5edff; }
@@ -54,7 +54,7 @@
     <a class="btn" href="manual.html">使い方</a>
     <a class="btn" href="https://github.com/kojio145/ConfigChief">ソースコード（GitHub）</a>
   </div>
-  <p class="note">v1.3.2。Windows 10 / 11（x64）。署名の無い exe のため、初めて起動するときに SmartScreen の警告が出ることがあります（「詳細情報」から「実行」）。MIT ライセンス・商用利用可。<b>実機では確かめていません</b>（同梱のパックはメーカーの公開コマンドリファレンスから作りました）。生成したコンフィグは、必ず検証機で確かめてから使ってください。</p>
+  <p class="note">v1.4.0。Windows 10 / 11（x64）。署名の無い exe のため、初めて起動するときに SmartScreen の警告が出ることがあります（「詳細情報」から「実行」）。MIT ライセンス・商用利用可。<b>実機では確かめていません</b>（同梱のパックはメーカーの公開コマンドリファレンスから作りました）。生成したコンフィグは、必ず検証機で確かめてから使ってください。</p>
 
   <figure class="shot">
     <img src="img/result-findings.png" width="1264" height="781" alt="ConfigChief の結果の画面: Cisco の拠点ルータを NEC IX に書き換え、書けない値を指摘として一覧にしている" loading="eager">
@@ -98,7 +98,7 @@
     <li>対応（旧ホスト名 → 新ホスト名・新メーカー・新機種、旧 IF 名 → 新 IF 名）を画面の表か Excel で埋めて、パラメータブックにする</li>
     <li>「生成とチェック」で、全台のコンフィグとチェック結果表が出ます</li>
   </ol>
-  <p>詳しくは <a href="manual.html">使い方</a>、<a href="tables.html">シートと列の一覧</a>、<a href="checks.html">チェックの一覧</a>、<a href="pack-guide.html">メーカーパックの書き方</a> を参照してください。作った経緯と設計の考え方は <a href="https://zenn.dev/kjo145/articles/configchief-config-to-excel-and-back">Zenn の開発記</a> にまとめています。</p>
+  <p>詳しくは <a href="manual.html">使い方</a>、<a href="tables.html">シートと列の一覧</a>、<a href="checks.html">チェックの一覧</a>、<a href="pack-guide.html">メーカーパックの書き方</a> を参照してください。利用の申請には <a href="approval.html">申請用の説明</a> を使えます。作った経緯と設計の考え方は <a href="https://zenn.dev/kjo145/articles/configchief-config-to-excel-and-back">Zenn の開発記</a> にまとめています。</p>
 
   <h2>English</h2>
   <p>ConfigChief reads router configurations into a vendor-neutral Excel workbook and writes configurations, a check report and delivery sheets back from it. The same workbook gives the configuration of any bundled vendor (Cisco IOS / IOS-XE, NEC UNIVERGE IX, NEC QX), so it also serves for replacing routers and switches across vendors. One portable Windows exe, no network access. The user interface and the documents are in Japanese. Not verified on real devices yet: check every generated configuration on a lab device. See the <a href="https://github.com/kojio145/ConfigChief">GitHub repository</a>.</p>

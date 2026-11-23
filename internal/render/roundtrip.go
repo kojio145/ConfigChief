@@ -7,6 +7,7 @@ import (
 	"github.com/kojio145/configchief/internal/compare"
 	"github.com/kojio145/configchief/internal/importer"
 	"github.com/kojio145/configchief/internal/model"
+	"github.com/kojio145/configchief/internal/pack"
 )
 
 // RoundTrip reads a generated configuration back with the same pack and
@@ -123,4 +124,24 @@ func isDefault(c *model.Cell) bool {
 		}
 	}
 	return true
+}
+
+// Design gives the rows of the device as the generation used them, with the
+// defaults of the pack put in, as the round trip compares them (spec 9.6,
+// 9.8). The rows are copies.
+func (o *Output) Design(p *pack.Pack) *model.Dataset {
+	design := model.NewDataset("book")
+	for _, name := range o.Data.TableNames() {
+		for _, row := range o.Data.Tables[name].Rows {
+			design.Adopt(cloneRow(row))
+		}
+	}
+	importer.FillDefaults(p, o.sc, design, o.Device, false)
+	return design
+}
+
+// UnusedCell tells that the generation did not use the value of a cell (G-602):
+// the pack cannot write it.
+func (o *Output) UnusedCell(row *model.Row, col string) bool {
+	return o.unused[rowKey(row)][col]
 }

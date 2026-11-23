@@ -37,6 +37,8 @@ const (
 	tagPage     = "https://github.com/kojio145/ConfigChief/releases/tag/v%s"
 	RepoPage    = "https://github.com/kojio145/ConfigChief"
 	ManualPage  = "https://kojio145.github.io/ConfigChief/manual.html"
+	// ApprovalPage is the sheet for a request to use the tool (spec 14.13).
+	ApprovalPage = "https://kojio145.github.io/ConfigChief/approval.html"
 
 	ExeName = "ConfigChief.exe"
 	maxExe  = 64 << 20

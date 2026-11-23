@@ -49,6 +49,7 @@ type Session struct {
 	wrote   written                       // what the last generation or check wrote
 	stop    atomic.Bool
 	zoom    int // the zoom of the page in per cent (0 = 100; spec 14.8.6)
+	opens   openCache // the count of the unhandled lines (spec 14.12.1)
 
 	// held is the mark of the open case (spec 14.8.2; nil = none could be
 	// made); newer is the version of a newer ConfigChief that used the case

@@ -321,13 +321,19 @@ models:
       pppoe:    "Dialer{i}"
       vlan:     "Vlan{vlan}"
       lag:      "Port-channel{n}"
+    other_names: []                # ほかに、この機種にあってよい IF の名前の形（チェック V-111）
+    unsupported:                   # この機種に無い機能（チェック G-607）。資料で確かめたものだけ
+      - {name: 内蔵スイッチ, table: switchports, when: "row.mode != 'routed'"}
 ```
 
 - `ports`: `name` は 1 つのポート、`range` は終わりの `[a-b]` を番号に広げた並び。`role` は `wan`・`lan`・`switch`（内蔵スイッチのポート）
 - ポートの指定 `sub`: サブ IF の親としての名前（NEC IX の `GigaEthernet0.0` のサブ IF は `GigaEthernet0.1` なので `sub: GigaEthernet0`）。`vlan_if`: 内蔵スイッチのポートで、そのポートがいちばん若いアクセスポートである VLAN の IF の名前（`range` では `{p}` がポートの番号。NEC IX の `"GigaEthernet2:{p}.0"`）
 - `logical` の印: `{n}`（旧 IF 名の番号）、`{parent}`（親のポートの新しい名前）、`{vlan}`（VLAN の番号）、`{i}`（1 から、まだ使っていない番号）、`{j}`（0 から、まだ使っていない番号）。印の値が決まらないときは、案を出しません
 - テンプレートからは `model.id`・`model.family`・`model.ports`・`model.limits.名前` で読めます。機種が空か定義に無い機器では、どれも空です。機種が分かるときだけ確かめる書き方にします（`{% if model.ports %}`）
-- ID の重なり、空の `ports`、`range` の形、知らない `role`・`logical` の名前は、パックの検査で誤りになります
+- 機器の「機種」がこの ID の機器では、インタフェースの表の IF 名を確かめます（チェック V-111）。当たってよいのは、`ports` のポートと `vlan_if`、`logical` と `other_names` の名前の形、`pack.yaml` の `interfaces.types` で種類が physical でない IF（ループバック・トンネル・VLAN の IF など）、それらのサブ IF です。ほかに、その機種だけの名前（内蔵スイッチの基本 IF など）があれば `other_names` に書きます（印は `{n}` = 数字の並び、`{parent}` = ポートの `sub` か名前）
+- `unsupported`: その機種に無い機能。`name`（指摘に出す名前）・`table`（設計データの表）・`when`（行ごとの式。`row.列名` で値を読む。無ければすべての行）。生成のとき、当たる行があればエラー（G-607）にします。書いていない機種では G-607 は「未実施」です。資料で「無い」と確かめた機能だけを書きます（使える設定を止めないため）
+- 機種が空か、定義に無い機器は、情報（V-114）を出すだけです。定義の ID に似た打ち間違い（英字と数字だけで 2 字以内の違い）は警告（V-116）にします
+- ID の重なり、空の `ports`、`range` の形、知らない `role`・`logical` の名前、`other_names` の知らない印、`unsupported` の空の `name`・`table` は、パックの検査で誤りになります。`unsupported` の知らない表と読めない `when` は、パックの試験（`ConfigChief pack test <フォルダ>`）で誤りになります
 - 同梱のパックの機種は、それぞれの README の「機種の定義」の節にあります。案件フォルダのパックに `models.yaml` を置けば、機種を足せます
 
 案の作り方:

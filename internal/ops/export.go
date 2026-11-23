@@ -54,6 +54,17 @@ func (e *Env) templateFiles() ([]string, error) {
 // ExportSheets writes the delivery sheets: one output for each template of
 // templates/, or the standard form when there is none.
 func (e *Env) ExportSheets(mask bool, now time.Time) (*SheetsOutcome, error) {
+	revs, err := e.Revisions()
+	if err != nil {
+		return nil, err
+	}
+	return e.exportSheets(mask, now, revs, nil, "")
+}
+
+// exportSheets writes the delivery sheets into dir ("" = out/<time>/sheets),
+// with the history of the versions (cur: the version made now; nil = the
+// newest of the history. Spec 13.7).
+func (e *Env) exportSheets(mask bool, now time.Time, revs []Revision, cur *Revision, dir string) (*SheetsOutcome, error) {
 	_, bk, err := e.readBook()
 	if err != nil {
 		return nil, err
@@ -66,11 +77,15 @@ func (e *Env) ExportSheets(mask bool, now time.Time) (*SheetsOutcome, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := &SheetsOutcome{Dir: "out/" + project.Stamp(now) + "/sheets", Masked: mask}
+	if dir == "" {
+		dir = "out/" + project.Stamp(now) + "/sheets"
+	}
+	out := &SheetsOutcome{Dir: dir, Masked: mask}
 	if len(problems) > 0 {
 		out.Notes = append(out.Notes, fmt.Sprintf("パラメータブックに、読めなかった所が %d 件あります（check で確かめてください）。読めた値だけを書き出しています", len(problems)))
 	}
 	opt := book.DeliverOptions{Project: e.Proj.Config.Name, Mask: mask, Lang: e.lang()}
+	opt.Revisions, opt.Revision = bookRevisions(revs, cur)
 	var files []book.Delivered
 	if len(names) == 0 {
 		data, err := book.Standard(e.Schema, ds, opt)

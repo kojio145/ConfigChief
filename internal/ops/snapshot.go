@@ -19,10 +19,15 @@ import (
 // holds no secret value: a secret is kept as its seal, which still tells
 // whether the value changed.
 type snapFile struct {
-	Version int          `json:"version"`
-	At      string       `json:"at"`
-	Tool    string       `json:"tool,omitempty"`
-	Devices []snapDevice `json:"devices"`
+	Version int    `json:"version"`
+	At      string `json:"at"`
+	Tool    string `json:"tool,omitempty"`
+	// Counted tells that Errors and Warnings were kept: the findings not
+	// approved at this generation (spec 14.12.1). Older records lack them.
+	Counted  bool         `json:"counted,omitempty"`
+	Errors   int          `json:"errors,omitempty"`
+	Warnings int          `json:"warnings,omitempty"`
+	Devices  []snapDevice `json:"devices"`
 }
 
 type snapDevice struct {
@@ -159,7 +164,8 @@ func (e *Env) snapshot(o *GenerateOutcome, now time.Time) (*Changes, error) {
 	}
 
 	cells := e.snapCells(o)
-	cur := snapFile{Version: 1, At: stamp, Tool: e.Version}
+	c := o.Count()
+	cur := snapFile{Version: 1, At: stamp, Tool: e.Version, Counted: true, Errors: c.Errors, Warnings: c.Warnings}
 	if len(cells[""]) > 0 {
 		cur.Devices = append(cur.Devices, snapDevice{Cells: cells[""]})
 	}

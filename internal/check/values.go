@@ -31,6 +31,9 @@ type Input struct {
 	// Filled is Data with the defaults of the vendor packs put in, for the
 	// checks that set two devices side by side (Cross); nil = Data.
 	Filled *model.Dataset
+	// Models tells what the vendor pack of that ID knows of its models
+	// (V-111, V-114, V-116, G-607); nil = the models are not looked at.
+	Models func(pack string) *PackModels
 	// Placeholders are the words that stand for "not decided yet" in a
 	// secret; nil = DefaultPlaceholders.
 	Placeholders []string
@@ -153,9 +156,7 @@ func Values(in Input, tally *Tally) []Finding {
 	}
 	x.basics()
 
-	const noModels = "どのメーカーパックにも、機種の定義（models.yaml）がまだありません"
-	tally.Skip("V-111", "", noModels)
-	tally.Skip("V-114", "", noModels)
+	x.models()
 	tally.Skip("V-112", "", "列と語の対応表の結び付きが、パックの定義にまだありません。書けない語は、生成のときに G-603 で確かめます")
 	tally.Skip("V-209", "", "ハッシュがどのメーカーのものかを、パラメータブックからは決められません。書けないハッシュは、生成のときにパックが誤りにします（G-601）")
 	return x.out

@@ -43,20 +43,14 @@ func (s *Session) AddFiles(source string, paths []string, overwrite bool) (*AddV
 	return v, nil
 }
 
-// Next tells the one thing to do next (spec 14.10.4); nil when it cannot
-// be told (the book cannot be read, say).
+// Next tells the one thing to do next (spec 14.10.4, 14.12.1); nil when it
+// cannot be told (the book cannot be read, say).
 func (s *Session) Next() *ops.Next {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	e, err := s.begin()
+	p, err := s.Steps(false)
 	if err != nil {
 		return nil
 	}
-	n, err := e.NextStep()
-	if err != nil {
-		return nil
-	}
-	return n
+	return p.Next
 }
 
 // LastResult gives the result of the newest output of "generate" or
@@ -75,7 +69,7 @@ func (s *Session) LastResult() (*ResultView, error) {
 		return nil, nil
 	}
 	now := s.now()
-	o, err := e.Generate(ops.GenOptions{CheckOnly: true, Dry: true}, now)
+	o, err := e.Generate(ops.GenOptions{CheckOnly: true, Dry: true, Rewrite: true}, now)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +80,8 @@ func (s *Session) LastResult() (*ResultView, error) {
 	}
 	s.shown = o
 	s.wrote = written{dir: dir, configs: configs, unverified: unverified,
-		report: Files{o.Report.XLSX, o.Report.HTML}, changes: ch}
+		report: Files{o.Report.XLSX, o.Report.HTML}, changes: ch,
+		rewrite: Files{o.RewriteReport.XLSX, o.RewriteReport.HTML}}
 	v := s.result(e, o, now)
 	when := ops.Stamped(dir)
 	v.Title = "前回の結果（" + when + " の出力）"

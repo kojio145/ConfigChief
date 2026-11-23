@@ -386,7 +386,7 @@ func (e *Env) importDoc(o *ImportOutcome, now time.Time) *report.Doc {
 			report.Pair{Label: "対応の未決のうち、未承認の指摘", Value: num(o.Mig.Open())},
 			report.Pair{Label: "対応の未決のうち、承認済みの指摘", Value: num(o.Mig.Count().Approved)},
 		)
-		d.Notes = append(d.Notes, "書き換えの 5 区分のうち、いま数えられるのは「旧にあって取り込めなかった」（未対応の行）だけです。残りの区分は、コンフィグの生成ができるようになってから出ます。")
+		d.Notes = append(d.Notes, "書き換えの区分のうち、取り込みで数えられるのは「旧にあって取り込めなかった」（未対応の行）だけです。旧の行 → 設計データ → 新の行 のつながりと残りの区分は、生成とチェックのたびに書き換えレポート（reports/rewrite.xlsx）に出ます。")
 	}
 	if e.mask() {
 		d.Notes = append(d.Notes, "秘密の列に入った値は "+masked+" に伏せています。未対応の行にある秘密の値は、ツールが見分けられないため伏せられません。このレポートを人に渡す前に確かめてください。")

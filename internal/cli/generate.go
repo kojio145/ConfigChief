@@ -26,7 +26,7 @@ func cmdCheck(args []string, out, errOut io.Writer) int {
 func generate(args []string, checkOnly bool, out, errOut io.Writer) int {
 	values := []string{"--project"}
 	if !checkOnly {
-		values = append(values, "--device")
+		values = append(values, "--device", "--delta")
 	}
 	pos, val, _, err := options(args, values, nil)
 	if err != nil || len(pos) != 0 {
@@ -39,6 +39,9 @@ func generate(args []string, checkOnly bool, out, errOut io.Writer) int {
 	e, ok := openCase(val["--project"], out, errOut)
 	if !ok {
 		return 2
+	}
+	if val["--delta"] != "" {
+		return delta(e, val["--delta"], val["--device"], out, errOut)
 	}
 	o, err := e.Generate(ops.GenOptions{Device: val["--device"], CheckOnly: checkOnly}, now())
 	if err != nil {
@@ -136,6 +139,17 @@ func printGenerate(out io.Writer, e *ops.Env, o *ops.GenerateOutcome, checkOnly 
 		fmt.Fprintf(out, "前回の生成（%s）との違い: 変わったセル %d、増えた行 %d、減った行 %d\n", ch.Before, len(ch.Cells), added, removed)
 		fmt.Fprintf(out, "変更一覧: %s\n          %s\n", ch.Report.XLSX, ch.Report.HTML)
 	}
+	if rw := o.RewriteSummary(); rw != nil {
+		var parts []string
+		for _, k := range ops.RewriteKinds {
+			parts = append(parts, fmt.Sprintf("%s %d", ops.RewriteWord(k), rw.Counts[k]))
+		}
+		fmt.Fprintf(out, "書き換え（旧コンフィグ %d 行）: %s\n", rw.Total, strings.Join(parts, "、"))
+		if rw.Unjudged+rw.Unapproved > 0 {
+			fmt.Fprintf(out, "  うち未判定・保留の未対応の行 %d、未承認の指摘がある行 %d\n", rw.Unjudged, rw.Unapproved)
+		}
+		fmt.Fprintf(out, "書き換えレポート: %s\n                  %s\n", o.RewriteReport.XLSX, o.RewriteReport.HTML)
+	}
 }
 
 // cmdApprove adds an approval of a finding or of a scope, or takes one out
@@ -187,5 +201,42 @@ func cmdApprove(args []string, out, errOut io.Writer) int {
 		next = "次に外部一覧を読んだとき（customer）から効きます"
 	}
 	fmt.Fprintf(out, "承認 %s を足しました（当たった指摘 %d 件）。%s\n", a.Approval.ID, a.Hits, next)
+	return 0
+}
+
+// delta makes the change commands from the book against the configurations
+// now of a side (spec 9.8): generate --delta old|new|logs.
+func delta(e *ops.Env, side, devices string, out, errOut io.Writer) int {
+	var list []string
+	for _, d := range strings.Split(devices, ",") {
+		if d = strings.TrimSpace(d); d != "" {
+			list = append(list, d)
+		}
+	}
+	o, err := e.Delta(ops.DeltaOptions{Side: side, Devices: list}, now())
+	if err != nil {
+		fmt.Fprintln(errOut, err)
+		return 2
+	}
+	same := 0
+	for _, d := range o.Devices {
+		switch {
+		case d.Made:
+			fmt.Fprintf(out, "  作った %s: %s（%d 行。足す %d・消す %d・置き換わる %d・残る %d）\n", d.Name, d.File, d.Lines, len(d.Added), len(d.Removed), len(d.Replaced), len(d.Kept))
+		case d.Unchanged:
+			same++
+			fmt.Fprintf(out, "  変更なし %s\n", d.Name)
+		default:
+			fmt.Fprintf(out, "  作らなかった %s: %s\n", d.Name, d.Why)
+		}
+	}
+	for _, n := range o.Notes {
+		fmt.Fprintf(out, "注意: %s\n", n)
+	}
+	fmt.Fprintf(out, "差分の投入（今のコンフィグ: input/%s）: 機器 %d、作った %d、変更なし %d、作らなかった %d\n", o.Side, len(o.Devices), o.Made(), same, o.NotMade())
+	fmt.Fprintf(out, "レポート: %s\n          %s\n", o.Report.XLSX, o.Report.HTML)
+	if o.NotMade() > 0 || len(o.Notes) > 0 {
+		return 1
+	}
 	return 0
 }

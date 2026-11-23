@@ -108,6 +108,10 @@ type Applied struct {
 	// point to (M-408).
 	Clashes []Note
 	Shared  []Note
+	// Keys gives, for each old row that was written, the key it has now:
+	// table + "\x00" + the old key text → the new key text (the rewriting
+	// report follows a line of the old side to the new one by it).
+	Keys map[string]string
 }
 
 // Apply rewrites the old design data for the new devices: host names by
@@ -126,7 +130,7 @@ func ApplyList(sc *schema.Set, list *model.Dataset, dev []book.DeviceMap, ifs []
 }
 
 func apply(sc *schema.Set, old *model.Dataset, dev []book.DeviceMap, ifs []book.IfMap, list bool) *Applied {
-	a := &Applied{Data: model.NewDataset(old.Source), Hosts: map[string]string{}}
+	a := &Applied{Data: model.NewDataset(old.Source), Hosts: map[string]string{}, Keys: map[string]string{}}
 	devs := map[string]book.DeviceMap{}
 	for _, d := range dev {
 		if _, dup := devs[d.OldHost]; !dup {
@@ -207,7 +211,9 @@ func apply(sc *schema.Set, old *model.Dataset, dev []book.DeviceMap, ifs []book.
 		devCol := t.DeviceColumn()
 		for _, r := range rows(old, t.Name) {
 			if devCol == "" {
-				a.Data.Adopt(clone(r))
+				if a.Data.Adopt(clone(r)) {
+					a.Keys[t.Name+"\x00"+r.KeyText()] = r.KeyText()
+				}
 				continue
 			}
 			host := r.Get(devCol)
@@ -301,6 +307,8 @@ func apply(sc *schema.Set, old *model.Dataset, dev []book.DeviceMap, ifs []book.
 			}
 			if !a.Data.Adopt(n) {
 				a.Clashes = append(a.Clashes, note("", ""))
+			} else {
+				a.Keys[t.Name+"\x00"+r.KeyText()] = n.KeyText()
 			}
 		}
 	}

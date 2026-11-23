@@ -253,15 +253,10 @@ bridge irb enable
 {% endif %}
 {% endif %}
 {% endfor %}
-{# With the model known (models.yaml): the ports the built-in switch has,
-   and the numbers a VLAN group can take (1 to the number of ports; CRM
-   p.3-14). #}
+{# With the model known (models.yaml): the numbers a VLAN group can take
+   (1 to the number of ports; CRM p.3-14). Whether the model has a port is
+   V-111 (appendix C 1.1), not told here a second time. #}
 {% if model.ports %}
-{% for i in ifs %}
-{% if ':port' in i.name and i.name not in model.ports %}
-{{ fail(i.name ~ ': 機種 ' ~ model.id ~ ' に、このポートはありません（IF 対応の新 IF 名を、この機種のポートに直してください）') }}
-{% endif %}
-{% endfor %}
 {% for s in t.switchports %}
 {% if ':port' in s.if_name and s.mode == 'access' and s.access_vlan != '' and s.access_vlan | int > model.limits.switch_ports %}
 {{ fail(s.if_name ~ ' の VLAN グループ ' ~ s.access_vlan ~ ' は書けません（機種 ' ~ model.id ~ ' の VLAN グループの番号は 1〜' ~ model.limits.switch_ports ~ ' です）') }}

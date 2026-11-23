@@ -33,6 +33,13 @@ func (e *Env) lang() string {
 
 // readBook reads the parameter book. All three are nil if there is none yet.
 func (e *Env) readBook() ([]byte, *book.Book, error) {
+	if e.draftBook != nil {
+		bk, err := book.Read(e.draftBook, e.Proj.Config.Book, e.Schema)
+		if err != nil {
+			return nil, nil, err
+		}
+		return e.draftBook, bk, nil
+	}
 	data, err := os.ReadFile(e.Proj.BookPath())
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil, nil

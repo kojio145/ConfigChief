@@ -107,6 +107,17 @@ type ResultView struct {
 	Changes    ChangesView    `json:"changes"`
 	Left       int            `json:"left"` // what a person has to look at
 	By         string         `json:"by"`   // the name the last approval was given with
+	// Draft: the checks ran over the book with the draft of the table put
+	// in, nothing was written and nothing can be approved here; Moved: the
+	// draft moves rows, so the rows told are those after a save (spec
+	// 14.12.3).
+	Draft bool `json:"draft"`
+	Moved bool `json:"moved"`
+	// Rewrite tells that there is a rewriting report to show (the tab
+	// 書き換え; Session.Rewrite gives its list), RewriteReport its files
+	// in the output folder (empty when none was written).
+	Rewrite       bool  `json:"rewrite"`
+	RewriteReport Files `json:"rewriteReport"`
 }
 
 // written is what the last step that wrote files left in the case folder.
@@ -116,6 +127,7 @@ type written struct {
 	unverified string
 	report     Files
 	changes    ChangesView
+	rewrite    Files
 }
 
 // Generate reads the parameter book, checks it and writes the configurations,
@@ -140,7 +152,8 @@ func (s *Session) generate(checkOnly bool) (*ResultView, error) {
 	}
 	s.shown = o
 	s.wrote = written{dir: o.Dir, configs: !checkOnly, unverified: o.Unverified,
-		report: Files{o.Report.XLSX, o.Report.HTML}, changes: changesView(e, o, now)}
+		report: Files{o.Report.XLSX, o.Report.HTML}, changes: changesView(e, o, now),
+		rewrite: Files{o.RewriteReport.XLSX, o.RewriteReport.HTML}}
 	v := s.result(e, o, now)
 	v.Title = "生成とチェックの結果"
 	if checkOnly {
@@ -222,7 +235,7 @@ func (s *Session) Unapprove(id string) (*ResultView, error) {
 // nothing: the files of the last step stay as they are, and the screen says
 // so (spec 14.2).
 func (s *Session) recheck(e *ops.Env, now time.Time, done string) (*ResultView, error) {
-	o, err := e.Generate(ops.GenOptions{CheckOnly: true, Dry: true}, now)
+	o, err := e.Generate(ops.GenOptions{CheckOnly: true, Dry: true, Rewrite: true}, now)
 	if err != nil {
 		return nil, fmt.Errorf("%s。ただし、チェックをやり直せませんでした: %v", done, err)
 	}
@@ -270,6 +283,7 @@ func (s *Session) result(e *ops.Env, o *ops.GenerateOutcome, now time.Time) *Res
 		Devices: []DeviceResult{}, Findings: []FindingView{}, Approvals: []ApprovalView{},
 		Checks: table(report.Sheet{Name: "チェック項目"}),
 		Left:   o.Findings(), By: s.name,
+		Rewrite: o.HasRewrite(), RewriteReport: w.rewrite,
 	}
 	for _, sh := range d.Sheets {
 		if sh.Name == v.Checks.Name {

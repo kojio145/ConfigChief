@@ -9,6 +9,7 @@ import (
 
 	"github.com/kojio145/configchief/internal/model"
 	"github.com/kojio145/configchief/internal/schema"
+	"github.com/kojio145/configchief/internal/tmpl"
 )
 
 // LintResult is what the check of a pack against the table definitions found
@@ -196,6 +197,23 @@ func Lint(p *Pack, sc *schema.Set) *LintResult {
 		for _, m := range reLexKind.FindAllStringSubmatch(e.text, -1) {
 			if _, ok := p.Lexicon[m[1]]; !ok {
 				problem("%s: 語の種類「%s」が lexicon.yaml にありません", e.where, m[1])
+			}
+		}
+	}
+
+	// What a model does not have (G-607): a table of the design data, and
+	// an expression that can be read.
+	eng := tmpl.New(tmpl.Options{})
+	for _, m := range p.Models {
+		for _, u := range m.Unsupported {
+			where := fmt.Sprintf("models.yaml %s unsupported %s", m.ID, u.Name)
+			if table(where, u.Table) == nil {
+				continue
+			}
+			if u.When != "" {
+				if err := eng.Check(where, "{{ "+u.When+" }}"); err != nil {
+					problem("%s: when「%s」が読めません（%v）", where, u.When, err)
+				}
 			}
 		}
 	}

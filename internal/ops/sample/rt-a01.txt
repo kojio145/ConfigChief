@@ -1,0 +1,60 @@
+rt-a01#show running-config
+Building configuration...
+
+Current configuration : 1024 bytes
+!
+version 15.9
+hostname rt-a01
+!
+ntp server 192.0.2.123
+logging host 192.0.2.124
+!
+interface Loopback0
+ ip address 198.51.100.250 255.255.255.255
+!
+interface FastEthernet0
+ switchport access vlan 10
+!
+interface FastEthernet1
+ switchport access vlan 10
+!
+interface FastEthernet2
+ switchport access vlan 20
+!
+interface FastEthernet3
+ shutdown
+!
+interface FastEthernet4
+ shutdown
+!
+interface FastEthernet5
+ shutdown
+!
+interface FastEthernet6
+ shutdown
+!
+interface FastEthernet7
+ shutdown
+!
+interface GigabitEthernet0
+ description sample wan a01
+ no ip address
+!
+interface GigabitEthernet0.100
+ encapsulation dot1Q 100
+ ip address 203.0.113.10 255.255.255.252
+ no mop enabled
+!
+interface Vlan10
+ description sample lan a01
+ ip address 192.0.2.1 255.255.255.192
+!
+interface Vlan20
+ description sample printer a01
+ ip address 192.0.2.65 255.255.255.192
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.9
+!
+end
+
+rt-a01#
