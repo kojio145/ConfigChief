@@ -153,6 +153,10 @@ func (a *App) Import(source string) (r0 *ui.ImportView, err error) {
 	defer a.guard("Import", &err)
 	return a.s.Import(source)
 }
+func (a *App) ImportStale(source string) (r0 bool, err error) {
+	defer a.guard("ImportStale", &err)
+	return a.s.ImportStale(source)
+}
 func (a *App) ChooseFile(source, path string) (r0 *ui.ImportView, err error) {
 	defer a.guard("ChooseFile", &err)
 	return a.s.ChooseFile(source, path)
@@ -232,6 +236,10 @@ func (a *App) Unhandled(source string) (r0 *ui.JudgeView, err error) {
 func (a *App) CarryOut(source string) (r0 *ui.CarryView, err error) {
 	defer a.guard("CarryOut", &err)
 	return a.s.CarryOut(source)
+}
+func (a *App) JudgeMany(source string, groups []string, verdict, reason, by string) (r0 *ui.JudgeView, err error) {
+	defer a.guard("JudgeMany", &err)
+	return a.s.JudgeMany(source, groups, verdict, reason, by)
 }
 func (a *App) Judge(source, group, devices, verdict, reason, by string) (r0 *ui.JudgeView, err error) {
 	defer a.guard("Judge", &err)

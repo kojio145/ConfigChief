@@ -328,7 +328,7 @@ func TestMappingBookCompare(t *testing.T) {
 		t.Fatal(err)
 	}
 	noNull(t, "mapping without a book", m)
-	if m.HasBook || len(m.Devices.Rows) != 0 || len(m.Devices.Header) != 7 || len(m.Ifs.Header) != 5 {
+	if m.HasBook || len(m.Devices.Rows) != 0 || len(m.Devices.Header) != 7 || len(m.Ifs.Header) != 7 {
 		t.Errorf("mapping without a book = %+v", m)
 	}
 	if _, err := s.Compare("old", "new"); err == nil || !strings.Contains(err.Error(), "parameters.xlsx がありません") {

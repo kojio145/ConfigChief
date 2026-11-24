@@ -304,7 +304,8 @@ func (b *Book) readMgmt(s *sheet.Sheet, m *mgmt) {
 			}
 			b.Devices = append(b.Devices, d)
 		case ifSheet:
-			f := IfMap{get(line, "new_host"), get(line, "old_if"), get(line, "new_if"), get(line, "basis"), r + 1}
+			f := IfMap{NewHost: get(line, "new_host"), OldIf: get(line, "old_if"), NewIf: get(line, "new_if"), Basis: get(line, "basis"), Row: r + 1,
+				OldHost: get(line, "old_host"), Now: get(line, "now")}
 			if f.NewHost == "" || f.OldIf == "" {
 				b.problemf(s.Name, addr(0, r), "新ホスト名か旧 IF 名が空です。この行は使いません")
 				continue

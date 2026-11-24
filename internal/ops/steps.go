@@ -184,6 +184,7 @@ func (e *Env) RunImport(source, choose string, now time.Time) (*ImportOutcome, e
 			have = bk.Devices
 		}
 		dev, ifs := convert.ProposeWith(src.Data, data(out.New), have, e.shapes)
+		convert.Refs(e.Schema, src.Data, append(append([]book.DeviceMap{}, have...), dev...), ifs)
 		file := e.Proj.Config.Book
 		next, sum, err := book.Update(old, file, e.Schema, e.lang(), book.Change{Devices: dev, Ifs: ifs, IfFill: ifs})
 		if err != nil {
@@ -213,6 +214,13 @@ func (e *Env) RunImport(source, choose string, now time.Time) (*ImportOutcome, e
 	}
 	if out.Report, err = e.writeReport(now, "import_"+source, e.importDoc(out, now)); err != nil {
 		return nil, err
+	}
+	if sig, err := e.inputSig(source); err == nil {
+		// What was taken, for ImportStale (spec 14.19.3). A mark that cannot
+		// be written only makes the next visit import again.
+		if os.MkdirAll(e.Proj.Path("state"), 0o755) == nil {
+			_ = os.WriteFile(e.Proj.Path(importSigFile(source)), []byte(sig), 0o644)
+		}
 	}
 	c := src.Count()
 	e.Proj.Log(now, "import %s: %d ファイル、%d 行（取り込み済み %d、無視 %d、読めなかった %d、うち未判定・保留 %d）、レポート %s",
@@ -268,6 +276,7 @@ func (e *Env) ProposeIfs(now time.Time) (*IfProposal, error) {
 		return nil, err
 	}
 	_, ifs := convert.ProposeWith(src.Data, data(nw), bk.Devices, e.shapes)
+	convert.Refs(e.Schema, src.Data, bk.Devices, ifs)
 	next, sum, err := book.Update(old, e.Proj.Config.Book, e.Schema, e.lang(), book.Change{Ifs: ifs, IfFill: ifs})
 	if err != nil {
 		return nil, err
@@ -349,6 +358,7 @@ func (e *Env) MakeBook(from string, replace bool, now time.Time) (*BookOutcome, 
 		ch.Devices, ch.Ifs = convert.ProposeWith(src.Data, data(nw), devs, e.shapes)
 		ch.IfFill = ch.Ifs
 		devs = append(append([]book.DeviceMap{}, devs...), ch.Devices...)
+		convert.Refs(e.Schema, src.Data, devs, ch.Ifs)
 		ifs = append(fillIfs(ifs, ch.Ifs), ch.Ifs...)
 		out.Applied = convert.Apply(e.Schema, src.Data, devs, ifs)
 		ch.Data = out.Applied.Data

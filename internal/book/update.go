@@ -55,6 +55,7 @@ type Summary struct {
 	Cells      int            // cells of rows of the book that were changed
 	IfFilled   int            // rows of 新旧対照表（ポート） whose empty new interface name was filled
 	IfSet      int            // rows of 新旧対照表（ポート） whose new interface name was put anew
+	IfRef      int            // rows of 新旧対照表（ポート） whose old host name or settings were written anew (spec 14.19.5)
 	Replaced   bool           // the sheets of the tables were emptied first
 	Problems   []Problem      // what Read said about the book as it was
 }
@@ -62,7 +63,7 @@ type Summary struct {
 // Changed tells whether the bytes differ from the book as it was, so that the
 // caller has something to write.
 func (s *Summary) Changed() bool {
-	return s.Created || s.Replaced || s.Sheets > 0 || s.DeviceRows > 0 || s.IfRows > 0 || s.Rows() > 0 || s.Cells > 0 || s.IfFilled > 0 || s.IfSet > 0
+	return s.Created || s.Replaced || s.Sheets > 0 || s.DeviceRows > 0 || s.IfRows > 0 || s.Rows() > 0 || s.Cells > 0 || s.IfFilled > 0 || s.IfSet > 0 || s.IfRef > 0
 }
 
 // Rows is the number of rows added to the sheets of the tables.
@@ -287,6 +288,41 @@ func Update(old []byte, file string, sc *schema.Set, lang string, ch Change) ([]
 				}
 			}
 			sum.IfSet++
+		}
+	}
+
+	// The columns the tool writes for people to read (spec 14.19.5): the
+	// rows that are in the book get them anew.
+	if info := bk.Sheets[ifSheet.id]; info != nil {
+		at := map[string]IfMap{}
+		for _, m := range bk.Ifs {
+			if m.Row > 0 {
+				at[ifKey(m)] = m
+			}
+		}
+		done := map[string]bool{}
+		for _, p := range ch.Ifs {
+			m, ok := at[ifKey(p)]
+			if !ok || done[ifKey(p)] || (p.OldHost == "" && p.Now == "") || (m.OldHost == p.OldHost && m.Now == p.Now) {
+				continue
+			}
+			done[ifKey(p)] = true
+			for _, cv := range []struct{ name, v string }{{"old_host", p.OldHost}, {"now", p.Now}} {
+				c := ifSheet.cols[ifSheet.col(cv.name)]
+				ci, err := column(f, info, st, c.name, c.title.In(lang))
+				if err != nil {
+					return nil, nil, err
+				}
+				if cv.v == "" {
+					err = emptyCell(f, info.Name, addr(ci, m.Row-1))
+				} else {
+					err = f.SetCellStr(info.Name, addr(ci, m.Row-1), cv.v)
+				}
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+			sum.IfRef++
 		}
 	}
 

@@ -44,6 +44,11 @@ type EditColumn struct {
 	// whose ChoiceBy cell is empty fills it too.
 	ChoiceBy  string            `json:"choiceBy,omitempty"`
 	ChoiceFor map[string]string `json:"choiceFor,omitempty"`
+	// ChoiceSets are the choices for each value of the ChoiceBy column, for
+	// choices that belong to more than one value (the new interface names
+	// of each new device, spec 14.19.6). A row whose value has no set is
+	// offered Choices.
+	ChoiceSets map[string][]string `json:"choiceSets,omitempty"`
 	// Mark tells the role of a column of the mapping sheets (spec 14.18.3):
 	// "write" = a person writes it, "shown" = shown only (changing it does
 	// nothing), "tool" = the tool writes it.

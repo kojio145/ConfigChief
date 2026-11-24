@@ -189,3 +189,27 @@ func (s *Session) judgeView(j *ops.Judging, done string) *JudgeView {
 	}
 	return v
 }
+
+// JudgeMany puts one judgment on several groups for every device (spec
+// 14.19.8): the groups the list shows after it is narrowed.
+func (s *Session) JudgeMany(source string, groups []string, verdict, reason, by string) (*JudgeView, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := checkSource(source); err != nil {
+		return nil, err
+	}
+	e, err := s.beginWrite()
+	if err != nil {
+		return nil, err
+	}
+	o, err := e.JudgeMany(source, groups, verdict, reason, by, s.now())
+	if err != nil {
+		return nil, err
+	}
+	if name := strings.TrimSpace(by); name != "" && name != s.name {
+		s.name = name
+		s.save()
+	}
+	s.judged(source, o.Judging)
+	return s.judgeView(o.Judging, fmt.Sprintf("かたまり %d 個に「%s」を付けました（%d 行）", o.Groups, ops.VerdictWord(o.Verdict), o.Lines)), nil
+}

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"sync"
+	"strings"
 	"time"
 
 	"github.com/kojio145/configchief/internal/book"
@@ -160,8 +161,10 @@ func (e *Env) editSheets() ([]byte, []*book.EditSheet, error) {
 				c.Choices, c.ChoiceNotes, c.ChoiceBy, c.ChoiceFor = models, modelNotes, "new_vendor", modelFor
 			case "devices/model":
 				c.Choices, c.ChoiceNotes, c.ChoiceBy, c.ChoiceFor = models, modelNotes, "vendor", modelFor
-			case "@ifs/basis":
+			case "@ifs/basis", "@ifs/old_host", "@ifs/now":
 				c.Mark = "tool"
+			case "@ifs/new_if":
+				c.Choices, c.ChoiceNotes, c.ChoiceBy, c.ChoiceSets = ifChoices(e, sheets, es)
 			}
 			switch es.ID + "/" + c.Key {
 			case "@devices/new_host", "@devices/new_vendor", "@devices/new_model", "@ifs/new_if":
@@ -567,4 +570,77 @@ func modelsChanged(d *book.Draft, bk *book.Book) []string {
 		}
 	}
 	return out
+}
+
+// ifChoices are the choices of 新旧対照表（ポート）の新 IF 名 (spec 14.19.6), by
+// new host: the ports of the new model of the device, the names the column
+// holds for the device already (the proposals of logical interfaces), and
+// "-" (not carried over). Another name can still be written.
+func ifChoices(e *Env, sheets []*book.EditSheet, ifs *book.EditSheet) (all []string, notes map[string]string, by string, sets map[string][]string) {
+	all, notes, sets = []string{"-"}, map[string]string{"-": "持っていかない"}, map[string][]string{}
+	seenAll := map[string]bool{"-": true}
+	add := func(host, name, note string) {
+		if host == "" || name == "" {
+			return
+		}
+		for _, v := range sets[host] {
+			if v == name {
+				return
+			}
+		}
+		sets[host] = append(sets[host], name)
+		if !seenAll[name] {
+			seenAll[name] = true
+			all = append(all, name)
+		}
+		if note != "" && notes[name] == "" {
+			notes[name] = note
+		}
+	}
+	col := func(es *book.EditSheet, key string) int {
+		for i, c := range es.Columns {
+			if c.Key == key {
+				return i
+			}
+		}
+		return -1
+	}
+	cell := func(r book.EditRow, i int) string {
+		if i < 0 || i >= len(r.Cells) {
+			return ""
+		}
+		return strings.TrimSpace(r.Cells[i])
+	}
+	roles := map[string]string{"wan": "WAN のポート", "lan": "LAN のポート", "switch": "スイッチのポート"}
+	for _, es := range sheets {
+		if es.ID != "@devices" {
+			continue
+		}
+		h, v, m := col(es, "new_host"), col(es, "new_vendor"), col(es, "new_model")
+		for _, r := range es.Rows {
+			host, vendor, model := cell(r, h), cell(r, v), cell(r, m)
+			if host == "" || host == "-" || model == "" {
+				continue
+			}
+			p := e.Packs[vendor]
+			if p == nil {
+				continue
+			}
+			if md := p.Model(model); md != nil {
+				for _, port := range md.Ports {
+					add(host, port.Name, roles[port.Role])
+				}
+			}
+		}
+	}
+	h, n := col(ifs, "new_host"), col(ifs, "new_if")
+	for _, r := range ifs.Rows {
+		if name := cell(r, n); name != "-" {
+			add(cell(r, h), name, "")
+		}
+	}
+	for host := range sets {
+		sets[host] = append(sets[host], "-")
+	}
+	return all, notes, "new_host", sets
 }

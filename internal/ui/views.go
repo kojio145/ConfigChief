@@ -379,7 +379,7 @@ func (s *Session) Mapping() (*MappingView, error) {
 	v := &MappingView{Book: e.Proj.Config.Book, Counts: []Pair{}, Problems: []string{}, Notes: []string{}, Findings: migFindings(e, m.Mig), By: s.name, Hosts: []string{}}
 	s.mig = m.Mig
 	v.Devices = Table{Name: "新旧対照表（機器）", Header: []string{"ブックの行", "旧ホスト名", "旧メーカー", "新ホスト名", "新メーカー", "新機種", "備考"}}
-	v.Ifs = Table{Name: "新旧対照表（ポート）", Header: []string{"ブックの行", "新ホスト名", "旧 IF 名", "新 IF 名", "案の根拠"}}
+	v.Ifs = Table{Name: "新旧対照表（ポート）", Header: []string{"ブックの行", "新ホスト名", "旧ホスト名", "旧 IF 名", "旧 IF の設定", "新 IF 名", "案の根拠"}}
 	for _, f := range m.Source.Files {
 		if f.Err != "" {
 			v.Notes = append(v.Notes, f.Path+" は取り込めません: "+f.Err)
@@ -423,7 +423,7 @@ func (s *Session) Mapping() (*MappingView, error) {
 		devs = append(devs, r)
 	}
 	for _, f := range m.Book.Ifs {
-		r := ranked{rank: 2, row: []string{fmt.Sprint(f.Row), f.NewHost, f.OldIf, f.NewIf, f.Basis}}
+		r := ranked{rank: 2, row: []string{fmt.Sprint(f.Row), f.NewHost, f.OldHost, f.OldIf, f.Now, f.NewIf, f.Basis}}
 		switch f.NewIf {
 		case "":
 			r.rank, r.mark = 0, report.MarkUnknown
@@ -659,4 +659,19 @@ func (s *Session) Diff(a, b string) (*DiffView, error) {
 	flush()
 	v.Side = side(v.Lines)
 	return v, nil
+}
+
+// ImportStale tells whether input/<source> changed since it was last
+// imported (spec 14.19.3): the screen of the import then imports it again.
+func (s *Session) ImportStale(source string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := checkSource(source); err != nil {
+		return false, err
+	}
+	e, err := s.begin()
+	if err != nil {
+		return false, err
+	}
+	return e.ImportStale(source)
 }

@@ -69,7 +69,7 @@
   // newJdg is the screen of the unhandled lines with nothing to show. changed
   // tells the sides that were judged after their last import.
   function newJdg() {
-    return { source: "old", views: {}, sel: {}, changed: {}, only: true, scope: "all", picked: {}, verdict: "manual", reason: "", by: null, carry: {} };
+    return { source: "old", views: {}, sel: {}, changed: {}, only: true, scope: "all", picked: {}, verdict: "manual", reason: "", by: null, carry: {}, q: "", memo: false, many: { verdict: "not_needed", reason: "" } };
   }
 
   // newMig is what the lists of a comparison and of the mapping keep about
@@ -296,35 +296,52 @@
     let v = null;
     await run(label, async () => { v = await api().AddFiles(source, paths, false); });
     if (!v) return;
-    const said = await clashes(source, v, label, () => api().AddFiles(source, paths, true));
+    const c = await clashes(source, v, label, () => api().AddFiles(source, paths, true));
     // Excel files are not copied: their columns are picked (spec 14.16.4).
     if (v.excel && v.excel.length) {
-      st.xl = { source, queue: v.excel.slice(), book: null, picked: {}, err: "" };
+      st.xl = { source, queue: v.excel.slice(), book: null, picked: {}, err: "", wrote: 0 };
       xlLoad("", 0);
     }
-    await told(source, said);
+    await told(source, c.said, v.copied + c.wrote);
   }
 
   // clashes asks whether the files of the same name with another content are
-  // written over, and tells what was done.
+  // written over, and tells what was done and how many files it wrote.
   async function clashes(source, v, label, again) {
-    let said = v.message;
+    let said = v.message, wrote = 0;
     if (v.clash.length) {
       const list = v.clash.slice(0, 10).join("\n") + (v.clash.length > 10 ? `\nほか ${v.clash.length - 10}` : "");
       const yes = await ask("同じ名前のファイル", `input/${source} に、同じ名前で中身の違うファイルが ${v.clash.length} 個あります。\n${list}\n\n上書きしますか？（元のファイルは state/backup に控えます）`, "上書きする");
       if (yes) {
         let w = null;
         await run(label, async () => { w = await again(); });
-        if (w) said = (said ? said + "\n" : "") + `上書きしました: ${w.copied} ファイル（元のファイルは state/backup に控えました）`;
+        if (w) {
+          said = (said ? said + "\n" : "") + `上書きしました: ${w.copied} ファイル（元のファイルは state/backup に控えました）`;
+          wrote = w.copied;
+        }
       } else {
         said = (said ? said + "\n" : "") + `同じ名前で中身の違う ${v.clash.length} ファイルは、写していません`;
       }
     }
-    return said;
+    return { said, wrote };
   }
 
-  // told shows what adding files did, and counts the steps again.
-  async function told(source, said) {
+  // told shows what adding files did, and counts the steps again. Files that
+  // were written are imported right away, on the screen of the import (spec
+  // 14.19.3); while Excel files wait for their columns, the import waits for
+  // them.
+  async function told(source, said, wrote) {
+    if (st.xl && st.xl.source === source) {
+      st.xl.wrote += wrote || 0;
+      wrote = 0;
+    }
+    if (wrote > 0 && (source === "old" || source === "new")) {
+      if (said) toast(said.split("\n")[0]);
+      st.added = null;
+      st.imp.source = source;
+      goTo("import");
+      return;
+    }
     st.added = { source, text: said };
     try {
       st.home = await api().Home();
@@ -359,6 +376,12 @@
     x.queue.shift();
     if (!x.queue.length) {
       st.xl = null;
+      // Files put before the Excel ones are imported now.
+      if (x.wrote > 0) {
+        st.imp.source = x.source;
+        goTo("import");
+        return;
+      }
       render();
       return;
     }
@@ -374,10 +397,12 @@
     let v = null;
     await run(label, async () => { v = await api().AddExcel(x.source, b.path, b.sheet, b.header, cols, false); });
     if (!v) return;
-    const said = await clashes(x.source, v, label, () => api().AddExcel(x.source, b.path, b.sheet, b.header, cols, true));
+    const c = await clashes(x.source, v, label, () => api().AddExcel(x.source, b.path, b.sheet, b.header, cols, true));
     const source = x.source;
+    const wrote = x.wrote + v.copied + c.wrote;
+    x.wrote = 0;
     xlNext();
-    await told(source, said);
+    await told(source, c.said, wrote);
   }
 
   function excelCard() {
@@ -386,8 +411,8 @@
     const pickAll = (on) => { b.columns.forEach((c) => { if (on && c.lines > 0) x.picked[c.col] = true; else delete x.picked[c.col]; }); render(); };
     const fileName = b ? b.file : x.queue[0].split(/[\\/]/).pop();
     return h("div", { class: "card excel-pick", id: "excel-pick" },
-      h("h2", null, `Excel の列からコンフィグを置く（input/${x.source}）`),
-      h("p", { class: "dim" }, "1 列を 1 台のコンフィグとして、選んだ列ごとにテキストのファイルを作ります。見出しの下のセルを、上から 1 セル 1 行でそのまま写します（字下げもそのまま）。メモの行も写すので、取り込んだ後に「読めなかった行」で「要らない」を付けてください。ホスト名はコンフィグの hostname の行から取り、無ければファイル名になります。"),
+      h("h2", null, `Excel の列からコンフィグを読み込む（${ADD_WHERE[x.source]}）`),
+      h("p", { class: "dim" }, "1 列を 1 台のコンフィグとして、選んだ列ごとにコンフィグのファイルを作って読み込みます。見出しの下のセルを、上から 1 セル 1 行でそのまま写します（字下げもそのまま）。メモの行も写すので、取り込んだ後に「読めなかった行」で「メモらしい行だけ」に絞り、まとめて「要らない」を付けてください。ホスト名はコンフィグの hostname の行から取り、無ければファイル名になります。"),
       h("div", { class: "row" }, h("b", null, fileName),
         x.queue.length > 1 ? h("span", { class: "dim" }, `（このあと Excel があと ${x.queue.length - 1} 個）`) : null),
       boxes("error", x.err ? [x.err] : []),
@@ -410,7 +435,7 @@
       h("div", { class: "row" },
         b ? button("全部選ぶ", () => pickAll(true)) : null,
         b ? button("全部外す", () => pickAll(false)) : null,
-        b ? button(`選んだ ${n} 列を input/${x.source} に置く`, xlPut, { class: "primary", id: "excel-put", disabled: n === 0 }) : null,
+        b ? button(`選んだ ${n} 列のコンフィグを読み込む`, xlPut, { class: "primary", id: "excel-put", disabled: n === 0 }) : null,
         button(x.queue.length > 1 ? "このファイルはやめて次へ" : "やめる", xlNext, { id: "excel-skip" })));
   }
 
@@ -658,6 +683,7 @@
       return;
     }
     render();
+    if (page === "import") importIfStale();
   }
 
   function drawNav() {
@@ -681,14 +707,18 @@
       extra: ["追加コンフィグ", true], fill: ["ひな形から作る", true], delta: ["差分の投入", true], customer: ["外部一覧", true],
       compare: ["比較", false], search: ["検索", true], outputs: ["出力", true],
     };
-    const steps = migration ? ["home", "import", "mapping", "judge", "edit", "result", "logs"] : ["home", "edit", "result", "logs"];
+    // A migration opens the table from the home, the mapping and the findings:
+    // the menu has it no more (spec 14.19.7). A new build writes its book there.
+    const steps = migration ? ["home", "import", "mapping", "judge", "result", "logs"] : ["home", "edit", "result", "logs"];
     const rest = (migration ? [] : ["import", "mapping", "judge"]).concat(["extra", "fill", "delta", "customer", "compare", "search", "outputs"]);
     const items = (ids) => ids.map((id) => item(id, I[id][0], I[id][1]));
     const fold = h("details", { class: "nav-group nav-others", id: "nav-others", open: rest.includes(st.page) || navOthersOpen() },
       h("summary", { class: "nav-group-title" }, "そのほか"), items(rest));
     fold.addEventListener("toggle", () => { if (!rest.includes(st.page)) navOthersOpen(fold.open); });
     add(nav, [
-      h("div", { class: "brand" }, "ConfigChief"),
+      h("div", { class: "brand" }, "ConfigChief",
+        // The version under the name, as PalaTerm has it (spec 14.19.2).
+        button("v" + st.version, () => go("about"), { class: "side-ver", id: "side-ver", title: "バージョン情報を開く" })),
       h("div", { class: "nav-case" }, st.cas ? st.cas.name : "案件を開いていません"),
       navNow(ns),
       group("工程", items(steps)),
@@ -696,7 +726,6 @@
       group("管理",
         item("cases", "案件", false),
         item("about", "バージョン情報", false)),
-      button("版 " + st.version, () => go("about"), { class: "nav-foot", title: "バージョン情報を開く" }),
     ]);
   }
 
@@ -1327,11 +1356,11 @@
         ? h("div", { class: "row rename", id: "rename" },
           h("input", { type: "text", id: "rename-name", value: rn.name, oninput: (e) => { rn.name = e.target.value; },
             onkeydown: (e) => { if (e.key === "Enter") rename(); if (e.key === "Escape") { st.rn = null; render(); } } }),
-          button("変える", rename, { class: "primary", id: "rename-go" }),
-          button("やめる", () => { st.rn = null; render(); }),
+          button("変更", rename, { class: "primary", id: "rename-go" }),
+          button("キャンセル", () => { st.rn = null; render(); }),
           h("span", { class: "dim small" }, "案件フォルダの名前も一緒に変わります。"))
         : h("div", { class: "row case-title" }, h("h1", null, m.case.name),
-          st.readOnly ? null : button("名前を変える", () => { st.rn = { name: m.case.name }; render(); }, { id: "rename-open", class: "link" })),
+          st.readOnly ? null : button("名前を変更", () => { st.rn = { name: m.case.name }; render(); }, { id: "rename-open" })),
       h("p", null, `種類: ${m.case.kind}`),
       stepsBox(),
       nextBox(),
@@ -1415,11 +1444,11 @@
 
   // ---- 取り込み ----
 
-  function importPage() {
+  // importRun imports a side and shows what it gave on the screen of the
+  // import.
+  function importRun(s) {
     const im = st.imp;
-    const s = im.source;
-    const v = im.views[s];
-    const doImport = () => run(`${SRC[s]}を取り込んでいます`, async () => {
+    return run(`${SRC[s]}を取り込んでいます`, async () => {
       im.views[s] = await api().Import(s);
       delete im.lines[s];
       im.tab[s] = "files";
@@ -1427,12 +1456,34 @@
       delete st.jdg.views[s];
       delete st.jdg.changed[s];
     }, true);
+  }
+
+  // importIfStale imports the side of the screen of the import when its
+  // files changed since the last import (spec 14.19.3): nobody has to press
+  // the button for files that were just put.
+  async function importIfStale() {
+    if (busy || !st.cas || st.page !== "import") return;
+    const s = st.imp.source;
+    let stale = false;
+    try {
+      stale = await api().ImportStale(s);
+    } catch (e) {
+      return; // the button is still there
+    }
+    if (stale && st.page === "import" && st.imp.source === s) await importRun(s);
+  }
+
+  function importPage() {
+    const im = st.imp;
+    const s = im.source;
+    const v = im.views[s];
+    const doImport = () => importRun(s);
     const toJudge = () => { st.jdg.source = s; go("judge"); };
     const out = [
       h("h1", null, "取り込み"),
       h("div", { class: "row" },
-        seg([["old", "旧コンフィグ（input/old）"], ["new", "新コンフィグ（input/new）"]], s, (x) => { im.source = x; render(); }),
-        button("取り込む", doImport, { class: "primary", id: "import-run" }),
+        seg([["old", "旧コンフィグ（input/old）"], ["new", "新コンフィグ（input/new）"]], s, (x) => { im.source = x; render(); importIfStale(); }),
+        button(v ? "取り込み直す" : "取り込む", doImport, { class: "primary", id: "import-run" }),
         button("フォルダを開く", () => show("input/" + s))),
       dropZone(s),
       h("p", { class: "dim" }, s === "old"
@@ -1715,7 +1766,12 @@
     ];
     if (!v) return out;
 
-    const list = v.groups.filter((g) => !jd.only || g.open || g.id === jd.sel[s]);
+    // Narrowed by words and by memo lines (spec 14.19.8): what is left can
+    // be judged at once.
+    const q = (jd.q || "").trim().toLowerCase();
+    const list = v.groups.filter((g) => (!jd.only || g.open || g.id === jd.sel[s])
+      && (!q || (g.shape + "\n" + g.path + "\n" + g.example.text).toLowerCase().includes(q))
+      && (!jd.memo || memoLike(g)));
     const t = {
       name: "かたまり", lead: "", code: [1, 2], whole: [3, 4, 5], marks: list.map((g) => (g.open ? "unknown" : "")),
       header: ["判定", "形", "親の行", "台数", "行数", "ID"],
@@ -1747,9 +1803,13 @@
       boxes("warn", v.notes),
       h("div", { class: "row" },
         h("label", null, h("input", { type: "checkbox", checked: jd.only, onchange: (e) => { jd.only = e.target.checked; render(); } }), " 未判定と保留だけ"),
+        h("label", null, h("input", { type: "checkbox", id: "judge-memo", checked: jd.memo, onchange: (e) => { jd.memo = e.target.checked; render(); } }), " メモらしい行だけ"),
+        tip("日本語などの文字（※・■・【 などの印も）を含む行と、# で始まる行・==== や ---- のような区切りの行です。Excel のコンフィグに混ざったメモの行は、ここで絞ってまとめて「要らない」にできます。"),
+        h("input", { type: "search", id: "judge-q", placeholder: "文字で絞る（形・親の行・例）", value: jd.q || "", onchange: (e) => { jd.q = e.target.value; render(); } }),
         h("span", { class: "dim small" }, v.groups.length
-          ? `かたまり ${v.groups.length} 個のうち、未判定・保留があるのは ${v.groups.filter((g) => g.open).length} 個です。`
+          ? `かたまり ${v.groups.length} 個のうち、未判定・保留があるのは ${v.groups.filter((g) => g.open).length} 個です。表示は ${list.length} 個です。`
           : "読めなかった行はありません。")),
+      list.length > 1 ? judgeManyBox(s, list) : null,
       h("div", { class: "lines", id: "judge" },
         h("div", { class: "findings-list" }, tableView(t, { id: `judge/${s}/${jd.only}`, onPick: pick, selected: sel })),
         side),
@@ -1757,6 +1817,42 @@
       h("details", { class: "fold-menu", id: "carry-fold", open: !!(st.folds["carry-fold"] || jd.carry[s]), ontoggle: (e) => { st.folds["carry-fold"] = e.target.open; } },
         h("summary", null, "メーカーパックを直す人に渡すレポート（持ち出し用）"), carryPart(jd, s)));
     return out;
+  }
+
+  // memoLike tells a group whose lines look like notes rather than settings:
+  // letters other than ASCII, or a mark that opens a note (spec 14.19.8).
+  function memoLike(g) {
+    const t = (g.example && g.example.text ? g.example.text : g.shape).trim();
+    return /[^\x00-\x7f]/.test(g.shape + "\n" + t) || /^#/.test(t) || /^[=*\-_~]{3,}/.test(t);
+  }
+
+  // judgeManyBox judges every group the list shows (spec 14.19.8).
+  function judgeManyBox(s, list) {
+    const jd = st.jdg, m = jd.many;
+    const lines = list.reduce((n, g) => n + g.heads + g.below, 0);
+    const go = async () => {
+      const word = VERDICTS.find((x) => x[0] === m.verdict)[1];
+      if (!(await ask("まとめて判定を付けますか", `表示しているかたまり ${list.length} 個（${lines} 行）の全台に「${word}」を付けます。機器を指定した判定は、そのまま残ります。`, "付ける"))) return;
+      await run("判定をまとめて付けています", async () => {
+        showJudge(s, await api().JudgeMany(s, list.map((g) => g.id), m.verdict, m.reason, jd.by || ""));
+        if (st.imp.views[s]) jd.changed[s] = true;
+        delete st.imp.lines[s];
+        if (st.imp.tab[s] === "lines") st.imp.tab[s] = "files";
+      }, true);
+    };
+    const btn = button(`表示している ${list.length} 個にまとめて付ける`, go, { class: "primary", id: "judge-many" });
+    const check = () => { btn.disabled = !(jd.by || "").trim() || (m.verdict === "not_needed" && !m.reason.trim()); };
+    check();
+    return h("details", { class: "fold-menu", id: "judge-many-fold", open: !!st.folds["judge-many-fold"], ontoggle: (e) => { st.folds["judge-many-fold"] = e.target.open; } },
+      h("summary", null, `表示しているかたまり ${list.length} 個（${lines} 行）に、まとめて判定を付ける`),
+      h("div", { class: "approve judge-form judge-many" },
+        h("p", { class: "dim small" }, "上の「未判定と保留だけ」「メモらしい行だけ」と文字で絞ってから付けます。全台に付けます。"),
+        h("div", { class: "field" }, h("span", null, "判定"), seg(VERDICTS, m.verdict, (x) => { m.verdict = x; render(); })),
+        h("div", { class: "field" }, h("span", null, "理由"),
+          h("input", { type: "text", id: "judge-many-reason", value: m.reason, placeholder: m.verdict === "not_needed" ? "要らないには、理由が要ります（例: Excel のメモの行）" : "書かなくても付けられます", oninput: (e) => { m.reason = e.target.value; check(); } })),
+        h("div", { class: "field" }, h("span", null, "判定した人"),
+          h("input", { type: "text", id: "judge-many-by", value: jd.by || "", oninput: (e) => { jd.by = e.target.value; check(); } })),
+        h("div", { class: "row" }, btn)));
   }
 
   function judgeDetail(s, g) {
@@ -4624,7 +4720,75 @@
     const back = button("新旧対照表へ戻る", () => go("mapping"), { class: "link", id: "g-to-mapping" });
     return G.id === "@devices"
       ? h("div", { class: "box info", id: "g-map-note" }, "色の付いた見出しの 3 列（新ホスト名・新メーカー・新機種）を書いて「保存」を押してください。▼ の一覧は、列の中の複数のセルを選んでから選ぶと、まとめて入ります。新機種を選ぶと、空の新メーカーも埋まります。持っていかない機器は、新ホスト名に - を書きます。保存すると、新旧対照表の「2. 新旧対照表（ポート）」へ進みます。 ", back)
-      : h("div", { class: "box info", id: "g-map-note" }, "色の付いた見出しの「新 IF 名」を確かめて、空の行を書いて「保存」を押してください。持っていかない IF は - と書きます。保存すると、新旧対照表の「3. 確かめて書く」へ進みます。 ", back);
+      : h("div", { class: "box info", id: "g-map-note" }, "色の付いた見出しの「新 IF 名」を確かめて、空の行を書いて「保存」を押してください。新 IF 名は ▼（スペースか F4）で、新機種のポートから選べます（ほかの旧 IF に割り当て済みのものには印が出ます。一覧に無い名前も打てます）。「旧 IF の設定」を見て、設定のある IF から割り当ててください。持っていかない IF は - と書きます。保存すると、新旧対照表の「3. 確かめて書く」へ進みます。 ", back,
+        h("div", { class: "row" },
+          button("設定のない旧 IF を「-」にする", gIfsDropBare, { id: "g-ifs-bare", title: "新 IF 名が空で、旧 IF の設定が「（設定なし）」か「無効（shutdown）」だけの行に - を入れます（下書き。保存するまで書きません）" }),
+          button("空いているポートを上から順に入れる", gIfsFill, { id: "g-ifs-fill", title: "新 IF 名が空の物理ポートの行に、その機器の新機種で空いているポートを、表の上から順に入れます。複数の行を選んでいれば、その行だけです（下書き。保存するまで書きません）" })));
+  }
+
+  // The bulk steps of 新旧対照表（ポート） (spec 14.19.9). They change the draft
+  // of the table only; the save writes them.
+  function gIfsCols() {
+    const k = (key) => G.cols.findIndex((x) => x.key === key);
+    return { host: k("new_host"), old: k("old_if"), now: k("now"), neu: k("new_if") };
+  }
+
+  // gIfsRows are the rows the steps go over: the selected ones when more than
+  // one row is selected, else all, in the order of the table.
+  function gIfsRows() {
+    const g = gRange(), out = [];
+    if (g.r1 > g.r0) {
+      for (let r = g.r0; r <= g.r1; r++) out.push(gRowAt(r));
+    } else {
+      for (let r = 0; r < G.view.length; r++) out.push(gRowAt(r));
+    }
+    return out.filter((r) => r && !r.del && !gBlank(r));
+  }
+
+  function gIfsDropBare() {
+    const c = gIfsCols();
+    if (c.neu < 0 || c.now < 0) return;
+    let n = 0;
+    gMutate((ops) => {
+      for (const r of gIfsRows()) {
+        const now = (r.cells[c.now] || "").trim();
+        if ((r.cells[c.neu] || "").trim() || !(now === "（設定なし）" || now === "無効（shutdown）")) continue;
+        if (ops.set(r, c.neu, "-")) n++;
+      }
+    });
+    gSay(n ? `設定のない旧 IF ${n} 行に - を入れました（保存すると書きます）` : "設定のない旧 IF で、新 IF 名が空の行はありませんでした");
+  }
+
+  // A logical interface or a subinterface is not a port to be given one of
+  // the model: the proposals name those after the new vendor.
+  const LOGICAL_IF = /^(lo|loopback|tu|tunnel|vlan|vl|di|dialer|po|port-channel|bvi|bdi|virtual|null|nve|vt|vi|cellular|async|bri|mfr|multilink|ppp|bridge|vlan-interface)/i;
+
+  function gIfsFill() {
+    const c = gIfsCols(), col = G.cols[c.neu];
+    if (c.neu < 0 || c.host < 0 || !col || !col.choiceSets) return;
+    // What every device has taken: the names in any row of it, the rows that
+    // are not looked at too.
+    const used = {};
+    for (const r of G.rows) {
+      if (!r || r.del || gBlank(r)) continue;
+      const host = (r.cells[c.host] || "").trim(), v = (r.cells[c.neu] || "").trim();
+      if (host && v && v !== "-") (used[host] = used[host] || {})[v] = true;
+    }
+    let n = 0, none = 0;
+    gMutate((ops) => {
+      for (const r of gIfsRows()) {
+        const host = (r.cells[c.host] || "").trim(), old = (r.cells[c.old] || "").trim();
+        if (!host || (r.cells[c.neu] || "").trim() || LOGICAL_IF.test(old) || /\.0*[1-9]\d*$/.test(old)) continue;
+        const ports = (col.choiceSets[host] || []).filter((v) => v !== "-" && !(used[host] && used[host][v]));
+        if (!ports.length) { none++; continue; }
+        if (ops.set(r, c.neu, ports[0])) {
+          (used[host] = used[host] || {})[ports[0]] = true;
+          n++;
+        }
+      }
+    });
+    gSay((n ? `空いているポートを ${n} 行に入れました（保存すると書きます）` : "入れる行はありませんでした（新 IF 名が空の物理ポートの行がありません）")
+      + (none ? `。${none} 行は、その機器の新機種に空いているポートがありません（新旧対照表（機器）の新機種を確かめてください）` : ""));
   }
 
   // gSaveGo saves the draft. In a migration case, a save made on a sheet of
@@ -5433,9 +5597,22 @@
       const some = choices.filter((v) => col.choiceFor[v] === by);
       if (some.length) choices = some;
     }
+    // The new interface names of the row's new device (spec 14.19.6), each
+    // told whether another old interface of the device has it already.
+    const used = {};
+    if (col.choiceSets) {
+      if (by && col.choiceSets[by]) choices = col.choiceSets[by];
+      const oi = G.cols.findIndex((x) => x.key === "old_if");
+      for (let i = 0; i < G.rows.length; i++) {
+        const o = G.rows[i];
+        if (!o || o === r || !o.cells || (o.cells[byCi] || "").trim() !== by) continue;
+        const v = (o.cells[G.vc[G.sel.fc]] || "").trim();
+        if (v && v !== "-") used[v] = (used[v] ? used[v] + "・" : "") + (oi >= 0 ? o.cells[oi] : "");
+      }
+    }
     const opts = [""].concat(choices);
     opts.forEach((v, i) => {
-      const note = v && col.choiceNotes && col.choiceNotes[v];
+      const note = v && (used[v] ? "割り当て済み（旧 " + used[v] + "）" : col.choiceNotes && col.choiceNotes[v]);
       const o = h("div", { class: cls("g-opt", v === now && "on"), "data-i": String(i) }, v === "" ? "（空にする）" : v,
         note ? h("span", { class: "dim small" }, "　" + note) : null);
       el.appendChild(o);
@@ -7335,13 +7512,26 @@
       h("div", { class: "card about-card" },
         h("div", { class: "brand-big" }, "ConfigChief"),
         h("div", { class: "dim" }, "Network device configurations ⇄ a vendor-neutral Excel workbook"),
-        h("p", null, "作者: KJO", h("br"), "MIT License © 2026 KJO"),
+        h("p", null, "作者: ", h("span", { id: "ab-author", onclick: (e) => { if (e.detail === 3) authorHello(); } }, "KJO"), h("br"), "MIT License © 2026 KJO"),
         h("div", { class: "row" },
           button("GitHub", () => api().OpenWeb("github"), { class: "link" }),
           button("使い方", () => api().OpenWeb("manual"), { class: "link" }),
           button("申請用の説明", () => api().OpenWeb("approval"), { class: "link", title: "使う許可の申請に使う 1 枚の説明（通信・書き込む場所・インストールしないこと）" }))),
     ];
     return out;
+  }
+
+  // authorHello pops a hello up over the page, as PalaTerm does on three
+  // clicks on the author's name (spec 14.19.2); a click anywhere or Esc puts
+  // it away.
+  function authorHello() {
+    if (document.querySelector(".author-pop")) return;
+    const ov = h("div", { class: "author-pop" }, h("div", { class: "author-hello" }, "It's-a me, Kojio! 🎉"));
+    document.body.appendChild(ov);
+    const done = () => { ov.remove(); document.removeEventListener("keydown", onKey, true); };
+    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); done(); } };
+    document.addEventListener("keydown", onKey, true);
+    ov.onclick = done;
   }
 
   // noteBody draws the Markdown of release notes plainly: **bold** and
