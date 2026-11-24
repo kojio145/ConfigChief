@@ -535,3 +535,17 @@ details.nav-others > summary.nav-group-title::before { content: "▸ "; }
 details.nav-others[open] > summary.nav-group-title::before { content: "▾ "; }
 
 #create-from { max-width: 100%; }
+/* M16: the next step on every screen, the name of the case, columns of Excel */
+.next-line { margin: 0 0 12px; padding: 6px 12px; }
+.case-title h1 { margin-right: 4px; }
+.rename input { min-width: 20em; font-size: 1.1em; }
+.excel-pick .sample-lines { white-space: pre; font-family: var(--mono, monospace); font-size: 12px; max-width: 32em; overflow: hidden; text-overflow: ellipsis; }
+/* M16: where the case is, on the menu (spec 14.16.5) */
+#nav .nav-now { display: block; width: 100%; text-align: left; margin: 2px 0 8px; padding: 4px 8px; font-size: 12px; line-height: 1.4;
+  color: #cfe0ff; background: #24405f; border: 1px solid #4a7bb8; border-radius: 6px; white-space: normal; cursor: pointer; }
+#nav div.nav-now { cursor: default; color: #aeb9c9; background: none; border-color: transparent; }
+#nav button[data-badge]::after { content: attr(data-badge); float: right; font-size: 11px; padding: 0 6px; border-radius: 8px; margin-left: 6px; }
+#nav button.nb-next::after { background: #4a90e2; color: #fff; font-weight: bold; }
+#nav button.nb-todo::after { background: #f5d36a; color: #3a2e00; }
+#nav button.nb-done::after { color: #7fd18b; }
+#nav button.nb-wait::after { opacity: 0.6; }

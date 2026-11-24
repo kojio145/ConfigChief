@@ -48,6 +48,9 @@
     next: null, // the one thing to do next (spec 14.10.4)
     nextFor: null, // the home view the next step was asked for
     hint: "", // the id of the control the next step points at
+    nextSeq: 0, // the asking of the next step that is the newest
+    xl: null, // the Excel files whose columns are picked: { source, queue, book, picked, err } (spec 14.16.4)
+    rn: null, // the new name of the case being typed: { name } (spec 14.16.3)
   };
 
   // newSrch is the search over the files of a case with nothing to show
@@ -214,6 +217,7 @@
       busy = false;
       hideBusy();
       render();
+      if (st.cas) askNext();
     }
   }
 
@@ -291,27 +295,122 @@
     let v = null;
     await run(label, async () => { v = await api().AddFiles(source, paths, false); });
     if (!v) return;
+    const said = await clashes(source, v, label, () => api().AddFiles(source, paths, true));
+    // Excel files are not copied: their columns are picked (spec 14.16.4).
+    if (v.excel && v.excel.length) {
+      st.xl = { source, queue: v.excel.slice(), book: null, picked: {}, err: "" };
+      xlLoad("", 0);
+    }
+    await told(source, said);
+  }
+
+  // clashes asks whether the files of the same name with another content are
+  // written over, and tells what was done.
+  async function clashes(source, v, label, again) {
     let said = v.message;
     if (v.clash.length) {
       const list = v.clash.slice(0, 10).join("\n") + (v.clash.length > 10 ? `\nほか ${v.clash.length - 10}` : "");
       const yes = await ask("同じ名前のファイル", `input/${source} に、同じ名前で中身の違うファイルが ${v.clash.length} 個あります。\n${list}\n\n上書きしますか？（元のファイルは state/backup に控えます）`, "上書きする");
       if (yes) {
         let w = null;
-        await run(label, async () => { w = await api().AddFiles(source, paths, true); });
+        await run(label, async () => { w = await again(); });
         if (w) said = (said ? said + "\n" : "") + `上書きしました: ${w.copied} ファイル（元のファイルは state/backup に控えました）`;
       } else {
         said = (said ? said + "\n" : "") + `同じ名前で中身の違う ${v.clash.length} ファイルは、写していません`;
       }
     }
+    return said;
+  }
+
+  // told shows what adding files did, and counts the steps again.
+  async function told(source, said) {
     st.added = { source, text: said };
     try {
       st.home = await api().Home();
     } catch (e) {
       // the home screen is drawn again the next time
     }
-    toast(said.split("\n")[0]);
+    if (said) toast(said.split("\n")[0]);
     render();
     loadNext();
+  }
+
+  // ---- configurations kept in Excel, one device a column (spec 14.16.4) ----
+
+  async function xlLoad(sheet, header) {
+    const x = st.xl;
+    if (!x || !x.queue.length) return;
+    try {
+      x.book = await api().ExcelBook(x.queue[0], sheet || "", header || 0);
+      x.err = "";
+    } catch (e) {
+      x.book = null;
+      x.err = errText(e);
+    }
+    x.picked = {};
+    render();
+  }
+
+  // xlNext goes on to the next Excel file, or closes the box.
+  function xlNext() {
+    const x = st.xl;
+    if (!x) return;
+    x.queue.shift();
+    if (!x.queue.length) {
+      st.xl = null;
+      render();
+      return;
+    }
+    xlLoad("", 0);
+  }
+
+  async function xlPut() {
+    const x = st.xl, b = x && x.book;
+    if (!b) return;
+    const cols = b.columns.filter((c) => x.picked[c.col]).map((c) => c.col);
+    if (!cols.length) return;
+    const label = "Excel の列からコンフィグを作っています";
+    let v = null;
+    await run(label, async () => { v = await api().AddExcel(x.source, b.path, b.sheet, b.header, cols, false); });
+    if (!v) return;
+    const said = await clashes(x.source, v, label, () => api().AddExcel(x.source, b.path, b.sheet, b.header, cols, true));
+    const source = x.source;
+    xlNext();
+    await told(source, said);
+  }
+
+  function excelCard() {
+    const x = st.xl, b = x.book;
+    const n = b ? b.columns.filter((c) => x.picked[c.col]).length : 0;
+    const pickAll = (on) => { b.columns.forEach((c) => { if (on && c.lines > 0) x.picked[c.col] = true; else delete x.picked[c.col]; }); render(); };
+    const fileName = b ? b.file : x.queue[0].split(/[\\/]/).pop();
+    return h("div", { class: "card excel-pick", id: "excel-pick" },
+      h("h2", null, `Excel の列からコンフィグを置く（input/${x.source}）`),
+      h("p", { class: "dim" }, "1 列を 1 台のコンフィグとして、選んだ列ごとにテキストのファイルを作ります。見出しの下のセルを、上から 1 セル 1 行でそのまま写します（字下げもそのまま）。メモの行も写すので、取り込んだ後に「読めなかった行」で「要らない」を付けてください。ホスト名はコンフィグの hostname の行から取り、無ければファイル名になります。"),
+      h("div", { class: "row" }, h("b", null, fileName),
+        x.queue.length > 1 ? h("span", { class: "dim" }, `（このあと Excel があと ${x.queue.length - 1} 個）`) : null),
+      boxes("error", x.err ? [x.err] : []),
+      b ? [
+        h("div", { class: "form-grid" },
+          h("label", null, "シート", Object.assign(select(b.sheets.map((s) => [s, s]), b.sheet, (s) => xlLoad(s, 0)), { id: "excel-sheet" })),
+          h("label", null, "見出しの行", h("input", { type: "number", min: "1", id: "excel-header", value: b.header, onchange: (e) => xlLoad(b.sheet, Number(e.target.value) || 0) }))),
+        h("p", { class: "dim small" }, `シート「${b.sheet}」は ${b.rows} 行です。見出しの行の、値のある列が並びます。見出しの行が違うときは、数を変えてください。`),
+        b.columns.length ? h("div", { class: "table-wrap" }, h("table", null,
+          h("thead", null, h("tr", null, h("th", null, ""), h("th", null, "列"), h("th", null, "見出し"), h("th", null, "行数"), h("th", null, "初めの行"), h("th", null, "作るファイル"))),
+          h("tbody", null, b.columns.map((c) => h("tr", null,
+            h("td", null, h("input", { type: "checkbox", "data-col": c.col, checked: !!x.picked[c.col], disabled: c.lines === 0,
+              onchange: (e) => { if (e.target.checked) x.picked[c.col] = true; else delete x.picked[c.col]; render(); } })),
+            h("td", null, c.letter),
+            h("td", null, c.header || h("span", { class: "dim" }, "（空）")),
+            h("td", null, String(c.lines)),
+            h("td", { class: "sample-lines" }, c.sample.join("\n")),
+            h("td", { class: "path" }, c.name)))))) : h("div", { class: "box info" }, "見出しの行の下に、値のある列がありません。見出しの行を変えてください。"),
+      ] : null,
+      h("div", { class: "row" },
+        b ? button("全部選ぶ", () => pickAll(true)) : null,
+        b ? button("全部外す", () => pickAll(false)) : null,
+        b ? button(`選んだ ${n} 列を input/${x.source} に置く`, xlPut, { class: "primary", id: "excel-put", disabled: n === 0 }) : null,
+        button(x.queue.length > 1 ? "このファイルはやめて次へ" : "やめる", xlNext, { id: "excel-skip" })));
   }
 
   // onFileDrop takes files dropped on a place that takes them.
@@ -554,7 +653,14 @@
   function drawNav() {
     const nav = $("nav");
     nav.textContent = "";
-    const item = (page, label, needsCase) => button(label, () => go(page), { class: st.page === page ? "on" : null, disabled: needsCase && !st.cas });
+    const ns = navSteps();
+    // The state of the steps of each screen is drawn from data-badge, so
+    // that the name of the button stays its text (spec 14.16.5).
+    const item = (page, label, needsCase) => {
+      const b = navBadge(page, ns);
+      return button(label, () => go(page), { class: cls(st.page === page && "on", b && b.cls), disabled: needsCase && !st.cas,
+        "data-badge": b ? b.word : null, "data-page": page });
+    };
     // The menu in the order of the steps of the case, the rest folded
     // (spec 14.14.2); a heading is not a button.
     const group = (title, ...items) => h("div", { class: "nav-group" }, h("div", { class: "nav-group-title" }, title), items);
@@ -574,6 +680,7 @@
     add(nav, [
       h("div", { class: "brand" }, "ConfigChief"),
       h("div", { class: "nav-case" }, st.cas ? st.cas.name : "案件を開いていません"),
+      navNow(ns),
       group("工程", items(steps)),
       fold,
       group("管理",
@@ -581,6 +688,46 @@
         item("about", "バージョン情報", false)),
       button("版 " + st.version, () => go("about"), { class: "nav-foot", title: "バージョン情報を開く" }),
     ]);
+  }
+
+  // navSteps gathers the steps of the open case by the screen they are done
+  // on, and which one is next (spec 14.16.5).
+  function navSteps() {
+    const p = st.steps;
+    if (!st.cas || !p || !p.steps || !p.steps.length) return null;
+    const next = p.next || {};
+    const i = p.steps.findIndex((x) => next.page && x.page === next.page && x.act === next.act && (x.state === "todo" || x.state === "optional"));
+    const by = {};
+    p.steps.forEach((x) => { (by[x.page] = by[x.page] || []).push(x); });
+    return { p, i, by };
+  }
+
+  // navBadge is the state of the steps of one screen of the menu: next, what
+  // is left, or done.
+  function navBadge(page, ns) {
+    const list = ns && ns.by[page];
+    if (!list) return null;
+    const nx = ns.i >= 0 ? ns.p.steps[ns.i] : null;
+    if (nx && nx.page === page) return { word: "次" + (nx.note ? " " + nx.note : ""), cls: "nb-next" };
+    const todo = list.find((x) => x.state === "todo");
+    if (todo) return { word: todo.note || "残りあり", cls: "nb-todo" };
+    if (list.some((x) => x.state === "counting")) return { word: "…", cls: "nb-wait" };
+    const must = list.filter((x) => x.state !== "optional");
+    if (must.length && must.every((x) => x.state === "done")) return { word: "済み", cls: "nb-done" };
+    return null;
+  }
+
+  // navNow tells under the name of the case which step the case is at.
+  function navNow(ns) {
+    if (!ns) return null;
+    const n = ns.p.steps.length;
+    if (ns.i >= 0) {
+      const x = ns.p.steps[ns.i];
+      return button(`いま ${ns.i + 1}/${n}: ${x.label}${x.note ? `（${x.note}）` : ""}`, () => goStep(x.page, x.act),
+        { class: "nav-now", id: "nav-now", title: (ns.p.next && ns.p.next.text) || "" });
+    }
+    const t = ns.p.next && ns.p.next.text;
+    return t ? h("div", { class: "nav-now", id: "nav-now", title: t }, t) : null;
   }
 
   // navOthersOpen tells (or keeps, given a value) whether そのほか of the
@@ -608,6 +755,12 @@
     if (st.error) {
       main.appendChild(h("div", { class: "box error" }, button("閉じる", () => { st.error = ""; render(); }, { class: "link close" }), st.error));
     }
+    // The next step on every screen of the steps (spec 14.16.1).
+    if (st.cas && !NO_NEXT_LINE.has(st.page)) {
+      main.appendChild(nextLine());
+      if (!same) askNext();
+    }
+    if (st.cas && st.xl) main.appendChild(excelCard());
     const pages = { cases: casesPage, home: homePage, import: importPage, judge: judgePage, extra: extraPage, mapping: mappingPage, edit: editPage, customer: customerPage, fill: fillPage, result: resultPage, logs: logsPage, search: searchPage, compare: comparePage, about: aboutPage, outputs: outputsPage, delta: deltaPage };
     afterDraw = [];
     add(main, [pages[st.page]()]);
@@ -1146,8 +1299,26 @@
     const fold = h("details", { class: "others", id: "home-others", open: othersOpen() }, h("summary", null, "そのほか（" + (migration ? "新コンフィグ・比較・レポート・パック" : "旧コンフィグ・新コンフィグ・比較・レポート・パック") + "）"), others);
     fold.addEventListener("toggle", () => othersOpen(fold.open));
 
+    const rn = st.rn;
+    const rename = async () => {
+      let home = null;
+      await run("案件名を変えています", async () => { home = await api().RenameCase(rn.name); });
+      if (!home) return;
+      st.rn = null;
+      await opened(home);
+      st.caseNote = `案件名を「${home.case.name}」に変えました（フォルダ: ${home.case.dir}）`;
+      render();
+    };
     return [
-      h("h1", null, m.case.name),
+      rn
+        ? h("div", { class: "row rename", id: "rename" },
+          h("input", { type: "text", id: "rename-name", value: rn.name, oninput: (e) => { rn.name = e.target.value; },
+            onkeydown: (e) => { if (e.key === "Enter") rename(); if (e.key === "Escape") { st.rn = null; render(); } } }),
+          button("変える", rename, { class: "primary", id: "rename-go" }),
+          button("やめる", () => { st.rn = null; render(); }),
+          h("span", { class: "dim small" }, "案件フォルダの名前も一緒に変わります。"))
+        : h("div", { class: "row case-title" }, h("h1", null, m.case.name),
+          st.readOnly ? null : button("名前を変える", () => { st.rn = { name: m.case.name }; render(); }, { id: "rename-open", class: "link" })),
       h("p", null, `種類: ${m.case.kind}`),
       stepsBox(),
       nextBox(),
@@ -1846,9 +2017,10 @@
   async function loadNext() {
     if (!st.cas) return;
     st.nextFor = st.home;
-    // An answer that comes after the case or its home changed is dropped.
-    const dir = st.cas.dir, home = st.home;
-    const gone = () => !st.cas || st.cas.dir !== dir || st.home !== home;
+    // An answer that comes after the case changed, or after a newer asking,
+    // is dropped.
+    const dir = st.cas.dir, seq = ++st.nextSeq;
+    const gone = () => !st.cas || st.cas.dir !== dir || st.nextSeq !== seq;
     const ask = async (quick) => {
       try {
         return await api().Steps(quick);
@@ -1860,14 +2032,55 @@
     if (gone()) return;
     st.steps = p;
     st.next = p ? p.next : null;
-    if (st.page === "home" && !busy) render();
+    drawNext();
     if (p && p.steps.some((x) => x.state === "counting")) {
       p = await ask(false);
       if (gone()) return;
       st.steps = p;
       st.next = p ? p.next : null;
-      if (st.page === "home" && !busy) render();
+      drawNext();
     }
+  }
+
+  // askNext asks for the next step a little later, once for asks that come
+  // together (a step that ends and the screen it goes to), so that the
+  // screen's own calls go first (spec 14.16.1).
+  let nextTimer = 0;
+  function askNext() {
+    clearTimeout(nextTimer);
+    nextTimer = setTimeout(loadNext, 300);
+  }
+
+  // drawNext shows the next step that was told: the home is drawn again,
+  // another screen has only its line put in place (what is being typed in
+  // the table stays; spec 14.16.1).
+  function drawNext() {
+    if (busy) return;
+    if (st.page === "home") {
+      render();
+      return;
+    }
+    drawNav();
+    const old = $("next-line");
+    if (old) old.replaceWith(nextLine());
+  }
+
+  // The screens that show no line of the next step.
+  const NO_NEXT_LINE = new Set(["home", "cases", "about"]);
+
+  // nextLine is the next step at the top of a screen other than the home
+  // (spec 14.16.1). On the screen it points into, it marks the button.
+  function nextLine() {
+    const n = st.next;
+    if (!n) return h("div", { id: "next-line", hidden: true });
+    const here = n.page === st.page;
+    let go = null;
+    if (n.page && !(n.page === "home" && !n.act)) {
+      go = here
+        ? (n.act ? button("ここ", () => { st.hint = n.act; render(); }, { id: "next-here", title: "この画面の、押すボタンに枠を付けます" }) : null)
+        : button(n.page === "home" ? "そこへ" : "移る", () => goStep(n.page, n.act), { class: "primary", id: "next-go" });
+    }
+    return h("div", { class: "next next-line", id: "next-line" }, h("b", null, "次にやること"), h("span", null, n.text), go);
   }
 
   // goStep goes to the screen of a step, and points at its button.

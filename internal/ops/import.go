@@ -139,6 +139,10 @@ func (e *Env) Import(source, choose string) (*Source, error) {
 		path := paths[i]
 		f := &File{Path: path}
 		reads[i].f = f
+		if IsExcel(path) {
+			f.Err = "Excel のファイルです。「ファイルを足す」でこのファイルを選ぶと、列を選んでコンフィグにできます"
+			return
+		}
 		text, err := project.ReadText(e.Proj.Path(path))
 		if err != nil {
 			f.Err = err.Error()

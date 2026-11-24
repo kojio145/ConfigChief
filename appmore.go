@@ -238,6 +238,26 @@ func (a *App) AddFiles(source string, paths []string, overwrite bool) (r0 *ui.Ad
 	return a.s.AddFiles(source, paths, overwrite)
 }
 
+// ExcelBook reads an Excel file for the choice of its columns (spec 14.16.4).
+func (a *App) ExcelBook(path, sheet string, header int) (r0 *ops.ExcelBook, err error) {
+	defer a.guard("ExcelBook", &err)
+	return a.s.ExcelBook(path, sheet, header)
+}
+
+// AddExcel makes columns of an Excel sheet into configuration files (spec
+// 14.16.4).
+func (a *App) AddExcel(source, path, sheet string, header int, cols []int, overwrite bool) (r0 *ui.AddView, err error) {
+	defer a.guard("AddExcel", &err)
+	return a.s.AddExcel(source, path, sheet, header, cols, overwrite)
+}
+
+// RenameCase gives the open case a new name and renames its folder (spec
+// 14.16.3).
+func (a *App) RenameCase(name string) (r0 *ui.Home, err error) {
+	defer a.guard("RenameCase", &err)
+	return a.s.RenameCase(name)
+}
+
 // PickFiles lets the user choose files to add (nil = the dialog was closed).
 func (a *App) PickFiles(title string) (r0 []string, err error) {
 	defer a.guard("PickFiles", &err)

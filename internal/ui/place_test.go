@@ -210,3 +210,69 @@ func TestAddFilesMakesTheFolder(t *testing.T) {
 		}
 	}
 }
+
+// The open case takes a new name: the folder and project.yaml (spec 14.16.3).
+func TestRenameCase(t *testing.T) {
+	s, place, _ := placeSession(t)
+	if _, err := s.NewCase("前の名前", "migration"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.NewCase("ほかの案件", "new"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Open(filepath.Join(place, "前の名前")); err != nil {
+		t.Fatal(err)
+	}
+	h, err := s.RenameCase("  新しい名前 ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(place, "新しい名前")
+	if !sameDir(h.Case.Dir, want) || h.Case.Name != "新しい名前" {
+		t.Errorf("renamed %+v", h.Case)
+	}
+	if _, err := os.Stat(filepath.Join(place, "前の名前")); err == nil {
+		t.Error("the old folder is still there")
+	}
+	data, _ := os.ReadFile(filepath.Join(want, "project.yaml"))
+	if !strings.Contains(string(data), "name: 新しい名前") {
+		t.Errorf("project.yaml:\n%s", data)
+	}
+	// The case is open in its new folder and can be written.
+	if _, err := s.AddFiles("old", []string{writeTemp(t, "rt-a01.txt", "hostname rt-a01\n")}, false); err != nil {
+		t.Errorf("add after rename: %v", err)
+	}
+	// The place lists the new name only.
+	v := s.Place()
+	if len(v.Cases) != 2 || v.Cases[0].Name != "ほかの案件" || v.Cases[1].Name != "新しい名前" {
+		t.Errorf("cases %+v", v.Cases)
+	}
+	// A name that is taken, and a name a folder cannot take: nothing changes.
+	if _, err := s.RenameCase("ほかの案件"); err == nil || !strings.Contains(err.Error(), "同じ名前のフォルダ") {
+		t.Errorf("taken: %v", err)
+	}
+	if _, err := s.RenameCase("a:b"); err == nil {
+		t.Error("bad name taken")
+	}
+	if st := s.State(); st.Case == nil || !sameDir(st.Case.Dir, want) {
+		t.Errorf("open case %+v", st.Case)
+	}
+	// Only the case of the letters.
+	if h, err := s.RenameCase("新しい名前"); err != nil || h.Case.Name != "新しい名前" {
+		t.Errorf("same name: %v", err)
+	}
+	// No case open.
+	s.Close()
+	if _, err := s.RenameCase("x"); err == nil {
+		t.Error("renamed with no case open")
+	}
+}
+
+func writeTemp(t *testing.T, name, text string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}

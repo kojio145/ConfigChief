@@ -147,7 +147,7 @@ func (e *Env) editSheets() ([]byte, []*book.EditSheet, error) {
 		cp.Columns = append([]book.EditColumn{}, es.Columns...)
 		for k := range cp.Columns {
 			switch cp.Columns[k].Key {
-			case "new_vendor":
+			case "old_vendor", "new_vendor":
 				cp.Columns[k].Choices = append([]string{}, e.PackIDs...)
 			case "new_model":
 				// The models the packs know (spec 14.10.3); another value

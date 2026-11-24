@@ -170,6 +170,10 @@ func TestEditMappingSheets(t *testing.T) {
 	// The sheets of the mapping are tables too; the new vendor is chosen
 	// from the packs.
 	v := view(t, e, "@devices")
+	// The old vendor is chosen from the packs too (spec 14.16.2).
+	if c := v.Columns[col(t, v, "old_vendor")]; strings.Join(c.Choices, ",") != "cisco_ios,nec_ix,nec_qx" {
+		t.Errorf("old vendor choices %v", c.Choices)
+	}
 	if c := v.Columns[col(t, v, "new_vendor")]; strings.Join(c.Choices, ",") != "cisco_ios,nec_ix,nec_qx" {
 		t.Errorf("new vendor: %v", c.Choices)
 	}

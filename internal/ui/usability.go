@@ -19,6 +19,9 @@ type AddView struct {
 	// written for them. The page asks, and sends them again to write over.
 	Clash []string `json:"clash"`
 	Files int      `json:"files"` // the files of the folder now
+	// Excel are the Excel files that came for the configurations: the page
+	// lets a person pick their columns (spec 14.16.4).
+	Excel []string `json:"excel"`
 }
 
 // AddFiles copies files a person dropped or chose into input/<source>.
@@ -33,14 +36,40 @@ func (s *Session) AddFiles(source string, paths []string, overwrite bool) (*AddV
 	if err != nil {
 		return nil, err
 	}
-	v := &AddView{Message: a.Said(), Copied: len(a.Copied), Clash: a.Clash}
-	if len(a.Clash) > 0 && len(a.Copied)+len(a.Same)+len(a.Skipped) == 0 {
+	return s.addView(e, source, a), nil
+}
+
+func (s *Session) addView(e *ops.Env, source string, a *ops.Added) *AddView {
+	v := &AddView{Message: a.Said(), Copied: len(a.Copied), Clash: a.Clash, Excel: a.Excel}
+	if len(a.Clash) > 0 && len(a.Copied)+len(a.Same)+len(a.Skipped)+len(a.Excel) == 0 {
 		v.Message = ""
 	}
 	if list, err := e.Proj.Inputs(source); err == nil {
 		v.Files = len(list)
 	}
-	return v, nil
+	return v
+}
+
+// ExcelBook reads an Excel file for the choice of its columns (spec
+// 14.16.4). It writes nothing.
+func (s *Session) ExcelBook(path, sheet string, header int) (*ops.ExcelBook, error) {
+	return ops.ReadExcel(path, sheet, header)
+}
+
+// AddExcel makes the columns of a sheet into configuration files in
+// input/<source> (spec 14.16.4).
+func (s *Session) AddExcel(source, path, sheet string, header int, cols []int, overwrite bool) (*AddView, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, err := s.beginWrite()
+	if err != nil {
+		return nil, err
+	}
+	a, err := e.AddExcelColumns(source, path, sheet, header, cols, overwrite, s.now())
+	if err != nil {
+		return nil, err
+	}
+	return s.addView(e, source, a), nil
 }
 
 // Next tells the one thing to do next (spec 14.10.4, 14.12.1); nil when it

@@ -21,20 +21,51 @@ type openCache struct {
 // Steps tells the steps of the case and the next thing to do (spec
 // 14.12.1). quick: do not count the unhandled lines now if the count kept
 // is not of the case as it is (the page asks again with quick false).
+//
+// The count reads every input file and can take long: it is made without
+// holding the session, on a case opened on its own, so that the steps a
+// person takes meanwhile do not wait for it (spec 14.16.1). It is kept only
+// when nothing it depends on changed while it was made.
 func (s *Session) Steps(quick bool) (*ops.Progress, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	e, err := s.begin()
 	if err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
 	mark := e.ProgressMark()
+	if (s.opens.dir == e.Proj.Dir && s.opens.mark == mark) || quick {
+		defer s.mu.Unlock()
+		return s.progress(e, mark)
+	}
+	dir := e.Proj.Dir
+	s.mu.Unlock()
+
+	count, counted := ops.OpenCount{}, false
+	if ce, err := ops.Open(dir); err == nil && ce.ProgressMark() == mark {
+		count = ce.CountOpen()
+		counted = ce.ProgressMark() == mark
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, err = s.begin()
+	if err != nil {
+		return nil, err
+	}
+	now := e.ProgressMark()
+	if counted && e.Proj.Dir == dir && now == mark {
+		s.opens = openCache{dir: dir, mark: mark, count: count}
+	}
+	return s.progress(e, now)
+}
+
+// progress tells the steps with the count kept, if it is of the case as it
+// is (else the step of the unhandled lines is being counted).
+func (s *Session) progress(e *ops.Env, mark string) (*ops.Progress, error) {
 	count := ops.OpenCount{}
 	if s.opens.dir == e.Proj.Dir && s.opens.mark == mark {
 		count = s.opens.count
-	} else if !quick {
-		count = e.CountOpen()
-		s.opens = openCache{dir: e.Proj.Dir, mark: mark, count: count}
 	}
 	return e.Progress(count)
 }

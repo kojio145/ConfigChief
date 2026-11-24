@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/kojio145/configchief/internal/ops"
 	"github.com/kojio145/configchief/internal/project"
 )
 
@@ -226,4 +227,59 @@ func (s *Session) MadePlace() (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.makePlace()
+}
+
+// RenameCase gives the open case a new name (spec 14.16.3): the folder is
+// renamed in the folder it is in, and project.yaml takes the name. When the
+// folder cannot be renamed, the case is opened again as it was and nothing
+// changes.
+func (s *Session) RenameCase(name string) (*Home, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.env == nil {
+		return nil, errors.New("案件を開いていません")
+	}
+	if _, err := s.beginWrite(); err != nil {
+		return nil, err
+	}
+	clean, err := project.CleanName(name)
+	if err != nil {
+		return nil, err
+	}
+	oldDir := s.env.Proj.Dir
+	newDir := filepath.Join(filepath.Dir(oldDir), clean)
+	if newDir != oldDir {
+		if !sameDir(newDir, oldDir) {
+			if _, err := os.Stat(newDir); err == nil {
+				return nil, fmt.Errorf("同じ名前のフォルダ（%s）があります。別の名前にしてください", newDir)
+			}
+		}
+		// The mark of the case is let go first: the folder cannot be
+		// renamed while a file in it is held.
+		s.env = nil
+		s.held.Release()
+		s.held = nil
+		if err := os.Rename(oldDir, newDir); err != nil {
+			if _, again := s.open(oldDir); again != nil {
+				return nil, fmt.Errorf("フォルダの名前を変えられませんでした（%v）。開き直すこともできませんでした: %v", err, again)
+			}
+			return nil, fmt.Errorf("フォルダの名前を変えられません。案件のファイルを Excel やエクスプローラで開いていれば、閉じてからもう一度押してください（%v）", err)
+		}
+		var list []Recent
+		for _, r := range s.recent {
+			if !sameDir(r.Dir, oldDir) {
+				list = append(list, r)
+			}
+		}
+		s.recent = list
+		s.edit = ops.EditCache{}
+		if _, err := s.open(newDir); err != nil {
+			return nil, fmt.Errorf("フォルダの名前は %s に変えましたが、開けませんでした: %v", newDir, err)
+		}
+	}
+	if err := s.env.SetCaseName(clean, s.now()); err != nil {
+		return nil, err
+	}
+	s.remember(newDir, clean)
+	return s.home(s.env)
 }

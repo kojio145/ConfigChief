@@ -33,6 +33,10 @@ type Added struct {
 	Clash   []string
 	Skipped []string // "<name>: why", the files that were left out
 	Backups []string // the copies of the files written over
+	// Excel are the Excel files that came for the configurations (old,
+	// new): they are not copied; a person picks the columns that are made
+	// into files (spec 14.16.4).
+	Excel []string
 }
 
 // AddInputs copies files a person chose into input/<source> (spec 4.2,
@@ -46,7 +50,7 @@ func (e *Env) AddInputs(source string, paths []string, overwrite bool, now time.
 		return nil, fmt.Errorf("「%s」にはファイルを足せません（old・new・logs・customer）", source)
 	}
 	rel := "input/" + source
-	out := &Added{Folder: rel, Copied: []string{}, Same: []string{}, Clash: []string{}, Skipped: []string{}, Backups: []string{}}
+	out := newAdded(rel)
 	type item struct{ name, path string }
 	var items []item
 	seen := map[string]bool{}
@@ -96,6 +100,10 @@ func (e *Env) AddInputs(source string, paths []string, overwrite bool, now time.
 			out.Skipped = append(out.Skipped, name+": . か ~$ で始まる名前のファイルは読まないので、写しません")
 			continue
 		}
+		if (source == "old" || source == "new") && IsExcel(name) {
+			out.Excel = append(out.Excel, it.path)
+			continue
+		}
 		if source == "customer" {
 			if ext := strings.ToLower(filepath.Ext(name)); ext != ".xlsx" && ext != ".xls" && ext != ".csv" {
 				out.Skipped = append(out.Skipped, name+": 外部一覧に置けるのは xlsx・xls・csv だけです")
@@ -116,41 +124,60 @@ func (e *Env) AddInputs(source string, paths []string, overwrite bool, now time.
 			out.Skipped = append(out.Skipped, name+": 読めません")
 			continue
 		}
-		dst := e.Proj.Path(rel + "/" + name)
-		if same, err := filepath.Abs(it.path); err == nil {
-			if d, err := filepath.Abs(dst); err == nil && strings.EqualFold(same, d) {
-				out.Same = append(out.Same, name)
-				continue
+		same := false
+		if a, err := filepath.Abs(it.path); err == nil {
+			if d, err := filepath.Abs(e.Proj.Path(rel + "/" + name)); err == nil && strings.EqualFold(a, d) {
+				same = true
 			}
 		}
-		if have, err := os.ReadFile(dst); err == nil {
-			if bytes.Equal(have, data) {
-				out.Same = append(out.Same, name)
-				continue
-			}
-			if !overwrite {
-				out.Clash = append(out.Clash, name)
-				continue
-			}
-			bk := fmt.Sprintf("state/backup/input_%s_%s_%s", source, project.Stamp(now), name)
-			if err := os.MkdirAll(e.Proj.Path("state/backup"), 0o755); err != nil {
-				return nil, err
-			}
-			if err := os.WriteFile(e.Proj.Path(bk), have, 0o644); err != nil {
-				return nil, fmt.Errorf("%s の控えを書けません: %v", name, err)
-			}
-			out.Backups = append(out.Backups, bk)
+		if same {
+			out.Same = append(out.Same, name)
+			continue
 		}
-		if err := os.WriteFile(dst, data, 0o644); err != nil {
-			return nil, fmt.Errorf("%s/%s を書けません: %v", rel, name, err)
+		if err := e.putInput(out, source, name, data, overwrite, now); err != nil {
+			return nil, err
 		}
-		out.Copied = append(out.Copied, name)
 	}
 	sort.Strings(out.Copied)
 	if len(out.Copied) > 0 {
 		e.Proj.Log(now, "add: %s に %d ファイルを写しました（上書き %d）", rel, len(out.Copied), len(out.Backups))
 	}
 	return out, nil
+}
+
+func newAdded(rel string) *Added {
+	return &Added{Folder: rel, Copied: []string{}, Same: []string{}, Clash: []string{}, Skipped: []string{}, Backups: []string{}, Excel: []string{}}
+}
+
+// putInput writes one file into input/<source>: a file of the same content
+// is left as it is, another content is written over only with overwrite and
+// is copied to state/backup first (spec 14.10.1).
+func (e *Env) putInput(out *Added, source, name string, data []byte, overwrite bool, now time.Time) error {
+	rel := "input/" + source
+	dst := e.Proj.Path(rel + "/" + name)
+	if have, err := os.ReadFile(dst); err == nil {
+		if bytes.Equal(have, data) {
+			out.Same = append(out.Same, name)
+			return nil
+		}
+		if !overwrite {
+			out.Clash = append(out.Clash, name)
+			return nil
+		}
+		bk := fmt.Sprintf("state/backup/input_%s_%s_%s", source, project.Stamp(now), name)
+		if err := os.MkdirAll(e.Proj.Path("state/backup"), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(e.Proj.Path(bk), have, 0o644); err != nil {
+			return fmt.Errorf("%s の控えを書けません: %v", name, err)
+		}
+		out.Backups = append(out.Backups, bk)
+	}
+	if err := os.WriteFile(dst, data, 0o644); err != nil {
+		return fmt.Errorf("%s/%s を書けません: %v", rel, name, err)
+	}
+	out.Copied = append(out.Copied, name)
+	return nil
 }
 
 // Said tells what AddInputs did, in a few lines.
@@ -167,6 +194,9 @@ func (a *Added) Said() string {
 	}
 	if len(a.Skipped) > 0 {
 		lines = append(lines, "写さなかったもの:\n  "+strings.Join(a.Skipped, "\n  "))
+	}
+	if len(a.Excel) > 0 {
+		lines = append(lines, fmt.Sprintf("Excel のファイル %d 個は写さずに、コンフィグにする列を選びます", len(a.Excel)))
 	}
 	if len(lines) == 0 {
 		return "写すファイルはありませんでした"

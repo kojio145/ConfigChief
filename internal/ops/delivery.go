@@ -635,3 +635,54 @@ func putValue(data []byte, group, key, value string) ([]byte, error) {
 	}
 	return buf.Bytes(), nil
 }
+
+// SetCaseName writes the name of the case into project.yaml (spec 14.16.3).
+// The folder is renamed by the caller; this only writes the name.
+func (e *Env) SetCaseName(name string, now time.Time) error {
+	if e.Proj.Config.Name == name {
+		return nil
+	}
+	path := e.Proj.Path(project.ConfigFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("%s を読めません: %v", project.ConfigFile, err)
+	}
+	next, err := putTop(data, "name", name)
+	if err != nil {
+		return fmt.Errorf("%s を書き換えられません: %v", project.ConfigFile, err)
+	}
+	copyTo, err := e.copyToBackup(project.ConfigFile, "project", data, now)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, next, 0o644); err != nil {
+		return fmt.Errorf("%s を書けません: %v", project.ConfigFile, err)
+	}
+	was := e.Proj.Config.Name
+	e.Proj.Config.Name = name
+	e.Proj.Log(now, "案件名を「%s」から「%s」に変えました（控え %s）", was, name, copyTo)
+	return nil
+}
+
+// putTop sets a key at the top of a YAML file, keeping the other lines and
+// their comments.
+func putTop(data []byte, key, value string) ([]byte, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("先頭が設定の並びではありません")
+	}
+	setMap(doc.Content[0], key, &yaml.Node{Kind: yaml.ScalarNode, Value: value})
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
+		return nil, err
+	}
+	if err := enc.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
