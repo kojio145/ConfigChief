@@ -22,7 +22,7 @@
     imp: { source: "old", views: {}, tab: {}, lines: {}, pick: {}, onlyBad: false },
     jdg: newJdg(),
     folds: {}, // the folded rows of buttons that are open (spec 14.18.8)
-    map: { view: null, tab: "open", pin: "", book: null, replace: false, redo: null }, // pin: the part the next visit opens (spec 14.17.2); redo: making the proposals of 新旧対照表（ポート） again (spec 14.11.4)
+    map: { view: null, tab: "open", pin: "", book: null, replace: false, redo: null, link: null }, // link: the panel that ties the ports (spec 14.20); pin: the part the next visit opens (spec 14.17.2); redo: making the proposals of 新旧対照表（ポート） again (spec 14.11.4)
     cmp: { a: "old", b: "new", view: null, tab: 0 },
     diff: { a: "", b: "", view: null, shown: LINES, mode: "line", stamps: true, secrets: true, layout: "stack", cur: -1 },
     tree: newTree(),
@@ -571,7 +571,7 @@
     st.hint = "";
     st.imp = { source: "old", views: {}, tab: {}, lines: {}, pick: {}, onlyBad: false };
     st.jdg = newJdg();
-    st.map = { view: null, tab: "open", pin: "", book: null, replace: false, redo: null };
+    st.map = { view: null, tab: "open", pin: "", book: null, replace: false, redo: null, link: null };
     st.xtra = newXtra();
     st.cks = null;
     st.cmp = { a: "old", b: "new", view: null, tab: 0 };
@@ -2128,6 +2128,324 @@
           rows: rv.rows.map((r) => [r.newHost, r.oldIf, r.was || "（空）", r.wasBasis, r.now || "（空）", r.basis]) }, { id: "redo/rows" }) : null) : null);
   }
 
+  // ---- 機器ごとに結ぶ (spec 14.20) ----
+  //
+  // st.map.link holds the panel: ifs and devs are the sheets 新旧対照表（ポート）
+  // and 新旧対照表（機器） as the book has them, pend the new interface names
+  // picked here (sheet row → name) that are not saved yet.
+
+  const BARE_NOW = ["（設定なし）", "無効（shutdown）"];
+
+  async function openLink(host) {
+    if (st.home && st.home.draft) {
+      st.edit.msg = "表の編集に、保存していない変更があります。先に「保存」するか「下書きを捨てる」を押してから、もう一度「機器ごとに結ぶ」を押してください";
+      openEdit({ sheet: "@ifs" });
+      return;
+    }
+    const lk = st.map.link || { host: "", sel: 0, pend: {}, copy: null, typed: "" };
+    await run("新旧対照表（ポート）を読んでいます", async () => {
+      lk.ifs = await api().EditSheet("@ifs");
+      lk.devs = await api().EditSheet("@devices");
+    });
+    if (!lk.ifs) return;
+    st.map.link = lk;
+    const hosts = linkHosts(lk);
+    if (!hosts.includes(lk.host)) lk.host = hosts.find((x) => linkLeft(lk, x) > 0) || hosts[0] || "";
+    linkPickFirst(lk);
+    render();
+  }
+
+  function linkCols(v) {
+    const k = (key) => v.columns.findIndex((c) => c.key === key);
+    return { host: k("new_host"), oldHost: k("old_host"), old: k("old_if"), now: k("now"), neu: k("new_if"), basis: k("basis") };
+  }
+
+  // linkRows are the rows of 新旧対照表（ポート） of a new host, in the order of the sheet.
+  function linkRows(lk, host) {
+    const c = linkCols(lk.ifs);
+    return lk.ifs.rows.filter((r) => r.row && (r.cells[c.host] || "").trim() === host);
+  }
+
+  function linkHosts(lk) {
+    const c = linkCols(lk.ifs), seen = {}, out = [];
+    for (const r of lk.ifs.rows) {
+      const x = (r.cells[c.host] || "").trim();
+      if (x && !seen[x]) { seen[x] = true; out.push(x); }
+    }
+    return out;
+  }
+
+  // linkVal is the new interface name of a row with what was picked here.
+  function linkVal(lk, r) {
+    if (r.row in lk.pend) return lk.pend[r.row];
+    return (r.cells[linkCols(lk.ifs).neu] || "").trim();
+  }
+
+  function linkLeft(lk, host) {
+    return linkRows(lk, host).filter((r) => !linkVal(lk, r)).length;
+  }
+
+  function linkPickFirst(lk) {
+    const rows = linkRows(lk, lk.host);
+    if (rows.some((r) => r.row === lk.sel)) return;
+    const empty = rows.find((r) => !linkVal(lk, r));
+    lk.sel = empty ? empty.row : rows.length ? rows[0].row : 0;
+  }
+
+  // linkSet puts a name into a row; "" empties it.
+  function linkSet(lk, r, name) {
+    const base = (r.cells[linkCols(lk.ifs).neu] || "").trim();
+    if (name === base) delete lk.pend[r.row];
+    else lk.pend[r.row] = name;
+  }
+
+  // linkNext moves the pick to the next row without a new name: below it
+  // first, then from the top.
+  function linkNext(lk) {
+    const rows = linkRows(lk, lk.host);
+    const i = rows.findIndex((r) => r.row === lk.sel);
+    const after = rows.slice(i + 1).concat(rows.slice(0, i + 1));
+    const next = after.find((r) => !linkVal(lk, r));
+    if (next) lk.sel = next.row;
+  }
+
+  // linkTie gives the picked old interface the name; one that had it is
+  // emptied (spec 14.20.1).
+  function linkTie(name) {
+    const lk = st.map.link;
+    name = (name || "").trim();
+    const rows = linkRows(lk, lk.host);
+    const r = rows.find((x) => x.row === lk.sel);
+    if (!r || !name) return;
+    let moved = "";
+    if (name !== "-") {
+      const c = linkCols(lk.ifs);
+      for (const o of rows) {
+        if (o !== r && linkVal(lk, o) === name) {
+          linkSet(lk, o, "");
+          moved = (o.cells[c.old] || "").trim();
+        }
+      }
+    }
+    linkSet(lk, r, name);
+    lk.msg = moved ? `${name} は旧 ${moved} から外して、こちらに結びました（旧 ${moved} は未決になりました）` : "";
+    linkNext(lk);
+    render();
+  }
+
+  function linkClear() {
+    const lk = st.map.link;
+    const r = linkRows(lk, lk.host).find((x) => x.row === lk.sel);
+    if (!r) return;
+    linkSet(lk, r, "");
+    lk.msg = "";
+    render();
+  }
+
+  function linkDropBare() {
+    const lk = st.map.link, c = linkCols(lk.ifs);
+    let n = 0;
+    for (const r of linkRows(lk, lk.host)) {
+      if (linkVal(lk, r) || !BARE_NOW.includes((r.cells[c.now] || "").trim())) continue;
+      linkSet(lk, r, "-");
+      n++;
+    }
+    lk.msg = n ? `設定のない旧 IF ${n} 行に - を入れました（保存すると書きます）` : "設定のない旧 IF で、新 IF 名が空の行はありませんでした";
+    linkNext(lk);
+    render();
+  }
+
+  // linkDevice gives the new vendor and model of a new host.
+  function linkDevice(lk, host) {
+    const v = lk.devs;
+    if (!v) return { vendor: "", model: "" };
+    const k = (key) => v.columns.findIndex((c) => c.key === key);
+    const h = k("new_host"), ve = k("new_vendor"), m = k("new_model");
+    const r = v.rows.find((x) => (x.cells[h] || "").trim() === host);
+    return r ? { vendor: (r.cells[ve] || "").trim(), model: (r.cells[m] || "").trim() } : { vendor: "", model: "" };
+  }
+
+  // linkShapes are the devices the names of a host can be copied to (spec
+  // 14.20.2): the same new model, with some old interface names alike.
+  function linkShapes(lk) {
+    const c = linkCols(lk.ifs);
+    const src = linkDevice(lk, lk.host);
+    const mine = new Set(linkRows(lk, lk.host).map((r) => (r.cells[c.old] || "").trim()));
+    const out = [];
+    for (const x of linkHosts(lk)) {
+      if (x === lk.host) continue;
+      const d = linkDevice(lk, x);
+      if (d.model !== src.model || (!src.model && d.vendor !== src.vendor)) continue;
+      const olds = linkRows(lk, x).map((r) => (r.cells[c.old] || "").trim());
+      const hit = olds.filter((o) => mine.has(o)).length;
+      if (!hit) continue;
+      const same = hit === olds.length && new Set(olds).size === mine.size;
+      out.push({ host: x, hit, all: olds.length, same });
+    }
+    return out;
+  }
+
+  function linkCopyOpen() {
+    const lk = st.map.link;
+    const picked = {};
+    for (const s of linkShapes(lk)) picked[s.host] = s.same;
+    lk.copy = { picked };
+    render();
+  }
+
+  function linkCopy() {
+    const lk = st.map.link, c = linkCols(lk.ifs);
+    const names = {};
+    for (const r of linkRows(lk, lk.host)) {
+      const v = linkVal(lk, r);
+      if (v) names[(r.cells[c.old] || "").trim()] = v;
+    }
+    let hosts = 0, n = 0, kept = 0;
+    for (const x of Object.keys(lk.copy.picked).filter((y) => lk.copy.picked[y])) {
+      let any = false;
+      for (const r of linkRows(lk, x)) {
+        const v = names[(r.cells[c.old] || "").trim()];
+        if (!v) continue;
+        const base = (r.cells[c.neu] || "").trim(), basis = (r.cells[c.basis] || "").trim();
+        // A name a person wrote stays: in the book (no basis), or here.
+        if (r.row in lk.pend || (base && !basis)) {
+          if (linkVal(lk, r) !== v) kept++;
+          continue;
+        }
+        if (base === v) continue;
+        linkSet(lk, r, v);
+        n++;
+        any = true;
+      }
+      if (any) hosts++;
+    }
+    lk.copy = null;
+    lk.msg = (n ? `${hosts} 台の ${n} 行に、${lk.host} の新 IF 名を写しました（保存すると書きます）` : "写す行はありませんでした")
+      + (kept ? `。人が書いた新 IF 名の ${kept} 行は変えていません` : "");
+    render();
+  }
+
+  async function linkSave() {
+    const lk = st.map.link, c = linkCols(lk.ifs);
+    const changed = [];
+    for (const r of lk.ifs.rows) {
+      if (!(r.row in lk.pend)) continue;
+      changed.push({ row: r.row,
+        key: { new_host: (r.cells[c.host] || "").trim(), old_if: (r.cells[c.old] || "").trim() },
+        old: { new_if: r.cells[c.neu] || "" }, new: { new_if: lk.pend[r.row] } });
+    }
+    if (!changed.length) {
+      lk.msg = "保存する変更はありません";
+      render();
+      return;
+    }
+    if (!(await ask("新旧対照表（ポート）を保存", `結んだ ${changed.length} 行の新 IF 名を、パラメータブック ${st.cas.book} に書きます。書く前に、今のブックの控えを state/backup に取ります。Excel でブックを開いているときは、先に閉じてください。`, "保存する"))) return;
+    let res = null;
+    await run("新旧対照表（ポート）を保存しています", async () => {
+      await api().EditDraft({ sheet: "@ifs", changed, added: [], deleted: [], columns: [] });
+      res = await api().EditSave({});
+    });
+    if (!res) return; // what went wrong is shown; the draft is in the table editor
+    if (!res.saved) {
+      // The book was changed elsewhere: the table editor shows what clashes.
+      st.edit.msg = "パラメータブックが、結ぶ欄を開いた後にほかで変わっていました。下の表で確かめて「保存」を押してください";
+      st.map.link = null;
+      openEdit({ sheet: "@ifs" });
+      return;
+    }
+    lk.pend = {};
+    lk.msg = `${changed.length} 行を保存しました`;
+    await run("新旧対照表を読み直しています", async () => {
+      lk.ifs = await api().EditSheet("@ifs");
+      lk.devs = await api().EditSheet("@devices");
+      st.map.view = await api().Mapping();
+      if (st.home) st.home = await api().Home();
+    });
+    askNext();
+  }
+
+  async function linkClose() {
+    const lk = st.map.link;
+    const n = Object.keys(lk.pend).length;
+    if (n && !(await ask("結ぶ欄を閉じる", `保存していない ${n} 行の割り当てを捨てます。`, "捨てて閉じる"))) return;
+    st.map.link = null;
+    render();
+  }
+
+  function linkCard() {
+    const lk = st.map.link, c = linkCols(lk.ifs);
+    const hosts = linkHosts(lk);
+    if (!hosts.length) {
+      return h("div", { class: "card", id: "link" }, h("h2", null, "機器ごとに結ぶ"),
+        h("p", null, "新旧対照表（ポート）に行がありません。先に「1. 新旧対照表（機器）」で新ホスト名を書いて保存してください。"),
+        h("div", { class: "row" }, button("閉じる", linkClose)));
+    }
+    const rows = linkRows(lk, lk.host);
+    const col = lk.ifs.columns[c.neu] || {};
+    const choices = ((col.choiceSets && col.choiceSets[lk.host]) || []).filter((x) => x !== "-");
+    // Names written here that the list does not have (typed ones).
+    for (const r of rows) {
+      const v = linkVal(lk, r);
+      if (v && v !== "-" && !choices.includes(v)) choices.push(v);
+    }
+    const holder = {};
+    for (const r of rows) {
+      const v = linkVal(lk, r);
+      if (v && v !== "-") (holder[v] = holder[v] || []).push((r.cells[c.old] || "").trim());
+    }
+    const pendN = Object.keys(lk.pend).length;
+    const nextHost = hosts.find((x) => x !== lk.host && linkLeft(lk, x) > 0);
+    const dev = linkDevice(lk, lk.host);
+    const sel = rows.find((r) => r.row === lk.sel);
+    const shapes = lk.copy ? linkShapes(lk) : [];
+    const left = rows.map((r) => {
+      const v = linkVal(lk, r), now = (r.cells[c.now] || "").trim();
+      return h("div", { class: cls("link-item", r.row === lk.sel && "on", BARE_NOW.includes(now) && "bare", r.row in lk.pend && "pend"),
+        "data-old": (r.cells[c.old] || "").trim(), onclick: () => { lk.sel = r.row; lk.msg = ""; render(); } },
+      h("div", { class: "link-name" }, (r.cells[c.old] || "").trim(), h("span", { class: "link-to" }, "→ " + (v === "-" ? "-（持っていかない）" : v || "（未決）"))),
+      h("div", { class: "link-now dim small" }, now));
+    });
+    const right = choices.map((x) => {
+      const by = holder[x];
+      return h("div", { class: cls("link-item", !by && "free"), "data-port": x, onclick: () => linkTie(x) },
+        h("div", { class: "link-name" }, x, col.choiceNotes && col.choiceNotes[x] ? h("span", { class: "dim small" }, " " + col.choiceNotes[x]) : null),
+        h("div", { class: "dim small" }, by ? "← 旧 " + by.join(", ") : "空き"));
+    });
+    return h("div", { class: "card", id: "link" },
+      h("h2", null, "機器ごとに結ぶ"),
+      h("p", null, "左で旧 IF を押してから、右で新しい IF を押すと結ばれます。結ぶと、左は次の未決の旧 IF へ進みます。全部結んだら「保存」を押してください。"),
+      h("div", { class: "row" },
+        h("span", null, "機器: "),
+        select(hosts.map((x) => { const n = linkLeft(lk, x); return [x, `${x}（${n ? "残り " + n : "済み"}）`]; }), lk.host,
+          (x) => { lk.host = x; lk.sel = 0; lk.copy = null; lk.msg = ""; linkPickFirst(lk); render(); }),
+        nextHost ? button("残りのある次の機器へ", () => { lk.host = nextHost; lk.sel = 0; lk.copy = null; lk.msg = ""; linkPickFirst(lk); render(); }, { id: "link-next-host" }) : null,
+        h("span", { class: "dim small" }, dev.model ? `新機種: ${dev.model}` : "新機種が空です（右に出るのは、この機器に書かれている名前だけです）")),
+      lk.msg ? h("div", { class: "box info", id: "link-msg" }, lk.msg) : null,
+      h("div", { class: "link-grid" },
+        h("div", null, h("h3", null, "旧 IF"), h("div", { class: "link-list", id: "link-old" }, left),
+          h("div", { class: "row" },
+            button("-（持っていかない）", () => linkTie("-"), { disabled: !sel, id: "link-drop" }),
+            button("外す（空にする）", linkClear, { disabled: !sel, id: "link-clear" }),
+            button("設定のない旧 IF を「-」にする", linkDropBare, { id: "link-bare" }))),
+        h("div", null, h("h3", null, "新しい IF"), h("div", { class: "link-list", id: "link-new" }, right.length ? right : h("p", { class: "dim" }, "候補がありません。下に名前を打って結んでください。")),
+          h("div", { class: "row" },
+            h("input", { type: "text", value: lk.typed, placeholder: "一覧に無い名前", id: "link-typed", oninput: (e) => { lk.typed = e.target.value; },
+              onkeydown: (e) => { if (e.key === "Enter") { linkTie(lk.typed); lk.typed = ""; } } }),
+            button("結ぶ", () => { linkTie(lk.typed); lk.typed = ""; }, { disabled: !sel, id: "link-typed-go" })))),
+      lk.copy ? h("div", { class: "box", id: "link-copy" },
+        h("p", null, `${lk.host} の新 IF 名を、同じ旧 IF 名の行に写します（新機種が同じ機器だけ）。空の行と、ツールの案のままの行に入れます。人が書いた新 IF 名は変えません。`),
+        shapes.length ? h("div", { class: "row redo-hosts" }, shapes.map((s) => h("label", null,
+          h("input", { type: "checkbox", checked: !!lk.copy.picked[s.host], "data-host": s.host, onchange: (e) => { lk.copy.picked[s.host] = e.target.checked; render(); } }),
+          ` ${s.host}（${s.same ? "同じ形" : `重なる旧 IF ${s.hit} / ${s.all}`}）`))) : h("p", { class: "dim" }, "写せる機器がありません（新機種が同じで、旧 IF 名が重なる機器がありません）。"),
+        h("div", { class: "row" },
+          button("写す", linkCopy, { class: "primary", disabled: !shapes.some((s) => lk.copy.picked[s.host]), id: "link-copy-go" }),
+          button("やめる", () => { lk.copy = null; render(); }))) : null,
+      h("div", { class: "row" },
+        button(pendN ? `保存（${pendN} 行）` : "保存", linkSave, { class: "primary", disabled: !pendN, id: "link-save" }),
+        button("この割り当てを同じ形の機器へ写す", linkCopyOpen, { id: "link-copy-open", disabled: !!lk.copy }),
+        button(pendN ? "やめる（捨てる）" : "閉じる", linkClose, { id: "link-close" })));
+  }
+
   // loadNext asks for the steps of the case and the next thing to do (spec
   // 14.10.4, 14.12.1). The home is drawn first; the answer comes after it,
   // at once without counting the unhandled lines, then with them.
@@ -2220,6 +2538,8 @@
       st.hint = "";
     }
     if (act === "edit-first") st.hint = "";
+    // The ports are tied in the panel first (spec 14.20.1).
+    if (act === "edit-ifs") st.hint = "link-open";
   }
 
   // goStep goes to the screen of a step, and points at its button.
@@ -2392,8 +2712,10 @@
           h("li", null, "新 IF 名が空の行は、ツールが決められなかった所です。「表で編集する」で新 IF 名を書きます"),
           h("li", null, "新しい機器に持っていかない IF は、新 IF 名に - と書きます")),
         h("p", null, left ? `新 IF 名が空の行: ${left} 行` : "新 IF 名はすべて決まっています。"),
+        h("p", null, "「機器ごとに結ぶ」で、旧 IF と新しい IF を左右に並べて、押して結べます。形が同じ機器が何台もあるときは、1 台を結んでから「この割り当てを同じ形の機器へ写す」を押します。"),
         h("div", { class: "row" },
-          button("表で編集する", () => openEdit({ sheet: "@ifs" }), { class: "primary", id: "edit-ifs" }),
+          button("機器ごとに結ぶ", () => openLink(""), { class: mp.link ? null : "primary", id: "link-open", disabled: !!mp.link }),
+          button("表で編集する", () => openEdit({ sheet: "@ifs" }), { id: "edit-ifs" }),
           button("案を作る", proposeIfs, { id: "propose-ifs",
             title: "input/old を読み直し、新ホスト名を書いた機器の 新旧対照表（ポート）の行を足し、空の新 IF 名を案で埋めます（人が書いた名前と - は変えません）。Excel で新旧対照表（機器）を書いたときに押してください" }),
           button("案を作り直す", () => openRedo([]), { disabled: !(v.hosts || []).length, id: "redo-ifs",
@@ -2401,7 +2723,8 @@
           excel, reload),
         h("p", { class: "dim small" }, "直して保存すると、3. 確かめて書く へ進みます。"),
         mp.redo ? redoCard(v) : null,
-        tableView(v.ifs, { id: "mapping/ifs" }));
+        mp.link ? linkCard() : null,
+        mp.link ? null : tableView(v.ifs, { id: "mapping/ifs" }));
       out.push(card);
     } else {
       const open = v.open.rows.length;
