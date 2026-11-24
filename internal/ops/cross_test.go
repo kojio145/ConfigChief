@@ -131,7 +131,7 @@ func TestCrossVendor(t *testing.T) {
 	}
 	got := strings.ReplaceAll(read(t, e, o.Devices[0].File), "\r\n", "\n")
 	if os.Getenv("CROSS_WRITE") != "" {
-		os.WriteFile(filepath.Join("testdata", "cross", "ix-c01.txt"), []byte(got), 0o644)
+		writeTestFile(filepath.Join("testdata", "cross", "ix-c01.txt"), []byte(got), 0o644)
 	}
 	want, err := os.ReadFile(filepath.Join("testdata", "cross", "ix-c01.txt"))
 	if err != nil {
@@ -229,7 +229,7 @@ func TestCrossVendor(t *testing.T) {
 func TestGenerateManyFailures(t *testing.T) {
 	e := genCase(t, map[string]string{"input/new/rt-c01.txt": rendered(t, "cisco_ios")})
 	text := strings.Repeat("{{ fail('sample stop') }}\n", 3)
-	if err := os.WriteFile(e.Proj.Path("extra/rt-c01.j2"), []byte(text), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("extra/rt-c01.j2"), []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	o, err := e.Generate(GenOptions{}, at)
@@ -246,7 +246,7 @@ func TestGenerateManyFailures(t *testing.T) {
 	}
 
 	text = strings.Repeat("{{ fail('sample stop') }}\n", 25)
-	if err := os.WriteFile(e.Proj.Path("extra/rt-c01.j2"), []byte(text), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("extra/rt-c01.j2"), []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if o, err = e.Generate(GenOptions{}, at); err != nil {

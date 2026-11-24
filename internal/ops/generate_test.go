@@ -451,11 +451,11 @@ func TestGenerateOptions(t *testing.T) {
 
 func TestGenerateExtra(t *testing.T) {
 	e := genCase(t, map[string]string{"input/new/rt-c01.txt": rendered(t, "cisco_ios")})
-	if err := os.WriteFile(e.Proj.Path("extra/rt-c01.j2"), []byte("service sequence-numbers\n!\n"), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("extra/rt-c01.j2"), []byte("service sequence-numbers\n!\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// A file for a device that is not there is told about, not dropped in silence.
-	if err := os.WriteFile(e.Proj.Path("extra/rt-z99.j2"), []byte("service sequence-numbers\n"), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("extra/rt-z99.j2"), []byte("service sequence-numbers\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	o, err := e.Generate(GenOptions{}, at)

@@ -51,9 +51,9 @@ type Made struct {
 }
 
 // CreateFrom makes a case that takes the settings of one before.
-func (a *App) CreateFrom(dir, name, kind, from string, parts []string) (r0 *Made, err error) {
+func (a *App) CreateFrom(name, kind, from string, parts []string) (r0 *Made, err error) {
 	defer a.guard("CreateFrom", &err)
-	h, said, err := a.s.CreateFrom(dir, name, kind, from, parts)
+	h, said, err := a.s.NewCaseFrom(name, kind, from, parts)
 	if err != nil {
 		return nil, err
 	}
@@ -61,9 +61,9 @@ func (a *App) CreateFrom(dir, name, kind, from string, parts []string) (r0 *Made
 }
 
 // SampleCase makes the sample case (spec 14.12.7).
-func (a *App) SampleCase(dir string) (r0 *Made, err error) {
+func (a *App) SampleCase() (r0 *Made, err error) {
 	defer a.guard("SampleCase", &err)
-	h, said, err := a.s.SampleCase(dir)
+	h, said, err := a.s.NewSample()
 	if err != nil {
 		return nil, err
 	}

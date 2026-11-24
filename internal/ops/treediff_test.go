@@ -42,7 +42,7 @@ func TestTreeFiles(t *testing.T) {
 	log := host + "#show clock\n10:00:00.000 JST Mon Nov 2 2026\n" + host + "#show running-config\nBuilding configuration...\n\nCurrent configuration : 2000 bytes\n" +
 		strings.Replace(text, "hostname "+host+"\n", "hostname "+host+"\nservice sequence-numbers\n", 1) + host + "#exit\n"
 	for p, s := range map[string]string{a: text, b: log} {
-		if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
+		if err := writeTestFile(p, []byte(s), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -75,11 +75,11 @@ func TestTreeFiles(t *testing.T) {
 
 	// A text no pack knows is compared as it stands.
 	c := filepath.Join(dir, "c.txt")
-	if err := os.WriteFile(c, []byte("alpha\n beta 1\n"), 0o644); err != nil {
+	if err := writeTestFile(c, []byte("alpha\n beta 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	d := filepath.Join(dir, "d.txt")
-	if err := os.WriteFile(d, []byte("alpha\n beta 2\n"), 0o644); err != nil {
+	if err := writeTestFile(d, []byte("alpha\n beta 2\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	p, err = TreeFiles(ps, c, d, treeOpt)
@@ -134,7 +134,7 @@ func TestTreeDiffSides(t *testing.T) {
 		"input/logs/empty.txt":   "",
 	}
 	for rel, text := range files {
-		if err := os.WriteFile(e.Proj.Path(rel), []byte(text), 0o644); err != nil {
+		if err := writeTestFile(e.Proj.Path(rel), []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -179,7 +179,7 @@ func TestTreeDiffSides(t *testing.T) {
 	// differ.
 	dir := t.TempDir()
 	for _, dev := range gen.Devices {
-		if err := os.WriteFile(filepath.Join(dir, dev.Host+".cfg"), []byte(dev.Output.Text), 0o644); err != nil {
+		if err := writeTestFile(filepath.Join(dir, dev.Host+".cfg"), []byte(dev.Output.Text), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -207,7 +207,7 @@ func TestTreeDiffRenamed(t *testing.T) {
 		t.Fatal(err)
 	}
 	setCell(t, e, "新旧対照表（機器）", "旧ホスト名", "rt-s01", "新ホスト名", "rt-n01")
-	if err := os.WriteFile(e.Proj.Path("input/new/n.txt"), []byte(strings.Replace(old, "hostname rt-s01\n", "hostname rt-n01\n", 1)), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("input/new/n.txt"), []byte(strings.Replace(old, "hostname rt-s01\n", "hostname rt-n01\n", 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, sides := range [][2]string{{"old", "new"}, {"new", "old"}} {

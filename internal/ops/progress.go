@@ -402,8 +402,8 @@ func (e *Env) newestDelivery() time.Time {
 		}
 		entries, _ := os.ReadDir(e.Proj.Path(d))
 		for _, ent := range entries {
-			if strings.HasPrefix(ent.Name(), deliveryPrefix) && ent.IsDir() {
-				later(d + "/" + ent.Name() + "/" + deliveryDone)
+			if done := deliveryDoneOf(ent.Name()); done != "" && ent.IsDir() {
+				later(d + "/" + ent.Name() + "/" + done)
 			}
 		}
 	}

@@ -42,7 +42,7 @@ func newCase(t *testing.T, files map[string]string) *Env {
 		t.Fatal(err)
 	}
 	for rel, text := range files {
-		if err := os.WriteFile(p.Path(rel), []byte(text), 0o644); err != nil {
+		if err := writeTestFile(p.Path(rel), []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -72,7 +72,7 @@ func TestOpenCasePack(t *testing.T) {
 	if err := os.MkdirAll(e.Proj.Path("packs/broken"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(e.Proj.Path("packs/broken/pack.yaml"), []byte("id: broken\ncolour: red\n"), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("packs/broken/pack.yaml"), []byte("id: broken\ncolour: red\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	e, err := Open(e.Proj.Dir)

@@ -38,12 +38,12 @@
 <tr><td>インストール</td><td>しません。スタートメニュー・サービス・常駐・自動起動の登録はありません</td></tr>
 <tr><td>レジストリ</td><td>書きません。読むのは、最新版の確認のときのプロキシの設定だけです</td></tr>
 <tr><td>管理者の権限</td><td>要りません</td></tr>
-<tr><td>消し方</td><td>exe と、下の「書き込む場所」の <code>%APPDATA%\ConfigChief</code> フォルダを消すだけです</td></tr>
+<tr><td>消し方</td><td>exe と、下の「書き込む場所」の <code>%APPDATA%\ConfigChief</code> フォルダを消すだけです（案件は、要らなければ <code>projects</code> フォルダごと消します）</td></tr>
 </table>
 <h2>書き込む場所</h2>
 <ul>
-<li>利用者が作った<b>案件フォルダ</b>の中（パラメータブック・作ったコンフィグ・レポート・操作の記録）</li>
-<li><code>%APPDATA%\ConfigChief</code>（最近使った案件の一覧・画面の拡大率・窓の位置と大きさ・内部エラーの記録 <code>error.log</code>・画面の作業フォルダ）</li>
+<li>利用者が作った<b>案件フォルダ</b>の中（パラメータブック・作ったコンフィグ・レポート・操作の記録）。案件フォルダは、ふだんは exe の隣の <code>projects</code> フォルダの下に作ります（利用者が別の場所に変えることもできます）</li>
+<li><code>%APPDATA%\ConfigChief</code>（最近使った案件の一覧・案件の置き場所を変えたときはその場所・画面の拡大率・窓の位置と大きさ・内部エラーの記録 <code>error.log</code>・画面の作業フォルダ）</li>
 </ul>
 <p>ほかの場所には書きません。<code>error.log</code> に、コンフィグや表の値は入りません。</p>
 <h2>通信</h2>

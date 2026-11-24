@@ -533,3 +533,5 @@ details.nav-others[open] > summary.nav-group-title { margin-bottom: 2px; }
 details.nav-others > button { display: block; width: 100%; }
 details.nav-others > summary.nav-group-title::before { content: "▸ "; }
 details.nav-others[open] > summary.nav-group-title::before { content: "▾ "; }
+
+#create-from { max-width: 100%; }

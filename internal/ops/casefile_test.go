@@ -102,7 +102,7 @@ func TestExportCaseWithoutSecrets(t *testing.T) {
 	}
 	// The book: no secret left in any cell, the masks in their place.
 	path := filepath.Join(t.TempDir(), "b.xlsx")
-	os.WriteFile(path, files["parameters.xlsx"], 0o644)
+	writeTestFile(path, files["parameters.xlsx"], 0o644)
 	f, err := excelize.OpenFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -151,8 +151,8 @@ func TestImportCase(t *testing.T) {
 	if paths, _ := e2.Proj.Inputs("old"); len(paths) != 1 {
 		t.Errorf("the inputs: %v", paths)
 	}
-	if st, err := os.Stat(filepath.Join(got.Dir, "out")); err != nil || !st.IsDir() {
-		t.Error("the folders of a case are made")
+	if _, err := os.Stat(filepath.Join(got.Dir, "out")); err == nil {
+		t.Error("out is made before it is used (spec 14.15.5)")
 	}
 	again, err := ImportCase(x.Data, "correct horse", parent)
 	if err != nil || again.Dir == got.Dir || !strings.HasSuffix(again.Dir, "_2") {

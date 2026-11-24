@@ -67,7 +67,7 @@ func (e *Env) Outputs() []OutputDir {
 		}
 		if entries, err := os.ReadDir(e.Proj.Path(d)); err == nil {
 			for _, ent := range entries {
-				if ent.IsDir() && strings.HasPrefix(ent.Name(), deliveryPrefix) {
+				if ent.IsDir() && deliveryDoneOf(ent.Name()) != "" {
 					o.Kinds = append(o.Kinds, "納品一式")
 					if deliv == "" {
 						deliv = d

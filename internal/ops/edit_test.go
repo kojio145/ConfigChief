@@ -1,7 +1,6 @@
 package ops
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -206,7 +205,7 @@ func TestEditWithoutBook(t *testing.T) {
 	if _, err := e.EditSheet("devices"); err == nil {
 		t.Error("no error without a book")
 	}
-	if err := os.WriteFile(e.Proj.Path("state/draft.yaml"), []byte("version: 1\nsheets: []\n"), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("state/draft.yaml"), []byte("version: 1\nsheets: []\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if saved, err := e.SaveEdits(nil, at); err != nil || saved.Summary != nil {

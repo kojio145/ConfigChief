@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,7 +13,7 @@ func TestCaseExportImport(t *testing.T) {
 		t.Fatalf("%+v %v", v, err)
 	}
 	path := filepath.Join(t.TempDir(), v.Name)
-	os.WriteFile(path, data, 0o644)
+	writeTestFile(path, data, 0o644)
 	f, err := CaseFile(path)
 	if err != nil || !f.Sealed {
 		t.Fatalf("%+v %v", f, err)
@@ -37,7 +36,7 @@ func TestCaseExportImport(t *testing.T) {
 		t.Errorf("the case read back is open: %+v", st.Case)
 	}
 	other := filepath.Join(t.TempDir(), "x.txt")
-	os.WriteFile(other, []byte("hello"), 0o644)
+	writeTestFile(other, []byte("hello"), 0o644)
 	if _, err := CaseFile(other); err == nil {
 		t.Error("not a case file")
 	}

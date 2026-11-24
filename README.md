@@ -4,6 +4,7 @@
 ConfigChief reads router and switch configurations into a vendor-neutral table (an Excel "parameter book"), and writes configurations, a check report and delivery sheets back from that table. It is made for replacing devices, also across vendors.
 
 - One Windows exe. No installer, no listening port. No network access, except when you press "check for the latest version" on the version page: it then asks GitHub's public releases of ConfigChief, and nothing of your case is sent
+- Each case is a folder of text and Excel files, made under `projects` next to the exe
 - The same input always gives the same output (no AI, no randomness inside)
 - A line that could not be read is always listed as "unknown" — nothing is dropped silently
 - The program knows no vendor: everything about a vendor lives in a text "vendor pack"
@@ -63,7 +64,7 @@ License: [MIT](LICENSE). Third-party notices: [THIRD-PARTY-NOTICES.md](THIRD-PAR
 ## 使い方
 
 1. [Releases](../../releases) から `ConfigChief.exe` を取り、好きなフォルダに置いて起動します（WebView2 ランタイムが要ります。Windows 11 には初めから入っています）
-2. 「案件」で案件フォルダを作り、旧機器のコンフィグを `input/old/` に置いて「取り込み」
+2. 「案件」で案件名を入れて作り（exe の隣の `projects\<案件名>` にできます）、旧機器のコンフィグを `input/old/` に置いて「取り込み」
 3. 対応（旧ホスト名 → 新ホスト名・新メーカー・新機種、旧 IF 名 → 新 IF 名）を、画面の表か Excel で埋めて、パラメータブックにする
 4. 「生成とチェック」で、全台のコンフィグとチェック結果表が出ます
 

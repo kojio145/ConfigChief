@@ -67,7 +67,7 @@ func TestLoadCheck(t *testing.T) {
 		if err := os.MkdirAll(e.Proj.Path("input/logs"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(e.Proj.Path("input/logs/"+name), []byte(text), 0o644); err != nil {
+		if err := writeTestFile(e.Proj.Path("input/logs/"+name), []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

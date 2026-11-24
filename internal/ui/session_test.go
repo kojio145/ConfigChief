@@ -40,7 +40,7 @@ func newSession(t *testing.T, files map[string]string) (*Session, string) {
 		t.Fatal(err)
 	}
 	for rel, text := range files {
-		if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(rel)), []byte(text), 0o644); err != nil {
+		if err := writeTestFile(filepath.Join(dir, filepath.FromSlash(rel)), []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -147,7 +147,7 @@ func TestCases(t *testing.T) {
 	if st = s2.State(); len(st.Recent) != maxRecent || filepath.Base(st.Recent[0].Dir) != "more-11" {
 		t.Errorf("recent = %d, first %+v", len(st.Recent), st.Recent[0])
 	}
-	if err := os.WriteFile(settings, []byte("{broken"), 0o644); err != nil {
+	if err := writeTestFile(settings, []byte("{broken"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if st = New("1.2.3", settings).State(); len(st.Recent) != 0 {
@@ -169,7 +169,7 @@ func TestImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(cfg, []byte(strings.Replace(string(data), "mask_in_reports: true", "mask_in_reports: false", 1)), 0o644); err != nil {
+	if err := writeTestFile(cfg, []byte(strings.Replace(string(data), "mask_in_reports: true", "mask_in_reports: false", 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Lines("old", "input/old/a_cisco.txt"); err == nil || !strings.Contains(err.Error(), "先に取り込んでください") {
@@ -393,8 +393,8 @@ func TestDiff(t *testing.T) {
 	}
 	b[14] = "line fifteen"
 	pa, pb := filepath.Join(dir, "a.txt"), filepath.Join(dir, "b.txt")
-	os.WriteFile(pa, []byte(strings.Join(a, "\n")+"\n"), 0o644)
-	os.WriteFile(pb, []byte(strings.Join(b, "\r\n")), 0o644)
+	writeTestFile(pa, []byte(strings.Join(a, "\n")+"\n"), 0o644)
+	writeTestFile(pb, []byte(strings.Join(b, "\r\n")), 0o644)
 
 	v, err := s.Diff(pa, pa)
 	if err != nil {
@@ -449,7 +449,7 @@ func TestPath(t *testing.T) {
 	}
 	// Of the files, only a book or a report is given.
 	for _, name := range []string{"parameters.xlsx", "tool.exe", "project.bat"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+		if err := writeTestFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -1,7 +1,6 @@
 package ops
 
 import (
-	"os"
 	"testing"
 	"time"
 
@@ -33,7 +32,7 @@ func bulkCase(t *testing.T, n, lines int) *Env {
 	}
 	for _, f := range files {
 		for _, side := range []string{"input/old/", "input/new/"} {
-			if err := os.WriteFile(p.Path(side+f.Name), []byte(f.Text), 0o644); err != nil {
+			if err := writeTestFile(p.Path(side+f.Name), []byte(f.Text), 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}

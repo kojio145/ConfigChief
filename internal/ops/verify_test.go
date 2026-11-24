@@ -23,7 +23,7 @@ func verifyKinds(o *VerifyOutcome) []string {
 // configuration and a log of a device that is not of the case.
 func TestVerify(t *testing.T) {
 	e := exportCase(t)
-	if err := os.WriteFile(e.Proj.Path("extra/rt-s01.j2"), []byte("ip multicast-routing\nservice sequence-numbers\n!\n"), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("extra/rt-s01.j2"), []byte("ip multicast-routing\nservice sequence-numbers\n!\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.Verify(at); err == nil || !strings.Contains(err.Error(), "input/logs にファイルがありません") {
@@ -48,7 +48,7 @@ func TestVerify(t *testing.T) {
 		if err := os.MkdirAll(e.Proj.Path("input/logs"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(e.Proj.Path("input/logs/"+name), []byte(text), 0o644); err != nil {
+		if err := writeTestFile(e.Proj.Path("input/logs/"+name), []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

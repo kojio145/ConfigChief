@@ -181,12 +181,12 @@ func TestSitesBookAndLogs(t *testing.T) {
 	}
 	for _, d := range gen.Devices {
 		log := d.Host + "#show running-config\nBuilding configuration...\n\n" + d.Output.Text + d.Host + "#exit\n"
-		if err := os.WriteFile(e.Proj.Path("input/logs/"+d.Host+".txt"), []byte(log), 0o644); err != nil {
+		if err := writeTestFile(e.Proj.Path("input/logs/"+d.Host+".txt"), []byte(log), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
 	// A log that shows no configuration is told and left out.
-	if err := os.WriteFile(e.Proj.Path("input/logs/zz-state.txt"), []byte("rt-s01#show clock\n10:00:00.000 JST Mon Nov 2 2026\nrt-s01#exit\n"), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("input/logs/zz-state.txt"), []byte("rt-s01#show clock\n10:00:00.000 JST Mon Nov 2 2026\nrt-s01#exit\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	o, err = e.Sites("logs", at)

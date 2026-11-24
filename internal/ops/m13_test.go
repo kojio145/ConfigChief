@@ -103,7 +103,7 @@ func TestProgressSteps(t *testing.T) {
 
 	// A log put in is a step to do.
 	later()
-	if err := os.WriteFile(e.Proj.Path("input/logs/rt-a01.log"), []byte("rt-a01#show clock\n"), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("input/logs/rt-a01.log"), []byte("rt-a01#show clock\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if p, _ = e.Progress(OpenCount{Known: true}); stepOf(t, p, "logs").State != StepTodo {
@@ -147,6 +147,7 @@ func TestDeliveryAndRevisions(t *testing.T) {
 	f.SetCellStr("Sheet1", "A3", "{{#rows revisions}}{{ row.version }}")
 	f.SetCellStr("Sheet1", "B3", "{{ row.summary }}")
 	f.SetCellStr("Sheet1", "A4", "end")
+	os.MkdirAll(e.Proj.Path("templates"), 0o755)
 	if err := f.SaveAs(e.Proj.Path("templates/history.xlsx")); err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +172,7 @@ func TestDeliveryAndRevisions(t *testing.T) {
 	if o.Configs != 1 || o.Revision == nil || o.Unverified != unapproved {
 		t.Fatalf("outcome: %+v", o)
 	}
-	for _, want := range []string{"/configs/rt-a01.txt", "/チェック結果表.xlsx", "/history.xlsx", "/" + deliveryDone} {
+	for _, want := range []string{"/configs/rt-a01.txt", "/チェック結果表.xlsx", "/history.xlsx", "/" + deliveryWords["ja"].done} {
 		found := false
 		for _, f := range o.Files {
 			if strings.HasSuffix(f, want) {
@@ -186,7 +187,7 @@ func TestDeliveryAndRevisions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(z.File) != len(o.Files) || !strings.HasPrefix(z.File[0].Name, deliveryPrefix+"sample/") {
+	if len(z.File) != len(o.Files) || !strings.HasPrefix(z.File[0].Name, deliveryWords["ja"].prefix+"sample/") {
 		t.Errorf("zip: %d files (want %d), first %s", len(z.File), len(o.Files), z.File[0].Name)
 	}
 	z.Close()
@@ -266,6 +267,51 @@ func TestDeliveryAndRevisions(t *testing.T) {
 	if n, err := e.DropOutputs([]string{list[len(list)-1].Dir}, at); err != nil || n != 1 || len(e.Outputs()) != len(list)-1 {
 		t.Errorf("drop: %v, %d", err, n)
 	}
+
+	// The names of the set in English (spec 14.15.4): project.yaml keeps
+	// its other lines and comments, and the set is still known as one.
+	if _, err := e.SetDeliveryNames("fr", at); err == nil {
+		t.Error("a language that is not there was taken")
+	}
+	if bak, err := e.SetDeliveryNames("en", at); err != nil || bak == "" {
+		t.Fatalf("set en: %v, %q", err, bak)
+	}
+	if bak, err := e.SetDeliveryNames("en", at); err != nil || bak != "" {
+		t.Errorf("the same language twice wrote again: %v, %q", err, bak)
+	}
+	yml, _ := os.ReadFile(e.Proj.Path("project.yaml"))
+	if !strings.Contains(string(yml), "delivery_names: en") || !strings.Contains(string(yml), "# 止めるチェックの ID") {
+		t.Errorf("project.yaml: %s", yml)
+	}
+	again, err := Open(e.Proj.Dir)
+	if err != nil || again.Proj.Config.Export.DeliveryNames != "en" {
+		t.Fatalf("reopen: %v", err)
+	}
+	o, err = e.MakeDelivery(DeliveryOptions{AllowUnverified: true}, at.Add(6*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(o.Dir, "/delivery_sample") || !strings.Contains(o.Zip, "/delivery_sample_") {
+		t.Errorf("english set: %s, %s", o.Dir, o.Zip)
+	}
+	for _, want := range []string{"/check_results.xlsx", "/contents.txt", "/configs/rt-a01.txt"} {
+		found := false
+		for _, f := range o.Files {
+			found = found || strings.HasSuffix(f, want)
+		}
+		if !found {
+			t.Errorf("%s is not in the english set: %v", want, o.Files)
+		}
+	}
+	got := false
+	for _, x := range e.Outputs() {
+		for _, k := range x.Kinds {
+			got = got || k == "納品一式"
+		}
+	}
+	if !got {
+		t.Error("the english set is not in the list of the outputs")
+	}
 }
 
 // The sample case can be imported, and has unhandled lines to judge (spec
@@ -317,7 +363,7 @@ func TestCopyCaseSettings(t *testing.T) {
 	}
 	cfg := read(t, from, "project.yaml")
 	cfg = strings.Replace(cfg, "keep_words: []", "keep_words: [sample-word]", 1)
-	if err := os.WriteFile(from.Proj.Path("project.yaml"), []byte(cfg), 0o644); err != nil {
+	if err := writeTestFile(from.Proj.Path("project.yaml"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	to := filepath.Join(t.TempDir(), "next")

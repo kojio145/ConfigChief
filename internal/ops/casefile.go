@@ -356,8 +356,5 @@ func ImportCase(data []byte, password, parent string) (*CaseImport, error) {
 			return nil, fmt.Errorf("%s を書けません: %v", f.Path, err)
 		}
 	}
-	for _, d := range project.Folders {
-		os.MkdirAll(filepath.Join(dir, filepath.FromSlash(d)), 0o755)
-	}
 	return &CaseImport{Dir: dir, Name: m.Name, Files: len(files), NoSecrets: m.NoSecret, Written: m.Written, Version: m.Version}, nil
 }

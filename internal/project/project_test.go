@@ -23,10 +23,15 @@ func TestInitAndOpen(t *testing.T) {
 		p.Config.Language != "ja" || !p.Config.Secrets.MaskInReports || p.Config.Output.Filename != "{{ device.hostname }}.txt" {
 		t.Errorf("config = %+v", p.Config)
 	}
-	for _, f := range []string{"input/old", "input/new", "extra", "state/backup", "out"} {
-		if st, err := os.Stat(p.Path(f)); err != nil || !st.IsDir() {
-			t.Errorf("folder %s is not there", f)
-		}
+	// Only what is filled first is made (spec 14.15.5).
+	if entries, _ := os.ReadDir(dir); len(entries) != 2 {
+		t.Errorf("the case holds %d entries, want project.yaml and input", len(entries))
+	}
+	if st, err := os.Stat(p.Path("input/old")); err != nil || !st.IsDir() {
+		t.Error("input/old is not there")
+	}
+	if entries, _ := os.ReadDir(p.Path("input")); len(entries) != 1 {
+		t.Errorf("input holds %d folders, want old only", len(entries))
 	}
 	if _, err := Init(dir, "", ""); err == nil || !strings.Contains(err.Error(), "すでに") {
 		t.Errorf("second Init: err = %v", err)
@@ -42,6 +47,10 @@ func TestInitAndOpen(t *testing.T) {
 	}
 	if q.Config.Name != "sample-two" || q.Config.Kind != "new" {
 		t.Errorf("config = %+v", q.Config)
+	}
+	// A new build has nothing to put first: project.yaml only.
+	if entries, _ := os.ReadDir(q.Dir); len(entries) != 1 {
+		t.Errorf("a new build holds %d entries, want project.yaml only", len(entries))
 	}
 }
 

@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -102,7 +101,7 @@ func TestTree(t *testing.T) {
 	// A folder as a side, with a file only it has.
 	other := t.TempDir()
 	for name, body := range map[string]string{"rt-a01.cfg": text, "rt-b02.cfg": strings.Replace(text, "hostname rt-a01\n", "hostname rt-b02\n", 1)} {
-		if err := os.WriteFile(filepath.Join(other, name), []byte(body), 0o644); err != nil {
+		if err := writeTestFile(filepath.Join(other, name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

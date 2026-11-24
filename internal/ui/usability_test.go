@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,7 +15,7 @@ import (
 func TestUsability(t *testing.T) {
 	s, dir := newSession(t, nil)
 	src := filepath.Join(t.TempDir(), "rt-c01.txt")
-	if err := os.WriteFile(src, []byte(rendered(t, "cisco_ios")), 0o644); err != nil {
+	if err := writeTestFile(src, []byte(rendered(t, "cisco_ios")), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if n := s.Next(); n == nil || n.Act != "add-old" {

@@ -40,7 +40,7 @@ rows:
 
 func put(t *testing.T, e *Env, rel, text string) {
 	t.Helper()
-	if err := os.WriteFile(e.Proj.Path(rel), []byte(text), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path(rel), []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

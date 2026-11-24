@@ -19,7 +19,7 @@ func TestSaveCheckSettings(t *testing.T) {
 	}
 	// A setting of an ID this version does not know stays.
 	text := strings.Replace(string(data), "severity: {}", "severity: {Z-999: warning}", 1)
-	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+	if err := writeTestFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if e.Proj, err = project.Open(e.Proj.Dir); err != nil {
@@ -77,11 +77,11 @@ func TestMakeSample(t *testing.T) {
 		t.Fatal(err)
 	}
 	a, err := e.MakeSample("sheets", at)
-	if err != nil || a != "templates/見本_機器ごとのシート.xlsx" {
+	if err != nil || a != "templates/sample_per_device.xlsx" {
 		t.Fatalf("%q, %v", a, err)
 	}
 	b, err := e.MakeSample("sheets", at)
-	if err != nil || b != "templates/見本_機器ごとのシート_2.xlsx" {
+	if err != nil || b != "templates/sample_per_device_2.xlsx" {
 		t.Fatalf("again: %q, %v", b, err)
 	}
 	if err := os.Remove(e.Proj.Path(b)); err != nil {

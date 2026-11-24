@@ -18,11 +18,11 @@ var SampleKinds = []string{"sheets", "files", "list"}
 func SampleName(kind string) string {
 	switch kind {
 	case "sheets":
-		return "見本_機器ごとのシート.xlsx"
+		return "sample_per_device.xlsx"
 	case "files":
-		return "{{ device.hostname }}_見本.xlsx"
+		return "{{ device.hostname }}_sample.xlsx"
 	case "list":
-		return "見本_全台の一覧.xlsx"
+		return "sample_all_devices.xlsx"
 	}
 	return ""
 }

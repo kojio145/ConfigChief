@@ -16,7 +16,7 @@ func TestSearch(t *testing.T) {
 	})
 	os.MkdirAll(filepath.Join(dir, "out", "2026-01-01_000000", "configs"), 0o755)
 	os.MkdirAll(filepath.Join(dir, "out", "2026-02-01_000000", "configs"), 0o755)
-	os.WriteFile(filepath.Join(dir, "out", "2026-02-01_000000", "configs", "rt-a01.txt"), []byte("ip address 192.0.2.1 255.255.255.0\n"), 0o644)
+	writeTestFile(filepath.Join(dir, "out", "2026-02-01_000000", "configs", "rt-a01.txt"), []byte("ip address 192.0.2.1 255.255.255.0\n"), 0o644)
 
 	v, err := s.Search(SearchOptions{})
 	if err != nil || len(v.Outs) != 2 || v.Outs[0] != "2026-02-01_000000" || len(v.Files) != 0 {
@@ -75,8 +75,8 @@ func TestSearchSpansCountUTF16(t *testing.T) {
 func TestDiffSide(t *testing.T) {
 	dir := t.TempDir()
 	a, b := filepath.Join(dir, "a.txt"), filepath.Join(dir, "b.txt")
-	os.WriteFile(a, []byte("hostname rt-a01\nip address 192.0.2.1\nold only\nsame\n"), 0o644)
-	os.WriteFile(b, []byte("hostname rt-a01\nip address 192.0.2.9\nsame\nnew <one>\n"), 0o644)
+	writeTestFile(a, []byte("hostname rt-a01\nip address 192.0.2.1\nold only\nsame\n"), 0o644)
+	writeTestFile(b, []byte("hostname rt-a01\nip address 192.0.2.9\nsame\nnew <one>\n"), 0o644)
 	s := New("1.2.3", "")
 	v, err := s.Diff(a, b)
 	if err != nil {

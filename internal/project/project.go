@@ -40,6 +40,9 @@ type Config struct {
 		// KeepWords are the words a report of unhandled lines that leaves
 		// the site keeps besides those of the pack (spec 8.6).
 		KeepWords []string `yaml:"keep_words"`
+		// DeliveryNames is the language of the names of the folder and the
+		// files of the delivery set: "ja" (or empty) | "en" (spec 14.15.4).
+		DeliveryNames string `yaml:"delivery_names"`
 	} `yaml:"export"`
 	Language string `yaml:"language"`
 }
@@ -53,7 +56,8 @@ type Project struct {
 // ConfigFile is the name of the settings file of a case folder.
 const ConfigFile = "project.yaml"
 
-// Folders are the folders of a case folder (spec 4). The tool writes under
+// Folders are the folders a case folder may have (spec 4); each is made when
+// it is used (spec 14.15.5). The tool writes under
 // state and out only; the rest is for the user to fill.
 var Folders = []string{
 	"input/old", "input/new", "input/customer", "input/logs",
@@ -78,6 +82,7 @@ checks:
   placeholders: []         # 秘密の値の「仮の値」とみなす語（空 = ツールの既定）
 export:
   keep_words: []           # 読めなかった行の持ち出し用レポートで、伏せずに残す語
+  delivery_names: ja       # 納品一式のフォルダ・ファイルの名前の言葉（ja | en）
 language: ja
 `
 
@@ -100,10 +105,14 @@ func Init(dir, name, kind string) (*Project, error) {
 		}
 		name = filepath.Base(abs)
 	}
-	for _, f := range Folders {
-		if err := os.MkdirAll(filepath.Join(dir, filepath.FromSlash(f)), 0o755); err != nil {
-			return nil, fmt.Errorf("フォルダを作れません: %v", err)
-		}
+	// Only what the user fills first is made; the other folders are made
+	// when they are used (spec 14.15.5).
+	first := dir
+	if kind == "migration" {
+		first = filepath.Join(dir, "input", "old")
+	}
+	if err := os.MkdirAll(first, 0o755); err != nil {
+		return nil, fmt.Errorf("フォルダを作れません: %v", err)
 	}
 	quoted, err := yaml.Marshal(name)
 	if err != nil {

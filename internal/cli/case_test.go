@@ -35,7 +35,7 @@ func do(args ...string) (code int, out, errOut string) {
 
 func put(t *testing.T, path, text string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+	if err := writeTestFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

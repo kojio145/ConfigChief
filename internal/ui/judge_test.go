@@ -117,7 +117,7 @@ func TestJudge(t *testing.T) {
 	// The import shows the judgments: in the counts, in the files, in the lines.
 	// With the new side the book tells the new host names.
 	for _, name := range []string{"rt-a01.txt", "rt-a02.txt"} {
-		if err := os.WriteFile(filepath.Join(dir, "input", "new", name), []byte(judgeFile(t, name)), 0o644); err != nil {
+		if err := writeTestFile(filepath.Join(dir, "input", "new", name), []byte(judgeFile(t, name)), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -24,7 +24,7 @@ func TestDeltaRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := strings.Replace(cfg, " description sample lan\n", " description old lan\n zz-unsupported-sub 1\n", 1)
-	if err := os.WriteFile(filepath.Join(dir, "input", "logs", "rt-d01.txt"), []byte(now), 0o644); err != nil {
+	if err := writeTestFile(filepath.Join(dir, "input", "logs", "rt-d01.txt"), []byte(now), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	r, err := s.DeltaRun("logs", nil)

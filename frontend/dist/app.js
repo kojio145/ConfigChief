@@ -18,7 +18,7 @@
     error: "",
     jump: "", // the id of what the next drawing scrolls to
     home: null,
-    create: { dir: "", name: "", kind: "migration" },
+    create: { name: "", kind: "migration" },
     imp: { source: "old", views: {}, tab: {}, lines: {}, pick: {}, onlyBad: false },
     jdg: newJdg(),
     map: { view: null, tab: "open", book: null, replace: false, redo: null }, // redo: making the proposals of 新旧対照表（ポート） again (spec 14.11.4)
@@ -469,6 +469,7 @@
 
   async function opened(home) {
     forgetViews();
+    st.place = null; // the list of the place is read again
     st.home = home;
     setState((await api().Start()).state);
     st.page = "home";
@@ -766,25 +767,26 @@
 
   function casesPage() {
     const c = st.create;
-    const pick = async () => {
-      try {
-        const dir = await api().PickFolder("案件フォルダにするフォルダ（空のフォルダ、または新しく作る）");
-        if (dir) c.dir = dir;
-      } catch (e) {
-        st.error = errText(e);
-      }
-      render();
-    };
+    // The place of the cases (spec 14.15.1): projects next to the exe, or
+    // the one chosen instead.
+    if (!st.place && !st.placeLoading) {
+      st.placeLoading = true;
+      api().Place().then((v) => { st.place = v; st.placeLoading = false; if (st.page === "cases") render(); })
+        .catch((e) => { st.placeLoading = false; st.error = errText(e); render(); });
+    }
+    const pl = st.place;
+    const sep = pl && pl.dir.includes("/") && !pl.dir.includes("\\") ? "/" : "\\";
+    const where = (name) => pl ? pl.dir + sep + (name.trim() || "（案件名）") : "";
     const create = () => run("案件を作っています", async () => {
       if (c.from) {
         const parts = (st.caseParts || []).filter((p) => (c.parts && p.id in c.parts ? c.parts[p.id] : p.default)).map((p) => p.id);
-        const made = await api().CreateFrom(c.dir, c.name, c.kind, c.from, parts);
+        const made = await api().CreateFrom(c.name, c.kind, c.from, parts);
         await opened(made.home);
         st.caseNote = made.said;
       } else {
-        await opened(await api().Create(c.dir, c.name, c.kind));
+        await opened(await api().Create(c.name, c.kind));
       }
-      st.create = { dir: "", name: "", kind: "migration" };
+      st.create = { name: "", kind: "migration" };
     });
     // The settings of a case before (spec 14.12.8).
     if (!st.caseParts) {
@@ -800,25 +802,17 @@
       }
       render();
     };
-    const fromChoices = [["", "写さない（空の案件）"]].concat(st.recent.filter((r) => !r.missing).map((r) => [r.dir, `${r.name || "（名前なし）"}（${r.dir}）`]));
+    // The cases of the place by their names; those outside it with their folders.
+    const fromChoices = [["", "写さない（空の案件）"]]
+      .concat((pl ? pl.cases : []).map((r) => [r.dir, r.name]))
+      .concat(st.recent.filter((r) => !r.missing).map((r) => [r.dir, `${r.name || "（名前なし）"}（${r.dir}）`]));
     if (c.from && !fromChoices.some((x) => x[0] === c.from)) fromChoices.push([c.from, c.from]);
-    // The sample case (spec 14.12.7).
-    const sample = async () => {
-      let dir = "";
-      try {
-        dir = await api().PickFolder("見本の案件を作るフォルダ（空のフォルダを選ぶか、新しく作ります）");
-      } catch (e) {
-        st.error = errText(e);
-        render();
-        return;
-      }
-      if (!dir) return;
-      run("見本の案件を作っています", async () => {
-        const made = await api().SampleCase(dir);
-        await opened(made.home);
-        st.caseNote = made.said;
-      });
-    };
+    // The sample case (spec 14.12.7, 14.15.3).
+    const sample = () => run("見本の案件を作っています", async () => {
+      const made = await api().SampleCase();
+      await opened(made.home);
+      st.caseNote = made.said;
+    });
     const open = (dir) => run("案件を開いています", async () => opened(await api().Open(dir)));
     const openPicked = async () => {
       let dir = "";
@@ -831,26 +825,55 @@
       if (dir) open(dir);
     };
     const forget = (dir) => run("一覧を直しています", async () => setState(await api().Forget(dir)));
+    const pickPlace = () => run("置き場所を変えています", async () => {
+      const v = await api().PickPlace();
+      if (v) st.place = v;
+    });
+    const resetPlace = () => run("置き場所を戻しています", async () => { st.place = await api().ResetPlace(); });
+    const showPlace = () => run("置き場所を開いています", async () => { await api().ShowPlace(); });
+    const typed = (e) => {
+      c.name = e.target.value;
+      const w = document.getElementById("create-where");
+      if (w) w.textContent = where(c.name);
+      const b = document.getElementById("create-go");
+      if (b) b.disabled = !c.name.trim();
+    };
 
     return [
       h("h1", null, "案件"),
-      h("p", { class: "dim" }, "案件フォルダ 1 つに、コンフィグ・パラメータブック・レポートをまとめて置きます。"),
-      h("div", { class: "card" },
-        h("h2", null, "案件を開く"),
-        h("div", { class: "row" }, button("案件フォルダを選んで開く", openPicked, { class: "primary" })),
-        st.recent.length ? h("div", { class: "table-wrap" }, h("table", null,
-          h("thead", null, h("tr", null, h("th", null, "最近開いた案件"), h("th", null, "フォルダ"), h("th", null, ""))),
+      h("p", { class: "dim" }, "案件 1 つが 1 つのフォルダです。コンフィグ・パラメータブック・レポートを、その中にまとめて置きます。"),
+      h("div", { class: "card", id: "place-card" },
+        h("h2", null, "案件の一覧"),
+        pl ? h("p", { class: "dim small" }, "置き場所: ", h("span", { class: "path", id: "place-dir" }, pl.dir), pl.default ? "（ConfigChief.exe の隣）" : "") : null,
+        pl && pl.shared ? h("div", { class: "box warn" }, `置き場所が共有の場所です（${pl.shared}）。案件は手元のフォルダで持つ決まりです。同期や、ほかの人の保存とぶつかることがあります。`) : null,
+        pl && pl.cases.length ? h("div", { class: "table-wrap" }, h("table", { id: "place-cases" },
+          h("thead", null, h("tr", null, h("th", null, "案件"), h("th", null, "フォルダ"), h("th", null, ""))),
+          h("tbody", null, pl.cases.map((r) => h("tr", null,
+            h("td", null, r.name),
+            h("td", { class: "path" }, r.dir.split(/[\\/]/).pop()),
+            h("td", null, button("開く", () => open(r.dir))))))))
+          : h("p", { class: "dim" }, pl ? "まだ案件がありません。下の「新しい案件を作る」か「見本の案件を作る」で作ります。" : "読んでいます…"),
+        h("div", { class: "row" },
+          button("置き場所をエクスプローラで開く", showPlace),
+          button("ほかの案件フォルダを選んで開く", openPicked)),
+        h("details", { class: "others", id: "place-more" }, h("summary", null, "置き場所を変える"),
+          h("p", { class: "dim small" }, "ふだんは ConfigChief.exe の隣の projects に作ります。ほかの場所に集めたいときだけ変えます（この PC に覚えます）。"),
+          h("div", { class: "row" },
+            button("置き場所を変える", pickPlace, { id: "place-pick" }),
+            pl && !pl.default ? button("ConfigChief.exe の隣に戻す", resetPlace, { id: "place-reset" }) : null))),
+      st.recent.length ? h("div", { class: "card" },
+        h("h2", null, "最近開いた、置き場所の外の案件"),
+        h("div", { class: "table-wrap" }, h("table", null,
+          h("thead", null, h("tr", null, h("th", null, "案件"), h("th", null, "フォルダ"), h("th", null, ""))),
           h("tbody", null, st.recent.map((r) => h("tr", null,
             h("td", null, r.name || "（名前なし）"),
             h("td", { class: "path" }, r.dir, r.missing ? h("div", { class: "dim" }, "案件フォルダが見つかりません") : null),
             h("td", null, h("div", { class: "row" },
               button("開く", () => open(r.dir), { disabled: r.missing }),
-              button("一覧から外す", () => forget(r.dir)))))))))
-          : h("p", { class: "dim" }, "最近開いた案件はありません。")),
+              button("一覧から外す", () => forget(r.dir)))))))))) : null,
       h("div", { class: "card" },
         h("h2", null, "新しい案件を作る"),
-        h("div", { class: "row" }, h("span", null, "フォルダ"), button("選ぶ", pick), h("span", { class: "path" }, c.dir || "（まだ選んでいません）")),
-        h("div", { class: "row" }, h("span", null, "案件名"), h("input", { type: "text", value: c.name, placeholder: "空ならフォルダの名前", oninput: (e) => { c.name = e.target.value; } })),
+        h("div", { class: "row" }, h("span", null, "案件名"), h("input", { type: "text", id: "create-name", value: c.name, placeholder: "例: 拠点ルータ更改", oninput: typed })),
         h("div", { class: "row" }, h("span", null, "種類"),
           seg([["migration", "更改（旧コンフィグから作る）"], ["new", "新規"]], c.kind, (k) => { c.kind = k; render(); })),
         h("div", { class: "row" }, h("span", null, "設定を写す元の案件"),
@@ -859,10 +882,11 @@
           tip("前の案件の、納品用シートのひな形・案件のルール・チェックの設定・追加コンフィグ・列の割り当て・ひな形と変数ルール・パックを、新しい案件に写します。コンフィグ・パラメータブック・出力は写しません。元の案件は変えません。")),
         c.from ? h("div", { class: "row create-parts" }, (st.caseParts || []).map((p) => h("label", null,
           h("input", { type: "checkbox", "data-part": p.id, checked: c.parts && p.id in c.parts ? c.parts[p.id] : p.default, onchange: (e) => { c.parts = c.parts || {}; c.parts[p.id] = e.target.checked; } }), " " + p.word))) : null,
-        h("div", { class: "row" }, button("作る", create, { class: "primary", disabled: !c.dir }))),
+        h("div", { class: "row" }, h("span", { class: "dim" }, "作るフォルダ: "), h("span", { class: "path", id: "create-where" }, where(c.name))),
+        h("div", { class: "row" }, button("作る", create, { class: "primary", id: "create-go", disabled: !c.name.trim() }))),
       h("div", { class: "card" },
         h("h2", null, "見本の案件"),
-        h("p", null, "初めて使うときや、人に使い方を見せるときに。架空の旧コンフィグ（Cisco の拠点ルータ 2 台）を置いた更改の案件を作ります。ホームの「次にやること」に沿って、取り込みから納品物まで一通り試せます。現場のデータは使いません。"),
+        h("p", null, "初めて使うときや、人に使い方を見せるときに。置き場所の sample に、架空の旧コンフィグ（Cisco の拠点ルータ 2 台）を置いた更改の案件を作ります。ホームの「次にやること」に沿って、取り込みから納品物まで一通り試せます。現場のデータは使いません。"),
         h("div", { class: "row" }, button("見本の案件を作る", sample, { id: "sample-case" }))),
       casePart(),
       st.cas ? checksPart() : null,
@@ -998,7 +1022,7 @@
         + (v.notes.length ? "\n" + v.notes.join("\n") : "")) : null,
       v && v.left.length ? h("div", { class: "box warn" }, "伏せられなかったもの（渡す前に中身を見てください）:\n" + v.left.join("\n")) : null,
       h("h3", null, "読み込む"),
-      h("div", { class: "row" }, button("ファイルを選んで読み込む", read, { id: "cx-read" }), h("span", { class: "dim small" }, "読み込んだ案件は、選んだ場所に新しいフォルダを作って広げ、そのまま開きます。")));
+      h("div", { class: "row" }, button("ファイルを選んで読み込む", read, { id: "cx-read" }), h("span", { class: "dim small" }, "読み込んだ案件は、案件の置き場所に新しいフォルダを作って広げ、そのまま開きます。")));
   }
 
   // ---- ホーム ----
@@ -1075,6 +1099,11 @@
       h("div", { class: "row" },
         h("span", null, "秘密の値（シート・表）: "),
         select([["show", "そのまま書く"], ["mask", "*** に伏せる"]], exp.mask, (v) => { exp.mask = v; })),
+      h("div", { class: "row" },
+        h("span", null, "納品一式のファイル名: "),
+        Object.assign(select([["ja", "日本語（納品_<案件名>・チェック結果表.xlsx …）"], ["en", "英語（delivery_<案件名>・check_results.xlsx …）"]], m.deliveryNames || "ja",
+          (v) => run("ファイル名の言葉を変えています", async () => { st.home = await api().SetDeliveryNames(v); })), { id: "delivery-names" }),
+        tip("お客さまに渡すフォルダとファイルの名前です。この案件だけに効きます（project.yaml の export.delivery_names）。ファイルの中の文は変わりません。")),
       h("div", { class: "row" },
         button("納品一式を作る", openDelivery, { class: "primary", disabled: !m.hasBook, id: "make-delivery" }),
         button("納品用パラメータシートを出す", () => doExport("sheet"), { disabled: !m.hasBook }),

@@ -36,6 +36,11 @@ type Session struct {
 	settings string // the file of the settings ("" = none is kept)
 	now      func() time.Time
 
+	// base is the place of the cases by default (spec 14.15.1: projects
+	// next to the exe); place is the one the user chose instead ("" = base).
+	base  string
+	place string
+
 	mu      sync.Mutex
 	recent  []Recent
 	name    string              // the name the last approval was given with
@@ -75,7 +80,7 @@ func SettingsFile() string {
 // New starts a session. settings is the file that keeps the recent cases
 // ("" = keep none).
 func New(version, settings string) *Session {
-	s := &Session{version: version, settings: settings, now: time.Now, imports: map[string]*ops.ImportOutcome{}}
+	s := &Session{version: version, settings: settings, now: time.Now, imports: map[string]*ops.ImportOutcome{}, base: DefaultPlace()}
 	s.load()
 	return s
 }
@@ -95,6 +100,9 @@ type settingsFile struct {
 	Grid map[string]GridPref `json:"grid,omitempty"`
 	// Zoom: the zoom of the page in per cent (spec 14.8.6; 0 = 100).
 	Zoom int `json:"zoom,omitempty"`
+	// Place: where the cases are made, if not next to the exe (spec
+	// 14.15.1).
+	Place string `json:"place,omitempty"`
 }
 
 func (s *Session) load() {
@@ -111,6 +119,7 @@ func (s *Session) load() {
 	}
 	s.name = strings.TrimSpace(f.Name)
 	s.zoom = cleanZoom(f.Zoom)
+	s.place = strings.TrimSpace(f.Place)
 	s.grid = map[string]GridPref{}
 	for k, p := range f.Grid {
 		if p = p.clean(); k != "" && len(p.Hidden)+len(p.Widths) > 0 {
@@ -130,7 +139,7 @@ func (s *Session) save() {
 	if s.settings == "" {
 		return
 	}
-	f := settingsFile{Recent: []Recent{}, Name: s.name, Grid: s.grid, Zoom: s.zoom}
+	f := settingsFile{Recent: []Recent{}, Name: s.name, Grid: s.grid, Zoom: s.zoom, Place: s.place}
 	for _, r := range s.recent {
 		f.Recent = append(f.Recent, Recent{Dir: r.Dir, Name: r.Name})
 	}
@@ -197,7 +206,11 @@ func (s *Session) state() State {
 			st.ReadOnly = (&project.ReadOnlyError{Newer: s.newer, Mine: s.version}).Error()
 		}
 	}
+	place := s.placeDir()
 	for _, r := range s.recent {
+		if place != "" && sameDir(filepath.Dir(r.Dir), place) {
+			continue // the list of the place has it (spec 14.15.1)
+		}
 		if _, err := os.Stat(filepath.Join(r.Dir, project.ConfigFile)); err != nil {
 			r.Missing = true
 		}
@@ -423,6 +436,9 @@ type Home struct {
 	// Shared says the case is on a shared place ("" = it is not; spec
 	// 14.8.13).
 	Shared string `json:"shared"`
+	// DeliveryNames is the language of the names of the delivery set: "ja"
+	// | "en" (spec 14.15.4).
+	DeliveryNames string `json:"deliveryNames"`
 }
 
 // Home tells where the case stands.
@@ -447,6 +463,10 @@ func (s *Session) home(e *ops.Env) (*Home, error) {
 		return nil, err
 	}
 	h.Old, h.New = len(old), len(nw)
+	h.DeliveryNames = "ja"
+	if e.Proj.Config.Export.DeliveryNames == "en" {
+		h.DeliveryNames = "en"
+	}
 	if why := project.SharedPlace(e.Proj.Dir); why != "" {
 		h.Shared = fmt.Sprintf(project.SharedNote, why)
 	}
@@ -492,6 +512,14 @@ func (s *Session) Path(rel string) (string, error) {
 	}
 	path := s.env.Proj.Path(rel)
 	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) && caseFolder(rel) {
+		// A folder of the case is made when it is first used (spec
+		// 14.15.5): opening it is a use.
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			return "", fmt.Errorf("%s を作れません: %v", rel, err)
+		}
+		info, err = os.Stat(path)
+	}
 	if err != nil {
 		return "", fmt.Errorf("%s は、まだありません", rel)
 	}
@@ -507,4 +535,14 @@ func strs(list []string) []string {
 		return []string{}
 	}
 	return list
+}
+
+// caseFolder tells whether rel is one of the folders a case may have.
+func caseFolder(rel string) bool {
+	for _, f := range project.Folders {
+		if rel == f {
+			return true
+		}
+	}
+	return false
 }

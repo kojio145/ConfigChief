@@ -31,7 +31,7 @@ func withoutSheet(t *testing.T, e *Env, name string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+	if err := writeTestFile(path, buf.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

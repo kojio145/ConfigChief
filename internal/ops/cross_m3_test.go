@@ -164,7 +164,7 @@ func crossSites(t *testing.T, dir string, ways []site) {
 			got := strings.ReplaceAll(read(t, e, o.Devices[0].File), "\r\n", "\n")
 			file := filepath.Join("testdata", dir, "to_"+w.newHost+".txt")
 			if os.Getenv("CROSS_WRITE") != "" {
-				os.WriteFile(file, []byte(got), 0o644)
+				writeTestFile(file, []byte(got), 0o644)
 			}
 			want, err := os.ReadFile(file)
 			if err != nil {

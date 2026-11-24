@@ -44,7 +44,7 @@ func TestCaseOfNewerVersion(t *testing.T) {
 	if v := project.ToolVersion(dir); v != "1.2.3" {
 		t.Fatalf("the version is recorded: %q", v)
 	}
-	os.WriteFile(filepath.Join(dir, project.ToolFile), []byte("version: 9.0.0\n"), 0o644)
+	writeTestFile(filepath.Join(dir, project.ToolFile), []byte("version: 9.0.0\n"), 0o644)
 	if _, err := s.Open(dir); err != nil {
 		t.Fatal(err)
 	}

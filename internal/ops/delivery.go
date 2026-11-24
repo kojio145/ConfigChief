@@ -16,19 +16,48 @@ import (
 	"time"
 
 	"github.com/kojio145/configchief/internal/book"
+	"github.com/kojio145/configchief/internal/project"
 	"go.yaml.in/yaml/v3"
 )
 
 // The whole set of what is delivered, in one folder (spec 13.6), and the
 // history of its versions (spec 13.7).
 
-const (
-	deliveryPrefix = "納品_"
-	// deliveryDone is written last into the set: a set without it was not
-	// finished.
-	deliveryDone  = "納品一式の内容.txt"
-	revisionsFile = "state/revisions.yaml"
-)
+const revisionsFile = "state/revisions.yaml"
+
+// deliveryNames are the names of the folder and the files of the delivery
+// set, in the language the case chose (spec 14.15.4). done is written last
+// into the set: a set without it was not finished.
+type deliveryNames struct {
+	prefix, done                      string
+	checks, rewrite, changes, peer string
+}
+
+var deliveryWords = map[string]deliveryNames{
+	"ja": {"納品_", "納品一式の内容.txt", "チェック結果表", "書き換えレポート", "変更一覧", "相手に渡すパラメータ表"},
+	"en": {"delivery_", "contents.txt", "check_results", "rewrite_report", "changes", "peer_parameters"},
+}
+
+// DeliveryLangs are the languages the names of a delivery set can be in.
+var DeliveryLangs = []string{"ja", "en"}
+
+func (e *Env) deliveryNames() deliveryNames {
+	if e.Proj.Config.Export.DeliveryNames == "en" {
+		return deliveryWords["en"]
+	}
+	return deliveryWords["ja"]
+}
+
+// deliveryDoneOf gives the file that tells a set in the folder name was
+// finished ("" = name is not a delivery set).
+func deliveryDoneOf(name string) string {
+	for _, w := range deliveryWords {
+		if strings.HasPrefix(name, w.prefix) {
+			return w.done
+		}
+	}
+	return ""
+}
 
 // Revision is one version that was delivered (spec 13.7).
 type Revision struct {
@@ -297,7 +326,8 @@ func (e *Env) MakeDelivery(opt DeliveryOptions, now time.Time) (*DeliveryOutcome
 	if unverified && !opt.AllowUnverified {
 		return nil, fmt.Errorf("未承認の指摘が残っています（エラー %d・警告 %d）。直すか承認してから作るか、残したまま作ることを選んでください", plan.Errors, plan.Warnings)
 	}
-	name := deliveryPrefix + fileSafe(e.Proj.Config.Name)
+	words := e.deliveryNames()
+	name := words.prefix + fileSafe(e.Proj.Config.Name)
 	base := e.outDir(now)
 	dir := base + "/" + name
 	if _, err := os.Stat(e.Proj.Path(dir)); err == nil {
@@ -352,9 +382,9 @@ func (e *Env) MakeDelivery(opt DeliveryOptions, now time.Time) (*DeliveryOutcome
 		out.Configs++
 	}
 	reports := []struct{ from, to string }{
-		{"check_results", "チェック結果表"},
-		{"rewrite", "書き換えレポート"},
-		{"changes", "変更一覧"},
+		{"check_results", words.checks},
+		{"rewrite", words.rewrite},
+		{"changes", words.changes},
 	}
 	for _, r := range reports {
 		for _, ext := range []string{".xlsx", ".html"} {
@@ -393,7 +423,7 @@ func (e *Env) MakeDelivery(opt DeliveryOptions, now time.Time) (*DeliveryOutcome
 		if f == "" {
 			continue
 		}
-		to := dir + "/相手に渡すパラメータ表" + filepath.Ext(f)
+		to := dir + "/" + words.peer + filepath.Ext(f)
 		if err := os.Rename(e.Proj.Path(f), e.Proj.Path(to)); err != nil {
 			return fail(fmt.Errorf("%s を写せません: %v", f, err))
 		}
@@ -414,10 +444,10 @@ func (e *Env) MakeDelivery(opt DeliveryOptions, now time.Time) (*DeliveryOutcome
 	for _, f := range out.Files {
 		fmt.Fprintf(&sb, "  %s\r\n", strings.TrimPrefix(f, dir+"/"))
 	}
-	if err := os.WriteFile(e.Proj.Path(dir+"/"+deliveryDone), []byte(sb.String()), 0o644); err != nil {
+	if err := os.WriteFile(e.Proj.Path(dir+"/"+words.done), []byte(sb.String()), 0o644); err != nil {
 		return fail(err)
 	}
-	out.Files = append(out.Files, dir+"/"+deliveryDone)
+	out.Files = append(out.Files, dir+"/"+words.done)
 
 	out.Zip = base + "/" + name + "_" + now.Format("20060102") + ".zip"
 	if err := zipFolder(e.Proj.Path(dir), e.Proj.Path(out.Zip), name, now); err != nil {
@@ -527,4 +557,81 @@ func (e *Env) BookHosts() ([]string, error) {
 		hosts = []string{}
 	}
 	return hosts, nil
+}
+
+// SetDeliveryNames writes the language of the names of the delivery set
+// into project.yaml (spec 14.15.4): export.delivery_names only, the other
+// lines and their comments staying. The file before goes to state/backup.
+// It gives the backup ("" = nothing changed).
+func (e *Env) SetDeliveryNames(lang string, now time.Time) (string, error) {
+	ok := false
+	for _, l := range DeliveryLangs {
+		ok = ok || l == lang
+	}
+	if !ok {
+		return "", fmt.Errorf("納品一式の名前の言葉「%s」は使えません（ja か en）", lang)
+	}
+	was := e.Proj.Config.Export.DeliveryNames
+	if was == lang || (was == "" && lang == "ja") {
+		return "", nil
+	}
+	path := e.Proj.Path(project.ConfigFile)
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("%s を読めません: %v", project.ConfigFile, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("%s を読めません: %v", project.ConfigFile, err)
+	}
+	next, err := putValue(data, "export", "delivery_names", lang)
+	if err != nil {
+		return "", fmt.Errorf("%s を書き換えられません: %v", project.ConfigFile, err)
+	}
+	copyTo, err := e.copyToBackup(project.ConfigFile, "project", data, now)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, next, 0o644); err != nil {
+		return "", fmt.Errorf("%s を書けません: %v", project.ConfigFile, err)
+	}
+	// The names of the set do not change what is generated: the time of
+	// the file stays, so the last generation is not taken as old (spec
+	// 13.6).
+	_ = os.Chtimes(path, info.ModTime(), info.ModTime())
+	e.Proj.Config.Export.DeliveryNames = lang
+	e.Proj.Log(now, "納品一式の名前の言葉を %s にしました（控え %s）", lang, copyTo)
+	return copyTo, nil
+}
+
+// putValue gives a YAML file with group.key set to a plain value; the other
+// lines and their comments stay.
+func putValue(data []byte, group, key, value string) ([]byte, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("先頭が設定の並びではありません")
+	}
+	top := doc.Content[0]
+	g := mapValue(top, group)
+	if g == nil {
+		g = &yaml.Node{Kind: yaml.MappingNode}
+		top.Content = append(top.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: group}, g)
+	}
+	if g.Kind != yaml.MappingNode {
+		g.Kind, g.Tag, g.Value, g.Content = yaml.MappingNode, "", "", nil
+	}
+	setMap(g, key, &yaml.Node{Kind: yaml.ScalarNode, Value: value})
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
+		return nil, err
+	}
+	if err := enc.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

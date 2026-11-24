@@ -96,9 +96,51 @@ func (a *App) Show(rel string) (err error) {
 
 // The rest passes the call on (see internal/ui for what each one does).
 
-func (a *App) Create(dir, name, kind string) (r0 *ui.Home, err error) {
+// Create makes a case named name in the place of the cases (spec 14.15.2).
+func (a *App) Create(name, kind string) (r0 *ui.Home, err error) {
 	defer a.guard("Create", &err)
-	return a.s.Create(dir, name, kind)
+	return a.s.NewCase(name, kind)
+}
+
+// Place tells the place of the cases and the cases in it (spec 14.15.1).
+func (a *App) Place() ui.PlaceView { defer a.guard("Place", nil); return a.s.Place() }
+
+// PickPlace lets the user choose another place of the cases (nil = the
+// dialog was closed).
+func (a *App) PickPlace() (r0 *ui.PlaceView, err error) {
+	defer a.guard("PickPlace", &err)
+	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "案件の置き場所（この下に、案件ごとのフォルダを作ります）", CanCreateDirectories: true})
+	if err != nil || dir == "" {
+		return nil, err
+	}
+	v, err := a.s.SetPlace(dir)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// SetDeliveryNames chooses the language of the names of the delivery set
+// (spec 14.15.4).
+func (a *App) SetDeliveryNames(lang string) (r0 *ui.Home, err error) {
+	defer a.guard("SetDeliveryNames", &err)
+	return a.s.SetDeliveryNames(lang)
+}
+
+// ShowPlace opens the place of the cases in the explorer.
+func (a *App) ShowPlace() (err error) {
+	defer a.guard("ShowPlace", &err)
+	dir, err := a.s.MadePlace()
+	if err != nil {
+		return err
+	}
+	return openPath(dir)
+}
+
+// ResetPlace makes projects next to the exe the place again.
+func (a *App) ResetPlace() (r0 ui.PlaceView, err error) {
+	defer a.guard("ResetPlace", &err)
+	return a.s.SetPlace("")
 }
 func (a *App) Open(dir string) (r0 *ui.Home, err error) {
 	defer a.guard("Open", &err)

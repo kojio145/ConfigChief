@@ -31,7 +31,7 @@ func TestCaseInUseAndNewer(t *testing.T) {
 		}
 		h.Release()
 	}
-	os.WriteFile(filepath.Join(dir, project.ToolFile), []byte("version: 9.0.0\n"), 0o644)
+	writeTestFile(filepath.Join(dir, project.ToolFile), []byte("version: 9.0.0\n"), 0o644)
 	was := Version
 	Version = "1.2.0"
 	defer func() { Version = was }()
@@ -54,7 +54,7 @@ func TestCaseCommands(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "case")
 	var out, errOut bytes.Buffer
 	Run([]string{"init", dir, "--name", "sample"}, &out, &errOut)
-	os.WriteFile(filepath.Join(dir, "input", "old", "rt-a01.txt"), []byte("hostname rt-a01\n"), 0o644)
+	writeTestFile(filepath.Join(dir, "input", "old", "rt-a01.txt"), []byte("hostname rt-a01\n"), 0o644)
 	file := filepath.Join(t.TempDir(), "x")
 	t.Setenv("CC_TEST_PW", "correct horse")
 	out.Reset()

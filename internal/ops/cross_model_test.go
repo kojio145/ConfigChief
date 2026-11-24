@@ -74,7 +74,7 @@ func TestBuiltInSwitchByModel(t *testing.T) {
 	}
 
 	// The device shows the configuration: the book and the new side agree.
-	if err := os.WriteFile(e.Proj.Path("input/new/ix-m01.txt"), []byte(got), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("input/new/ix-m01.txt"), []byte(got), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.RunImport("new", "", at); err != nil {
@@ -94,7 +94,7 @@ func TestBuiltInSwitchByModel(t *testing.T) {
 	if err := os.MkdirAll(e.Proj.Path("input/logs"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(e.Proj.Path("input/logs/ix-m01.txt"), []byte(got), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("input/logs/ix-m01.txt"), []byte(got), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	v, err := e.Verify(at)

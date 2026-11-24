@@ -241,7 +241,7 @@ func TestJudgeNoExtra(t *testing.T) {
 	// Only that the file is there counts.
 	write := func(rel string) {
 		t.Helper()
-		if err := os.WriteFile(e.Proj.Path(rel), []byte("!\n"), 0o644); err != nil {
+		if err := writeTestFile(e.Proj.Path(rel), []byte("!\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -288,7 +288,7 @@ func TestJudgeStaleAndFaults(t *testing.T) {
 
 	// A file that is written wrong stops the import and the judging, and
 	// tells where.
-	if err := os.WriteFile(e.Proj.Path("state/judgments.yaml"), []byte("judgments:\n  - pack: cisco_ios\n    shape: ip sla <n>\n    devices: \"*\"\n    verdict: not_needed\n    by: admin\n"), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("state/judgments.yaml"), []byte("judgments:\n  - pack: cisco_ios\n    shape: ip sla <n>\n    devices: \"*\"\n    verdict: not_needed\n    by: admin\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.RunImport("old", "", at); err == nil || !strings.Contains(err.Error(), "state/judgments.yaml の 1 件目") || !strings.Contains(err.Error(), "reason") {

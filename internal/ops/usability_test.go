@@ -22,7 +22,7 @@ func TestAddInputs(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+		if err := writeTestFile(p, []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		return p
@@ -128,7 +128,7 @@ func TestNextStep(t *testing.T) {
 		}
 	}
 	step("add-old")
-	if err := os.WriteFile(e.Proj.Path("input/old/rt-a01.txt"), []byte(sample(t, "cisco_ios")), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("input/old/rt-a01.txt"), []byte(sample(t, "cisco_ios")), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	step("import-run")

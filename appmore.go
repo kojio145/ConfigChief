@@ -227,11 +227,7 @@ func (a *App) CaseImport(path, password string) (r0 *ui.CaseImportView, err erro
 	if err := ui.CaseCheck(path, password); err != nil {
 		return nil, err
 	}
-	parent, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "案件を広げる場所（この下に案件のフォルダを作ります）", CanCreateDirectories: true})
-	if err != nil || parent == "" {
-		return nil, err
-	}
-	return a.s.CaseImport(path, password, parent)
+	return a.s.ImportHere(path, password)
 }
 
 // The things that save a person work (spec 14.10).

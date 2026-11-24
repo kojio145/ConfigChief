@@ -215,7 +215,7 @@ func TestRewriteEveryFile(t *testing.T) {
 		"input/old/notes.txt":  "sample text that no pack can tell\n\nsecond sample line\n",
 	}
 	for name, text := range files {
-		if err := os.WriteFile(e.Proj.Path(name), []byte(text), 0o644); err != nil {
+		if err := writeTestFile(e.Proj.Path(name), []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

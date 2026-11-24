@@ -109,7 +109,7 @@ func TestResult(t *testing.T) {
 
 	// A second device whose values are wrong: it is stopped, the other is
 	// written, and the changes since the first time are told.
-	if err := os.WriteFile(filepath.Join(dir, "input", "new", "ix-c01.txt"), []byte(rendered(t, "nec_ix")), 0o644); err != nil {
+	if err := writeTestFile(filepath.Join(dir, "input", "new", "ix-c01.txt"), []byte(rendered(t, "nec_ix")), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.MakeBook("new", true); err != nil {

@@ -165,8 +165,8 @@ func TestExportSheets(t *testing.T) {
 	tpl("{{ device.hostname }}_sheet.xlsx", map[string]string{"A1": "{{ device.hostname }}", "A2": "{{#rows pppoe}}{{ row.username }}", "B2": "{{ row.password }}"})
 	tpl("list.xlsx", map[string]string{"A1": "{{#rows devices}}{{ row.hostname }}", "B1": "{{ row.vendor }}"})
 	tpl("wrong.xlsx", map[string]string{"A1": "{{ row.hostname }}", "A2": "{{#rows interfaces}}{{ row.nothing }}"})
-	os.WriteFile(e.Proj.Path("templates/~$list.xlsx"), []byte("x"), 0o644)
-	os.WriteFile(e.Proj.Path("templates/memo.txt"), []byte("x"), 0o644)
+	writeTestFile(e.Proj.Path("templates/~$list.xlsx"), []byte("x"), 0o644)
+	writeTestFile(e.Proj.Path("templates/memo.txt"), []byte("x"), 0o644)
 
 	later := at.Add(1e9)
 	if o, err = e.ExportSheets(true, later); err != nil {

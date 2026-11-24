@@ -53,7 +53,7 @@ func nowFile(t *testing.T, e *Env, rel, text string, rs ...[2]string) {
 	if err := os.MkdirAll(e.Proj.Path(rel[:strings.LastIndex(rel, "/")]), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(e.Proj.Path(rel), []byte(text), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path(rel), []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

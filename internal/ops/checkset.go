@@ -257,7 +257,7 @@ func mapValue(m *yaml.Node, key string) *yaml.Node {
 // takes the new content, so the comments on it stay.
 func setMap(m *yaml.Node, key string, v *yaml.Node) {
 	if old := mapValue(m, key); old != nil {
-		old.Kind, old.Style, old.Tag, old.Value, old.Content = v.Kind, v.Style, "", "", v.Content
+		old.Kind, old.Style, old.Tag, old.Value, old.Content = v.Kind, v.Style, "", v.Value, v.Content
 		return
 	}
 	m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, v)
