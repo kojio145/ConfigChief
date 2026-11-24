@@ -22,7 +22,7 @@
     imp: { source: "old", views: {}, tab: {}, lines: {}, pick: {}, onlyBad: false },
     jdg: newJdg(),
     folds: {}, // the folded rows of buttons that are open (spec 14.18.8)
-    map: { view: null, tab: "open", pin: "", book: null, replace: false, redo: null, link: null }, // link: the panel that ties the ports (spec 14.20); pin: the part the next visit opens (spec 14.17.2); redo: making the proposals of 新旧対照表（ポート） again (spec 14.11.4)
+    map: { view: null, tab: "open", pin: "", book: null, replace: false, redo: null, link: null, dform: null }, // link: the panel that ties the ports (spec 14.20); pin: the part the next visit opens (spec 14.17.2); redo: making the proposals of 新旧対照表（ポート） again (spec 14.11.4)
     cmp: { a: "old", b: "new", view: null, tab: 0 },
     diff: { a: "", b: "", view: null, shown: LINES, mode: "line", stamps: true, secrets: true, layout: "stack", cur: -1 },
     tree: newTree(),
@@ -571,7 +571,7 @@
     st.hint = "";
     st.imp = { source: "old", views: {}, tab: {}, lines: {}, pick: {}, onlyBad: false };
     st.jdg = newJdg();
-    st.map = { view: null, tab: "open", pin: "", book: null, replace: false, redo: null, link: null };
+    st.map = { view: null, tab: "open", pin: "", book: null, replace: false, redo: null, link: null, dform: null };
     st.xtra = newXtra();
     st.cks = null;
     st.cmp = { a: "old", b: "new", view: null, tab: 0 };
@@ -2538,8 +2538,10 @@
       st.hint = "";
     }
     if (act === "edit-first") st.hint = "";
-    // The ports are tied in the panel first (spec 14.20.1).
+    // The ports are tied in the panel first (spec 14.20.1), the devices
+    // written in part 1 itself (spec 14.21.1).
     if (act === "edit-ifs") st.hint = "link-open";
+    if (act === "edit-devices") st.hint = "dev-form";
   }
 
   // goStep goes to the screen of a step, and points at its button.
@@ -2632,33 +2634,403 @@
     }));
   }
 
-  // copyHosts puts the old host name into each empty new host name, as a
-  // draft of the table, and opens the table to look and save (spec 14.18.4).
-  async function copyHosts() {
-    if (st.home && st.home.draft) {
-      // A draft of the sheet would be put over: save or throw it first.
-      st.edit.msg = "表の編集に、保存していない変更があります。先に「保存」するか「下書きを捨てる」を押してから、もう一度「新ホスト名を旧ホスト名のままにする」を押してください";
+  // ---- 新旧対照表（機器）をその場で書く (spec 14.21) ----
+
+  function newDev() {
+    return { sheet: null, for: null, pend: {}, pick: {}, only: "all", q: "", from: "", to: "", pre: "", post: "", bv: "", bm: "", msg: "", loading: false, err: "" };
+  }
+
+  // devLoad reads 新旧対照表（機器） with its choices; what was written here and
+  // not saved stays.
+  async function devLoad() {
+    const mp = st.map;
+    const md = mp.dform || newDev();
+    mp.dform = md;
+    md.loading = true;
+    md.for = mp.view;
+    try {
+      md.sheet = await api().EditSheet("@devices");
+      md.err = "";
+    } catch (e) {
+      md.err = errText(e);
+    }
+    md.loading = false;
+    if (st.page === "mapping" && mp.tab === "devices" && !busy) render();
+  }
+
+  function devCol(md, k) {
+    return md.sheet.columns.findIndex((c) => c.key === k);
+  }
+
+  function devBase(md, r, k) {
+    const i = devCol(md, k);
+    return i < 0 ? "" : (r.cells[i] || "").trim();
+  }
+
+  function devVal(md, r, k) {
+    const p = md.pend[r.row];
+    return p && k in p ? p[k] : devBase(md, r, k);
+  }
+
+  function devSet(md, r, k, v) {
+    v = (v || "").trim();
+    const p = md.pend[r.row] || {};
+    if (v === devBase(md, r, k)) delete p[k];
+    else p[k] = v;
+    if (Object.keys(p).length) md.pend[r.row] = p;
+    else delete md.pend[r.row];
+  }
+
+  function devRows(md) {
+    return md.sheet.rows.filter((r) => r.row && devBase(md, r, "old_host"));
+  }
+
+  // devState: "todo" (no new host yet), "out" (not carried over: - , or
+  // empty with a note, spec 14.18.1), "model" (no new model yet), "done".
+  function devState(md, r) {
+    const host = devVal(md, r, "new_host");
+    if (host === "-") return "out";
+    if (!host) return devBase(md, r, "note") ? "out" : "todo";
+    return devVal(md, r, "new_model") ? "done" : "model";
+  }
+
+  const DEV_STATE = { todo: "未決", out: "持っていかない", model: "新機種が空", done: "決まった" };
+
+  function devShown(md) {
+    const q = md.q.trim().toLowerCase();
+    return devRows(md).filter((r) => (md.only !== "todo" || devState(md, r) === "todo" || devState(md, r) === "model")
+      && (!q || devBase(md, r, "old_host").toLowerCase().includes(q) || devVal(md, r, "new_host").toLowerCase().includes(q)));
+  }
+
+  function devVendorCol(md) {
+    return md.sheet.columns[devCol(md, "new_vendor")] || { choices: [] };
+  }
+
+  function devModelCol(md) {
+    return md.sheet.columns[devCol(md, "new_model")] || { choices: [] };
+  }
+
+  function devVendorName(md, v) {
+    const n = (devVendorCol(md).choiceNotes || {})[v];
+    return v && n ? `${n}（${v}）` : v;
+  }
+
+  function devVendorOpts(md, now) {
+    const list = (devVendorCol(md).choices || []).slice();
+    if (now && !list.includes(now)) list.push(now);
+    return [["", "（選ぶ）"]].concat(list.map((v) => [v, devVendorName(md, v)]));
+  }
+
+  function devModelOpts(md, vendor, now) {
+    const col = devModelCol(md), forOf = col.choiceFor || {}, notes = col.choiceNotes || {};
+    let list = col.choices || [];
+    if (vendor) {
+      const some = list.filter((m) => forOf[m] === vendor);
+      if (some.length) list = some;
+    }
+    list = list.slice();
+    if (now && !list.includes(now)) list.push(now);
+    return [["", "（選ぶ）"]].concat(list.map((m) => [m, notes[m] ? `${m}  ${notes[m]}` : m]));
+  }
+
+  // devPutModel puts a model, and the vendor it goes with (spec 14.18.2).
+  function devPutModel(md, r, m) {
+    devSet(md, r, "new_model", m);
+    const to = m && (devModelCol(md).choiceFor || {})[m];
+    if (to) devSet(md, r, "new_vendor", to);
+  }
+
+  // devPutVendor puts a vendor; a model of another vendor goes.
+  function devPutVendor(md, r, v) {
+    devSet(md, r, "new_vendor", v);
+    const m = devVal(md, r, "new_model"), to = m && (devModelCol(md).choiceFor || {})[m];
+    if (v && to && to !== v) devSet(md, r, "new_model", "");
+  }
+
+  // devMatch takes a pasted vendor as its ID or its name.
+  function devMatchVendor(md, text) {
+    const col = devVendorCol(md), t = text.trim().toLowerCase();
+    if (!t) return "";
+    for (const v of col.choices || []) {
+      const n = ((col.choiceNotes || {})[v] || "").toLowerCase();
+      if (v.toLowerCase() === t || (n && (n === t || devVendorName(md, v).toLowerCase() === t))) return v;
+    }
+    return text.trim();
+  }
+
+  // devDraw draws the form again where it is, keeping the place of the cursor.
+  function devDraw() {
+    const el = $("dev-form");
+    if (!el) { render(); return; }
+    const a = document.activeElement;
+    const id = a && el.contains(a) ? a.id : "";
+    const at = id && a.tagName === "INPUT" && a.type === "text" ? [a.selectionStart, a.selectionEnd] : null;
+    const scroll = $("dev-scroll") ? $("dev-scroll").scrollTop : 0;
+    el.replaceWith(devForm());
+    if ($("dev-scroll")) $("dev-scroll").scrollTop = scroll;
+    const b = id && $(id);
+    if (b) {
+      b.focus({ preventScroll: true });
+      if (at) { try { b.setSelectionRange(at[0], at[1]); } catch (e) { /* not a text box */ } }
+    }
+  }
+
+  // devMove goes to the new host name of the row above or below (spec 14.21.1).
+  function devMove(md, r, by) {
+    const rows = devShown(md);
+    let i = rows.findIndex((x) => x.row === r.row);
+    for (;;) {
+      i += by;
+      if (i < 0 || i >= rows.length) return;
+      const b = $("dev-host-" + rows[i].row);
+      if (b && !b.disabled) {
+        b.focus();
+        b.select();
+        return;
+      }
+    }
+  }
+
+  // devSoft tells a typed name without drawing the form again: a button
+  // pressed right after typing keeps its click.
+  function devSoft(md, r) {
+    const tr = $("dev-row-" + r.row);
+    if (tr) {
+      tr.classList.toggle("pend", r.row in md.pend);
+      const s = devState(md, r);
+      tr.className = tr.className.replace(/dev-(todo|out|model|done)/, "dev-" + s);
+      const td = tr.lastElementChild;
+      if (td) { td.textContent = DEV_STATE[s]; td.className = cls("small", "dev-st-" + s); }
+    }
+    const n = Object.keys(md.pend).length, b = $("dev-save"), t = $("dev-throw");
+    if (b) { b.textContent = n ? `保存（${n} 台）` : "保存"; b.disabled = !n; }
+    if (t) t.disabled = !n;
+  }
+
+  function devKey(e, md, r) {
+    if (e.key === "Enter" || e.key === "ArrowDown") {
+      e.preventDefault();
+      devSet(md, r, "new_host", e.target.value);
+      devDraw();
+      devMove(md, r, 1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      devSet(md, r, "new_host", e.target.value);
+      devDraw();
+      devMove(md, r, -1);
+    }
+  }
+
+  // devPaste puts lines copied from a column of Excel into this row and the
+  // rows under it; a second and third column are the vendor and the model
+  // (spec 14.21.1).
+  function devPaste(e, md, r) {
+    const text = (e.clipboardData || window.clipboardData).getData("text") || "";
+    const lines = text.replace(/\r\n?/g, "\n").replace(/\n+$/, "").split("\n");
+    if (lines.length <= 1 && !lines[0].includes("\t")) return; // one name: as it is typed
+    e.preventDefault();
+    const rows = devShown(md);
+    const at = rows.findIndex((x) => x.row === r.row);
+    let n = 0, over = 0;
+    lines.forEach((line, i) => {
+      const row = rows[at + i];
+      if (!row) { if (line.trim()) over++; return; }
+      const cells = line.split("\t");
+      devSet(md, row, "new_host", cells[0]);
+      if (cells.length > 1 && cells[1].trim()) devPutVendor(md, row, devMatchVendor(md, cells[1]));
+      if (cells.length > 2 && cells[2].trim()) devPutModel(md, row, cells[2].trim());
+      n++;
+    });
+    md.msg = `貼った ${n} 行を、${devBase(md, r, "old_host")} から下へ入れました（保存すると書きます）` + (over ? `。行が足りず、${over} 行は入れていません` : "");
+    devDraw();
+  }
+
+  function devPicked(md) {
+    return devRows(md).filter((r) => md.pick[r.row]);
+  }
+
+  // devRename makes the new host name of a row from its old one (spec 14.21.2).
+  function devRename(md, old) {
+    let x = old;
+    if (md.from) x = x.split(md.from).join(md.to);
+    return md.pre + x + md.post;
+  }
+
+  function devBulk(fn, said) {
+    const md = st.map.dform;
+    const rows = devPicked(md);
+    if (!rows.length) { md.msg = "先に、左のチェックで行を選んでください"; devDraw(); return; }
+    for (const r of rows) fn(md, r);
+    md.msg = `選んだ ${rows.length} 台${said}（保存すると書きます）`;
+    devDraw();
+  }
+
+  async function devSave() {
+    const md = st.map.dform;
+    const changed = [];
+    for (const r of devRows(md)) {
+      const p = md.pend[r.row];
+      if (!p) continue;
+      const old = {};
+      for (const k in p) old[k] = r.cells[devCol(md, k)] || "";
+      changed.push({ row: r.row, key: { old_host: r.cells[devCol(md, "old_host")] }, old, new: Object.assign({}, p) });
+    }
+    if (!changed.length) { md.msg = "保存する変更はありません"; devDraw(); return; }
+    if (!(await ask("新旧対照表（機器）を保存", `書いた ${changed.length} 台を、パラメータブック ${st.cas.book} に書きます。書く前に、今のブックの控えを state/backup に取ります。新旧対照表（ポート）の案も作ります。Excel でブックを開いているときは、先に閉じてください。`, "保存する"))) return;
+    let res = null;
+    await run("新旧対照表（機器）を保存しています", async () => {
+      await api().EditDraft({ sheet: "@devices", changed, added: [], deleted: [], columns: [] });
+      res = await api().EditSave({});
+    });
+    if (!res) return; // what went wrong is shown; the draft is in the table editor
+    if (!res.saved) {
+      st.edit.msg = "パラメータブックが、この画面で書き始めた後にほかで変わっていました。下の表で確かめて「保存」を押してください";
+      st.map.dform = null;
       openEdit({ sheet: "@devices" });
       return;
     }
-    let said = "";
-    await run("下書きを作っています", async () => {
-      const v = await api().EditSheet("@devices");
-      const ci = (k) => v.columns.findIndex((c) => c.key === k);
-      const changed = [];
-      for (const r of v.rows) {
-        const host = r.cells[ci("old_host")] || "", now = r.cells[ci("new_host")] || "", note = r.cells[ci("note")] || "";
-        if (host && !now.trim() && !note.trim()) changed.push({ row: r.row, key: { old_host: host }, old: { new_host: now }, new: { new_host: host } });
-      }
-      if (changed.length) {
-        const all = await api().EditDraft({ sheet: "@devices", changed, added: [], deleted: [], columns: [] });
-        if (st.home) st.home.draft = all;
-      }
-      said = changed.length ? `${changed.length} 台の新ホスト名に、旧ホスト名を入れました（下書き）。確かめて「保存」を押してください` : "新ホスト名が空の行はありません";
+    // On to the ports, with the panel that ties them open (spec 14.21.3).
+    const mp = st.map;
+    mp.dform = null;
+    mp.tab = "ifs";
+    mp.redo = null;
+    if (res.redo && res.redo.length) {
+      const picked = {};
+      for (const x of res.redo) picked[x] = true;
+      mp.redo = { picked, view: null };
+    }
+    st.hint = "";
+    await run("新旧対照表を読み直しています", async () => {
+      mp.view = await api().Mapping();
+      if (st.home) st.home = await api().Home();
+      st.mig.msg = res.message;
     });
-    if (!said) return;
-    st.edit.msg = said;
-    openEdit({ sheet: "@devices" });
+    if (!mp.redo && (mp.view.hosts || []).length) {
+      mp.link = null;
+      await openLink("");
+    }
+  }
+
+  async function devThrow() {
+    const md = st.map.dform;
+    const n = Object.keys(md.pend).length;
+    if (n && !(await ask("書いたものを捨てる", `保存していない ${n} 台の変更を捨てます。`, "捨てる"))) return;
+    md.pend = {};
+    md.msg = "";
+    devDraw();
+  }
+
+  function devRow(md, r) {
+    const old = devBase(md, r, "old_host");
+    const host = devVal(md, r, "new_host"), vend = devVal(md, r, "new_vendor"), model = devVal(md, r, "new_model");
+    const s = devState(md, r), out = host === "-";
+    const dup = host && !out && md.dups[host] > 1;
+    const vSel = select(devVendorOpts(md, vend), vend, (v) => { devPutVendor(md, r, v); devDraw(); });
+    vSel.id = "dev-vendor-" + r.row;
+    vSel.disabled = out;
+    const mSel = select(devModelOpts(md, vend, model), model, (m) => { devPutModel(md, r, m); devDraw(); });
+    mSel.id = "dev-model-" + r.row;
+    mSel.disabled = out;
+    return h("tr", { id: "dev-row-" + r.row, class: cls(r.row in md.pend && "pend", "dev-" + s), "data-old": old },
+      h("td", null, h("input", { type: "checkbox", checked: !!md.pick[r.row], id: "dev-pick-" + r.row,
+        onchange: (e) => { if (e.target.checked) md.pick[r.row] = true; else delete md.pick[r.row]; devDraw(); } })),
+      h("td", { class: "mono" }, old),
+      h("td", { class: "dim small" }, devVendorName(md, devBase(md, r, "old_vendor"))),
+      h("td", null, h("input", { type: "text", id: "dev-host-" + r.row, class: cls("dev-host", dup && "dup"), value: out ? "" : host, disabled: out,
+        placeholder: out ? "持っていかない" : "新ホスト名", title: "Enter・↓ で下の行、↑ で上の行へ。Excel の列を写して貼ると、ここから下へ入ります（2 列目・3 列目は新メーカー・新機種）",
+        oninput: (e) => { devSet(md, r, "new_host", e.target.value); },
+        onchange: () => devSoft(md, r), onkeydown: (e) => devKey(e, md, r), onpaste: (e) => devPaste(e, md, r) })),
+      h("td", null, vSel),
+      h("td", null, mSel),
+      h("td", { class: "center" }, h("input", { type: "checkbox", checked: out, id: "dev-out-" + r.row, title: "持っていかない（新ホスト名を - にします）",
+        onchange: (e) => { devSet(md, r, "new_host", e.target.checked ? "-" : ""); devDraw(); } })),
+      h("td", { class: cls("small", "dev-st-" + s) }, DEV_STATE[s] + (dup ? "・同じ新ホスト名あり" : "")));
+  }
+
+  function devForm() {
+    const md = st.map.dform;
+    const rows = devRows(md), shown = devShown(md);
+    md.dups = {};
+    for (const r of rows) {
+      const x = devVal(md, r, "new_host");
+      if (x && x !== "-") md.dups[x] = (md.dups[x] || 0) + 1;
+    }
+    const picked = devPicked(md), pendN = Object.keys(md.pend).length;
+    const todo = rows.filter((r) => devState(md, r) === "todo").length;
+    const olds = [...new Set(rows.map((r) => devBase(md, r, "old_vendor")).filter(Boolean))];
+    const allOn = shown.length > 0 && shown.every((r) => md.pick[r.row]);
+    const ex = picked.slice(0, 3).map((r) => `${devBase(md, r, "old_host")} → ${devRename(md, devBase(md, r, "old_host"))}`).join("、");
+    const bvSel = select(devVendorOpts(md, md.bv), md.bv, (v) => { md.bv = v; const to = (devModelCol(md).choiceFor || {})[md.bm]; if (v && to && to !== v) md.bm = ""; devDraw(); });
+    bvSel.id = "dev-bulk-vendor";
+    const bmSel = select(devModelOpts(md, md.bv, md.bm), md.bm, (m) => { md.bm = m; const to = (devModelCol(md).choiceFor || {})[m]; if (to) md.bv = to; devDraw(); });
+    bmSel.id = "dev-bulk-model";
+    const oldSel = select([["", "旧メーカーで選ぶ ▼"]].concat(olds.map((v) => [v, devVendorName(md, v)])), "", (v) => {
+      for (const r of rows) if (devBase(md, r, "old_vendor") === v) md.pick[r.row] = true;
+      devDraw();
+    });
+    oldSel.id = "dev-pick-old";
+    const txt = (k, ph, id, size) => h("input", { type: "text", id, value: md[k], placeholder: ph, size: size || 8,
+      oninput: (e) => { md[k] = e.target.value; const p = $("dev-ren-ex"); if (p) p.textContent = devPicked(md).slice(0, 3).map((r) => `${devBase(md, r, "old_host")} → ${devRename(md, devBase(md, r, "old_host"))}`).join("、"); } });
+    return h("div", { id: "dev-form" },
+      md.msg ? h("div", { class: "box info", id: "dev-msg" }, button("閉じる", () => { md.msg = ""; devDraw(); }, { class: "link close" }), md.msg) : null,
+      h("div", { class: "row dev-filter" },
+        seg([["all", `すべて（${rows.length}）`], ["todo", `決まっていない（${rows.filter((r) => ["todo", "model"].includes(devState(md, r))).length}）`]], md.only, (v) => { md.only = v; devDraw(); }),
+        h("input", { type: "search", id: "dev-q", value: md.q, placeholder: "ホスト名で絞る", oninput: (e) => { md.q = e.target.value; devDraw(); } }),
+        h("span", { class: "dim small" }, todo ? `新ホスト名がまだ空: ${todo} 台` : "すべての機器の新ホスト名が決まっています")),
+      h("div", { class: "dev-scroll", id: "dev-scroll" },
+        h("table", { class: "dev-table", id: "dev-table" },
+          h("thead", null, h("tr", null,
+            h("th", null, h("input", { type: "checkbox", checked: allOn, id: "dev-pick-all", title: "見えている行をすべて選ぶ／外す",
+              onchange: (e) => { for (const r of shown) { if (e.target.checked) md.pick[r.row] = true; else delete md.pick[r.row]; } devDraw(); } })),
+            h("th", null, "旧ホスト名"), h("th", null, "旧メーカー"),
+            h("th", { class: "w" }, "新ホスト名"), h("th", { class: "w" }, "新メーカー"), h("th", { class: "w" }, "新機種"),
+            h("th", null, "持っていかない"), h("th", null, "状態"))),
+          h("tbody", null, shown.length ? shown.map((r) => devRow(md, r)) : h("tr", null, h("td", { colspan: 8, class: "dim" }, rows.length ? "絞り込みに合う機器はありません" : "旧機器がありません。旧コンフィグを取り込むと並びます"))))),
+      h("div", { class: "dev-bulk", id: "dev-bulk" },
+        h("div", { class: "row" },
+          h("b", null, picked.length ? `選んだ ${picked.length} 台に:` : "まとめて書く: 左のチェックで行を選びます"),
+          button("未決を選ぶ", () => { for (const r of rows) if (devState(md, r) === "todo") md.pick[r.row] = true; devDraw(); }, { class: "link", id: "dev-pick-todo" }),
+          oldSel,
+          picked.length ? button("選択を外す", () => { md.pick = {}; devDraw(); }, { class: "link", id: "dev-pick-none" }) : null),
+        h("div", { class: "row" },
+          h("span", null, "新メーカー"), bvSel, h("span", null, "新機種"), bmSel,
+          button("入れる", () => devBulk((m, r) => { if (md.bv) devPutVendor(m, r, md.bv); if (md.bm) devPutModel(m, r, md.bm); }, "に新メーカー・新機種を入れました"),
+            { disabled: !picked.length || (!md.bv && !md.bm), id: "dev-bulk-put" })),
+        h("div", { class: "row" },
+          button("新ホスト名を旧ホスト名のままにする", () => devBulk((m, r) => devSet(m, r, "new_host", devBase(m, r, "old_host")), "の新ホスト名を旧ホスト名にしました"), { disabled: !picked.length, id: "dev-bulk-same" }),
+          button("持っていかない", () => devBulk((m, r) => devSet(m, r, "new_host", "-"), "を持っていかないにしました"), { disabled: !picked.length, id: "dev-bulk-out" }),
+          button("新ホスト名を空に戻す", () => devBulk((m, r) => devSet(m, r, "new_host", ""), "の新ホスト名を空にしました"), { disabled: !picked.length, id: "dev-bulk-clear" })),
+        h("div", { class: "row" },
+          h("span", null, "名前の付け替え: 旧ホスト名の"), txt("from", "この文字を", "dev-ren-from"), h("span", null, "→"), txt("to", "この文字に", "dev-ren-to"),
+          h("span", null, "前に"), txt("pre", "", "dev-ren-pre", 5), h("span", null, "後ろに"), txt("post", "", "dev-ren-post", 5),
+          button("新ホスト名に入れる", () => {
+            if (!md.from && !md.pre && !md.post) { md.msg = "付け替える文字か、前・後ろに付ける文字を入れてください"; devDraw(); return; }
+            devBulk((m, r) => devSet(m, r, "new_host", devRename(m, devBase(m, r, "old_host"))), "の新ホスト名を、旧ホスト名から付け替えました");
+          }, { disabled: !picked.length, id: "dev-ren-go" })),
+        h("p", { class: "dim small", id: "dev-ren-ex" }, ex)),
+      h("div", { class: "row dev-save" },
+        button(pendN ? `保存（${pendN} 台）` : "保存", devSave, { class: "primary", disabled: !pendN, id: "dev-save" }),
+        button("やめる（捨てる）", devThrow, { id: "dev-throw", disabled: !pendN }),
+        h("span", { class: "dim small" }, pendN ? "保存すると、新旧対照表（ポート）の案を作って、2 のポートを結ぶ欄へ進みます" : "書いた所は色が付きます。保存するまで、パラメータブックは変わりません")));
+  }
+
+  // devCard is the place in part 1 where 新旧対照表（機器） is written (spec 14.21).
+  function devCard() {
+    const mp = st.map;
+    if (st.home && st.home.draft) {
+      return h("div", { class: "box warn", id: "dev-form" }, "表の編集に、保存していない変更があります。ここで書く前に、表の編集で「保存」するか「下書きを捨てる」を押してください。 ",
+        button("表の編集を開く", () => openEdit({ sheet: "@devices" }), { class: "link" }));
+    }
+    const md = mp.dform;
+    if (!md || (!md.loading && md.for !== mp.view && !Object.keys(md.pend).length)) {
+      if (!md || !md.loading) setTimeout(devLoad, 0);
+      if (md) md.loading = true;
+      else mp.dform = Object.assign(newDev(), { loading: true });
+      return h("div", { id: "dev-form", class: "dim" }, "新旧対照表（機器）を読んでいます…");
+    }
+    if (md.err) return h("div", { class: "box error", id: "dev-form" }, md.err);
+    if (!md.sheet) return h("div", { id: "dev-form", class: "dim" }, "新旧対照表（機器）を読んでいます…");
+    return devForm();
   }
 
   function mappingPage() {
@@ -2689,19 +3061,18 @@
       const gone = n("うち持っていかない（新ホスト名が - か、空で備考あり）");
       out.push(h("div", { class: "card", id: "map-devices" },
         h("h2", null, "1. 新旧対照表（機器）"),
-        h("p", null, "旧機器 1 台ごとに、置き換える新しい機器を書きます。「表で編集する」を押して、次の 3 つの列を埋めて保存してください。"),
-        h("ul", null,
-          h("li", null, h("b", null, "新ホスト名"), ": 新しい機器の名前"),
-          h("li", null, h("b", null, "新メーカー"), ": ▼ から選びます（NEC IX は nec_ix、NEC QX は nec_qx、Cisco は cisco_ios）"),
-          h("li", null, h("b", null, "新機種"), ": ▼ から選びます。選ぶと、2 のポートの割り当ての案が機種のポートの並びから入ります")),
-        h("p", { class: "dim" }, "持っていかない機器は、新ホスト名に - と書きます（理由は備考に）。表では、列の中の複数のセルを選んでから ▼ で選ぶと、まとめて入ります。保存すると、2. 新旧対照表（ポート）へ進みます。"),
+        h("p", null, "旧機器 1 台ごとに、置き換える新しい機器を、下の表にそのまま書きます。新ホスト名を打ち、新メーカー・新機種を ▼ から選んで「保存」を押してください。"),
+        h("ul", { class: "small" },
+          h("li", null, "新ホスト名の欄で Enter・↓ を押すと下の行へ進みます。Excel の列を写して貼ると、その行から下へまとめて入ります（2 列目・3 列目に新メーカー・新機種があれば、それも入ります）"),
+          h("li", null, "同じ機種にする機器は、左のチェックで選んで「まとめて書く」で一度に入れます。名前の付け方が決まっていれば「名前の付け替え」で旧ホスト名から作れます"),
+          h("li", null, "持っていかない機器は「持っていかない」にチェックします（理由は備考に）")),
         h("p", null, (left ? `まだ書いていない機器: ${left} 台` : "すべての機器が決まっています。") + (gone ? `（持っていかない機器: ${gone} 台）` : "")),
-        h("div", { class: "row" },
-          button("表で編集する", () => openEdit({ sheet: "@devices" }), { class: "primary", id: "edit-devices" }),
-          button("新ホスト名を旧ホスト名のままにする", copyHosts, { id: "copy-hosts", disabled: !left,
-            title: "新ホスト名が空の行に、旧ホスト名を写して表を開きます（下書き。確かめて「保存」を押すまで、パラメータブックは変わりません）。名前を変えない更改のときに使います" }),
-          excel, reload),
-        tableView(v.devices, { id: "mapping/devices" })));
+        devCard(),
+        h("details", { class: "fold-menu", id: "dev-more", open: !!st.folds["dev-more"], ontoggle: (e) => { st.folds["dev-more"] = e.target.open; } }, h("summary", null, "表の編集・Excel で書く（備考・行を足すとき）"),
+          h("p", { class: "dim small" }, "備考も書くときや、行を足すときは表の編集で書きます。Excel で書いたら、保存して閉じてから「読み直す」を押してください。"),
+          h("div", { class: "row" },
+            button("表で編集する", () => openEdit({ sheet: "@devices" }), { id: "edit-devices" }),
+            excel, reload))));
     } else if (mp.tab === "ifs") {
       const left = n("うち新 IF 名が空");
       const card = h("div", { class: "card", id: "map-ifs" },

@@ -589,3 +589,24 @@ details.fold-menu[open] { display: block; width: 100%; }
 .link-to { margin-left: 10px; }
 .link-now { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #link-typed { width: 14em; }
+/* 新旧対照表（機器）をその場で書く (spec 14.21) */
+.dev-filter input[type=search] { width: 14em; }
+.dev-scroll { max-height: 60vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); margin: 6px 0; }
+.dev-table { border-collapse: collapse; width: 100%; }
+.dev-table th { position: sticky; top: 0; background: #eef1f5; z-index: 1; text-align: left; font-size: 12px; padding: 4px 6px; white-space: nowrap; }
+.dev-table td { padding: 3px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
+.dev-table td.mono { font-family: Consolas, monospace; white-space: nowrap; }
+.dev-table td.center { text-align: center; }
+.dev-table input.dev-host { width: 100%; min-width: 10em; font-family: Consolas, monospace; }
+.dev-table input.dev-host.dup { border-color: #d97706; background: var(--warn-bg); }
+.dev-table select { max-width: 18em; }
+.dev-table tr.pend td { background: #eaf3ff; }
+.dev-table tr.dev-out td { color: var(--ignored); }
+.dev-table td.dev-st-todo { color: var(--unknown); font-weight: bold; }
+.dev-table td.dev-st-model { color: #a15c00; }
+.dev-table td.dev-st-done { color: #1a7f37; }
+.dev-bulk { border: 1px dashed var(--line); border-radius: 6px; padding: 6px 10px; margin: 6px 0; background: #fafbfc; }
+.dev-bulk .row { margin: 4px 0; }
+.dev-save { margin-top: 8px; }
+.dev-bulk input[type=text] { width: 8em; min-width: 0; }
+.dev-table td:last-child { white-space: nowrap; }
