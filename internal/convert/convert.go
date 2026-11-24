@@ -45,7 +45,7 @@ func Propose(old, new *model.Dataset, have []book.DeviceMap) (dev []book.DeviceM
 			d = book.DeviceMap{OldHost: host, OldVendor: r.Get("vendor")}
 			if n := find("devices", "hostname", host); n != nil {
 				d.NewHost, d.NewVendor = host, n.Get("vendor")
-				d.NewModel, d.NewOS = n.Get("model"), n.Get("os_version")
+				d.NewModel = n.Get("model")
 			}
 			known[host] = d
 			dev = append(dev, d)
@@ -295,7 +295,7 @@ func apply(sc *schema.Set, old *model.Dataset, dev []book.DeviceMap, ifs []book.
 			}
 			if t.Name == "devices" && !list {
 				d := devs[host]
-				for col, v := range map[string]string{"vendor": d.NewVendor, "model": d.NewModel, "os_version": d.NewOS} {
+				for col, v := range map[string]string{"vendor": d.NewVendor, "model": d.NewModel} {
 					if v != "" {
 						n.Cells[col] = &model.Cell{Values: []string{v}, Origins: []model.Origin{{Kind: "book"}}}
 					}

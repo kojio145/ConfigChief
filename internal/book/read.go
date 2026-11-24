@@ -271,6 +271,9 @@ func (b *Book) readMgmt(s *sheet.Sheet, m *mgmt) {
 		names[foldName(c.title.JA)] = c.name
 		names[foldName(c.title.EN)] = c.name
 	}
+	for _, h := range goneCols[m] {
+		names[foldName(h)] = "gone:" + foldName(h)
+	}
 	info, _ := b.header(s, names)
 	b.Sheets[m.id] = info
 	if b.layout {
@@ -291,7 +294,7 @@ func (b *Book) readMgmt(s *sheet.Sheet, m *mgmt) {
 		switch m {
 		case deviceSheet:
 			d := DeviceMap{get(line, "old_host"), get(line, "old_vendor"), get(line, "new_host"), get(line, "new_vendor"),
-				get(line, "new_model"), get(line, "new_os"), get(line, "note"), r + 1}
+				get(line, "new_model"), get(line, "note"), r + 1}
 			if d.OldHost == "" {
 				b.problemf(s.Name, addr(0, r), "旧ホスト名が空です。この行は使いません")
 				continue

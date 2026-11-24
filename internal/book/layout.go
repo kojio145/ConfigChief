@@ -10,7 +10,7 @@ import (
 
 // DeviceMap is a row of the sheet 新旧対照表（機器） (appendix A 6.1).
 type DeviceMap struct {
-	OldHost, OldVendor, NewHost, NewVendor, NewModel, NewOS, Note string
+	OldHost, OldVendor, NewHost, NewVendor, NewModel, Note string
 	Row                                                           int // row of the sheet; 0 = not in the book
 }
 
@@ -50,8 +50,7 @@ var (
 		{"new_host", schema.Text{JA: "新ホスト名", EN: "New hostname"}, schema.Text{JA: "空のままなら、その旧機器は書き換えの対象外。理由を備考に書く", EN: "Empty = the old device is not carried over. Write the reason in Note"}},
 		{"new_vendor", schema.Text{JA: "新メーカー", EN: "New vendor"}, schema.Text{JA: "メーカーパックの ID", EN: "The id of the vendor pack"}},
 		{"new_model", schema.Text{JA: "新機種", EN: "New model"}, schema.Text{}},
-		{"new_os", schema.Text{JA: "新 OS 版", EN: "New OS version"}, schema.Text{}},
-		{"note", schema.Text{JA: "備考", EN: "Note"}, schema.Text{}},
+		{"note", schema.Text{JA: "備考", EN: "Note"}, schema.Text{JA: "持っていかない機器は、その理由", EN: "Why the old device is not carried over"}},
 	}, []string{"機器対応"}}
 	ifSheet = &mgmt{"@ifs", schema.Text{JA: "新旧対照表（ポート）", EN: "Interface map"}, []mgmtCol{
 		{"new_host", schema.Text{JA: "新ホスト名", EN: "New hostname"}, schema.Text{}},
@@ -66,6 +65,10 @@ var (
 		{"value", schema.Text{JA: "値", EN: "Value"}, schema.Text{JA: "行の値が空のときに使う値", EN: "The value used when the cell of a row is empty"}},
 	}, nil}
 	mgmtSheets = []*mgmt{deviceSheet, ifSheet, commonSheet}
+	// goneCols are the headings of columns a sheet had before and has no
+	// more (spec 14.17.3): a book made by an older version keeps the column,
+	// which is not read and not shown in the table editor.
+	goneCols = map[*mgmt][]string{deviceSheet: {"新 OS 版", "New OS version"}}
 )
 
 func (m *mgmt) col(name string) int {
@@ -89,7 +92,7 @@ func (m *mgmt) grid(lang string, rows [][]string) Grid {
 }
 
 func (d DeviceMap) cells() []string {
-	return []string{d.OldHost, d.OldVendor, d.NewHost, d.NewVendor, d.NewModel, d.NewOS, d.Note}
+	return []string{d.OldHost, d.OldVendor, d.NewHost, d.NewVendor, d.NewModel, d.Note}
 }
 
 func (m IfMap) cells() []string { return []string{m.NewHost, m.OldIf, m.NewIf, m.Basis} }

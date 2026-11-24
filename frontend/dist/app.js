@@ -21,7 +21,7 @@
     create: { name: "", kind: "migration" },
     imp: { source: "old", views: {}, tab: {}, lines: {}, pick: {}, onlyBad: false },
     jdg: newJdg(),
-    map: { view: null, tab: "open", book: null, replace: false, redo: null }, // redo: making the proposals of 新旧対照表（ポート） again (spec 14.11.4)
+    map: { view: null, tab: "open", pin: "", book: null, replace: false, redo: null }, // pin: the part the next visit opens (spec 14.17.2); redo: making the proposals of 新旧対照表（ポート） again (spec 14.11.4)
     cmp: { a: "old", b: "new", view: null, tab: 0 },
     diff: { a: "", b: "", view: null, shown: LINES, mode: "line", stamps: true, secrets: true, layout: "stack", cur: -1 },
     tree: newTree(),
@@ -545,7 +545,7 @@
     st.hint = "";
     st.imp = { source: "old", views: {}, tab: {}, lines: {}, pick: {}, onlyBad: false };
     st.jdg = newJdg();
-    st.map = { view: null, tab: "open", book: null, replace: false, redo: null };
+    st.map = { view: null, tab: "open", pin: "", book: null, replace: false, redo: null };
     st.xtra = newXtra();
     st.cks = null;
     st.cmp = { a: "old", b: "new", view: null, tab: 0 };
@@ -612,6 +612,13 @@
       st.mig.msg = "";
       st.mig.sel = "";
       st.mig.reason = "";
+    }
+    if (page === "mapping" && st.page !== "mapping") {
+      // The part with something left is opened, unless the way here chose
+      // one (spec 14.17.2).
+      if (st.map.pin) st.map.tab = st.map.pin;
+      else st.map.tab = mapTabNow();
+      st.map.pin = "";
     }
     st.page = page;
     st.error = "";
@@ -1973,6 +1980,7 @@
     for (const x of hosts) picked[x] = true;
     st.map.redo = { picked, view: null };
     st.map.tab = "ifs";
+    st.map.pin = "ifs";
     if (st.page !== "mapping") go("mapping");
     else render();
   }
@@ -2077,7 +2085,7 @@
     let go = null;
     if (n.page && !(n.page === "home" && !n.act)) {
       go = here
-        ? (n.act ? button("ここ", () => { st.hint = n.act; render(); }, { id: "next-here", title: "この画面の、押すボタンに枠を付けます" }) : null)
+        ? (n.act ? button("ここ", () => { st.hint = n.act; if (st.page === "mapping" && mapTabOf(n.act)) st.map.tab = mapTabOf(n.act); render(); }, { id: "next-here", title: "この画面の、押すボタンに枠を付けます" }) : null)
         : button(n.page === "home" ? "そこへ" : "移る", () => goStep(n.page, n.act), { class: "primary", id: "next-go" });
     }
     return h("div", { class: "next next-line", id: "next-line" }, h("b", null, "次にやること"), h("span", null, n.text), go);
@@ -2086,6 +2094,10 @@
   // goStep goes to the screen of a step, and points at its button.
   function goStep(page, act) {
     st.hint = act;
+    if (page === "mapping" && mapTabOf(act)) {
+      st.map.tab = st.map.pin = mapTabOf(act);
+      if (st.page === "mapping") st.map.pin = "";
+    }
     if (page === "import") st.imp.source = "old";
     if (page === "logs") st.logs.tab = act === "verify" ? "verify" : "load";
     if (act === "verify") st.hint = "logs-run";
@@ -2145,45 +2157,110 @@
       b.open.rows.length ? [h("h2", null, `${b.open.name}（${b.open.rows.length}）`), tableView(b.open, { id: "book/open/" + b.from })] : null);
   }
 
+  // The three parts of the mapping screen, in the order of the work (spec
+  // 14.17.1), and the steps of the case they do (spec 14.12.1).
+  const MAP_PARTS = [
+    { tab: "devices", step: "devices", label: "1. 新旧対照表（機器）" },
+    { tab: "ifs", step: "ifs", label: "2. 新旧対照表（ポート）" },
+    { tab: "open", step: "book", label: "3. 確かめて書く" },
+  ];
+
+  // mapTabOf is the part of the mapping screen an operation is on.
+  function mapTabOf(act) {
+    return { "edit-devices": "devices", "edit-ifs": "ifs", "propose-ifs": "ifs", "redo-ifs": "ifs", "make-book": "open" }[act] || "";
+  }
+
+  // mapTabNow is the part the mapping screen opens at: the first of its
+  // steps with something left, else the last (spec 14.17.2).
+  function mapTabNow() {
+    const steps = (st.steps && st.steps.steps) || [];
+    for (const part of MAP_PARTS) {
+      const x = steps.find((y) => y.id === part.step);
+      if (x && x.state === "todo") return part.tab;
+    }
+    return "open";
+  }
+
+  function mapParts() {
+    const mp = st.map;
+    const steps = (st.steps && st.steps.steps) || [];
+    return h("div", { class: "steps map-parts", id: "map-parts" }, MAP_PARTS.map((part) => {
+      const x = steps.find((y) => y.id === part.step) || {};
+      const word = x.state === "todo" && x.note ? x.note : STEP_WORDS[x.state] || "";
+      return h("button", { type: "button", onclick: () => { mp.tab = part.tab; st.hint = ""; render(); },
+        class: cls("step", x.state, mp.tab === part.tab && "on"), "data-part": part.tab, id: "map-part-" + part.tab },
+      h("span", null, part.label), h("span", { class: "st" }, word));
+    }));
+  }
+
   function mappingPage() {
     const mp = st.map;
     const v = mp.view;
     const out = [
       h("h1", null, "新旧対照表"),
-      h("p", { class: "dim" }, "新旧対照表（機器）と 新旧対照表（ポート）は、画面の表か Excel で書きます（「新旧対照表（機器）を表で編集」「新旧対照表（ポート）を表で編集」か、「Excel で開く」）。この画面では、まだ決まっていないところを確かめ、決まったら旧コンフィグの値をパラメータブックに書きます。"),
-      h("div", { class: "row" },
-        button("読み直す", loadMapping),
-        button("新旧対照表（機器）を表で編集", () => openEdit({ sheet: "@devices" }), { disabled: !v || !v.hasBook, id: "edit-devices" }),
-        button("新旧対照表（ポート）を表で編集", () => openEdit({ sheet: "@ifs" }), { disabled: !v || !v.hasBook, id: "edit-ifs" }),
-        button("Excel で開く", () => show(st.cas.book), { disabled: !v || !v.hasBook }),
-        button("新旧対照表（ポート）の案を作る", proposeIfs, { disabled: !v || !v.hasBook, id: "propose-ifs",
-          title: "input/old を読み直し、新ホスト名を書いた機器の 新旧対照表（ポート）の行を足し、空の新 IF 名を案で埋めます（人が書いた名前と - は変えません）。取り込み直す必要はありません" }),
-        button("案を作り直す", () => openRedo([]), { disabled: !v || !v.hasBook || !(v.hosts || []).length, id: "redo-ifs",
-          title: "後から新機種を書いた・変えた機器の 新旧対照表（ポート）の案を、今の機種で作り直します。ツールの案（根拠のある行）だけを入れ替え、人が書いた名前は変えません" })),
-      h("p", { class: "dim small" }, "新旧対照表（機器）を画面の表で保存すると、新旧対照表（ポート）の案は自動で作ります。Excel で書いたときは「新旧対照表（ポート）の案を作る」を押してください。"),
+      h("p", { class: "dim" }, "旧機器と新しい機器の割り当てを、1 → 2 → 3 の順に決めます。押した段の中に、することとボタンが出ます。"),
       draftNote(),
     ];
     if (!v) return out;
-    if (mp.redo) out.push(redoCard(v));
     out.push(boxes("warn", v.notes));
     if (!v.hasBook) {
       out.push(h("div", { class: "box info" }, `パラメータブック ${v.book} はまだありません。旧コンフィグを取り込むと作られます。`),
         h("div", { class: "row" }, button("取り込みへ", () => { st.imp.source = "old"; go("import"); })));
       return out;
     }
-    const tables = { open: v.open, devices: v.devices, ifs: v.ifs };
-    const mg = st.mig;
-    if (mg.by == null || !mg.by.trim()) mg.by = v.by;
+    const n = (label) => {
+      const x = (v.counts || []).find((p) => p.label === label);
+      return x ? +x.value : 0;
+    };
     const again = async () => { st.map.view = await api().Mapping(); };
-    out.push(
-      counts(v.counts),
-      boxes("info", mg.msg ? [mg.msg] : []),
-      boxes("warn", v.problems),
-      h("div", { class: "row" }, seg([
-        ["open", `決まっていない（${v.open.rows.length}）`],
-        ["devices", `新旧対照表（機器）（${v.devices.rows.length}）`],
-        ["ifs", `新旧対照表（ポート）（${v.ifs.rows.length}）`]], mp.tab, (x) => { mp.tab = x; render(); })),
-      mp.tab === "open" ? migTable(v.open, v.findings, "mapping/open", again) : tableView(tables[mp.tab], { id: "mapping/" + mp.tab }),
+    const reload = button("読み直す", loadMapping, { class: "link", title: "Excel で直したときなどに、旧コンフィグとパラメータブックを読み直します" });
+    const excel = button("Excel で開く", () => show(st.cas.book), { title: "パラメータブックを Excel で開きます。Excel で書いたら、保存して閉じてから「読み直す」を押してください" });
+    out.push(mapParts(), boxes("info", st.mig.msg ? [st.mig.msg] : []), boxes("warn", v.problems));
+    if (mp.tab === "devices") {
+      const left = n("うち新ホスト名も備考も空");
+      out.push(h("div", { class: "card", id: "map-devices" },
+        h("h2", null, "1. 新旧対照表（機器）"),
+        h("p", null, "旧機器 1 台ごとに、置き換える新しい機器を書きます。「表で編集する」を押して、次の 3 つの列を埋めて保存してください。"),
+        h("ul", null,
+          h("li", null, h("b", null, "新ホスト名"), ": 新しい機器の名前"),
+          h("li", null, h("b", null, "新メーカー"), ": ▼ から選びます（NEC IX は nec_ix、NEC QX は nec_qx、Cisco は cisco_ios）"),
+          h("li", null, h("b", null, "新機種"), ": ▼ から選びます。選ぶと、2 のポートの割り当ての案が機種のポートの並びから入ります")),
+        h("p", { class: "dim" }, "持っていかない機器は、新ホスト名を空のままにして、備考に理由を書きます。保存すると、2. 新旧対照表（ポート）へ進みます。"),
+        h("p", null, left ? `まだ書いていない機器: ${left} 台` : "すべての機器が決まっています。"),
+        h("div", { class: "row" },
+          button("表で編集する", () => openEdit({ sheet: "@devices" }), { class: "primary", id: "edit-devices" }),
+          excel, reload),
+        tableView(v.devices, { id: "mapping/devices" })));
+    } else if (mp.tab === "ifs") {
+      const left = n("うち新 IF 名が空");
+      const card = h("div", { class: "card", id: "map-ifs" },
+        h("h2", null, "2. 新旧対照表（ポート）"),
+        h("p", null, "旧機器の IF（旧 IF 名）を、新しい機器のどの IF（新 IF 名）にするかを確かめます。新機種を選んだ機器には、ツールの案が入っています（「案の根拠」の列）。"),
+        h("ul", null,
+          h("li", null, "案が合っていれば、そのままで大丈夫です"),
+          h("li", null, "新 IF 名が空の行は、ツールが決められなかった所です。「表で編集する」で新 IF 名を書きます"),
+          h("li", null, "新しい機器に持っていかない IF は、新 IF 名に - と書きます")),
+        h("p", null, left ? `新 IF 名が空の行: ${left} 行` : "新 IF 名はすべて決まっています。"),
+        h("div", { class: "row" },
+          button("表で編集する", () => openEdit({ sheet: "@ifs" }), { class: "primary", id: "edit-ifs" }),
+          button("案を作る", proposeIfs, { id: "propose-ifs",
+            title: "input/old を読み直し、新ホスト名を書いた機器の 新旧対照表（ポート）の行を足し、空の新 IF 名を案で埋めます（人が書いた名前と - は変えません）。Excel で新旧対照表（機器）を書いたときに押してください" }),
+          button("案を作り直す", () => openRedo([]), { disabled: !(v.hosts || []).length, id: "redo-ifs",
+            title: "後から新機種を書いた・変えた機器の案を、今の機種で作り直します。ツールの案（根拠のある行）だけを入れ替え、人が書いた名前は変えません" }),
+          excel, reload),
+        h("p", { class: "dim small" }, "直して保存すると、3. 確かめて書く へ進みます。"),
+        mp.redo ? redoCard(v) : null,
+        tableView(v.ifs, { id: "mapping/ifs" }));
+      out.push(card);
+    } else {
+      const open = v.open.rows.length;
+      out.push(h("div", { class: "card", id: "map-open" },
+        h("h2", null, "3. 確かめて書く"),
+        h("p", null, open
+          ? `新旧対照表で決まっていないところが ${open} 件あります。行を押すと、内容と直し方が出ます。直すときは、1 か 2 に戻って「表で編集する」で直してください（このまま進めてよいものは、理由を付けて承認できます）。`
+          : "新旧対照表で決まっていないところはありません。下の「新しい名前に置き換えてパラメータブックに書く」を押してください。"),
+        open ? migTable(v.open, v.findings, "mapping/open", again) : null,
+        h("div", { class: "row" }, reload)),
       h("div", { class: "card" },
         h("h2", null, "パラメータブックに書く"),
         h("p", null, "旧コンフィグの値を、新旧対照表で新しいホスト名と IF 名に置き換えて、パラメータブックの設計データのシートに書きます。すでにある行は変えず、足りない行を足します。"),
@@ -2195,6 +2272,7 @@
           makeBook("old", mp.replace);
         }, { class: "primary", id: "make-book" }))),
       mp.book && mp.book.from === "old" ? bookResult(mp.book) : null);
+    }
     return out;
   }
 
@@ -4464,6 +4542,35 @@
     }, true, "台");
   }
 
+  // gSaveGo saves the draft. In a migration case, a save made on a sheet of
+  // the mapping goes on to the next part of the mapping screen (spec
+  // 14.17.3): 新旧対照表（ポート） after 新旧対照表（機器）, 確かめて書く after it.
+  async function gSaveGo() {
+    const id = G && G.id;
+    const saved = await gSave();
+    const migration = !st.cas || st.cas.kind !== "新規";
+    if (saved !== "saved" || !migration || (id !== "@devices" && id !== "@ifs")) return;
+    const msg = st.edit.msg;
+    const redo = id === "@devices" && st.edit.redo ? st.edit.redo : null;
+    G = null;
+    st.edit = newEdit();
+    const mp = st.map;
+    mp.tab = id === "@devices" ? "ifs" : "open";
+    mp.redo = null;
+    if (redo) {
+      const picked = {};
+      for (const x of redo) picked[x] = true;
+      mp.redo = { picked, view: null };
+    }
+    st.hint = "";
+    st.page = "mapping";
+    st.mig = newMig();
+    await run("新旧対照表を読み直しています", async () => {
+      mp.view = await api().Mapping();
+      st.mig.msg = msg;
+    }, true);
+  }
+
   // gDraftCheck checks the book with the draft put in, without writing it
   // (spec 14.12.3).
   async function gDraftCheck() {
@@ -5210,7 +5317,7 @@
     }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "s") {
       ev.preventDefault();
-      gSave();
+      gSaveGo();
     }
   }
 
@@ -6369,7 +6476,7 @@
       if (lk === "d") { done(); gFillDown(false); return; }
       if (lk === "r") { done(); gFillDown(true); return; }
       if (lk === "a") { done(); gSelect(0, 0, R, C); return; }
-      if (lk === "s") { done(); gSave(); return; }
+      if (lk === "s") { done(); gSaveGo(); return; }
       if (lk === "f") { done(); gFindOpen(false); return; }
       if (lk === "h") { done(); gFindOpen(true); return; }
       if (k === "+" || (e.shiftKey && (k === "=" || k === ";"))) { done(); gInsertAt(false); return; }
@@ -6656,7 +6763,7 @@
         h("span", null, "シート: "), sheets,
         G.v.device >= 0 ? Object.assign(select(devOpts, G.dev, (d) => { G.dev = d; refilter(); }), { id: "g-dev" }) : null,
         filter,
-        button("保存（パラメータブックに書く）", gSave, { class: "primary", id: "g-save", title: "Ctrl+S" }),
+        button("保存", gSaveGo, { class: "primary", id: "g-save", title: "Ctrl+S。下書きをパラメータブック（Excel）に書きます" }),
         button("保存してチェック", gSaveCheck, { id: "g-save-check", title: "保存して、続けて「チェックだけ」を行い、結果の指摘を出します" }),
         button("表の編集を終える", gClose, { id: "g-close" })),
       // The tools used most stay in sight; the rest are in three menus

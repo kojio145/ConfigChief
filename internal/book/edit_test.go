@@ -426,7 +426,7 @@ func TestApplyNewColumn(t *testing.T) {
 	// right end when a value is saved for it.
 	data := inExcel(t, editBook(t), func(f *excelize.File) {
 		must(t, f.SetCellStr("新旧対照表（機器）", "A2", "rt-old01"))
-		must(t, f.SetCellStr("新旧対照表（機器）", "G1", ""))
+		must(t, f.SetCellStr("新旧対照表（機器）", "F1", ""))
 	})
 	es := editSheet(t, data, "@devices")
 	note := es.index("note")

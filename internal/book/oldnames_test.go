@@ -50,3 +50,59 @@ func TestOldSheetNames(t *testing.T) {
 		t.Errorf("devices = %+v, ifs = %+v", b.Devices, b.Ifs)
 	}
 }
+
+// TestGoneNewOSColumn: a book made before 2026-11-24 has the column 新 OS 版
+// in 新旧対照表（機器）(spec 14.17.3). It is not read, not shown in the table
+// editor and not a free column; the other columns are read as before.
+func TestGoneNewOSColumn(t *testing.T) {
+	sc := defs(t)
+	first, _ := mustUpdate(t, nil, sc, "ja", Change{
+		Data:    sampleData(),
+		Devices: []DeviceMap{{OldHost: "rt-a01", OldVendor: "cisco_ios", NewHost: "rt-b01", NewModel: "ix-4ge", Note: "sample note"}},
+	})
+	sheet := "新旧対照表（機器）"
+	old := edit(t, first, func(f *excelize.File) {
+		rows, err := f.GetRows(sheet)
+		if err != nil || len(rows) == 0 {
+			t.Fatal(err)
+		}
+		if slices.Contains(rows[0], "新 OS 版") {
+			t.Fatal("a new book has the column 新 OS 版")
+		}
+		at := len(rows[0]) // 備考 is the last column: put 新 OS 版 before it
+		col, _ := excelize.ColumnNumberToName(at)
+		if err := f.InsertCols(sheet, col, 1); err != nil {
+			t.Fatal(err)
+		}
+		cell, _ := excelize.CoordinatesToCellName(at, 1)
+		f.SetCellValue(sheet, cell, "新 OS 版")
+		cell, _ = excelize.CoordinatesToCellName(at, 2)
+		f.SetCellValue(sheet, cell, "9.9.9")
+	})
+	b := mustRead(t, old, sc)
+	if len(b.Problems) != 0 {
+		t.Errorf("problems = %v", b.Problems)
+	}
+	if len(b.Devices) != 1 || b.Devices[0].NewModel != "ix-4ge" || b.Devices[0].Note != "sample note" {
+		t.Fatalf("devices = %+v", b.Devices)
+	}
+	sheets, err := ReadSheets(old, editFile, sc, "ja")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, es := range sheets {
+		if es.ID != "@devices" {
+			continue
+		}
+		for _, c := range es.Columns {
+			if c.Title == "新 OS 版" {
+				t.Errorf("the table editor shows 新 OS 版: %+v", es.Columns)
+			}
+		}
+	}
+	second, _ := mustUpdate(t, old, sc, "ja", Change{Data: sampleData(), Devices: []DeviceMap{{OldHost: "rt-a02", OldVendor: "cisco_ios", Note: "second note"}}})
+	b = mustRead(t, second, sc)
+	if len(b.Devices) != 2 || b.Devices[1].Note != "second note" {
+		t.Errorf("devices = %+v", b.Devices)
+	}
+}

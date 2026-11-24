@@ -378,7 +378,7 @@ func (s *Session) Mapping() (*MappingView, error) {
 	}
 	v := &MappingView{Book: e.Proj.Config.Book, Counts: []Pair{}, Problems: []string{}, Notes: []string{}, Findings: migFindings(e, m.Mig), By: s.name, Hosts: []string{}}
 	s.mig = m.Mig
-	v.Devices = Table{Name: "新旧対照表（機器）", Header: []string{"ブックの行", "旧ホスト名", "旧メーカー", "新ホスト名", "新メーカー", "新機種", "新 OS 版", "備考"}}
+	v.Devices = Table{Name: "新旧対照表（機器）", Header: []string{"ブックの行", "旧ホスト名", "旧メーカー", "新ホスト名", "新メーカー", "新機種", "備考"}}
 	v.Ifs = Table{Name: "新旧対照表（ポート）", Header: []string{"ブックの行", "新ホスト名", "旧 IF 名", "新 IF 名", "案の根拠"}}
 	for _, f := range m.Source.Files {
 		if f.Err != "" {
@@ -411,7 +411,7 @@ func (s *Session) Mapping() (*MappingView, error) {
 		if d.NewHost != "" && !slices.Contains(v.Hosts, d.NewHost) {
 			v.Hosts = append(v.Hosts, d.NewHost)
 		}
-		r := ranked{rank: 2, row: []string{fmt.Sprint(d.Row), d.OldHost, d.OldVendor, d.NewHost, d.NewVendor, d.NewModel, d.NewOS, d.Note}}
+		r := ranked{rank: 2, row: []string{fmt.Sprint(d.Row), d.OldHost, d.OldVendor, d.NewHost, d.NewVendor, d.NewModel, d.Note}}
 		switch {
 		case d.NewHost == "" && d.Note == "":
 			r.rank, r.mark = 0, report.MarkUnknown

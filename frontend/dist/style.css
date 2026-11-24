@@ -518,6 +518,11 @@ details.menu .menu-items button { text-align: left; }
 .steps .step.todo .st { color: #8a5a00; font-weight: bold; }
 .steps .step.next { outline: 2px solid var(--accent); }
 .steps .step.optional, .steps .step.wait, .steps .step.counting { color: var(--dim); }
+/* The three parts of the mapping screen (spec 14.17.1): larger, the one open is marked */
+.map-parts { gap: 10px; margin: 10px 0 12px; }
+.map-parts button.step { min-width: 14em; padding: 10px 14px; font-size: 15px; }
+.map-parts button.step.wait { color: inherit; }
+.map-parts button.step.on { outline: 3px solid #35507a; outline-offset: 1px; font-weight: bold; }
 .others > summary { cursor: pointer; margin: 12px 0 6px; font-weight: bold; color: var(--dim); }
 .outputs td.kinds { min-width: 14em; }
 /* More items in the menu (M13): it scrolls instead of running into the version */
