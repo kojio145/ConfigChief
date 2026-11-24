@@ -211,7 +211,7 @@ func (e *Env) diffFindings(r *compare.Result, oldIsA bool) []check.Finding {
 // The findings of the mapping (M-406 to M-408). The device of M-406, of
 // M-407 and of a row that was left out is the old host name.
 func noReasonFinding(host string) check.Finding {
-	return migFinding("M-407", host, model.Ref{}, "新ホスト名が空で、備考もありません。「新旧対照表（機器）」に新ホスト名か、対象外にする理由（備考）を書いてください")
+	return migFinding("M-407", host, model.Ref{}, "新ホスト名が空です。「新旧対照表（機器）」に新ホスト名を書くか、持っていかない機器なら新ホスト名に - を書いてください")
 }
 
 func undecidedFinding(n convert.Note) check.Finding {

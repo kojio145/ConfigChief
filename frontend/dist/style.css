@@ -327,6 +327,9 @@ table.grid thead th.g-key { background: #d9e3f2; }
 table.grid thead th.g-free { font-style: italic; }
 table.grid thead th.g-nocol { color: var(--dim); }
 table.grid .g-req { color: var(--unknown); font-weight: 400; }
+/* The columns a person writes, and those shown only (spec 14.18.3) */
+table.grid thead th.g-m-write { background: #fff3c4; color: #5a3d00; }
+table.grid thead th.g-m-shown, table.grid thead th.g-m-tool { color: var(--dim); font-weight: 400; font-style: italic; }
 table.grid th.g-rh { position: sticky; left: 0; background: #f0f2f6; z-index: 2; text-align: right; color: var(--dim); font-weight: 400; font-size: 12px; cursor: pointer; }
 table.grid thead th.g-corner { z-index: 5; background: #e9edf3; }
 table.grid td.g-stick { position: sticky; z-index: 1; background: var(--panel); }
@@ -554,3 +557,8 @@ details.nav-others[open] > summary.nav-group-title::before { content: "▾ "; }
 #nav button.nb-todo::after { background: #f5d36a; color: #3a2e00; }
 #nav button.nb-done::after { color: #7fd18b; }
 #nav button.nb-wait::after { opacity: 0.6; }
+
+/* A row of secondary buttons folded under one line (spec 14.18.8) */
+details.fold-menu { display: inline-block; vertical-align: middle; }
+details.fold-menu > summary { cursor: pointer; color: var(--accent); padding: 4px 8px; }
+details.fold-menu[open] { display: block; width: 100%; }

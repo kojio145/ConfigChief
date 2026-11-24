@@ -38,7 +38,17 @@ type EditColumn struct {
 	// ChoiceNotes says a few words of a choice, shown beside it in the list
 	// (the model of a pack, spec 14.10.3). nil = none.
 	ChoiceNotes map[string]string `json:"choiceNotes,omitempty"`
-	Note        string            `json:"note"`
+	// ChoiceBy is the key of the column that narrows the choices of a row,
+	// and ChoiceFor the value of that column each choice goes with: the
+	// models of the new vendor only (spec 14.18.2). Picking a choice in a row
+	// whose ChoiceBy cell is empty fills it too.
+	ChoiceBy  string            `json:"choiceBy,omitempty"`
+	ChoiceFor map[string]string `json:"choiceFor,omitempty"`
+	// Mark tells the role of a column of the mapping sheets (spec 14.18.3):
+	// "write" = a person writes it, "shown" = shown only (changing it does
+	// nothing), "tool" = the tool writes it.
+	Mark string `json:"mark,omitempty"`
+	Note string `json:"note"`
 	// What the draft does to a free column: Added = the sheet gets it with
 	// the save, Was = the heading it has in the sheet (Title is the new
 	// one), Dropped = the save takes it out.

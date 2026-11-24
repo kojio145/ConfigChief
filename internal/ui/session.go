@@ -417,6 +417,13 @@ func (s *Session) SetZoom(z int) int {
 type PackInfo struct {
 	ID      string `json:"id"`
 	Version string `json:"version"`
+	Title   string `json:"title"` // the name of the pack, for a person (spec 14.18.2)
+}
+
+func packInfo(e *ops.Env, id string) PackInfo {
+	p := e.Packs[id]
+	t := p.Title["ja"]
+	return PackInfo{ID: id, Version: p.Version, Title: t}
 }
 
 // Home is the first screen of a case (spec 14.1).
@@ -487,7 +494,7 @@ func (s *Session) home(e *ops.Env) (*Home, error) {
 		}
 	}
 	for _, id := range e.PackIDs {
-		h.Packs = append(h.Packs, PackInfo{ID: id, Version: e.Packs[id].Version})
+		h.Packs = append(h.Packs, packInfo(e, id))
 	}
 	return h, nil
 }

@@ -201,7 +201,7 @@ func apply(sc *schema.Set, old *model.Dataset, dev []book.DeviceMap, ifs []book.
 			continue
 		}
 		a.Unmapped = append(a.Unmapped, host)
-		if !ok || d.Note == "" {
+		if !ok || (d.Note == "" && !d.Out) {
 			a.NoReason = append(a.NoReason, host)
 		}
 	}

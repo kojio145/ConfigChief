@@ -139,20 +139,33 @@ func (e *Env) editSheets() ([]byte, []*book.EditSheet, error) {
 	out := make([]*book.EditSheet, len(sheets))
 	copy(out, sheets)
 	for i, es := range out {
-		if es.ID != "@devices" {
+		if es.ID != "@devices" && es.ID != "@ifs" && es.ID != "devices" {
 			continue
 		}
-		// The new vendor is the ID of a pack that can be used.
+		// A vendor is the ID of a pack that can be used, a model the ID of a
+		// model of the pack of the row (spec 14.10.3, 14.18.2); another value
+		// can still be written.
 		cp := *es
 		cp.Columns = append([]book.EditColumn{}, es.Columns...)
+		vendors, vendorNotes := e.vendorChoices()
+		models, modelNotes, modelFor := e.modelChoices()
 		for k := range cp.Columns {
-			switch cp.Columns[k].Key {
-			case "old_vendor", "new_vendor":
-				cp.Columns[k].Choices = append([]string{}, e.PackIDs...)
-			case "new_model":
-				// The models the packs know (spec 14.10.3); another value
-				// can still be written.
-				cp.Columns[k].Choices, cp.Columns[k].ChoiceNotes = e.modelChoices()
+			c := &cp.Columns[k]
+			switch es.ID + "/" + c.Key {
+			case "@devices/old_vendor":
+				c.Choices, c.ChoiceNotes, c.Mark = vendors, vendorNotes, "shown"
+			case "@devices/new_vendor", "devices/vendor":
+				c.Choices, c.ChoiceNotes = vendors, vendorNotes
+			case "@devices/new_model":
+				c.Choices, c.ChoiceNotes, c.ChoiceBy, c.ChoiceFor = models, modelNotes, "new_vendor", modelFor
+			case "devices/model":
+				c.Choices, c.ChoiceNotes, c.ChoiceBy, c.ChoiceFor = models, modelNotes, "vendor", modelFor
+			case "@ifs/basis":
+				c.Mark = "tool"
+			}
+			switch es.ID + "/" + c.Key {
+			case "@devices/new_host", "@devices/new_vendor", "@devices/new_model", "@ifs/new_if":
+				c.Mark = "write"
 			}
 		}
 		out[i] = &cp
@@ -456,10 +469,28 @@ func (e *Env) ReplaceAll(query, with string, opt book.FindOptions, skip string) 
 	return out, e.writeDraft(d)
 }
 
-// modelChoices lists the IDs of the models of the packs that can be used,
-// pack by pack, with the pack and the title of each (spec 14.10.3).
-func (e *Env) modelChoices() ([]string, map[string]string) {
+// vendorChoices lists the IDs of the packs that can be used, with the
+// title of each (spec 14.18.2).
+func (e *Env) vendorChoices() ([]string, map[string]string) {
 	ids, notes := []string{}, map[string]string{}
+	for _, id := range e.PackIDs {
+		ids = append(ids, id)
+		if p := e.Packs[id]; p != nil {
+			if t := p.Title[e.lang()]; t != "" {
+				notes[id] = t
+			} else if t := p.Title["ja"]; t != "" {
+				notes[id] = t
+			}
+		}
+	}
+	return ids, notes
+}
+
+// modelChoices lists the IDs of the models of the packs that can be used,
+// pack by pack, with the pack and the title of each (spec 14.10.3), and the
+// pack each goes with (spec 14.18.2).
+func (e *Env) modelChoices() ([]string, map[string]string, map[string]string) {
+	ids, notes, by := []string{}, map[string]string{}, map[string]string{}
 	for _, id := range e.PackIDs {
 		p := e.Packs[id]
 		if p == nil {
@@ -470,6 +501,7 @@ func (e *Env) modelChoices() ([]string, map[string]string) {
 				continue
 			}
 			ids = append(ids, m.ID)
+			by[m.ID] = id
 			note := id
 			if t := m.Title[e.lang()]; t != "" {
 				note += "・" + t
@@ -479,7 +511,7 @@ func (e *Env) modelChoices() ([]string, map[string]string) {
 			notes[m.ID] = note
 		}
 	}
-	return ids, notes
+	return ids, notes, by
 }
 
 // clearBasis empties the basis of the rows of 新旧対照表（ポート） whose new interface

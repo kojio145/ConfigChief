@@ -215,7 +215,7 @@ func importView(e *ops.Env, o *ops.ImportOutcome, d *report.Doc) *ImportView {
 		Findings: o.Findings(),
 	}
 	for _, id := range e.PackIDs {
-		v.Packs = append(v.Packs, PackInfo{ID: id, Version: e.Packs[id].Version})
+		v.Packs = append(v.Packs, packInfo(e, id))
 	}
 	// The lists of the report but the first and the last one: the files are
 	// shown from Files, and the lines of a file are asked for one file at a
@@ -413,7 +413,7 @@ func (s *Session) Mapping() (*MappingView, error) {
 		}
 		r := ranked{rank: 2, row: []string{fmt.Sprint(d.Row), d.OldHost, d.OldVendor, d.NewHost, d.NewVendor, d.NewModel, d.Note}}
 		switch {
-		case d.NewHost == "" && d.Note == "":
+		case d.NewHost == "" && d.Note == "" && !d.Out:
 			r.rank, r.mark = 0, report.MarkUnknown
 			openDevs++
 		case d.NewHost == "":
@@ -440,8 +440,8 @@ func (s *Session) Mapping() (*MappingView, error) {
 	v.Open = table(e.MappingSheet(a, m.Mig, false))
 	v.Counts = []Pair{
 		{"新旧対照表（機器）の行", fmt.Sprint(len(m.Book.Devices))},
-		{"うち新ホスト名も備考も空", fmt.Sprint(openDevs)},
-		{"うち対象外（新ホスト名が空で、備考あり）", fmt.Sprint(outDevs)},
+		{"うち新ホスト名がまだ空", fmt.Sprint(openDevs)},
+		{"うち持っていかない（新ホスト名が - か、空で備考あり）", fmt.Sprint(outDevs)},
 		{"新旧対照表（ポート）の行", fmt.Sprint(len(m.Book.Ifs))},
 		{"うち新 IF 名が空", fmt.Sprint(openIfs)},
 		{"うち持っていかない IF（-）", fmt.Sprint(outIfs)},

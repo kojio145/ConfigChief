@@ -21,6 +21,7 @@
     create: { name: "", kind: "migration" },
     imp: { source: "old", views: {}, tab: {}, lines: {}, pick: {}, onlyBad: false },
     jdg: newJdg(),
+    folds: {}, // the folded rows of buttons that are open (spec 14.18.8)
     map: { view: null, tab: "open", pin: "", book: null, replace: false, redo: null }, // pin: the part the next visit opens (spec 14.17.2); redo: making the proposals of 新旧対照表（ポート） again (spec 14.11.4)
     cmp: { a: "old", b: "new", view: null, tab: 0 },
     diff: { a: "", b: "", view: null, shown: LINES, mode: "line", stamps: true, secrets: true, layout: "stack", cur: -1 },
@@ -595,9 +596,11 @@
       st.exp.plan = null;
     }
     if (page === "edit") {
+      st.edit.back = ""; // opened from the menu: the save stays here
       openEdit(null);
       return;
     }
+    if (st.page === "edit") st.edit.back = "";
     if (page === "home") {
       st.nb.devices = null;
       run("案件を読んでいます", async () => {
@@ -1251,8 +1254,8 @@
       h("div", { class: "row" },
         button("生成とチェック", () => generate(false), { class: "primary", disabled: !m.hasBook, id: "generate" }),
         button("チェックだけ", () => generate(true), { disabled: !m.hasBook }),
-        m.lastGen || st.res.view ? button("結果を見る", () => go("result")) : null,
-        button("差分の投入へ", () => go("delta"), { disabled: !m.hasBook, title: "今のコンフィグとの差から、変えるコマンドだけの投入を作ります（設定変更の案件）" })));
+        m.lastGen || st.res.view ? button("結果を見る", () => go("result")) : null),
+      h("p", { class: "dim small" }, "変えるコマンドだけの投入（設定変更の案件）は、左のメニューの「そのほか」の「差分の投入」で作ります。"));
     const deliverCard = h("div", { class: "card" },
       h("h2", null, "納品物"),
       h("p", null, "「納品一式を作る」で、いちばん新しい生成のコンフィグ・チェック結果表と、パラメータブックから作る納品用パラメータシート・相手に渡すパラメータ表を、1 つのフォルダ（と zip）にまとめます。シートや表だけを出すこともできます（チェックはしません）。"),
@@ -1260,16 +1263,19 @@
         h("span", null, "秘密の値（シート・表）: "),
         select([["show", "そのまま書く"], ["mask", "*** に伏せる"]], exp.mask, (v) => { exp.mask = v; })),
       h("div", { class: "row" },
+        button("納品一式を作る", openDelivery, { class: "primary", disabled: !m.hasBook, id: "make-delivery" })),
+      deliveryPart(),
+      // The rest is folded under one line (spec 14.18.8).
+      h("details", { class: "fold-menu", id: "deliver-more", open: !!st.folds["deliver-more"], ontoggle: (e) => { st.folds["deliver-more"] = e.target.open; } }, h("summary", null, "シート・表だけを出す・ファイル名・ひな形"),
+        h("div", { class: "row" },
+          button("納品用パラメータシートを出す", () => doExport("sheet"), { disabled: !m.hasBook }),
+          button("相手に渡すパラメータ表を出す", () => doExport("peer"), { disabled: !m.hasBook }),
+          button("ひな形のフォルダを開く", () => show("templates"))),
+      h("div", { class: "row" },
         h("span", null, "納品一式のファイル名: "),
         Object.assign(select([["ja", "日本語（納品_<案件名>・チェック結果表.xlsx …）"], ["en", "英語（delivery_<案件名>・check_results.xlsx …）"]], m.deliveryNames || "ja",
           (v) => run("ファイル名の言葉を変えています", async () => { st.home = await api().SetDeliveryNames(v); })), { id: "delivery-names" }),
         tip("お客さまに渡すフォルダとファイルの名前です。この案件だけに効きます（project.yaml の export.delivery_names）。ファイルの中の文は変わりません。")),
-      h("div", { class: "row" },
-        button("納品一式を作る", openDelivery, { class: "primary", disabled: !m.hasBook, id: "make-delivery" }),
-        button("納品用パラメータシートを出す", () => doExport("sheet"), { disabled: !m.hasBook }),
-        button("相手に渡すパラメータ表を出す", () => doExport("peer"), { disabled: !m.hasBook }),
-        button("ひな形のフォルダを開く", () => show("templates"))),
-      deliveryPart(),
       h("div", { class: "row" },
         h("span", null, "ひな形の見本: "),
         select([["sheets", "1 ブックで機器ごとのシート"], ["files", "機器ごとに 1 ファイル"], ["list", "全台を 1 枚の一覧"]], exp.sample || "sheets", (v) => { exp.sample = v; }),
@@ -1278,7 +1284,7 @@
           exp.sampleMsg = `${rel} を作りました。templates フォルダのひな形は、すべて使います（ひな形 1 つにつき、納品用シートが 1 つ出ます）。見本を直して使うか、要らなければ消してください。書き方は使い方の「納品用パラメータシートのひな形」にあります。`;
           exp.sampleFile = rel;
         }), { id: "make-sample" }),
-        tip("見出し・罫線・色の付いたひな形を templates フォルダに作ります。機器の基本・インタフェース・スタティック経路の欄があり、そのまま「納品用パラメータシートを出す」で出せます。自社の書式に合わせて直して使います。改版履歴の欄は {{#rows revisions}} で書けます（使い方の「改版履歴」）")),
+        tip("見出し・罫線・色の付いたひな形を templates フォルダに作ります。機器の基本・インタフェース・スタティック経路の欄があり、そのまま「納品用パラメータシートを出す」で出せます。自社の書式に合わせて直して使います。改版履歴の欄は {{#rows revisions}} で書けます（使い方の「改版履歴」）"))),
       exp.sampleMsg ? h("div", { class: "box info", id: "sample-msg" }, exp.sampleMsg,
         h("div", { class: "row" }, button("見本を開く", () => show(exp.sampleFile)), button("ひな形のフォルダを開く", () => show("templates")))) : null,
       exp.view ? h("div", { id: "export-result" },
@@ -1300,7 +1306,7 @@
         button("出力の一覧", () => go("outputs"))));
     const packCard = h("div", { class: "card" },
       h("h2", null, "使えるベンダーパック"),
-      h("p", null, m.packs.length ? m.packs.map((p) => `${p.id} ${p.version}`).join("、") : "ありません。"));
+      h("p", null, m.packs.length ? m.packs.map((p) => p.title ? `${p.title}（${p.id} ${p.version}）` : `${p.id} ${p.version}`).join("、") : "ありません。"));
     const main = migration ? [input("old", m.old), bookCard, genCard, deliverCard] : [bookCard, genCard, deliverCard];
     const others = migration ? [input("new", m.new), compareCard, reportCard, packCard] : [input("old", m.old), input("new", m.new), compareCard, reportCard, packCard];
     const fold = h("details", { class: "others", id: "home-others", open: othersOpen() }, h("summary", null, "そのほか（" + (migration ? "新コンフィグ・比較・レポート・パック" : "旧コンフィグ・新コンフィグ・比較・レポート・パック") + "）"), others);
@@ -1443,6 +1449,9 @@
       counts(v.counts),
       boxes("warn", v.notes),
       h("div", { class: "row" },
+        // In a migration, the mapping comes next (spec 14.18.6); the lines
+        // not read are judged after it.
+        s === "old" && (!st.cas || st.cas.kind !== "新規") ? button("次へ: 新旧対照表", () => goStep("mapping", ""), { class: "primary", id: "import-next" }) : null,
         button("レポートを Excel で開く", () => show(v.report.xlsx)),
         button("レポートをブラウザで開く", () => show(v.report.html)),
         v.files.some((f) => f.unknown) ? button("読めなかった行に判定を付ける", toJudge) : null,
@@ -1484,7 +1493,7 @@
         return h("div", { class: "row" },
           h("span", { class: "path" }, f.path),
           h("span", { class: "dim small" }, f.candidates.length ? "候補: " + f.candidates.map((c) => `${c.pack}（${c.score} 点）`).join("、") : ""),
-          select(v.packs.map((p) => [p.id, `${p.id} ${p.version}`]), im.pick[key], (x) => { im.pick[key] = x; }),
+          select(v.packs.map((p) => [p.id, p.title ? `${p.title}（${p.id} ${p.version}）` : `${p.id} ${p.version}`]), im.pick[key], (x) => { im.pick[key] = x; }),
           button("このパックで読む", choose));
       }));
   }
@@ -1704,7 +1713,6 @@
       h("p", { class: "dim" }, "どの規則にも当たらなかった行を、形（数字・アドレスなどを印に置き換えた文面）ごとのかたまりにまとめて出します。かたまりごとに「追加コンフィグで書く」「要らない」「保留」のどれかを付けます。判定は案件に残り、同じ形の行には、次の取り込みでも当たります。"),
       h("p", { class: "dim small" }, "読めなかった行は、どの値が秘密かをツールが見分けられないため、文面をそのまま出します。"),
     ];
-    out.push(carryPart(jd, s));
     if (!v) return out;
 
     const list = v.groups.filter((g) => !jd.only || g.open || g.id === jd.sel[s]);
@@ -1744,7 +1752,10 @@
           : "読めなかった行はありません。")),
       h("div", { class: "lines", id: "judge" },
         h("div", { class: "findings-list" }, tableView(t, { id: `judge/${s}/${jd.only}`, onPick: pick, selected: sel })),
-        side));
+        side),
+      // For the people who mend the packs, under the work (spec 14.18.8).
+      h("details", { class: "fold-menu", id: "carry-fold", open: !!(st.folds["carry-fold"] || jd.carry[s]), ontoggle: (e) => { st.folds["carry-fold"] = e.target.open; } },
+        h("summary", null, "メーカーパックを直す人に渡すレポート（持ち出し用）"), carryPart(jd, s)));
     return out;
   }
 
@@ -1922,6 +1933,7 @@
       x.msg = r.message;
       x.notes = r.notes || [];
       if (x.from) {
+        x.backTo = x.from.source; // a way back to the lines not read (spec 14.18.7)
         x.from = null;
         st.jdg.views = {}; // the judgments changed: read again when the screen opens
       }
@@ -1942,6 +1954,7 @@
     out.push(h("div", { class: "card", id: "extra-edit" },
       h("h2", null, `extra/${x.name}`, x.isNew ? h("span", { class: "dim small" }, "（新しいファイル）") : null, " ", dirty),
       boxes("info", x.msg ? [x.msg] : []),
+      x.backTo ? h("div", { class: "row" }, button("読めなかった行へ戻る", () => { st.jdg.source = x.backTo; x.backTo = ""; go("judge"); }, { class: "primary", id: "extra-back" })) : null,
       boxes("warn", x.notes),
       h("div", { class: "row" }, h("span", null, "差し込む位置: "), select(posOpts, pos, setPos),
         tip("節の名前は、生成したコンフィグの並びの区切り（system・interfaces・routing など）です。選ぶと、ファイルの 1 行目に差し込む位置を書きます")),
@@ -2085,20 +2098,23 @@
     let go = null;
     if (n.page && !(n.page === "home" && !n.act)) {
       go = here
-        ? (n.act ? button("ここ", () => { st.hint = n.act; if (st.page === "mapping" && mapTabOf(n.act)) st.map.tab = mapTabOf(n.act); render(); }, { id: "next-here", title: "この画面の、押すボタンに枠を付けます" }) : null)
+        ? (n.act ? button("ここ", () => { stepTarget(n.page, n.act); if (n.page === "edit" && n.act === "edit-first") { openEdit({ sheet: "devices" }); return; } render(); }, { id: "next-here", title: "この画面の、押すボタンに枠を付けます" }) : null)
         : button(n.page === "home" ? "そこへ" : "移る", () => goStep(n.page, n.act), { class: "primary", id: "next-go" });
     }
     return h("div", { class: "next next-line", id: "next-line" }, h("b", null, "次にやること"), h("span", null, n.text), go);
   }
 
-  // goStep goes to the screen of a step, and points at its button.
-  function goStep(page, act) {
+  // stepTarget makes the screen of a step show the place of its operation
+  // (the tab, the side) and points at its button (spec 14.18.6). The
+  // 「移る」 and 「ここ」 of the next step both use it.
+  function stepTarget(page, act) {
     st.hint = act;
     if (page === "mapping" && mapTabOf(act)) {
       st.map.tab = st.map.pin = mapTabOf(act);
       if (st.page === "mapping") st.map.pin = "";
     }
     if (page === "import") st.imp.source = "old";
+    if (page === "judge") st.jdg.source = "old";
     if (page === "logs") st.logs.tab = act === "verify" ? "verify" : "load";
     if (act === "verify") st.hint = "logs-run";
     if (page === "result" && act === "findings") {
@@ -2107,7 +2123,14 @@
       st.res.want = "findings";
       st.hint = "";
     }
+    if (act === "edit-first") st.hint = "";
+  }
+
+  // goStep goes to the screen of a step, and points at its button.
+  function goStep(page, act) {
+    stepTarget(page, act);
     if (page === "home") { render(); return; }
+    if (page === "edit" && act === "edit-first") { st.edit.back = ""; openEdit({ sheet: "devices" }); return; }
     go(page);
   }
 
@@ -2193,6 +2216,35 @@
     }));
   }
 
+  // copyHosts puts the old host name into each empty new host name, as a
+  // draft of the table, and opens the table to look and save (spec 14.18.4).
+  async function copyHosts() {
+    if (st.home && st.home.draft) {
+      // A draft of the sheet would be put over: save or throw it first.
+      st.edit.msg = "表の編集に、保存していない変更があります。先に「保存」するか「下書きを捨てる」を押してから、もう一度「新ホスト名を旧ホスト名のままにする」を押してください";
+      openEdit({ sheet: "@devices" });
+      return;
+    }
+    let said = "";
+    await run("下書きを作っています", async () => {
+      const v = await api().EditSheet("@devices");
+      const ci = (k) => v.columns.findIndex((c) => c.key === k);
+      const changed = [];
+      for (const r of v.rows) {
+        const host = r.cells[ci("old_host")] || "", now = r.cells[ci("new_host")] || "", note = r.cells[ci("note")] || "";
+        if (host && !now.trim() && !note.trim()) changed.push({ row: r.row, key: { old_host: host }, old: { new_host: now }, new: { new_host: host } });
+      }
+      if (changed.length) {
+        const all = await api().EditDraft({ sheet: "@devices", changed, added: [], deleted: [], columns: [] });
+        if (st.home) st.home.draft = all;
+      }
+      said = changed.length ? `${changed.length} 台の新ホスト名に、旧ホスト名を入れました（下書き）。確かめて「保存」を押してください` : "新ホスト名が空の行はありません";
+    });
+    if (!said) return;
+    st.edit.msg = said;
+    openEdit({ sheet: "@devices" });
+  }
+
   function mappingPage() {
     const mp = st.map;
     const v = mp.view;
@@ -2217,7 +2269,8 @@
     const excel = button("Excel で開く", () => show(st.cas.book), { title: "パラメータブックを Excel で開きます。Excel で書いたら、保存して閉じてから「読み直す」を押してください" });
     out.push(mapParts(), boxes("info", st.mig.msg ? [st.mig.msg] : []), boxes("warn", v.problems));
     if (mp.tab === "devices") {
-      const left = n("うち新ホスト名も備考も空");
+      const left = n("うち新ホスト名がまだ空");
+      const gone = n("うち持っていかない（新ホスト名が - か、空で備考あり）");
       out.push(h("div", { class: "card", id: "map-devices" },
         h("h2", null, "1. 新旧対照表（機器）"),
         h("p", null, "旧機器 1 台ごとに、置き換える新しい機器を書きます。「表で編集する」を押して、次の 3 つの列を埋めて保存してください。"),
@@ -2225,10 +2278,12 @@
           h("li", null, h("b", null, "新ホスト名"), ": 新しい機器の名前"),
           h("li", null, h("b", null, "新メーカー"), ": ▼ から選びます（NEC IX は nec_ix、NEC QX は nec_qx、Cisco は cisco_ios）"),
           h("li", null, h("b", null, "新機種"), ": ▼ から選びます。選ぶと、2 のポートの割り当ての案が機種のポートの並びから入ります")),
-        h("p", { class: "dim" }, "持っていかない機器は、新ホスト名を空のままにして、備考に理由を書きます。保存すると、2. 新旧対照表（ポート）へ進みます。"),
-        h("p", null, left ? `まだ書いていない機器: ${left} 台` : "すべての機器が決まっています。"),
+        h("p", { class: "dim" }, "持っていかない機器は、新ホスト名に - と書きます（理由は備考に）。表では、列の中の複数のセルを選んでから ▼ で選ぶと、まとめて入ります。保存すると、2. 新旧対照表（ポート）へ進みます。"),
+        h("p", null, (left ? `まだ書いていない機器: ${left} 台` : "すべての機器が決まっています。") + (gone ? `（持っていかない機器: ${gone} 台）` : "")),
         h("div", { class: "row" },
           button("表で編集する", () => openEdit({ sheet: "@devices" }), { class: "primary", id: "edit-devices" }),
+          button("新ホスト名を旧ホスト名のままにする", copyHosts, { id: "copy-hosts", disabled: !left,
+            title: "新ホスト名が空の行に、旧ホスト名を写して表を開きます（下書き。確かめて「保存」を押すまで、パラメータブックは変わりません）。名前を変えない更改のときに使います" }),
           excel, reload),
         tableView(v.devices, { id: "mapping/devices" })));
     } else if (mp.tab === "ifs") {
@@ -2283,7 +2338,11 @@
   function generate(checkOnly) {
     run(checkOnly ? "チェックしています" : "コンフィグを生成してチェックしています", async () => {
       showResult(checkOnly ? await api().Check() : await api().Generate());
-      st.res.tab = "devices";
+      // The findings to fix or approve come first, as the next step is
+      // to clear them (spec 14.18.6).
+      const todo = st.res.view.findings.some((f) => (f.state === "open" || f.state === "fix") && (f.severity === "error" || f.severity === "warning"));
+      st.res.tab = todo ? "findings" : "devices";
+      if (todo) st.res.state = "todo";
       st.page = "result";
     }, true, "台");
   }
@@ -2349,14 +2408,18 @@
       v.draft ? h("div", { class: "row", id: "draft-result" },
         button("表の編集へ戻る", () => openEdit(null), { class: "primary" }),
         h("span", { class: "dim small" }, "直したら、表の編集の「保存してチェック」で保存して、チェックし直します。")) : h("div", { class: "row" },
-        button("チェック結果表を Excel で開く", () => show(v.report.xlsx)),
-        button("チェック結果表をブラウザで開く", () => show(v.report.html)),
-        v.rewriteReport && v.rewriteReport.xlsx ? button("書き換えレポートを Excel で開く", () => show(v.rewriteReport.xlsx)) : null,
-        v.changes.has ? button("変更一覧を Excel で開く", () => show(v.changes.report.xlsx)) : null,
-        v.changes.has ? button("変更一覧をブラウザで開く", () => show(v.changes.report.html)) : null,
-        button("出力フォルダを開く", () => show(v.dir)),
         button("パラメータブックを表で編集", () => openEdit(null)),
-        button("パラメータブックを Excel で開く", () => show(st.cas.book))),
+        button("パラメータブックを Excel で開く", () => show(st.cas.book)),
+        // The reports and the folder are folded: the findings below are the
+        // work (spec 14.18.8).
+        h("details", { class: "fold-menu", id: "result-files", open: !!st.folds["result-files"], ontoggle: (e) => { st.folds["result-files"] = e.target.open; } }, h("summary", null, "レポート・出力フォルダを開く"),
+          h("div", { class: "row" },
+            button("チェック結果表を Excel で開く", () => show(v.report.xlsx)),
+            button("チェック結果表をブラウザで開く", () => show(v.report.html)),
+            v.rewriteReport && v.rewriteReport.xlsx ? button("書き換えレポートを Excel で開く", () => show(v.rewriteReport.xlsx)) : null,
+            v.changes.has ? button("変更一覧を Excel で開く", () => show(v.changes.report.xlsx)) : null,
+            v.changes.has ? button("変更一覧をブラウザで開く", () => show(v.changes.report.html)) : null,
+            button("出力フォルダを開く", () => show(v.dir))))),
       h("div", { class: "row" }, h("span", { class: "dim small" }, "パラメータブックを直したら（画面の表なら「保存」をしてから）、もう一度:"), again),
       h("p", { class: "dim small" }, "画面では、秘密の列の値をいつも伏せて出します。書き出したコンフィグのファイルには、値がそのまま入っています。"),
       h("div", { class: "row", id: "tabs" }, seg(tabs, rs.tab, (x) => { rs.tab = x; render(); })),
@@ -3302,9 +3365,9 @@
     }, true, "ログ");
     const out = [
       h("h1", null, "検証機のログ"),
-      h("p", { class: "dim" }, "検証機や本番機で取った端末ログ（input/logs/。1 台で 1 ファイル）を読みます。「投入ログ」は機器に弾かれたコマンドを探し、「反映確認」は投入後の設定全体（show running-config）をパラメータブックと比べます。"),
+      h("p", { class: "dim" }, "検証機や本番機で取った端末ログ（input/logs/。1 台で 1 ファイル）を読みます。「投入ログ」は機器に弾かれたコマンドを探し、「投入後の確認」は投入後の設定全体（show running-config）をパラメータブックと比べます。"),
       h("div", { class: "row" },
-        seg([["load", "投入ログ"], ["verify", "反映確認"]], what, (x) => { lg.tab = x; mg.sel = ""; render(); }),
+        seg([["load", "投入ログ"], ["verify", "投入後の確認"]], what, (x) => { lg.tab = x; mg.sel = ""; render(); }),
         button("input/logs を開く", () => show("input/logs"))),
       dropZone("logs"),
       h("div", { class: "row" }, button(label, start, { class: "primary", id: "logs-run" })),
@@ -4074,7 +4137,7 @@
   }
 
   function newEdit() {
-    return { list: null, want: null, msg: "", prefs: {}, find: newFind() };
+    return { list: null, want: null, msg: "", prefs: {}, find: newFind(), back: "" }; // back: the screen a finding opened the table from
   }
 
   // dialog asks with any content and any buttons; it gives the id of the
@@ -4360,6 +4423,8 @@
 
   // openEditAt opens the table at a cell a finding names ("シート!C5").
   function openEditAt(at) {
+    // The save goes back to the screen of the finding (spec 14.18.7).
+    if (st.page !== "edit") st.edit.back = st.page;
     const i = at.lastIndexOf("!");
     const want = { sheet: i < 0 ? at : at.slice(0, i), row: 0, col: 0 };
     const m = i < 0 ? null : /^([A-Z]+)(\d+)$/.exec(at.slice(i + 1));
@@ -4480,9 +4545,11 @@
         }
       }
     }
+    const back = st.edit.back;
     G = null;
     st.edit = newEdit();
-    go("home");
+    // Back to the screen the table was opened from (spec 14.18.7).
+    go(back && back !== "edit" ? back : "home");
   }
 
   // gSave writes the draft of every sheet into the book. A change that meets
@@ -4495,13 +4562,13 @@
       gSay("保存する変更はありません");
       return "none";
     }
-    if (!(await ask("パラメータブックに保存", `表の編集の下書き（${n} 件。すべてのシートの分）を、パラメータブック ${st.cas.book} に書きます。書く前に、今のブックの控えを state/backup に取ります。Excel でブックを開いているときは、先に閉じてください。`, "保存する"))) return "";
+    if (!(await ask("表の変更を保存", `表の編集の下書き（${n} 件。すべてのシートの分）を、パラメータブック ${st.cas.book} に書きます。書く前に、今のブックの控えを state/backup に取ります。Excel でブックを開いているときは、先に閉じてください。`, "保存する"))) return "";
     const choice = {};
     const id = G.id;
     st.edit.msg = "";
     for (;;) {
       let res = null;
-      await run("パラメータブックに書いています", async () => { res = await api().EditSave(choice); });
+      await run("表の変更を保存しています", async () => { res = await api().EditSave(choice); });
       if (!res) return ""; // what went wrong is shown; the draft stays
       const open = res.conflicts.filter((c) => !(c.id in choice));
       if (!res.saved && open.length) {
@@ -4527,9 +4594,16 @@
   // the findings left (spec 14.12.3).
   async function gSaveCheck() {
     if (!G || G.busy) return;
-    const from = st.edit.from || "";
     const saved = await gSave();
     if (!saved) return;
+    await gCheckNow();
+  }
+
+  // gCheckNow runs "check only" and shows the findings left, for the device
+  // the table was opened for.
+  async function gCheckNow() {
+    const from = st.edit.from || "";
+    st.edit.back = "";
     const rs = st.res;
     await run("チェックしています", async () => {
       showResult(await api().Check());
@@ -4542,14 +4616,32 @@
     }, true, "台");
   }
 
+  // mapSheetNote tells, over a sheet of the mapping in a migration case,
+  // which columns to write and where the save goes on to (spec 14.18.3).
+  function mapSheetNote() {
+    const migration = !st.cas || st.cas.kind !== "新規";
+    if (!G || !migration || (G.id !== "@devices" && G.id !== "@ifs")) return null;
+    const back = button("新旧対照表へ戻る", () => go("mapping"), { class: "link", id: "g-to-mapping" });
+    return G.id === "@devices"
+      ? h("div", { class: "box info", id: "g-map-note" }, "色の付いた見出しの 3 列（新ホスト名・新メーカー・新機種）を書いて「保存」を押してください。▼ の一覧は、列の中の複数のセルを選んでから選ぶと、まとめて入ります。新機種を選ぶと、空の新メーカーも埋まります。持っていかない機器は、新ホスト名に - を書きます。保存すると、新旧対照表の「2. 新旧対照表（ポート）」へ進みます。 ", back)
+      : h("div", { class: "box info", id: "g-map-note" }, "色の付いた見出しの「新 IF 名」を確かめて、空の行を書いて「保存」を押してください。持っていかない IF は - と書きます。保存すると、新旧対照表の「3. 確かめて書く」へ進みます。 ", back);
+  }
+
   // gSaveGo saves the draft. In a migration case, a save made on a sheet of
   // the mapping goes on to the next part of the mapping screen (spec
   // 14.17.3): 新旧対照表（ポート） after 新旧対照表（機器）, 確かめて書く after it.
   async function gSaveGo() {
     const id = G && G.id;
     const saved = await gSave();
+    if (saved !== "saved") return;
     const migration = !st.cas || st.cas.kind !== "新規";
-    if (saved !== "saved" || !migration || (id !== "@devices" && id !== "@ifs")) return;
+    if (!migration || (id !== "@devices" && id !== "@ifs")) {
+      // Opened from a finding: back to it, checked again (spec 14.18.7).
+      const back = st.edit.back;
+      if (back === "result") await gCheckNow();
+      else if (back && back !== "edit") { st.edit.back = ""; go(back); }
+      return;
+    }
     const msg = st.edit.msg;
     const redo = id === "@devices" && st.edit.redo ? st.edit.redo : null;
     G = null;
@@ -4773,6 +4865,9 @@
     else if (c.free) parts.push("定義に無い列（自由列）");
     else if (c.type) parts.push("型: " + (c.list ? `${c.type} の並び` : c.type));
     if (c.was) parts.push(`保存すると、見出しを「${c.was}」から変えます`);
+    if (c.mark === "write") parts.push("書く列です");
+    if (c.mark === "shown") parts.push("表示のための列です（書き換えても、ツールの動きは変わりません）");
+    if (c.mark === "tool") parts.push("ツールが書く列です");
     if (c.note) parts.push(c.note);
     if (c.secret) parts.push("秘密の値（伏せて出します）");
     if (c.col < 0 && !c.added) parts.push("シートに無い列です。値を入れて保存すると、シートの右端に見出しを足します");
@@ -5329,7 +5424,16 @@
     const r = gRowAt(G.sel.fr);
     const now = r ? r.cells[G.vc[G.sel.fc]] : "";
     el.textContent = "";
-    const opts = [""].concat(col.choices);
+    // The choices of the value in the column that narrows them (the models
+    // of the new vendor, spec 14.18.2); all when it is empty or has none.
+    let choices = col.choices;
+    const byCi = col.choiceBy ? G.cols.findIndex((x) => x.key === col.choiceBy) : -1;
+    const by = byCi >= 0 && r ? (r.cells[byCi] || "").trim() : "";
+    if (by && col.choiceFor) {
+      const some = choices.filter((v) => col.choiceFor[v] === by);
+      if (some.length) choices = some;
+    }
+    const opts = [""].concat(choices);
     opts.forEach((v, i) => {
       const note = v && col.choiceNotes && col.choiceNotes[v];
       const o = h("div", { class: cls("g-opt", v === now && "on"), "data-i": String(i) }, v === "" ? "（空にする）" : v,
@@ -5370,7 +5474,20 @@
       if (many && gBlank(gRowAt(r))) continue;
       for (let c = g.c0; c <= g.c1; c++) list.push([r, c, v]);
     }
-    gSetCells(list);
+    // A model picked in a row without a vendor fills the vendor too (spec
+    // 14.18.2).
+    const more = [];
+    for (const [r, c] of list) {
+      const col = gColAt(c);
+      const byCi = col && col.choiceBy ? G.cols.findIndex((x) => x.key === col.choiceBy) : -1;
+      const row = gRowAt(r);
+      const to = v && col && col.choiceFor ? col.choiceFor[v] : "";
+      if (byCi >= 0 && to && row && !(row.cells[byCi] || "").trim()) more.push([row, byCi, to]);
+    }
+    gMutate((ops) => {
+      for (const [vr, c, text] of list) ops.set(gRowAt(vr), G.vc[c], gNorm(gColAt(c), text));
+      for (const [row, ci, text] of more) ops.set(row, ci, text);
+    });
     G.wrap.focus({ preventScroll: true });
   }
 
@@ -6740,7 +6857,11 @@
     const have = ed.list.sheets.filter((s) => !s.missing), lack = ed.list.sheets.filter((s) => s.missing);
     const opt = (s) => h("option", { value: s.id }, gSheetLabel(s));
     const sheets = h("select", { id: "g-sheet", onchange: (e) => gSwitch(e.target.value) },
-      have.map(opt), lack.length ? h("optgroup", { label: `まだシートが無い表（${lack.length}）`, id: "g-lack" }, lack.map(opt)) : null);
+      // The sheets of the values first, the sheets of the mapping and the
+      // common values apart (spec 14.18.5).
+      h("optgroup", { label: "パラメータブックの値" }, have.filter((x) => !x.id.startsWith("@")).map(opt)),
+      have.some((x) => x.id.startsWith("@")) ? h("optgroup", { label: "新旧対照表・共通値" }, have.filter((x) => x.id.startsWith("@")).map(opt)) : null,
+      lack.length ? h("optgroup", { label: `まだシートが無い表（${lack.length}）`, id: "g-lack" }, lack.map(opt)) : null);
     sheets.value = G.id;
     const devs = new Set();
     if (G.v.device >= 0) for (const r of G.rows) if (r.row !== 0 && r.cells[G.v.device]) devs.add(r.cells[G.v.device]);
@@ -6790,6 +6911,7 @@
           button("Excel で開く", () => show(st.cas.book))]),
         tool(G.show ? "秘密の値を隠す" : "秘密の値を見せる", () => { gCommitEdit(); G.show = !G.show; gRedrawAll(); }, { id: "g-show", hidden: !G.cols.some((c) => c.secret) })),
       h("div", { class: "g-findbar", id: "g-findbar", hidden: true }),
+      mapSheetNote(),
       G.v.missing ? h("div", { class: "box info", id: "g-missing" }, `シート「${G.v.name}」は、まだパラメータブックにありません。下の表に行を足して「保存」を押すと、ブックにこのシートを作ってから行を書きます（何も足さなければ、シートは作りません）。`) : null,
       h("div", { class: "row" },
         h("span", { class: "dim small", id: "g-status" }),
@@ -6800,7 +6922,7 @@
     G.vc.forEach((ci, c) => {
       const col = G.cols[ci];
       const sorted = G.sort.ci === ci, filtered = !!G.colFilter[ci];
-      head.appendChild(h("th", { "data-c": String(c), class: cls(col.isKey && "g-key", col.free && "g-free", col.col < 0 && "g-nocol", c < G.lefts.length - 1 && "g-stick") || null,
+      head.appendChild(h("th", { "data-c": String(c), class: cls(col.isKey && "g-key", col.free && "g-free", col.col < 0 && "g-nocol", c < G.lefts.length - 1 && "g-stick", col.mark && "g-m-" + col.mark) || null,
         style: c < G.lefts.length - 1 ? `left:${G.lefts[c]}px` : null, title: gColTip(col) },
       col.title, col.required && !col.isKey ? h("span", { class: "g-req" }, " *") : null, col.secret ? h("span", { class: "g-req" }, " 🔒") : null,
       h("button", { type: "button", class: cls("g-hm", (sorted || filtered) && "on"), "data-hm": String(c), tabindex: "-1", title: "並べ替え・絞り込み・列を隠す" }, (sorted ? (G.sort.dir > 0 ? "▲" : "▼") : "") + (filtered ? "⏷" : "▾")),

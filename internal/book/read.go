@@ -294,7 +294,10 @@ func (b *Book) readMgmt(s *sheet.Sheet, m *mgmt) {
 		switch m {
 		case deviceSheet:
 			d := DeviceMap{get(line, "old_host"), get(line, "old_vendor"), get(line, "new_host"), get(line, "new_vendor"),
-				get(line, "new_model"), get(line, "note"), r + 1}
+				get(line, "new_model"), get(line, "note"), r + 1, false}
+			if d.NewHost == "-" {
+				d.NewHost, d.Out = "", true
+			}
 			if d.OldHost == "" {
 				b.problemf(s.Name, addr(0, r), "旧ホスト名が空です。この行は使いません")
 				continue

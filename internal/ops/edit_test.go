@@ -177,6 +177,21 @@ func TestEditMappingSheets(t *testing.T) {
 	if c := v.Columns[col(t, v, "new_vendor")]; strings.Join(c.Choices, ",") != "cisco_ios,nec_ix,nec_qx" {
 		t.Errorf("new vendor: %v", c.Choices)
 	}
+	// The vendors say their names, the models go with their vendor, and the
+	// columns to write are marked (spec 14.18.2, 14.18.3).
+	nv, nm := v.Columns[col(t, v, "new_vendor")], v.Columns[col(t, v, "new_model")]
+	if nv.ChoiceNotes["nec_ix"] == "" || nv.Mark != "write" || v.Columns[col(t, v, "old_vendor")].Mark != "shown" {
+		t.Errorf("new vendor: notes %v, mark %q", nv.ChoiceNotes, nv.Mark)
+	}
+	if nm.ChoiceBy != "new_vendor" || nm.ChoiceFor["ix-4ge"] != "nec_ix" || nm.ChoiceFor["qx-24ge-4xge"] != "nec_qx" {
+		t.Errorf("new model: by %q, for %v", nm.ChoiceBy, nm.ChoiceFor)
+	}
+	if dv := view(t, e, "devices"); dv.Columns[col(t, dv, "vendor")].ChoiceNotes["cisco_ios"] == "" || dv.Columns[col(t, dv, "model")].ChoiceBy != "vendor" {
+		t.Errorf("the sheet of the devices: %+v", dv.Columns[col(t, dv, "model")])
+	}
+	if iv := view(t, e, "@ifs"); iv.Columns[col(t, iv, "new_if")].Mark != "write" || iv.Columns[col(t, iv, "basis")].Mark != "tool" {
+		t.Errorf("the marks of 新旧対照表（ポート）")
+	}
 	draft(t, e, book.DraftSheet{Sheet: "@devices", Added: []book.DraftAdd{{Cells: map[string]string{"old_host": "rt-old01", "new_host": "rt-a01", "new_vendor": "nec_ix"}}}})
 	draft(t, e, book.DraftSheet{Sheet: "@ifs", Added: []book.DraftAdd{{Cells: map[string]string{"new_host": "rt-a01", "old_if": "GigabitEthernet0/0", "new_if": "GigaEthernet0.0"}}}})
 	draft(t, e, book.DraftSheet{Sheet: "@common", Added: []book.DraftAdd{{Cells: map[string]string{"scope": "*", "table": "devices", "column": "domain_name", "value": "example.com"}}}})

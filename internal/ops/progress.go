@@ -138,7 +138,7 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 		if bk != nil {
 			empty, hosts := 0, map[string]bool{}
 			for _, d := range bk.Devices {
-				if d.NewHost == "" && d.Note == "" {
+				if d.NewHost == "" && d.Note == "" && !d.Out {
 					empty++
 				}
 			}
@@ -159,7 +159,7 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 			}
 			if empty > 0 {
 				dev.State, dev.Note = StepTodo, fmt.Sprintf("%d 台", empty)
-				dev.Text = fmt.Sprintf("「新旧対照表（機器）」の新ホスト名が %d 台空です。新ホスト名・新メーカー（分かれば新機種）を書いてください（持っていかない機器は、備考に理由を書きます）", empty)
+				dev.Text = fmt.Sprintf("「新旧対照表（機器）」の新ホスト名が %d 台空です。新ホスト名・新メーカー・新機種を書いてください（持っていかない機器は、新ホスト名に - を書きます）", empty)
 			} else {
 				dev.State = StepDone
 			}
@@ -206,7 +206,7 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 			s.State, s.Text = StepTodo, "空のパラメータブックを作ってください（新規構築）"
 		}
 		add(s)
-		s = Step{ID: "first", Label: "1 台目を書く", Page: "edit", State: StepWait}
+		s = Step{ID: "first", Label: "1 台目を書く", Page: "edit", Act: "edit-first", State: StepWait}
 		if bk != nil {
 			if t := bk.Data.Tables["devices"]; t != nil && len(t.Rows) > 0 {
 				s.State, s.Note, bookDone = StepDone, fmt.Sprintf("%d 台", len(t.Rows)), true

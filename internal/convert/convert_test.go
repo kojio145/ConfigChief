@@ -123,7 +123,7 @@ func TestApply(t *testing.T) {
 	sc := defs(t)
 	dev := []book.DeviceMap{
 		{OldHost: "rt-a01", NewHost: "ix-b01", NewVendor: "nec_ix", NewModel: "sample-model"},
-		{OldHost: "rt-a02", Note: "撤去する"},
+		{OldHost: "rt-a02", Out: true}, // "-": not carried over, no reason needed (spec 14.18.1)
 	}
 	ifs := []book.IfMap{
 		{NewHost: "ix-b01", OldIf: "GigabitEthernet0/0", NewIf: "GigaEthernet0.0"},

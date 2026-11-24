@@ -11,7 +11,10 @@ import (
 // DeviceMap is a row of the sheet 新旧対照表（機器） (appendix A 6.1).
 type DeviceMap struct {
 	OldHost, OldVendor, NewHost, NewVendor, NewModel, Note string
-	Row                                                           int // row of the sheet; 0 = not in the book
+	Row                                                    int // row of the sheet; 0 = not in the book
+	// Out: the new host name is "-": the old device is not carried over
+	// (spec 14.18.1). NewHost is "" then, as for an empty cell.
+	Out bool
 }
 
 // IfMap is a row of the sheet 新旧対照表（ポート） (appendix A 6.2). NewIf "" = not
@@ -47,9 +50,9 @@ var (
 	deviceSheet = &mgmt{"@devices", schema.Text{JA: "新旧対照表（機器）", EN: "Device map"}, []mgmtCol{
 		{"old_host", schema.Text{JA: "旧ホスト名", EN: "Old hostname"}, schema.Text{JA: "旧コンフィグのホスト名（取り込んだ値）", EN: "The hostname in the old configuration"}},
 		{"old_vendor", schema.Text{JA: "旧メーカー", EN: "Old vendor"}, schema.Text{JA: "取り込みに使ったメーカーパック（表示用）", EN: "The vendor pack that read the old configuration"}},
-		{"new_host", schema.Text{JA: "新ホスト名", EN: "New hostname"}, schema.Text{JA: "空のままなら、その旧機器は書き換えの対象外。理由を備考に書く", EN: "Empty = the old device is not carried over. Write the reason in Note"}},
-		{"new_vendor", schema.Text{JA: "新メーカー", EN: "New vendor"}, schema.Text{JA: "メーカーパックの ID", EN: "The id of the vendor pack"}},
-		{"new_model", schema.Text{JA: "新機種", EN: "New model"}, schema.Text{}},
+		{"new_host", schema.Text{JA: "新ホスト名", EN: "New hostname"}, schema.Text{JA: "新しい機器の名前。空 = まだ決めていない。- と書くと、その旧機器は新しい機器に持っていかない（理由は備考に）", EN: "The name of the new device. Empty = not decided yet. Write - for an old device that is not carried over (the reason in Note)"}},
+		{"new_vendor", schema.Text{JA: "新メーカー", EN: "New vendor"}, schema.Text{JA: "▼ から選ぶ（メーカーパックの ID）", EN: "Pick from the list (the id of the vendor pack)"}},
+		{"new_model", schema.Text{JA: "新機種", EN: "New model"}, schema.Text{JA: "▼ から選ぶ（新メーカーの機種だけが出る）。選ぶと新旧対照表（ポート）の案が機種のポートの並びから入る", EN: "Pick from the list (the models of the new vendor). The interface map is proposed from its ports"}},
 		{"note", schema.Text{JA: "備考", EN: "Note"}, schema.Text{JA: "持っていかない機器は、その理由", EN: "Why the old device is not carried over"}},
 	}, []string{"機器対応"}}
 	ifSheet = &mgmt{"@ifs", schema.Text{JA: "新旧対照表（ポート）", EN: "Interface map"}, []mgmtCol{
@@ -92,7 +95,11 @@ func (m *mgmt) grid(lang string, rows [][]string) Grid {
 }
 
 func (d DeviceMap) cells() []string {
-	return []string{d.OldHost, d.OldVendor, d.NewHost, d.NewVendor, d.NewModel, d.Note}
+	host := d.NewHost
+	if d.Out && host == "" {
+		host = "-"
+	}
+	return []string{d.OldHost, d.OldVendor, host, d.NewVendor, d.NewModel, d.Note}
 }
 
 func (m IfMap) cells() []string { return []string{m.NewHost, m.OldIf, m.NewIf, m.Basis} }

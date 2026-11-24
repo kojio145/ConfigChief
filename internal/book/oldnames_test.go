@@ -106,3 +106,18 @@ func TestGoneNewOSColumn(t *testing.T) {
 		t.Errorf("devices = %+v", b.Devices)
 	}
 }
+
+// TestNotCarriedOver: a new host name "-" says the old device is not carried
+// over (spec 14.18.1). It reads as an empty new host name that is decided,
+// and is written back as "-".
+func TestNotCarriedOver(t *testing.T) {
+	sc := defs(t)
+	data, _ := mustUpdate(t, nil, sc, "ja", Change{
+		Data:    sampleData(),
+		Devices: []DeviceMap{{OldHost: "rt-a01", OldVendor: "cisco_ios", Out: true}, {OldHost: "rt-a02", OldVendor: "cisco_ios"}},
+	})
+	b := mustRead(t, data, sc)
+	if len(b.Devices) != 2 || !b.Devices[0].Out || b.Devices[0].NewHost != "" || b.Devices[1].Out {
+		t.Fatalf("devices = %+v", b.Devices)
+	}
+}
