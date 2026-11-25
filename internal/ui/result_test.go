@@ -156,9 +156,6 @@ func TestResult(t *testing.T) {
 	if _, err := s.Approve(v202[0].Key, "half", "sample reason", "sample-user"); err == nil {
 		t.Error("approved by a scope that is not there")
 	}
-	if _, err := s.Approve(v202[0].Key, "", " ", "sample-user"); err == nil {
-		t.Error("approved without a reason")
-	}
 
 	// One finding. The checks run again and nothing is written.
 	a, err := s.Approve(v202[0].Key, "", "sample reason", " sample-user ")

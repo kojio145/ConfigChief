@@ -44,7 +44,7 @@ html, body {
 }
 
 .brand { font-size: 18px; font-weight: 700; padding: 2px 8px 10px; }
-.nav-case { font-size: 12px; padding: 0 8px 12px; color: #aeb9c9; word-break: break-all; }
+.nav-case { font-size: 12px; padding: 4px 8px 2px; color: #aeb9c9; word-break: break-all; }
 
 #nav button {
   display: block;
@@ -73,7 +73,7 @@ h2 { font-size: 15px; margin: 22px 0 8px; }
 p { margin: 6px 0; line-height: 1.6; }
 .dim { color: var(--dim); }
 .small { font-size: 12px; }
-.path { font-family: Consolas, "MS Gothic", monospace; font-size: 12px; word-break: break-all; }
+.path { font-size: 13px; word-break: break-all; } /* the font of the screen: a Japanese name in a monospace font fell back to an old one (spec 14.22.1) */
 
 button, select, input[type="text"] {
   font: inherit;

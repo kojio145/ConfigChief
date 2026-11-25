@@ -144,6 +144,15 @@ type Approval struct {
 	At      string         `yaml:"at"`
 }
 
+// ReasonText is the reason as a list shows it: an approval may have none
+// (appendix C 3.2).
+func (a Approval) ReasonText() string {
+	if a.Reason == "" {
+		return "（理由なし）"
+	}
+	return a.Reason
+}
+
 // ApprovalScope is what an approval of a scope covers. Devices is "*",
 // "@group", or host names with commas between.
 type ApprovalScope struct {
@@ -177,8 +186,6 @@ func (p *Project) Approvals() ([]Approval, error) {
 			return nil, fmt.Errorf("%s（%s）: finding か scope のどちらか 1 つを書きます", where, a.ID)
 		case a.Scope != nil && (a.Scope.Rule == "" || a.Scope.Devices == ""):
 			return nil, fmt.Errorf("%s（%s）: scope には rule と devices が要ります", where, a.ID)
-		case a.Reason == "" || a.By == "":
-			return nil, fmt.Errorf("%s（%s）: reason と by が要ります", where, a.ID)
 		}
 		seen[a.ID] = true
 	}
@@ -233,10 +240,6 @@ func (p *Project) Judgments() ([]Judgment, error) {
 			return nil, fmt.Errorf("%s: pack・shape・devices が要ります", where)
 		case j.Verdict != VerdictManual && j.Verdict != VerdictNotNeeded && j.Verdict != VerdictHold:
 			return nil, fmt.Errorf("%s: verdict は manual・not_needed・hold のどれかです（「%s」）", where, j.Verdict)
-		case j.Verdict == VerdictNotNeeded && j.Reason == "":
-			return nil, fmt.Errorf("%s: not_needed（要らない）には reason が要ります", where)
-		case j.By == "":
-			return nil, fmt.Errorf("%s: by が要ります", where)
 		}
 	}
 	return y.Judgments, nil

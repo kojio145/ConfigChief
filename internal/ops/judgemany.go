@@ -26,16 +26,9 @@ func (e *Env) JudgeMany(source string, groups []string, verdict, reason, by stri
 		source = "old"
 	}
 	switch verdict {
-	case project.VerdictManual, project.VerdictHold:
-	case project.VerdictNotNeeded:
-		if reason == "" {
-			return nil, fmt.Errorf("「要らない」には理由を書いてください")
-		}
+	case project.VerdictManual, project.VerdictHold, project.VerdictNotNeeded:
 	default:
 		return nil, fmt.Errorf("まとめて付ける判定は manual（追加コンフィグで書く）・not_needed（要らない）・hold（保留）のどれかです（「%s」）", verdict)
-	}
-	if by == "" {
-		return nil, fmt.Errorf("判定した人の名前を書いてください")
 	}
 	if len(groups) == 0 {
 		return nil, fmt.Errorf("判定を付けるかたまりがありません")

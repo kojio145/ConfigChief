@@ -167,7 +167,7 @@ func (e *Env) editSheets() ([]byte, []*book.EditSheet, error) {
 				c.Choices, c.ChoiceNotes, c.ChoiceBy, c.ChoiceSets = ifChoices(e, sheets, es)
 			}
 			switch es.ID + "/" + c.Key {
-			case "@devices/new_host", "@devices/new_vendor", "@devices/new_model", "@ifs/new_if":
+			case "@devices/new_host", "@devices/new_vendor", "@devices/new_model", "@ifs/new_if", "@ifs/add_ports":
 				c.Mark = "write"
 			}
 		}

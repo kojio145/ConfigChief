@@ -190,9 +190,6 @@ func TestApproveFindings(t *testing.T) {
 	if len(list) != 2 || list[0].Finding != items[0].Key || list[1].Finding != items[1].Key || list[0].Scope != nil || list[0].ID == list[1].ID {
 		t.Errorf("approvals = %+v", list)
 	}
-	if _, _, err := e.ApproveFindings(items, keys, " ", "試験", at); err == nil {
-		t.Error("no reason was taken")
-	}
 }
 
 // The newest output is found again, and a check that writes nothing points

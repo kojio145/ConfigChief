@@ -80,3 +80,37 @@ func (s *Session) UnapproveMigration(id string) error {
 	}
 	return e.Unapprove(id, s.now())
 }
+
+// ApproveMigrationMany approves findings of a migration that the mapping or
+// the comparison shows, picked together: one approval each, with the same
+// reason (spec 14.22.10; appendix C 3.2). The screen asks for the list again.
+func (s *Session) ApproveMigrationMany(keys []string, reason, by string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.env == nil {
+		return "", errors.New("案件を開いていません")
+	}
+	if s.mig == nil {
+		return "", errors.New("指摘の一覧がありません。読み直してください")
+	}
+	if len(keys) == 0 {
+		return "", errors.New("承認する指摘を選んでください")
+	}
+	e, err := s.beginWrite()
+	if err != nil {
+		return "", err
+	}
+	done, left, err := e.ApproveFindings(s.mig.Items, keys, reason, by, s.now())
+	if err != nil {
+		return "", err
+	}
+	if name := strings.TrimSpace(by); name != s.name {
+		s.name = name
+		s.save()
+	}
+	msg := fmt.Sprintf("%d 件を承認しました", len(done))
+	if len(left) > 0 {
+		msg += fmt.Sprintf("。%d 件は承認できませんでした: %s", len(left), firstKinds(left))
+	}
+	return msg, nil
+}

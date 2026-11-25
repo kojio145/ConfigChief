@@ -26,6 +26,9 @@ type IfMap struct {
 	// 14.19.5): the old device of the interface and its settings now. They
 	// are written anew with every import; nothing reads them back.
 	OldHost, Now string
+	// AddPorts are new physical ports, with commas between, that go into the
+	// VLAN of the row's interface as access ports (spec 14.22.6).
+	AddPorts string
 }
 
 // Common is a row of the sheet 共通値 (appendix A 6.3).
@@ -66,6 +69,7 @@ var (
 		{"now", schema.Text{JA: "旧 IF の設定", EN: "Old interface settings"}, schema.Text{JA: "ツールが書く（表示用）。旧 IF の今の設定。取り込むたびに書き直す", EN: "Written by the tool (to read): the settings of the old interface, written anew with every import"}},
 		{"new_if", schema.Text{JA: "新 IF 名", EN: "New interface"}, schema.Text{JA: "空なら未決。- と書くと「新機器には持っていかない」", EN: "Empty = not decided. Write - for an interface that is not carried over"}},
 		{"basis", schema.Text{JA: "案の根拠", EN: "Basis"}, schema.Text{JA: "ツールが書く。人が直したら空にする", EN: "Written by the tool. Clear it when you change the name"}},
+		{"add_ports", schema.Text{JA: "足すポート", EN: "Add ports"}, schema.Text{JA: "VLAN の IF の行に書く。旧に無い新しい物理ポートを、この VLAN のアクセスポートとして足す（カンマで区切る。例 GigaEthernet1:port5,GigaEthernet1:port6）", EN: "On the row of a VLAN interface: new physical ports, not on the old device, that go into this VLAN as access ports (commas between)"}},
 	}, []string{"IF 対応"}}
 	commonSheet = &mgmt{"@common", schema.Text{JA: "共通値", EN: "Common values"}, []mgmtCol{
 		{"scope", schema.Text{JA: "範囲", EN: "Scope"}, schema.Text{JA: "* か @グループ名", EN: "* or @group"}},
@@ -109,7 +113,7 @@ func (d DeviceMap) cells() []string {
 }
 
 func (m IfMap) cells() []string {
-	return []string{m.NewHost, m.OldHost, m.OldIf, m.Now, m.NewIf, m.Basis}
+	return []string{m.NewHost, m.OldHost, m.OldIf, m.Now, m.NewIf, m.Basis, m.AddPorts}
 }
 
 // foldName makes a sheet name or a heading comparable: case and spaces do

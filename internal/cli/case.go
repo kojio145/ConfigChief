@@ -289,6 +289,9 @@ func printMapping(out io.Writer, e *ops.Env, a *convert.Applied, v *ops.Verdicts
 		t, r, _ := e.Place(n)
 		fmt.Fprintf(out, "書かなかった行（先の行とキーが同じ）: %s %s %s\n", n.Device, t, r)
 	}
+	for _, n := range a.PortsLeft {
+		fmt.Fprintf(out, "%s の足すポート %s: %s\n", n.Device, n.Value, n.Key)
+	}
 	if !all {
 		return
 	}

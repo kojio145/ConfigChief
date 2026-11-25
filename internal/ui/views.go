@@ -529,6 +529,13 @@ func (s *Session) MakeBook(from string, replace bool) (*BookView, error) {
 		v.Problems = append(v.Problems, p.String())
 	}
 	if o.Applied != nil {
+		// The ports of 足すポート (spec 14.22.6).
+		if n := len(o.Applied.Ports); n > 0 {
+			v.Messages = append(v.Messages, fmt.Sprintf("新旧対照表（ポート）の「足すポート」から、物理ポート %d 個をアクセスポートとして足しました（すでにブックにある行は変えません）", n))
+		}
+		for _, n := range o.Applied.PortsLeft {
+			v.Problems = append(v.Problems, fmt.Sprintf("%s の足すポート %s: %s", n.Device, n.Value, n.Key))
+		}
 		v.Open = table(e.MappingSheet(o.Applied, o.Mig, true))
 	}
 	return v, nil

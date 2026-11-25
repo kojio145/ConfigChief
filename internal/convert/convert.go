@@ -1,6 +1,7 @@
 package convert
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 
@@ -108,6 +109,11 @@ type Applied struct {
 	// point to (M-408).
 	Clashes []Note
 	Shared  []Note
+	// Ports lists the ports of 足すポート that were added (Value: the port,
+	// Key: its VLAN) and PortsLeft those that could not be (Value: the port,
+	// Key: why), spec 14.22.6.
+	Ports     []Note
+	PortsLeft []Note
 	// Keys gives, for each old row that was written, the key it has now:
 	// table + "\x00" + the old key text → the new key text (the rewriting
 	// report follows a line of the old side to the new one by it).
@@ -312,7 +318,66 @@ func apply(sc *schema.Set, old *model.Dataset, dev []book.DeviceMap, ifs []book.
 			}
 		}
 	}
+	if !list {
+		addPorts(a, ifs)
+	}
 	return a
+}
+
+// groupIf is the name of the interface of a VLAN group ("<device>:<n>.0").
+var groupIf = regexp.MustCompile(`^(.+):(\d+)\.0$`)
+
+// addPorts puts the ports of 足すポート into the design data (spec 14.22.6):
+// each is an access port of the VLAN of the interface of its row, with a row
+// of its own in the interfaces. A row that is there already stays as it is.
+func addPorts(a *Applied, ifs []book.IfMap) {
+	newOf := map[string]bool{}
+	for _, h := range a.Hosts {
+		newOf[h] = true
+	}
+	seen := map[string]bool{}
+	for _, m := range ifs {
+		if strings.TrimSpace(m.AddPorts) == "" || !newOf[m.NewHost] || seen[m.NewHost+"\x00"+m.OldIf] {
+			continue
+		}
+		seen[m.NewHost+"\x00"+m.OldIf] = true
+		left := func(port, why string) {
+			a.PortsLeft = append(a.PortsLeft, Note{Device: m.NewHost, Table: "switchports", Key: why, Value: port})
+		}
+		vlan := ""
+		if m.NewIf != "" && m.NewIf != "-" {
+			if r := a.Data.Tables["interfaces"].Find([]model.KV{{Name: "device", Value: m.NewHost}, {Name: "name", Value: m.NewIf}}); r != nil {
+				vlan = r.Get("vlan_id")
+			}
+			if g := groupIf.FindStringSubmatch(m.NewIf); vlan == "" && g != nil {
+				vlan = g[2]
+			}
+		}
+		for _, p := range strings.Split(m.AddPorts, ",") {
+			if p = strings.TrimSpace(p); p == "" {
+				continue
+			}
+			switch {
+			case m.NewIf == "" || m.NewIf == "-":
+				left(p, "旧 IF "+m.OldIf+" の新 IF 名が決まっていないので、足すポートを書きません")
+				continue
+			case vlan == "":
+				left(p, "新 IF "+m.NewIf+" の VLAN が分からないので、足すポートを書きません（VLAN の IF の行に書きます）")
+				continue
+			}
+			o := []model.Origin{{Kind: "book"}}
+			cell := func(v string) *model.Cell { return &model.Cell{Values: []string{v}, Origins: o} }
+			sp := &model.Row{Table: "switchports", Key: []model.KV{{Name: "device", Value: m.NewHost}, {Name: "if_name", Value: p}},
+				Cells: map[string]*model.Cell{"device": cell(m.NewHost), "if_name": cell(p), "mode": cell("access"), "access_vlan": cell(vlan)}}
+			if !a.Data.Adopt(sp) {
+				left(p, "スイッチポートの表に、このポートの行がもうあります（そちらを使います）")
+				continue
+			}
+			a.Data.Adopt(&model.Row{Table: "interfaces", Key: []model.KV{{Name: "device", Value: m.NewHost}, {Name: "name", Value: p}},
+				Cells: map[string]*model.Cell{"device": cell(m.NewHost), "name": cell(p), "enabled": cell("true")}})
+			a.Ports = append(a.Ports, Note{Device: m.NewHost, Table: "switchports", Key: vlan, Value: p})
+		}
+	}
 }
 
 // fromDefault tells that every value of a cell was put in by a pack, and not

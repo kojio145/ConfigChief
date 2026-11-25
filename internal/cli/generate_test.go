@@ -118,8 +118,6 @@ func TestGenerateCommands(t *testing.T) {
 		append([]string{"approve", "--project", dir, "--finding", key[1]}, who...),
 		append([]string{"approve", "--project", dir, "--rule", "V-106", "--devices", "*"}, who...),
 		append([]string{"approve", "--project", dir, "--finding", keys[0][1], "--devices", "*"}, who...),
-		{"approve", "--project", dir, "--finding", keys[0][1], "--by", "sample-user"},
-		{"approve", "--project", dir, "--finding", keys[0][1], "--reason", "sample reason"},
 	} {
 		if code, _, errOut := do(args...); code != 2 || errOut == "" {
 			t.Errorf("%v = %d, stderr %q", args, code, errOut)

@@ -241,7 +241,7 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 			fin.State, fin.Text = StepTodo, "結果の指摘を確かめてください（直すか承認）"
 		case snap.Errors+snap.Warnings > 0:
 			fin.State, fin.Note = StepTodo, fmt.Sprintf("%d 件", snap.Errors+snap.Warnings)
-			fin.Text = fmt.Sprintf("未承認の指摘が %d 件あります（エラー %d・警告 %d）。値を直すか、理由を付けて承認してください", snap.Errors+snap.Warnings, snap.Errors, snap.Warnings)
+			fin.Text = fmt.Sprintf("未承認の指摘が %d 件あります（エラー %d・警告 %d）。値を直すか、承認してください", snap.Errors+snap.Warnings, snap.Errors, snap.Warnings)
 		default:
 			fin.State = StepDone
 		}

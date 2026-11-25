@@ -62,11 +62,8 @@ func (e *Env) columnName(table, s string) (string, bool) {
 // (nothing is written by them): an approval is for a finding that is there.
 func (e *Env) Approve(req ApproveRequest, now time.Time) (*Approved, error) {
 	req.Reason, req.By = strings.TrimSpace(req.Reason), strings.TrimSpace(req.By)
+	// The reason and the name may be empty (appendix C 3.2, 2026-11-25).
 	switch {
-	case req.Reason == "":
-		return nil, fmt.Errorf("承認の理由を書いてください")
-	case req.By == "":
-		return nil, fmt.Errorf("承認者の名前を書いてください")
 	case (req.Finding == "") == (req.Rule == ""):
 		return nil, fmt.Errorf("指摘の指紋か、範囲（チェックの ID と機器）のどちらか一方を指定してください")
 	}
@@ -271,12 +268,6 @@ func (e *Env) Unapprove(id string, now time.Time) error {
 // why.
 func (e *Env) ApproveFindings(items []Judged, keys []string, reason, by string, now time.Time) (done []project.Approval, left []string, err error) {
 	reason, by = strings.TrimSpace(reason), strings.TrimSpace(by)
-	switch {
-	case reason == "":
-		return nil, nil, fmt.Errorf("承認の理由を書いてください")
-	case by == "":
-		return nil, nil, fmt.Errorf("承認者の名前を書いてください")
-	}
 	byKey := map[string]Judged{}
 	for _, f := range items {
 		byKey[f.Key] = f

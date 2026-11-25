@@ -350,5 +350,10 @@ func (a *App) ApproveMany(keys []string, reason, by string) (r0 *ui.ResultView, 
 	return a.s.ApproveMany(keys, reason, by)
 }
 
+func (a *App) ApproveMigrationMany(keys []string, reason, by string) (r0 string, err error) {
+	defer a.guard("ApproveMigrationMany", &err)
+	return a.s.ApproveMigrationMany(keys, reason, by)
+}
+
 // BookWritable tells whether Excel has let the book go (spec 14.10.7).
 func (a *App) BookWritable() bool { defer a.guard("BookWritable", nil); return a.s.BookWritable() }

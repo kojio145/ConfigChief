@@ -578,7 +578,7 @@ func uniq(list []string) []string {
 func (e *Env) mappingSheet(a *convert.Applied, v *Verdicts, all bool) report.Sheet {
 	s := report.Sheet{
 		Name:   "新旧対照表で決まっていないところ",
-		Lead:   "パラメータブックの「新旧対照表（機器）」「新旧対照表（ポート）」で、まだ決まっていないところです。直すか、理由を付けて承認します（画面では行を押します。コマンドラインでは、指紋を approve に渡します）。",
+		Lead:   "パラメータブックの「新旧対照表（機器）」「新旧対照表（ポート）」で、まだ決まっていないところです。直すか、承認します（画面では行を押します。コマンドラインでは、指紋を approve に渡します）。",
 		Header: []string{"チェック", "旧機器", "表", "行", "列", "対象", "内容", "状態", "承認", "指紋", "直し方"},
 	}
 	if all {
@@ -664,7 +664,7 @@ func (e *Env) compareDoc(o *CompareOutcome, now time.Time) *report.Doc {
 			report.Pair{Label: "未承認の警告", Value: num(c.Warnings)},
 			report.Pair{Label: "承認済みの指摘", Value: num(c.Approved)},
 		)
-		d.Notes = append(d.Notes, "旧との違いは、移行のチェック（M-403〜M-408）の指摘です。意図した違いは、理由を付けて承認します（画面では行を押します。コマンドラインでは、各行の「指紋」を approve に渡すか、範囲で承認します）。")
+		d.Notes = append(d.Notes, "旧との違いは、移行のチェック（M-403〜M-408）の指摘です。意図した違いは、承認します（画面では行を押します。コマンドラインでは、各行の「指紋」を approve に渡すか、範囲で承認します）。")
 	}
 	oldIsA := o.A.Name == "old"
 	for _, s := range []*Side{o.A, o.B} {

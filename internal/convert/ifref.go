@@ -64,6 +64,35 @@ func IfNow(sc *schema.Set, old *model.Dataset, host string, r *model.Row) string
 	add("VLAN ", r.Get("encap_vlan"))
 	add("VLAN ", r.Get("vlan_id"))
 	add("ブリッジグループ ", r.Get("bridge_group"))
+	// The switch port of the interface (spec 14.22.5): an access port told
+	// only by its description could not be told apart.
+	if sp := old.Tables["switchports"].Find([]model.KV{{Name: "device", Value: host}, {Name: "if_name", Value: r.Get("name")}}); sp != nil {
+		switch mode := sp.Get("mode"); mode {
+		case "trunk":
+			t := "トランク"
+			var in []string
+			if v := sp.Get("allowed_vlans"); v != "" {
+				in = append(in, "許可 VLAN "+v)
+			}
+			if v := sp.Get("native_vlan"); v != "" {
+				in = append(in, "ネイティブ "+v)
+			}
+			if len(in) > 0 {
+				t += "（" + strings.Join(in, "・") + "）"
+			}
+			parts = append(parts, t)
+		case "routed":
+		default:
+			if v := sp.Get("access_vlan"); v != "" {
+				parts = append(parts, "アクセス VLAN "+v)
+			} else if mode == "access" {
+				parts = append(parts, "アクセス VLAN 1（既定）")
+			} else if mode != "" {
+				parts = append(parts, "スイッチポート "+mode)
+			}
+		}
+		add("音声 VLAN ", sp.Get("voice_vlan"))
+	}
 	if r.Get("enabled") == "false" {
 		parts = append(parts, "無効（shutdown）")
 	}
@@ -90,7 +119,8 @@ func usedBy(sc *schema.Set, old *model.Dataset, host, name string) []string {
 	}
 	var out []string
 	for _, t := range sc.Tables {
-		if t.Name == "interfaces" || old.Tables[t.Name] == nil {
+		// The switch port is told on its own (spec 14.22.5).
+		if t.Name == "interfaces" || t.Name == "switchports" || old.Tables[t.Name] == nil {
 			continue
 		}
 		var cols []string

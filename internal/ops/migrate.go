@@ -296,7 +296,7 @@ func stateCellsOf(j *Judged) ([]string, string) {
 		return []string{j.RuleID, "情報", "", j.Key}, ""
 	case j.Approval != nil:
 		a := j.Approval
-		return []string{j.RuleID, "承認済み", a.ID + " " + a.By + ": " + a.Reason, j.Key}, ""
+		return []string{j.RuleID, "承認済み", a.ID + " " + strings.TrimPrefix(a.By+": ", ": ") + a.ReasonText(), j.Key}, ""
 	case j.Severity == check.Error:
 		return []string{j.RuleID, "未承認（" + sev + "）", "", j.Key}, report.MarkUnknown
 	}
@@ -322,7 +322,7 @@ func approvalSheet(v *Verdicts) report.Sheet {
 		if note != "" {
 			mark = report.MarkWarn
 		}
-		s.Rows = append(s.Rows, []string{a.ID, approvalTarget(a), rule, dev, a.Reason, a.By, a.At, num(v.Hits[a.ID]), note})
+		s.Rows = append(s.Rows, []string{a.ID, approvalTarget(a), rule, dev, a.ReasonText(), a.By, a.At, num(v.Hits[a.ID]), note})
 		s.Marks = append(s.Marks, mark)
 	}
 	return s

@@ -311,9 +311,6 @@ func TestGenerateBlocked(t *testing.T) {
 			t.Errorf("approved %+v: %+v", r, a)
 		}
 	}
-	if _, err := e.Approve(ApproveRequest{Finding: v202[0].Key, By: "sample-user"}, at); err == nil {
-		t.Error("approved without a reason")
-	}
 	if list, _ := e.Proj.Approvals(); len(list) != 0 {
 		t.Fatalf("approvals = %+v", list)
 	}

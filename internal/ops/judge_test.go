@@ -121,8 +121,6 @@ func TestJudgeLines(t *testing.T) {
 		req  JudgeRequest
 		want string
 	}{
-		{JudgeRequest{Group: sla.ID, Verdict: "not_needed", By: "admin"}, "理由"},
-		{JudgeRequest{Group: sla.ID, Verdict: "manual"}, "名前"},
 		{JudgeRequest{Group: sla.ID, Verdict: "done", By: "admin"}, "manual"},
 		{JudgeRequest{Group: "zzzz", Verdict: "hold", By: "admin"}, "ありません"},
 		{JudgeRequest{Group: sla.ID, Verdict: "hold", By: "admin", Devices: "rt-a01,rt-z99"}, "rt-z99"},
@@ -288,10 +286,10 @@ func TestJudgeStaleAndFaults(t *testing.T) {
 
 	// A file that is written wrong stops the import and the judging, and
 	// tells where.
-	if err := writeTestFile(e.Proj.Path("state/judgments.yaml"), []byte("judgments:\n  - pack: cisco_ios\n    shape: ip sla <n>\n    devices: \"*\"\n    verdict: not_needed\n    by: admin\n"), 0o644); err != nil {
+	if err := writeTestFile(e.Proj.Path("state/judgments.yaml"), []byte("judgments:\n  - pack: cisco_ios\n    shape: ip sla <n>\n    devices: \"*\"\n    verdict: later\n    by: admin\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.RunImport("old", "", at); err == nil || !strings.Contains(err.Error(), "state/judgments.yaml の 1 件目") || !strings.Contains(err.Error(), "reason") {
+	if _, err := e.RunImport("old", "", at); err == nil || !strings.Contains(err.Error(), "state/judgments.yaml の 1 件目") || !strings.Contains(err.Error(), "verdict") {
 		t.Errorf("import with a wrong judgment: %v", err)
 	}
 	if _, err := e.Review("old"); err == nil {

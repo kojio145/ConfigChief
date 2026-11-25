@@ -72,8 +72,6 @@ func TestJudge(t *testing.T) {
 
 	// What is refused is not written.
 	for _, c := range []struct{ want, group, devices, verdict, reason, by string }{
-		{"名前を書いてください", sla.ID, "", "manual", "", " "},
-		{"理由を書いてください", sla.ID, "", "not_needed", "", "admin"},
 		{"どれかです", sla.ID, "", "later", "", "admin"},
 		{"読めなかった行にありません", "00000000", "", "hold", "", "admin"},
 		{"行がありません: rt-a09", sla.ID, "rt-a09", "hold", "", "admin"},

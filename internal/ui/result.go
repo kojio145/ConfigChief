@@ -337,7 +337,7 @@ func (s *Session) result(e *ops.Env, o *ops.GenerateOutcome, now time.Time) *Res
 
 	for _, a := range o.Approvals {
 		av := ApprovalView{ID: a.ID, Target: ops.ApprovalTarget(a), Rule: a.Rule, Devices: a.Device,
-			Reason: a.Reason, By: a.By, At: a.At, Hits: o.Hits[a.ID], Note: o.Refused[a.ID]}
+			Reason: a.ReasonText(), By: a.By, At: a.At, Hits: o.Hits[a.ID], Note: o.Refused[a.ID]}
 		if a.Scope != nil {
 			av.Rule, av.Devices = a.Scope.Rule, a.Scope.Devices
 		}
@@ -371,7 +371,7 @@ func findingView(e *ops.Env, o *ops.GenerateOutcome, f ops.Judged) FindingView {
 	switch {
 	case f.Approval != nil:
 		fv.State, fv.StateWord = "approved", "承認済み"
-		fv.Approval, fv.Reason, fv.By, fv.When = f.Approval.ID, f.Approval.Reason, f.Approval.By, f.Approval.At
+		fv.Approval, fv.Reason, fv.By, fv.When = f.Approval.ID, f.Approval.ReasonText(), f.Approval.By, f.Approval.At
 	case f.Severity == check.Info:
 		fv.State, fv.StateWord = "info", "情報"
 	case !check.Approvable(f.RuleID):

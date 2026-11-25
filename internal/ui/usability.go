@@ -155,9 +155,6 @@ func (s *Session) ApproveMany(keys []string, reason, by string) (*ResultView, er
 	if s.draft {
 		return nil, errors.New("下書きでチェックした結果では承認できません。表の編集で保存してから「チェックだけ」を押し、その結果で承認してください")
 	}
-	if strings.TrimSpace(reason) == "" || strings.TrimSpace(by) == "" {
-		return nil, errors.New("理由と承認者を書いてください")
-	}
 	if len(keys) == 0 {
 		return nil, errors.New("承認する指摘を選んでください")
 	}

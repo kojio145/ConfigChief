@@ -496,16 +496,9 @@ func (e *Env) JudgeLines(req JudgeRequest, now time.Time) (*JudgeOutcome, error)
 		req.Source = "old"
 	}
 	switch req.Verdict {
-	case project.VerdictManual, project.VerdictHold, VerdictNone:
-	case project.VerdictNotNeeded:
-		if req.Reason == "" {
-			return nil, fmt.Errorf("「要らない」には理由を書いてください")
-		}
+	case project.VerdictManual, project.VerdictHold, VerdictNone, project.VerdictNotNeeded:
 	default:
 		return nil, fmt.Errorf("判定は manual（追加コンフィグで書く）・not_needed（要らない）・hold（保留）・none（取り消し）のどれかです（「%s」）", req.Verdict)
-	}
-	if req.By == "" && req.Verdict != VerdictNone {
-		return nil, fmt.Errorf("判定した人の名前を書いてください")
 	}
 	src, err := e.importSide(req.Source, "")
 	if err != nil {

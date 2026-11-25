@@ -570,7 +570,7 @@ func (e *Env) checkDoc(o *GenerateOutcome, now time.Time) *report.Doc {
 		case note != "":
 			mark = report.MarkWarn
 		}
-		appr.Rows = append(appr.Rows, []string{a.ID, approvalTarget(a), rule, dev, a.Reason, a.By, a.At, hits, note})
+		appr.Rows = append(appr.Rows, []string{a.ID, approvalTarget(a), rule, dev, a.ReasonText(), a.By, a.At, hits, note})
 		appr.Marks = append(appr.Marks, mark)
 	}
 

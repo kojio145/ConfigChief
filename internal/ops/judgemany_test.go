@@ -1,7 +1,6 @@
 package ops
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -11,9 +10,6 @@ func TestJudgeMany(t *testing.T) {
 	j := review(t, e, "old")
 	if len(j.Groups) < 2 {
 		t.Fatalf("groups: %d", len(j.Groups))
-	}
-	if _, err := e.JudgeMany("old", []string{j.Groups[0].ID}, "not_needed", "", "admin", at); err == nil || !strings.Contains(err.Error(), "理由") {
-		t.Errorf("not_needed without a reason: %v", err)
 	}
 	if _, err := e.JudgeMany("old", nil, "hold", "", "admin", at); err == nil {
 		t.Error("no group is refused")

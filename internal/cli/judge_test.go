@@ -64,8 +64,6 @@ func TestJudgeCommand(t *testing.T) {
 		{"両方を指定", []string{"--group", sla}},
 		{"両方を指定", []string{"--verdict", "manual", "--by", "admin"}},
 		{"両方を指定", []string{"--group", sla, "--verdict", "manual", "--by", "admin", "--all"}},
-		{"名前を書いてください", []string{"--group", sla, "--verdict", "manual"}},
-		{"理由を書いてください", []string{"--group", sla, "--verdict", "not_needed", "--by", "admin"}},
 		{"どれかです", []string{"--group", sla, "--verdict", "later", "--by", "admin"}},
 		{"読めなかった行にありません", []string{"--group", "00000000", "--verdict", "hold", "--by", "admin"}},
 		{"読めなかった行にありません", []string{"--group", sla, "--verdict", "hold", "--by", "admin", "--source", "new", "--devices", "rt-a09"}},
