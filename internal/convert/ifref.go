@@ -61,7 +61,7 @@ func IfNow(sc *schema.Set, old *model.Dataset, host string, r *model.Row) string
 	}
 	add("", r.Get("ipv6"))
 	add("VRF: ", r.Get("vrf"))
-	add("VLAN ", r.Get("encap_vlan"))
+	add("タグ VLAN ", r.Get("encap_vlan")) // a subinterface: told from the interface of a VLAN (spec 14.23.1)
 	add("VLAN ", r.Get("vlan_id"))
 	add("ブリッジグループ ", r.Get("bridge_group"))
 	// The switch port of the interface (spec 14.22.5): an access port told

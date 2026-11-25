@@ -63,9 +63,9 @@ var (
 		{"note", schema.Text{JA: "備考", EN: "Note"}, schema.Text{JA: "持っていかない機器は、その理由", EN: "Why the old device is not carried over"}},
 	}, []string{"機器対応"}}
 	ifSheet = &mgmt{"@ifs", schema.Text{JA: "新旧対照表（ポート）", EN: "Interface map"}, []mgmtCol{
-		{"new_host", schema.Text{JA: "新ホスト名", EN: "New hostname"}, schema.Text{}},
+		{"new_host", schema.Text{JA: "新ホスト名", EN: "New hostname"}, schema.Text{JA: "新しい機器のホスト名（新旧対照表（機器）の新ホスト名）", EN: "The host name of the new device (as on the device map)"}},
 		{"old_host", schema.Text{JA: "旧ホスト名", EN: "Old hostname"}, schema.Text{JA: "ツールが書く（表示用）。その旧 IF を持つ旧機器", EN: "Written by the tool (to read): the old device of the interface"}},
-		{"old_if", schema.Text{JA: "旧 IF 名", EN: "Old interface"}, schema.Text{}},
+		{"old_if", schema.Text{JA: "旧 IF 名", EN: "Old interface"}, schema.Text{JA: "旧機器の IF の名前（旧コンフィグにある名前）", EN: "The name of the interface on the old device (as in the old configuration)"}},
 		{"now", schema.Text{JA: "旧 IF の設定", EN: "Old interface settings"}, schema.Text{JA: "ツールが書く（表示用）。旧 IF の今の設定。取り込むたびに書き直す", EN: "Written by the tool (to read): the settings of the old interface, written anew with every import"}},
 		{"new_if", schema.Text{JA: "新 IF 名", EN: "New interface"}, schema.Text{JA: "空なら未決。- と書くと「新機器には持っていかない」", EN: "Empty = not decided. Write - for an interface that is not carried over"}},
 		{"basis", schema.Text{JA: "案の根拠", EN: "Basis"}, schema.Text{JA: "ツールが書く。人が直したら空にする", EN: "Written by the tool. Clear it when you change the name"}},

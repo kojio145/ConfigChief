@@ -47,6 +47,11 @@ type Progress struct {
 type OpenCount struct {
 	Lines int
 	Known bool
+	// IfsOpen is the count of the findings M-406 (a new interface name not
+	// decided) that are not approved; IfsKnown tells it was counted (spec
+	// 14.23.4: rows approved as they are count as decided).
+	IfsOpen  int
+	IfsKnown bool
 }
 
 // CountOpen reads the configurations of both sides again and counts the
@@ -67,7 +72,16 @@ func (e *Env) CountOpen() OpenCount {
 		}
 		n += j.Open + j.Hold
 	}
-	return OpenCount{Lines: n, Known: true}
+	out := OpenCount{Lines: n, Known: true}
+	if m, err := e.Mapping(); err == nil && m.Mig != nil {
+		out.IfsKnown = true
+		for _, f := range m.Mig.Items {
+			if f.RuleID == "M-406" && f.Approval == nil {
+				out.IfsOpen++
+			}
+		}
+	}
+	return out
 }
 
 // ProgressMark is a mark of what the count of the unhandled lines depends
@@ -89,7 +103,7 @@ func (e *Env) ProgressMark() string {
 			return nil
 		})
 	}
-	for _, rel := range []string{"input/old", "input/new", "state/judgments.yaml", "state/sources.yaml", "packs", "extra", "project.yaml"} {
+	for _, rel := range []string{"input/old", "input/new", "state/judgments.yaml", "state/approvals.yaml", "state/sources.yaml", "packs", "extra", "project.yaml"} {
 		add(rel)
 	}
 	add(e.Proj.Config.Book)
@@ -169,6 +183,9 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 				sort.Strings(noIfs)
 				ifs.State, ifs.Note, ifs.Act = StepTodo, fmt.Sprintf("%d 台", len(noIfs)), "propose-ifs"
 				ifs.Text = fmt.Sprintf("新ホスト名を書いた %d 台（%s）に、新旧対照表（ポート）の行がありません。新旧対照表（ポート）の案を作ってください", len(noIfs), short(noIfs))
+			case undecided > 0 && open.IfsKnown && open.IfsOpen == 0:
+				// Every row left empty is approved as it is.
+				ifs.State, ifs.Note = StepDone, "承認済み"
 			case undecided > 0:
 				ifs.State, ifs.Note = StepTodo, fmt.Sprintf("%d 行", undecided)
 				ifs.Text = fmt.Sprintf("「新旧対照表（ポート）」の新 IF 名が %d 行空です。新しい IF 名を書いてください（持っていかない IF は -）", undecided)
@@ -180,7 +197,7 @@ func (e *Env) Progress(open OpenCount) (*Progress, error) {
 			case t != nil && len(t.Rows) > 0:
 				book.State, bookDone = StepDone, true
 			case dev.State == StepDone && ifs.State == StepDone && len(old) > 0:
-				book.State, book.Text = StepTodo, "新旧対照表が決まりました。「新しい名前に置き換えてパラメータブックに書く」を押してください"
+				book.State, book.Text = StepTodo, "新旧対照表が決まりました。「パラメータブックに書く」を押してください"
 			}
 		}
 		add(dev)

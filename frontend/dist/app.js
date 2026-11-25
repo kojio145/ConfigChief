@@ -641,6 +641,9 @@
       st.mig.sel = "";
       st.mig.reason = "";
     }
+    // The table of the ports is read again when the screen is come back to
+    // (the book may have been changed elsewhere), unless it holds picks.
+    if (page === "mapping" && st.page !== "mapping" && st.map.link && !linkPendN(st.map.link)) st.map.link = null;
     if (page === "mapping" && st.page !== "mapping") {
       // The part with something left is opened, unless the way here chose
       // one (spec 14.17.2).
@@ -913,7 +916,8 @@
     const heads = cols.map((c) => {
       const x = t.header[c];
       const mark = fs.sort.ci === c ? (fs.sort.dir > 0 ? " ▲" : " ▼") : "";
-      const th = h("th", { class: "sortable", title: "押すと並べ替えます（昇順 → 降順 → 元の順）" }, x, h("span", { class: "sort-mark" }, mark));
+      const about = (opts.tips && opts.tips[x]) || HEAD_TIPS[x] || "";
+      const th = h("th", { class: "sortable", "data-tip": (about ? about + "\n" : "") + "押すと並べ替えます（昇順 → 降順 → 元の順）" }, x, h("span", { class: "sort-mark" }, mark));
       if (fs.widths[c]) th.style.width = th.style.minWidth = th.style.maxWidth = fs.widths[c] + "px";
       th.addEventListener("click", (e) => {
         if (e.target.classList.contains("rz")) return;
@@ -1797,6 +1801,36 @@
     };
     const sel = list.findIndex((g) => g.id === jd.sel[s]);
     detail(list[sel]);
+    // Groups picked with the boxes and judged together (spec 14.23.5).
+    const P = (jd.pickIds = jd.pickIds || {})[s] = (jd.pickIds[s] || {});
+    for (const k of Object.keys(P)) if (!list.some((g) => g.id === k)) delete P[k];
+    const bar = h("div", { class: "approve judge-pick-bar", id: "judge-pick-bar" });
+    const m = jd.many;
+    const drawBar = () => {
+      const ids = Object.keys(P);
+      bar.textContent = "";
+      if (!ids.length) {
+        add(bar, [h("span", { class: "dim small" }, "左の箱でかたまりを選ぶと、選んだものにまとめて判定を付けられます（見出しの箱で、表示しているものを全部選べます）。")]);
+        return;
+      }
+      const lines = list.filter((g) => P[g.id]).reduce((n, g) => n + g.heads + g.below, 0);
+      add(bar, [
+        h("div", { class: "row" },
+          h("b", null, `${ids.length} 個（${lines} 行）を選んでいます`),
+          seg(VERDICTS, m.verdict, (x) => { m.verdict = x; drawBar(); }),
+          h("input", { type: "text", id: "judge-pick-reason", value: m.reason, placeholder: "理由（書かなくてもよい）", oninput: (e) => { m.reason = e.target.value; } }),
+          button(`選んだ ${ids.length} 個に付ける`, () => run("判定をまとめて付けています", async () => {
+            showJudge(s, await api().JudgeMany(s, ids, m.verdict, m.reason, jd.by || ""));
+            jd.pickIds[s] = {};
+            if (st.imp.views[s]) jd.changed[s] = true;
+            delete st.imp.lines[s];
+            if (st.imp.tab[s] === "lines") st.imp.tab[s] = "files";
+          }, true), { class: "primary", id: "judge-pick-go" }),
+          button("選ぶのをやめる", () => { jd.pickIds[s] = {}; render(); }, { class: "link" })),
+        h("p", { class: "dim small" }, "全台に付けます。機器を指定した判定は、そのまま残ります。")]);
+    };
+    drawBar();
+    const checks = { can: () => true, on: (i) => !!P[list[i].id], set: (i, on) => { if (on) P[list[i].id] = true; else delete P[list[i].id]; }, changed: drawBar };
     afterDraw.push(() => {
       const tr = document.querySelector("#judge tr.sel");
       const wrap = tr && tr.closest(".table-wrap");
@@ -1815,9 +1849,10 @@
         h("span", { class: "dim small" }, v.groups.length
           ? `かたまり ${v.groups.length} 個のうち、未判定・保留があるのは ${v.groups.filter((g) => g.open).length} 個です。表示は ${list.length} 個です。`
           : "読めなかった行はありません。")),
+      list.length ? bar : null,
       list.length > 1 ? judgeManyBox(s, list) : null,
       h("div", { class: "lines", id: "judge" },
-        h("div", { class: "findings-list" }, tableView(t, { id: `judge/${s}/${jd.only}`, onPick: pick, selected: sel })),
+        h("div", { class: "findings-list" }, tableView(t, { id: `judge/${s}/${jd.only}`, onPick: pick, selected: sel, checks })),
         side),
       // For the people who mend the packs, under the work (spec 14.18.8).
       h("details", { class: "fold-menu", id: "carry-fold", open: !!(st.folds["carry-fold"] || jd.carry[s]), ontoggle: (e) => { st.folds["carry-fold"] = e.target.open; } },
@@ -2078,6 +2113,7 @@
     run("新旧対照表（ポート）の案を作っています", async () => {
       st.mig.msg = await api().ProposeIfs();
       st.map.view = await api().Mapping();
+      if (st.map.link && !linkPendN(st.map.link)) st.map.link = null;
       st.map.tab = "ifs";
     }, true);
   }
@@ -2104,6 +2140,7 @@
         st.mig.msg = r.message;
         st.map.redo = null;
         st.map.view = await api().Mapping();
+      if (st.map.link && !linkPendN(st.map.link)) st.map.link = null;
       } else rd.view = r;
     }, true);
     const all = hosts.length > 0 && hosts.every((x) => rd.picked[x]);
@@ -2128,7 +2165,7 @@
           rows: rv.rows.map((r) => [r.newHost, r.oldIf, r.was || "（空）", r.wasBasis, r.now || "（空）", r.basis]) }, { id: "redo/rows" }) : null) : null);
   }
 
-  // ---- 機器ごとに結ぶ (spec 14.20) ----
+  // ---- 旧 IF ごとに新 IF を選ぶ (spec 14.20, 14.23) ----
   //
   // st.map.link holds the panel: ifs and devs are the sheets 新旧対照表（ポート）
   // and 新旧対照表（機器） as the book has them, pend the new interface names
@@ -2136,25 +2173,32 @@
 
   const BARE_NOW = ["（設定なし）", "無効（shutdown）"];
 
-  async function openLink(host) {
-    if (st.home && st.home.draft) {
-      st.edit.msg = "表の編集に、保存していない変更があります。先に「保存」するか「下書きを捨てる」を押してから、もう一度「機器ごとに結ぶ」を押してください";
-      openEdit({ sheet: "@ifs" });
-      return;
-    }
-    const lk = st.map.link || { host: "", sel: 0, pend: {}, addp: {}, copy: null, typed: "" };
+  // linkLoad reads the sheets of the table of the ports without the window
+  // of a step (spec 14.23.1): the table is read when the part is shown, and
+  // the buttons of the screen stay to be pressed meanwhile.
+  async function linkLoad() {
+    const mp = st.map;
+    if (mp.linkWait) return;
+    mp.linkWait = true;
+    const lk = mp.link || { host: "", sel: 0, pend: {}, addp: {}, copy: null, typed: "" };
     lk.addp = lk.addp || {};
-    await run("新旧対照表（ポート）を読んでいます", async () => {
+    try {
       lk.ifs = await api().EditSheet("@ifs");
       lk.devs = await api().EditSheet("@devices");
-    });
-    if (!lk.ifs) return;
-    st.map.link = lk;
+      lk.err = "";
+    } catch (e) {
+      lk.err = errText(e);
+    }
+    mp.linkWait = false;
+    if (!lk.ifs) { mp.linkErr = lk.err; if (st.page === "mapping" && !busy) render(); return; }
+    mp.linkErr = "";
+    mp.link = lk;
     const hosts = linkHosts(lk);
     if (!hosts.includes(lk.host)) lk.host = hosts.find((x) => linkLeft(lk, x) > 0) || hosts[0] || "";
     linkPickFirst(lk);
-    render();
+    if (st.page === "mapping" && !busy) render();
   }
+
 
   function linkCols(v) {
     const k = (key) => v.columns.findIndex((c) => c.key === key);
@@ -2228,8 +2272,10 @@
         }
       }
     }
+    // A port picked for an old interface leaves the VLAN it was put into.
+    for (const o of rows) { const a = linkAdds(lk, o); if (a.includes(name)) linkSetAdds(lk, o, a.filter((x) => x !== name)); }
     linkSet(lk, r, name);
-    lk.msg = moved ? `${name} は旧 ${moved} から外して、こちらに結びました（旧 ${moved} は未決になりました）` : "";
+    lk.msg = moved ? `${name} を旧 ${moved} から付け替えました（旧 ${moved} は未決に戻りました）` : "";
     linkNext(lk);
     render();
   }
@@ -2373,6 +2419,7 @@
     });
     // A device that is done goes on to the next with something left (spec
     // 14.22.8).
+    lk.leftMsg = linkLeft(lk, was);
     const next = linkLeft(lk, was) ? "" : linkHosts(lk).find((x) => x !== was && linkLeft(lk, x) > 0);
     if (next) {
       lk.host = next;
@@ -2387,11 +2434,14 @@
     loadNext();
   }
 
-  async function linkClose() {
+  // linkThrow throws away what was picked and not saved.
+  async function linkThrow() {
     const lk = st.map.link;
     const n = linkPendN(lk);
-    if (n && !(await ask("結ぶ欄を閉じる", `保存していない ${n} 行の割り当てを捨てます。`, "捨てて閉じる"))) return;
-    st.map.link = null;
+    if (n && !(await ask("選んだものを捨てる", `保存していない ${n} 行を捨てます。`, "捨てる"))) return;
+    lk.pend = {};
+    lk.addp = {};
+    lk.msg = "";
     render();
   }
 
@@ -2427,51 +2477,85 @@
   // linkVlanBox shows, for an old interface of a VLAN, the old access ports of
   // the VLAN and the ports of the new switch to add to its group (spec
   // 14.22.6).
-  function linkVlanBox(lk, sel, rows, choices, holder) {
+  // linkVlanBox tells, under the row of an old interface of a VLAN, its old
+  // access ports and the ports picked for them (spec 14.22.6).
+  function linkVlanBox(lk, sel, rows) {
     const c = linkCols(lk.ifs);
     const vlan = nowVlanIf((sel.cells[c.now] || "").trim());
     if (!vlan) return null;
     const to = linkVal(lk, sel);
     const access = rows.filter((r) => nowAccess((r.cells[c.now] || "").trim()) === vlan);
     const adds = linkAdds(lk, sel);
-    // The ports of the switch: the names of a port of a built-in switch.
-    const sw = choices.filter((x) => /:port\d+$/i.test(x));
-    const takenByAdd = {};
-    for (const r of rows) if (r !== sel) for (const p of linkAdds(lk, r)) takenByAdd[p] = (r.cells[c.old] || "").trim();
-    return h("div", { class: "box", id: "link-vlan" },
-      h("b", null, `VLAN ${vlan} の物理ポート`),
-      access.length
-        ? h("ul", { class: "small" }, access.map((r) => {
-          const v = linkVal(lk, r);
-          return h("li", null, `旧 ${(r.cells[c.old] || "").trim()} → ${v === "-" ? "-（持っていかない）" : v || "（未決。左で選んで、右の物理ポートに結びます）"}`);
-        }))
-        : h("p", { class: "dim small" }, "旧機器に、この VLAN のアクセスポートはありません。"),
-      !to || to === "-"
-        ? h("p", { class: "dim small" }, "この旧 IF を新しい IF（VLAN グループの IF など）に結ぶと、旧に無い物理ポートを足せます。")
-        : sw.length
-          ? [h("p", { class: "small" }, `旧に無い物理ポートを ${to} の VLAN に足す（足すポート）:`),
-            h("div", { class: "row link-adds" }, sw.map((p) => {
-              const by = holder[p] ? "旧 " + holder[p].join(", ") : takenByAdd[p] ? "旧 " + takenByAdd[p] + " の足すポート" : "";
-              return h("label", { class: by ? "dim" : null, title: by ? `${by} に使っています` : "" },
-                h("input", { type: "checkbox", "data-add": p, checked: adds.includes(p), disabled: !!by && !adds.includes(p),
-                  onchange: (e) => { const list = adds.filter((x) => x !== p); if (e.target.checked) list.push(p); linkSetAdds(lk, sel, list); render(); } }),
-                " " + p + (by ? `（${by}）` : ""));
-            }))]
-          : h("p", { class: "dim small" }, "新機種に内蔵スイッチのポートがありません（足すポートは、表の編集で「足すポート」の列に書けます）。"));
+    const list = access.map((r) => {
+      const v = linkVal(lk, r);
+      return `旧 ${(r.cells[c.old] || "").trim()} → ${v === "-" ? "-（持っていかない）" : v || "（未決）"}`;
+    }).concat(adds.map((p) => `${p}（下の「まだ使っていない物理ポート」で入れたもの）`));
+    return h("div", { class: "dim small link-vlan", id: "link-vlan-" + sel.row },
+      `VLAN ${vlan} の物理ポート${to && to !== "-" ? `（新 IF ${to}）` : ""}: `,
+      list.length ? list.join("、") : "まだありません（旧のアクセスポートの行か、下の「まだ使っていない物理ポート」で選びます）");
   }
 
+  // linkFreePorts lists the ports of the built-in switch of the new device
+  // that no old interface is picked for, each with a ▼ of the VLANs it can
+  // go into (spec 14.24): what was "足すポート" seen from the port.
+  function linkFreePorts(lk, rows, choices, holder) {
+    const c = linkCols(lk.ifs);
+    const sw = choices.filter((x) => /:port\d+$/i.test(x) && !holder[x]);
+    if (!sw.length) return null;
+    // The old interfaces of a VLAN given a new one: the VLANs to go into.
+    const vlans = rows.filter((r) => {
+      const v = linkVal(lk, r);
+      return nowVlanIf((r.cells[c.now] || "").trim()) && v && v !== "-";
+    });
+    const inOf = {};
+    for (const r of vlans) for (const p of linkAdds(lk, r)) inOf[p] = r;
+    const body = sw.map((p) => {
+      const cur = inOf[p];
+      const el = h("select", { id: "link-free-" + p.replace(/[^A-Za-z0-9]/g, "_"), "data-port": p, class: "link-sel" },
+        h("option", { value: "" }, "使わない"),
+        vlans.map((r) => h("option", { value: String(r.row) }, `VLAN ${nowVlanIf((r.cells[c.now] || "").trim())} に入れる（${linkVal(lk, r)}・旧 ${(r.cells[c.old] || "").trim()}）`)));
+      el.value = cur ? String(cur.row) : "";
+      el.addEventListener("change", () => {
+        for (const r of vlans) {
+          const list = linkAdds(lk, r);
+          if (list.includes(p)) linkSetAdds(lk, r, list.filter((x) => x !== p));
+        }
+        const to = vlans.find((r) => String(r.row) === el.value);
+        if (to) linkSetAdds(lk, to, linkAdds(lk, to).concat([p]));
+        lk.msg = to ? `${p} を VLAN ${nowVlanIf((to.cells[c.now] || "").trim())} に入れます（保存すると書きます）` : `${p} は使いません`;
+        render();
+      });
+      return h("tr", { "data-port": p, class: cur ? "pend" : null },
+        h("td", { class: "mono" }, p),
+        h("td", null, el),
+        h("td", { class: "small" }, cur ? "使う" : "使わない"));
+    });
+    return h("div", { id: "link-free" },
+      h("h3", null, "新しい機器の、まだ使っていない物理ポート"),
+      h("p", { class: "dim small" }, vlans.length
+        ? "旧機器に無いポートを VLAN に入れるときは、▼ で VLAN を選びます（その VLAN のアクセスポートになります）。使わないポートは「使わない」のままにします。"
+        : "VLAN の IF（Vlan10 など）の行で、新しい機器の VLAN グループの IF（GigaEthernet1:1.0 など）を選ぶと、ここで VLAN を選べるようになります。"),
+      h("div", { class: "link-wrap" }, h("table", { class: "link-table", id: "link-free-table" },
+        h("thead", null, h("tr", null,
+          h("th", { "data-tip": "新しい機器の内蔵スイッチのポートのうち、どの旧 IF にも選ばれていないもの" }, "物理ポート"),
+          h("th", { "data-tip": "このポートを入れる VLAN。旧機器に無いポートを、その VLAN のアクセスポートとして足します" }, "入れる VLAN"),
+          h("th", null, "状態"))),
+        h("tbody", null, body))));
+  }
+
+
+  // linkCard is the table where a new interface is picked for each old
+  // interface of one device (spec 14.23.1).
   function linkCard() {
     const lk = st.map.link, c = linkCols(lk.ifs);
     const hosts = linkHosts(lk);
     if (!hosts.length) {
-      return h("div", { class: "card", id: "link" }, h("h2", null, "機器ごとに結ぶ"),
-        h("p", null, "新旧対照表（ポート）に行がありません。先に「1. 新旧対照表（機器）」で新ホスト名を書いて保存してください。"),
-        h("div", { class: "row" }, button("閉じる", linkClose)));
+      return h("div", { class: "card", id: "link" }, h("h2", null, "旧 IF ごとに新 IF を選ぶ"),
+        h("p", null, `新旧対照表（ポート）に行がありません。先に「${partLabel("devices")}」で新ホスト名を書いて保存してください。`));
     }
     const rows = linkRows(lk, lk.host);
     const col = lk.ifs.columns[c.neu] || {};
     const choices = ((col.choiceSets && col.choiceSets[lk.host]) || []).filter((x) => x !== "-");
-    // Names written here that the list does not have (typed ones).
     for (const r of rows) {
       const v = linkVal(lk, r);
       if (v && v !== "-" && !choices.includes(v)) choices.push(v);
@@ -2483,72 +2567,94 @@
     }
     const pendN = linkPendN(lk);
     const nextHost = hosts.find((x) => x !== lk.host && linkLeft(lk, x) > 0);
-    // The VLAN each new port goes into: by the old access port tied to it,
-    // or by 足すポート (spec 14.22.6).
-    const groupOf = {}, portVlan = {}, added = {};
-    for (const r of rows) {
-      const v = linkVal(lk, r), vl = nowVlanIf((r.cells[c.now] || "").trim());
-      if (vl && v && v !== "-") groupOf[vl] = v;
-    }
-    for (const r of rows) {
-      const v = linkVal(lk, r), a = nowAccess((r.cells[c.now] || "").trim());
-      if (a && v && v !== "-") portVlan[v] = a;
-      const vl = nowVlanIf((r.cells[c.now] || "").trim());
-      if (vl) for (const p of linkAdds(lk, r)) { portVlan[p] = vl; (added[p] = added[p] || []).push((r.cells[c.old] || "").trim()); }
-    }
     const dev = linkDevice(lk, lk.host);
-    const sel = rows.find((r) => r.row === lk.sel);
     const shapes = lk.copy ? linkShapes(lk) : [];
-    const left = rows.map((r) => {
-      const v = linkVal(lk, r), now = (r.cells[c.now] || "").trim();
-      return h("div", { class: cls("link-item", r.row === lk.sel && "on", BARE_NOW.includes(now) && "bare", r.row in lk.pend && "pend"),
-        "data-old": (r.cells[c.old] || "").trim(), onclick: () => { lk.sel = r.row; lk.msg = ""; render(); } },
-      h("div", { class: "link-name" }, (r.cells[c.old] || "").trim(), h("span", { class: "link-to" }, "→ " + (v === "-" ? "-（持っていかない）" : v || "（未決）"))),
-      h("div", { class: "link-now dim small" }, now));
-    });
-    const right = choices.map((x) => {
-      const by = holder[x];
-      return h("div", { class: cls("link-item", !by && !added[x] && "free"), "data-port": x, onclick: () => linkTie(x) },
-        h("div", { class: "link-name" }, x, col.choiceNotes && col.choiceNotes[x] ? h("span", { class: "dim small" }, " " + col.choiceNotes[x]) : null),
-        h("div", { class: "dim small" }, (by ? "← 旧 " + by.join(", ") : added[x] ? "旧 " + added[x].join(", ") + " の足すポート" : "空き")
-          + (portVlan[x] ? `（VLAN ${portVlan[x]}${groupOf[portVlan[x]] ? " → " + groupOf[portVlan[x]] + " のグループ" : ""}）` : "")));
-    });
+    const left = linkLeft(lk, lk.host);
+    const pickHost = (x) => { lk.host = x; lk.sel = 0; lk.copy = null; lk.msg = ""; lk.leftMsg = 0; linkPickFirst(lk); render(); };
+    // The ▼ of one old interface.
+    const pick = (r) => {
+      const v = linkVal(lk, r), mine = (r.cells[c.old] || "").trim();
+      const opt = (value, label) => h("option", { value }, label);
+      const free = choices.filter((x) => !holder[x]);
+      const used = choices.filter((x) => holder[x] && !(holder[x].length === 1 && holder[x][0] === mine));
+      const el = h("select", { id: "link-sel-" + r.row, "data-old": mine, class: cls("link-sel", !v && "todo") },
+        opt("", "（未決）まだ決めていない"),
+        opt("-", "-（持っていかない）"),
+        v && v !== "-" ? opt(v, v + (col.choiceNotes && col.choiceNotes[v] ? "  " + col.choiceNotes[v] : "")) : null,
+        free.filter((x) => x !== v).length ? h("optgroup", { label: "空いている IF" }, free.filter((x) => x !== v).map((x) => opt(x, x + (col.choiceNotes && col.choiceNotes[x] ? "  " + col.choiceNotes[x] : "")))) : null,
+        used.filter((x) => x !== v).length ? h("optgroup", { label: "ほかの旧 IF が使用中（選ぶと付け替え）" }, used.filter((x) => x !== v).map((x) => opt(x, `${x}  ← 旧 ${holder[x].join(", ")}`))) : null,
+        opt("?type", "一覧に無い名前を打つ…"));
+      el.value = v;
+      el.addEventListener("change", async () => {
+        let name = el.value;
+        if (name === "?type") {
+          name = await askText("新 IF の名前", `旧 ${mine} にする新しい IF の名前を打ってください（一覧に無い名前）。`, v && v !== "-" ? v : "", "決める");
+          if (name == null || !name.trim()) { render(); return; }
+          name = name.trim();
+        }
+        lk.sel = r.row;
+        if (!name) { linkClear(); return; }
+        linkTie(name);
+      });
+      return el;
+    };
+    const state = (r) => {
+      const v = linkVal(lk, r);
+      const word = !v ? "未決" : v === "-" ? "持っていかない" : "決まった";
+      return h("td", { class: cls("small", "link-st", !v && "todo") }, word + (r.row in lk.pend || r.row in lk.addp ? "（保存前）" : ""));
+    };
+    const body = [];
+    for (const r of rows) {
+      const now = (r.cells[c.now] || "").trim();
+      body.push(h("tr", { id: "link-row-" + r.row, class: cls(r.row in lk.pend && "pend", BARE_NOW.includes(now) && "bare"), "data-old": (r.cells[c.old] || "").trim() },
+        h("td", { class: "mono" }, (r.cells[c.old] || "").trim()),
+        h("td", { class: "small link-now" }, now),
+        h("td", null, pick(r)),
+        state(r)));
+      const vb = nowVlanIf(now) ? linkVlanBox(lk, r, rows) : null;
+      if (vb) body.push(h("tr", { class: "link-vlan-row" }, h("td", null), h("td", { colspan: 3 }, vb)));
+    }
+    const tipOf = { "旧 IF": "旧機器の IF の名前", "旧 IF の設定": "旧コンフィグでの、その IF の設定（説明・アドレス・VLAN・スイッチポート・使っている設定）。どの新 IF にするかの手がかりです", "新 IF": "新しい機器のどの IF にするか。▼ で選びます。（未決）= まだ決めていない、- = 新しい機器に持っていかない", "状態": "未決・決まった・持っていかない。（保存前）は、まだパラメータブックに書いていない行です" };
     return h("div", { class: "card", id: "link" },
-      h("h2", null, "機器ごとに結ぶ"),
-      h("p", null, "左で旧 IF を押してから、右で新しい IF を押すと結ばれます。結ぶと、左は次の未決の旧 IF へ進みます。全部結んだら「保存」を押してください。"),
+      h("h2", null, "旧 IF ごとに新 IF を選ぶ"),
+      h("p", null, "旧機器の IF 1 つごとに、新しい機器のどの IF にするかを ▼ で選びます。選んだら「保存」。保存すると、残りのある次の機器へ進みます。"),
       h("div", { class: "row" },
         h("span", null, "機器: "),
-        select(hosts.map((x) => { const n = linkLeft(lk, x); return [x, `${x}（${n ? "残り " + n : "済み"}）`]; }), lk.host,
-          (x) => { lk.host = x; lk.sel = 0; lk.copy = null; lk.msg = ""; linkPickFirst(lk); render(); }),
-        nextHost ? button("残りのある次の機器へ", () => { lk.host = nextHost; lk.sel = 0; lk.copy = null; lk.msg = ""; linkPickFirst(lk); render(); }, { id: "link-next-host" }) : null,
-        h("span", { class: "dim small" }, dev.model ? `新機種: ${dev.model}` : "新機種が空です（右に出るのは、この機器に書かれている名前だけです）")),
+        Object.assign(select(hosts.map((x) => { const n = linkLeft(lk, x); return [x, `${x}（${n ? "未決 " + n : "済み"}）`]; }), lk.host, pickHost), { id: "link-host" }),
+        nextHost ? button(`次の機器へ（${nextHost}）`, () => pickHost(nextHost), { id: "link-next-host" }) : null,
+        h("span", { class: "dim small" }, (dev.model ? `新機種: ${dev.model}` : "新機種が空です（▼ には、この機器に書かれている名前だけが出ます）") + `・未決 ${left} 行`)),
       lk.msg ? h("div", { class: "box info", id: "link-msg" }, lk.msg) : null,
-      h("p", { class: "dim small" }, "左の「（未決）」はまだ決めていない旧 IF、「-（持っていかない）」は新しい機器に持っていかない旧 IF です。"),
-      sel ? linkVlanBox(lk, sel, rows, choices, holder) : null,
-      h("div", { class: "link-grid" },
-        h("div", null, h("h3", null, "旧 IF"), h("div", { class: "link-list", id: "link-old" }, left),
-          h("div", { class: "row" },
-            button("-（持っていかない）", () => linkTie("-"), { disabled: !sel, id: "link-drop" }),
-            button("外す（空にする）", linkClear, { disabled: !sel, id: "link-clear" }),
-            button("設定のない旧 IF を「-」にする", linkDropBare, { id: "link-bare" }))),
-        h("div", null, h("h3", null, "新しい IF"), h("div", { class: "link-list", id: "link-new" }, right.length ? right : h("p", { class: "dim" }, "候補がありません。下に名前を打って結んでください。")),
-          h("div", { class: "row" },
-            h("input", { type: "text", value: lk.typed, placeholder: "一覧に無い名前", id: "link-typed", oninput: (e) => { lk.typed = e.target.value; },
-              onkeydown: (e) => { if (e.key === "Enter") { linkTie(lk.typed); lk.typed = ""; } } }),
-            button("結ぶ", () => { linkTie(lk.typed); lk.typed = ""; }, { disabled: !sel, id: "link-typed-go" })))),
-      lk.copy ? h("div", { class: "box", id: "link-copy" },
-        h("p", null, `${lk.host} の新 IF 名を、同じ旧 IF 名の行に写します（新機種が同じ機器だけ）。空の行と、ツールの案のままの行に入れます。人が書いた新 IF 名は変えません。`),
-        shapes.length ? h("div", { class: "row redo-hosts" }, shapes.map((s) => h("label", null,
-          h("input", { type: "checkbox", checked: !!lk.copy.picked[s.host], "data-host": s.host, onchange: (e) => { lk.copy.picked[s.host] = e.target.checked; render(); } }),
-          ` ${s.host}（${s.same ? "同じ形" : `重なる旧 IF ${s.hit} / ${s.all}`}）`))) : h("p", { class: "dim" }, "写せる機器がありません（新機種が同じで、旧 IF 名が重なる機器がありません）。"),
-        h("div", { class: "row" },
-          button("写す", linkCopy, { class: "primary", disabled: !shapes.some((s) => lk.copy.picked[s.host]), id: "link-copy-go" }),
-          button("やめる", () => { lk.copy = null; render(); }))) : null,
+      lk.leftMsg && left ? h("div", { class: "box warn", id: "link-left" },
+        `未決（空欄）が ${left} 行残っています。使わない IF は「-（持っていかない）」を選んでください。空欄のまま進めると、その IF は旧の名前のまま新しい機器に入ります。`,
+        h("div", { class: "row" }, button(`残りの ${left} 行を全部「-」にする`, () => {
+          for (const r of rows) if (!linkVal(lk, r)) linkSet(lk, r, "-");
+          lk.leftMsg = 0;
+          lk.msg = `未決の ${left} 行を「-（持っていかない）」にしました（保存すると書きます）`;
+          render();
+        }, { id: "link-left-drop" }))) : null,
+      h("div", { class: "link-wrap" }, h("table", { class: "link-table", id: "link-table" },
+        h("thead", null, h("tr", null, ["旧 IF", "旧 IF の設定", "新 IF", "状態"].map((x) => h("th", { "data-tip": tipOf[x] }, x)))),
+        h("tbody", null, body))),
+      linkFreePorts(lk, rows, choices, holder),
       h("div", { class: "row" },
         button(pendN ? `保存（${pendN} 行）` : "保存", linkSave, { class: "primary", disabled: !pendN, id: "link-save", title: "パラメータブックにすぐ書きます。この機器が済んでいれば、残りのある次の機器へ進みます" }),
-        button("この割り当てを同じ形の機器へ写す", linkCopyOpen, { id: "link-copy-open", disabled: !!lk.copy }),
-        button(pendN ? "やめる（捨てる）" : "閉じる", linkClose, { id: "link-close" })));
+        pendN ? button("やめる（捨てる）", linkThrow, { id: "link-throw" }) : null,
+        h("span", { class: "dim small" }, pendN ? "選んだ所は、保存するまでパラメータブックに書きません（機器を替えても残ります）" : "")),
+      h("details", { class: "fold-menu", id: "link-more", open: !!lk.copy || !!st.folds["link-more"], ontoggle: (e) => { st.folds["link-more"] = e.target.open; } },
+        h("summary", null, "まとめて（設定のない旧 IF を - にする・同じ形の機器へ写す）"),
+        h("div", { class: "row" },
+          button("設定のない旧 IF を「-」にする", linkDropBare, { id: "link-bare", title: "この機器の、設定の無い旧 IF と止めてあるだけの旧 IF で、未決の行を - にします" }),
+          button("この機器の選び方を同じ形の機器へ写す", linkCopyOpen, { id: "link-copy-open", disabled: !!lk.copy, title: "新機種が同じで旧 IF 名が重なる機器の、同じ旧 IF 名の行に、同じ新 IF を入れます（人が書いた名前は変えません）" })),
+        lk.copy ? h("div", { class: "box", id: "link-copy" },
+          h("p", null, `${lk.host} の新 IF を、同じ旧 IF 名の行に写します（新機種が同じ機器だけ）。空の行と、ツールの案のままの行に入れます。人が書いた新 IF 名は変えません。`),
+          shapes.length ? h("div", { class: "row redo-hosts" }, shapes.map((x) => h("label", null,
+            h("input", { type: "checkbox", checked: !!lk.copy.picked[x.host], "data-host": x.host, onchange: (e) => { lk.copy.picked[x.host] = e.target.checked; render(); } }),
+            ` ${x.host}（${x.same ? "同じ形" : `重なる旧 IF ${x.hit} / ${x.all}`}）`))) : h("p", { class: "dim" }, "写せる機器がありません（新機種が同じで、旧 IF 名が重なる機器がありません）。"),
+          h("div", { class: "row" },
+            button("写す", linkCopy, { class: "primary", disabled: !shapes.some((x) => lk.copy.picked[x.host]), id: "link-copy-go" }),
+            button("やめる", () => { lk.copy = null; render(); }))) : null));
   }
+
 
   // loadNext asks for the steps of the case and the next thing to do (spec
   // 14.10.4, 14.12.1). The home is drawn first; the answer comes after it,
@@ -2659,7 +2765,7 @@
     if (act === "edit-first") st.hint = "";
     // The ports are tied in the panel first (spec 14.20.1), the devices
     // written in part 1 itself (spec 14.21.1).
-    if (act === "edit-ifs") st.hint = "link-open";
+    if (act === "edit-ifs") st.hint = "link";
     if (act === "edit-devices") st.hint = "dev-form";
   }
 
@@ -2711,10 +2817,25 @@
   }
 
   function bookResult(b) {
-    return h("div", null,
-      boxes("info", b.messages),
+    const [head, ...rest] = b.messages;
+    // On to the first step after the book with something left (spec 14.23.4).
+    const goNext = () => {
+      st.map.book = null;
+      const steps = (st.steps && st.steps.steps) || [];
+      const i = steps.findIndex((x) => x.id === "book");
+      const n = steps.slice(i + 1).find((x) => x.state === "todo" || x.state === "counting") || steps.slice(i + 1).find((x) => x.state !== "done");
+      if (n && n.page !== "home") goStep(n.page, n.act);
+      else { if (n) stepTarget(n.page, n.act); go("home"); }
+    };
+    return h("div", { id: "book-result" },
+      h("div", { class: "box info" },
+        h("b", null, (head || "パラメータブックに書きました").replace(/。控え: \S+/, "")),
+        h("div", null, "次は、読めなかった行を確かめてから「生成とチェック」です。"),
+        h("div", { class: "row" },
+          button("次の工程へ", goNext, { class: "primary", id: "book-next" }),
+          null)),
       boxes("warn", b.problems),
-      b.open.rows.length ? [h("h2", null, `${b.open.name}（${b.open.rows.length}）`), tableView(b.open, { id: "book/open/" + b.from })] : null);
+      rest.length ? h("details", { class: "fold-menu", id: "book-detail" }, h("summary", null, "書いた行の数（シートごと）"), h("ul", { class: "small" }, rest.map((x) => h("li", null, x)))) : null);
   }
 
   // The three parts of the mapping screen, in the order of the work (spec
@@ -3068,7 +3189,7 @@
     loadNext(); // the steps are counted again at once (spec 14.22.3)
     if (!mp.redo && (mp.view.hosts || []).length) {
       mp.link = null;
-      await openLink("");
+      await linkLoad();
     }
   }
 
@@ -3143,9 +3264,10 @@
           h("thead", null, h("tr", null,
             h("th", null, h("input", { type: "checkbox", checked: allOn, id: "dev-pick-all", title: "見えている行をすべて選ぶ／外す",
               onchange: (e) => { for (const r of shown) { if (e.target.checked) md.pick[r.row] = true; else delete md.pick[r.row]; } devDraw(); } })),
-            h("th", null, "旧ホスト名"), h("th", null, "旧メーカー"),
-            h("th", { class: "w" }, "新ホスト名"), h("th", { class: "w" }, "新メーカー"), h("th", { class: "w" }, "新機種"),
-            h("th", null, "持っていかない"), h("th", null, "状態"))),
+            ...["旧ホスト名", "旧メーカー"].map((x) => h("th", { "data-tip": HEAD_TIPS[x] }, x)),
+            ...["新ホスト名", "新メーカー", "新機種"].map((x) => h("th", { class: "w", "data-tip": HEAD_TIPS[x] }, x)),
+            h("th", { "data-tip": "チェックすると、その旧機器を新しい機器に持っていきません（新ホスト名が - になります）" }, "持っていかない"),
+            h("th", { "data-tip": "未決 = 新ホスト名がまだ空。新機種が空 = 新ホスト名はあるが新機種が空（ポートの案が作れません）。決まった・持っていかない" }, "状態"))),
           h("tbody", null, shown.length ? shown.map((r) => devRow(md, r)) : h("tr", null, h("td", { colspan: 8, class: "dim" }, rows.length ? "絞り込みに合う機器はありません" : "旧機器がありません。旧コンフィグを取り込むと並びます"))))),
       h("div", { class: "dev-bulk", id: "dev-bulk" },
         h("div", { class: "row" },
@@ -3222,6 +3344,25 @@
     openEdit({ sheet: "@devices" });
   }
 
+  // linkPart is the table of the ports of part 4, read the first time the
+  // part is shown (spec 14.23.1).
+  function linkPart(v) {
+    const mp = st.map;
+    if (!(v.hosts || []).length && !(mp.link && linkHosts(mp.link).length)) return null;
+    if (st.home && st.home.draft && !mp.link) {
+      return h("div", { class: "box warn", id: "link" }, "表の編集に、保存していない変更があります。ここで選ぶ前に、保存するか、表の編集で続けてください。 ",
+        h("div", { class: "row" },
+          button("下書きを保存する", saveDraftHere, { class: "primary", id: "link-draft-save" }),
+          button("表の編集を開く", () => openEdit({ sheet: "@ifs" }))));
+    }
+    if (!mp.link) {
+      if (mp.linkErr) return h("div", { class: "box error", id: "link-wait" }, mp.linkErr);
+      if (!mp.linkWait) setTimeout(linkLoad, 0);
+      return h("div", { class: "dim", id: "link-wait" }, "新旧対照表（ポート）を読んでいます…");
+    }
+    return linkCard();
+  }
+
   function mappingPage() {
     const mp = st.map;
     const v = mp.view;
@@ -3266,16 +3407,19 @@
       const left = n("うち新 IF 名が空");
       const card = h("div", { class: "card", id: "map-ifs" },
         h("h2", null, partLabel("ifs")),
-        h("p", null, "旧機器の IF（旧 IF 名）を、新しい機器のどの IF（新 IF 名）にするかを確かめます。新機種を選んだ機器には、ツールの案が入っています（「案の根拠」の列）。"),
-        h("ul", null,
-          h("li", null, "案が合っていれば、そのままで大丈夫です"),
-          h("li", null, "新 IF 名が空（下の一覧では「（未決）」）の行は、まだ決まっていない所です。「機器ごとに結ぶ」か「表で編集する」で新 IF 名を決めます"),
-          h("li", null, "新しい機器に持っていかない IF は、新 IF 名を - にします（下の一覧では「-（持っていかない）」）"),
-          h("li", null, "VLAN の IF（Vlan10 など）を新しい機器の VLAN グループの IF（GigaEthernet1:1.0 など）にしたら、そのグループに入れる物理ポートは、旧のアクセスポートを新しい物理ポートに結んで決めます。旧に無いポートは「足すポート」で足します（「機器ごとに結ぶ」で VLAN の IF を選ぶと出ます）")),
-        h("p", null, left ? `新 IF 名が空の行: ${left} 行` : "新 IF 名はすべて決まっています。"),
-        h("p", null, "「機器ごとに結ぶ」で、旧 IF と新しい IF を左右に並べて、押して結べます。形が同じ機器が何台もあるときは、1 台を結んでから「この割り当てを同じ形の機器へ写す」を押します。"),
+        h("p", null, (left ? `新 IF がまだ決まっていない旧 IF: ${left} 行。` : "すべての旧 IF の新 IF が決まっています。") + "新機種を選んだ機器には、ツールの案が入っています（合っていれば、そのままで大丈夫です）。"),
+        h("details", { class: "fold-menu", id: "ifs-help", open: !!st.folds["ifs-help"], ontoggle: (e) => { st.folds["ifs-help"] = e.target.open; } },
+          h("summary", null, "選び方のこつ"),
+          h("ul", { class: "small" },
+            h("li", null, "新しい機器に持っていかない IF は「-（持っていかない）」を選びます。設定の無い旧 IF は「まとめて」の「設定のない旧 IF を「-」にする」で一度に - にできます"),
+            h("li", null, "使用中の IF を選ぶと、前にその IF を選んでいた旧 IF は（未決）に戻ります"),
+            h("li", null, "VLAN の IF（Vlan10 など）を新しい機器の VLAN グループの IF（GigaEthernet1:1.0 など）にしたら、そのグループに入る物理ポートは、旧のアクセスポート（旧 IF の設定に「アクセス VLAN」）の行で新しい物理ポートを選ぶと決まります。旧に無いポートは、表の下の「新しい機器の、まだ使っていない物理ポート」で、入れる VLAN を ▼ で選びます"),
+            h("li", null, "形が同じ機器が何台もあるときは、1 台を選び終えてから「まとめて」の「この機器の選び方を同じ形の機器へ写す」を押します"))),
+        mp.redo ? redoCard(v) : null,
+        linkPart(v),
+        h("details", { class: "fold-menu", id: "ifs-more", open: !!st.folds["ifs-more"], ontoggle: (e) => { st.folds["ifs-more"] = e.target.open; } },
+        h("summary", null, "そのほか（表の編集・案を作る・Excel・全機器の一覧）"),
         h("div", { class: "row" },
-          button("機器ごとに結ぶ", () => openLink(""), { class: mp.link ? null : "primary", id: "link-open", disabled: !!mp.link }),
           button("表で編集する", () => openEdit({ sheet: "@ifs" }), { id: "edit-ifs" }),
           button("案を作る", proposeIfs, { id: "propose-ifs",
             title: "input/old を読み直し、新ホスト名を書いた機器の 新旧対照表（ポート）の行を足し、空の新 IF 名を案で埋めます（人が書いた名前と - は変えません）。Excel で新旧対照表（機器）を書いたときに押してください" }),
@@ -3283,30 +3427,41 @@
             title: "後から新機種を書いた・変えた機器の案を、今の機種で作り直します。ツールの案（根拠のある行）だけを入れ替え、人が書いた名前は変えません" }),
           excel, reload),
         h("p", { class: "dim small" }, `表の編集で、機器を絞らずに保存すると「${partLabel("open")}」へ進みます。`),
-        mp.redo ? redoCard(v) : null,
-        mp.link ? linkCard() : null,
-        mp.link ? null : tableView(ifsShown(v.ifs), { id: "mapping/ifs" }));
+        h("h3", null, "全機器の一覧（読むだけ）"),
+        tableView(ifsShown(v.ifs), { id: "mapping/ifs" })));
       out.push(card);
     } else {
       const open = v.open.rows.length;
+      // What is left to decide: the findings not approved (spec 14.23.4).
+      const left = (v.findings || []).filter((f) => f.state === "open" && f.severity !== "info").length;
+      const bookStep = ((st.steps && st.steps.steps) || []).find((x) => x.id === "book") || {};
+      const written = mp.book && mp.book.from === "old";
       out.push(h("div", { class: "card", id: "map-open" },
-        h("h2", null, partLabel("open")),
-        h("p", null, open
-          ? `新旧対照表で決まっていないところが ${open} 件あります。行を押すと、内容と直し方が出ます。直すときは「${partLabel("devices")}」か「${partLabel("ifs")}」に戻って直してください。このまま進めてよいものは承認します（左のチェックで選んで、まとめて承認できます）。`
-          : "新旧対照表で決まっていないところはありません。下の「新しい名前に置き換えてパラメータブックに書く」を押してください。"),
+        h("h2", null, `${partLabel("open")}: 1. 決まっていないところを確かめる`),
+        h("p", null, !open
+          ? "新旧対照表で決まっていないところはありません。下の「2. パラメータブックに書く」へ進んでください。"
+          : left
+            ? `新旧対照表で決まっていないところが ${left} 件あります。行を押すと、内容と直し方が出ます。直すときは「${partLabel("devices")}」か「${partLabel("ifs")}」に戻って直してください。このまま進めてよいものは承認します（左のチェックで選んで、まとめて承認できます）。`
+            : `決まっていないところ ${open} 件は、すべて承認済みです。下の「2. パラメータブックに書く」へ進んでください。`),
         open ? migTable(v.open, v.findings, "mapping/open", again, null, true) : null,
         h("div", { class: "row" }, reload)),
-      h("div", { class: "card" },
-        h("h2", null, "パラメータブックに書く"),
-        h("p", null, "旧コンフィグの値を、新旧対照表で新しいホスト名と IF 名に置き換えて、パラメータブックの設計データのシートに書きます。すでにある行は変えず、足りない行を足します。"),
-        h("div", { class: "row" },
-          h("label", null, h("input", { type: "checkbox", id: "map-replace", checked: mp.replace, onchange: (e) => { mp.replace = e.target.checked; } }),
-            " 設計データのシートを空にしてから書く（作り直し）")),
-        h("div", { class: "row" }, button("新しい名前に置き換えてパラメータブックに書く", async () => {
-          if (mp.replace && !(await ask("作り直しますか", "設計データのシートを空にしてから書きます。画面の表や Excel で手で直した値は消えます（書く前の控えは残ります）。新旧対照表（機器）・新旧対照表（ポート）のシートは変えません。", "作り直す"))) return;
-          makeBook("old", mp.replace);
-        }, { class: "primary", id: "make-book" }))),
-      mp.book && mp.book.from === "old" ? bookResult(mp.book) : null);
+      h("div", { class: "card", id: "map-write" },
+        h("h2", null, `${partLabel("open")}: 2. パラメータブックに書く`),
+        h("p", null, "旧コンフィグの設定を、新旧対照表で決めた新しいホスト名・IF 名に置き換えて、パラメータブックの各シート（機器・インタフェース・経路など）に書き込みます。ここから先は、このパラメータブックが新しい機器の設計の元になります。"),
+        bookStep.state === "done" && !written ? h("p", { class: "dim small" }, "パラメータブックには、もう書いてあります。旧コンフィグや新旧対照表を直したときは、もう一度押すと、足りない行を足します（すでにある行は変えません）。") : null,
+        h("div", { class: "row" }, button(written ? "もう一度書く" : "パラメータブックに書く", () => makeBook("old", false),
+          { class: left || written ? null : "primary", id: "make-book", title: "書く前に、今のブックの控えを state/backup に取ります" })),
+        written ? bookResult(mp.book) : null,
+        h("details", { class: "fold-menu", id: "write-more", open: !!st.folds["write-more"], ontoggle: (e) => { st.folds["write-more"] = e.target.open; } },
+          h("summary", null, "作り直す（手で直した値を消して、書き直す）"),
+          h("p", { class: "dim small" }, "設計データのシートを空にしてから書き直します。画面の表や Excel で手で直した値は消えます（書く前の控えは残ります）。新旧対照表のシートは変えません。"),
+          h("div", { class: "row" },
+            h("label", null, h("input", { type: "checkbox", id: "map-replace", checked: mp.replace, onchange: (e) => { mp.replace = e.target.checked; } }),
+              " 設計データのシートを空にしてから書く"),
+            button("作り直して書く", async () => {
+              if (!(await ask("作り直しますか", "設計データのシートを空にしてから書きます。画面の表や Excel で手で直した値は消えます（書く前の控えは残ります）。新旧対照表（機器）・新旧対照表（ポート）のシートは変えません。", "作り直す"))) return;
+              makeBook("old", true);
+            }, { id: "make-book-again" })))));
     }
     return out;
   }
@@ -3628,6 +3783,9 @@
       out.push(h("div", { class: "box info" }, "下書きでチェックした結果です。承認は、表の編集で「保存してチェック」をした後の結果で行います。"),
         h("div", { class: "row" }, button("表の編集へ戻る", () => openEdit(null))));
     } else if (f.state === "open") {
+      if (f.rule === "M-406") {
+        out.push(h("div", { class: "box warn", id: "m406-note" }, "承認すると、この IF は旧の名前のまま新しい機器に入ります。新しい機器で使わない IF なら、承認せずに、新旧対照表（ポート）でその行を「-（持っていかない）」にしてください。"));
+      }
       const what = [f.rule, f.table && `表「${f.table}」`, o.migration && f.column && `列「${f.column}」`].filter(Boolean).join("・");
       const scopes = [["", "この指摘だけ"]];
       if (f.canScope && f.device) scopes.push(["device", `${f.device} の、${what}の指摘すべて`]);
@@ -3713,10 +3871,12 @@
         side));
   }
 
-  function approveMigMany(reload) {
+  async function approveMigMany(reload) {
     const mg = st.mig;
     const keys = Object.keys(mg.many || {});
     if (!keys.length) return;
+    const empty = (st.map.view && st.map.view.findings || []).filter((f) => mg.many[f.key] && f.rule === "M-406").length;
+    if (empty && !(await ask("新 IF 名が空の行も承認しますか", `選んだうち ${empty} 件は、新 IF 名が空（未決）の旧 IF です。承認すると、その IF は旧の名前のまま新しい機器に入ります。新しい機器で使わない IF は、承認せずに新旧対照表（ポート）で「-（持っていかない）」にしてください。`, "そのまま承認する"))) return;
     run("承認して、一覧を作り直しています", async () => {
       mg.msg = await api().ApproveMigrationMany(keys, mg.manyReason || "", mg.by || "");
       mg.many = {};
@@ -5978,11 +6138,76 @@
     return Math.min(280, Math.max(byType[c.type] || (c.free ? 160 : 120), title));
   }
 
+  // TYPE_WORDS say the type of a column in words (spec 14.23.2).
+  const TYPE_WORDS = {
+    string: "文字", text: "文字（複数行も可）", ip: "IP アドレス", int: "整数", bool: "有効か無効（true / false）", enum: "決まった値から選ぶ", ref: "ほかの表にある名前",
+    ifname: "IF 名", ipv4: "IPv4 アドレス", ipv6: "IPv6 アドレス", ipv4_prefix: "IPv4 のアドレスとマスク長（例 192.0.2.1/24）",
+    ipv6_prefix: "IPv6 のアドレスとプレフィックス長", prefix: "ネットワーク（例 192.0.2.0/24）", mac: "MAC アドレス", secret: "秘密の値（パスワード・鍵）",
+  };
+
+  // HEAD_TIPS tell what the headings of the lists of the screens are (spec
+  // 14.23.2).
+  const HEAD_TIPS = {
+    "ブックの行": "パラメータブックのシートの行番号",
+    "旧ホスト名": "旧機器のホスト名（旧コンフィグから取り込んだ名前）",
+    "旧メーカー": "旧コンフィグを読んだメーカーパック。表示のための列です",
+    "新ホスト名": "新しい機器のホスト名。空 = まだ決めていない、- = 持っていかない",
+    "新メーカー": "新しい機器のメーカー（メーカーパック）",
+    "新機種": "新しい機器の機種。選ぶと、新旧対照表（ポート）の案が機種のポートから入ります",
+    "備考": "人が書くメモ。持っていかない機器は、その理由",
+    "旧 IF 名": "旧機器の IF の名前",
+    "旧 IF の設定": "旧コンフィグでの、その IF の設定（説明・アドレス・VLAN・スイッチポート・その IF を使っている設定）。ツールが取り込むたびに書き直します",
+    "新 IF 名": "新しい機器の IF の名前。空・（未決） = まだ決めていない、- = 新しい機器に持っていかない",
+    "案の根拠": "ツールが新 IF 名の案を入れた理由。人が直すと空になります",
+    "足すポート": "VLAN の IF の行に書く、旧に無い新しい物理ポート（その VLAN のアクセスポートとして足します）",
+    "チェック": "チェックの ID（V- 値・G- 生成・M- 移行・S- 資料・R- 反映確認）。使い方の「チェックと承認」に一覧があります",
+    "重大度": "エラー（直すか承認が要る）・警告（確かめて承認）・情報（承認は要らない）",
+    "状態": "未承認・承認済み・要修正（承認できない）など",
+    "機器": "その行の機器のホスト名",
+    "表": "設計データの表（パラメータブックのシート）",
+    "行": "表の中の行（行を見分ける値）",
+    "列": "表の列",
+    "内容": "指摘の内容。行を押すと、直し方と根拠が出ます",
+    "パック": "その機器のメーカーパック",
+    "未承認のエラー": "直すか承認するまで残るエラーの数",
+    "未承認の警告": "確かめて承認するまで残る警告の数",
+    "承認済み": "承認した指摘の数",
+    "情報": "知らせるだけの指摘の数（承認は要りません）",
+    "コンフィグ": "書き出したコンフィグのファイル",
+    "判定": "読めなかった行に付けた判定（追加コンフィグで書く・要らない・保留・未判定）",
+    "形": "読めなかった行の形（値を <n> などに伏せたもの）。同じ形の行を 1 つにまとめています",
+    "親の行": "その行が入っている上の階層の行（interface など）",
+    "台数": "その形の行がある機器の数",
+    "行数": "行の数",
+    "ID": "かたまりの ID（コマンドラインの judge --group で使います）",
+  };
+
+  // The tip of a heading, shown at once (spec 14.23.2): the title of the
+  // browser waits a second and is easily missed.
+  let tipEl = null, tipOn = null;
+  function tipShow(e) {
+    const t = e.target.closest && e.target.closest("[data-tip]");
+    if (t === tipOn) return;
+    tipOn = t;
+    if (!t || !t.dataset.tip) { if (tipEl) tipEl.hidden = true; return; }
+    if (!tipEl) { tipEl = h("div", { id: "tip", hidden: true }); document.body.appendChild(tipEl); }
+    tipEl.textContent = t.dataset.tip;
+    tipEl.hidden = false;
+    const r = t.getBoundingClientRect();
+    const w = tipEl.offsetWidth, hh = tipEl.offsetHeight;
+    tipEl.style.left = Math.max(4, Math.min(r.left, window.innerWidth - w - 8)) + "px";
+    tipEl.style.top = (r.bottom + 6 + hh > window.innerHeight ? r.top - hh - 6 : r.bottom + 6) + "px";
+  }
+  document.addEventListener("mouseover", tipShow);
+  document.addEventListener("mousedown", () => { tipOn = null; if (tipEl) tipEl.hidden = true; }, true);
+  document.addEventListener("scroll", () => { tipOn = null; if (tipEl) tipEl.hidden = true; }, true);
+
   function gColTip(c) {
     const parts = [c.title];
     if (c.added) parts.push("足した自由列です。保存すると、シートの右端に見出しを足します");
     else if (c.free) parts.push("定義に無い列（自由列）");
-    else if (c.type) parts.push("型: " + (c.list ? `${c.type} の並び` : c.type));
+    else if (c.type) parts.push("書くもの: " + (TYPE_WORDS[c.type] || c.type) + (c.list ? "（カンマで区切って複数）" : ""));
+    if (c.choices && c.choices.length && c.choices.length <= 12) parts.push("選べる値: " + c.choices.join("・"));
     if (c.was) parts.push(`保存すると、見出しを「${c.was}」から変えます`);
     if (c.mark === "write") parts.push("書く列です");
     if (c.mark === "shown") parts.push("表示のための列です（書き換えても、ツールの動きは変わりません）");
@@ -8034,13 +8259,16 @@
       onkeydown: (e) => { if (!e.isComposing && (e.key === "Enter" || e.key === "Escape")) { e.preventDefault(); G.wrap.focus(); } } });
     filter.addEventListener("compositionend", (e) => { G.filter = e.target.value; refilter(); });
     const tool = (label, fn, props) => button(label, () => { fn(); gFocusBack(); }, props);
+    // The sheets of the mapping of a migration come before the design data:
+    // there is nothing to check yet (spec 14.23.3).
+    const mapSheet = st.cas && st.cas.kind !== "新規" && (G.id === "@devices" || G.id === "@ifs");
     out.push(
       h("div", { class: "row" },
         h("span", null, "シート: "), sheets,
         G.v.device >= 0 ? Object.assign(select(devOpts, G.dev, (d) => { G.dev = d; refilter(); }), { id: "g-dev" }) : null,
         filter,
         button("保存", gSaveGo, { class: "primary", id: "g-save", title: "Ctrl+S。下書きをパラメータブック（Excel）に書きます" }),
-        button("保存してチェック", gSaveCheck, { id: "g-save-check", title: "保存して、続けて「チェックだけ」を行い、結果の指摘を出します" }),
+        mapSheet ? null : button("保存してチェック", gSaveCheck, { id: "g-save-check", title: "保存して、続けて「チェックだけ」（コンフィグは書き出さずに、値の誤りなどを調べる）を行い、残った指摘の一覧を出します。指摘を直しに来たときに使います" }),
         button("表の編集を終える", gClose, { id: "g-close" })),
       // The tools used most stay in sight; the rest are in three menus
       // (spec 14.12.5).
@@ -8078,7 +8306,7 @@
       const col = G.cols[ci];
       const sorted = G.sort.ci === ci, filtered = !!G.colFilter[ci];
       head.appendChild(h("th", { "data-c": String(c), class: cls(col.isKey && "g-key", col.free && "g-free", col.col < 0 && "g-nocol", c < G.lefts.length - 1 && "g-stick", col.mark && "g-m-" + col.mark) || null,
-        style: c < G.lefts.length - 1 ? `left:${G.lefts[c]}px` : null, title: gColTip(col) },
+        style: c < G.lefts.length - 1 ? `left:${G.lefts[c]}px` : null, "data-tip": gColTip(col) },
       col.title, col.required && !col.isKey ? h("span", { class: "g-req" }, " *") : null, col.secret ? h("span", { class: "g-req" }, " 🔒") : null,
       h("button", { type: "button", class: cls("g-hm", (sorted || filtered) && "on"), "data-hm": String(c), tabindex: "-1", title: "並べ替え・絞り込み・列を隠す" }, (sorted ? (G.sort.dir > 0 ? "▲" : "▼") : "") + (filtered ? "⏷" : "▾")),
       h("span", { class: "g-rz", "data-rz": String(c), title: "ドラッグで列幅を変えます（ダブルクリックで中身に合わせます）" })));
